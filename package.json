@@ -1,0 +1,13 @@
+{
+  "name": "novel-prompt-generator",
+  "version": "1.0.337",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "build": "node scripts/build.mjs",
+    "lint": "node scripts/lint.mjs",
+    "test": "node scripts/test.mjs",
+    "test:coverage": "node --experimental-test-coverage --test tests/contracts/*.test.mjs"
+  }
+}
