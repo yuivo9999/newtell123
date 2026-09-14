@@ -1,7 +1,7 @@
 /* v29: cohesive glossary / terminology workspace extracted from app-legacy.js. */
 
 export function install(deps){
-  const {
+  let {
 
     startBgTask,
     endBgTask,

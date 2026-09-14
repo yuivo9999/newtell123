@@ -3,8 +3,23 @@
 const _m0 = (() => {
 // Extracted from app-legacy.js; legacy UI/runtime bridge.
 const W = globalThis;
-const state = W.TellMeRuntime?.state ?? W.state;
-const $=W.$, busy=W.busy, toast=W.toast, unwrapAIResult=W.unwrapAIResult, callDeepSeek=W.callDeepSeek, fullStoryText=W.fullStoryText, resolveActiveSpec=W.resolveActiveSpec, parseJson=W.parseJson, persist=W.persist, render=W.render, pushAssetHist=W.pushAssetHist, PROMPTS=W.PROMPTS;
+const getState = () => W.TellMeRuntime?.state ?? W.state;
+const state = new Proxy({}, {
+  get(_, p) { return getState()?.[p]; },
+  set(_, p, v) { const s = getState(); if (s) s[p] = v; return true; }
+});
+const $ = (s, r = document) => (r || document).querySelector(s);
+const busy = (...a) => W.busy?.(...a);
+const toast = (...a) => W.toast?.(...a);
+const unwrapAIResult = (...a) => W.unwrapAIResult ? W.unwrapAIResult(...a) : a[0];
+const callDeepSeek = (...a) => W.callDeepSeek?.(...a);
+const fullStoryText = (...a) => W.fullStoryText ? W.fullStoryText(...a) : '';
+const resolveActiveSpec = (...a) => W.resolveActiveSpec ? W.resolveActiveSpec(...a) : {};
+const parseJson = (...a) => W.parseJson ? W.parseJson(...a) : {};
+const persist = (...a) => W.persist?.(...a);
+const render = (...a) => W.render?.(...a);
+const pushAssetHist = (...a) => W.pushAssetHist ? W.pushAssetHist(...a) : _m1.pushAssetHist(...a);
+const PROMPTS = new Proxy({}, { get(_, p) { return W.PROMPTS?.[p]; } });
 async function genCharacters(){
   const btn = $('#btnGenChars'); busy(btn,true,'生成角色中…');
   try{
@@ -114,8 +129,17 @@ return Object.freeze({genCharacters, genScenes, genCover, genStoryboard});
 const _m1 = (() => {
 // Extracted from app-legacy.js; legacy UI/runtime bridge.
 const W = globalThis;
-const state = W.TellMeRuntime?.state ?? W.state;
-const $=W.$, esc=W.esc, toast=W.toast, persist=W.persist, render=W.render; const ASSET_LABEL=W.ASSET_LABEL;
+const getState = () => W.TellMeRuntime?.state ?? W.state;
+const state = new Proxy({}, {
+  get(_, p) { return getState()?.[p]; },
+  set(_, p, v) { const s = getState(); if (s) s[p] = v; return true; }
+});
+const $ = (s, r = document) => (r || document).querySelector(s);
+const esc = (...a) => W.esc ? W.esc(...a) : a[0];
+const toast = (...a) => W.toast?.(...a);
+const persist = (...a) => W.persist?.(...a);
+const render = (...a) => W.render?.(...a);
+const ASSET_LABEL = new Proxy({}, { get(_, p) { return W.ASSET_LABEL?.[p]; } });
 function pushAssetHist(kind, data){
   if(data == null) return;
   if(!state.hist) state.hist = { characters:[], scenes:[], cover:[], storyboard:[] };

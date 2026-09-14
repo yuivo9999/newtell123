@@ -6,18 +6,23 @@
  * modules remain internal installation seams; canonical Domain APIs are the only
  * cross-domain runtime contract.
  */
+globalThis.$ = window.$ = (s, r = document) => (r || document).querySelector(s);
+globalThis.$$ = window.$$ = (s, r = document) => [...(r || document).querySelectorAll(s)];
+
 const loadClassic = (src) => new Promise((resolve, reject) => {
   const script = document.createElement('script');
-  script.src = `${src}?v=modern-1`;
+  const url = new URL(src, import.meta.url);
+  url.searchParams.set('v', 'modern-1');
+  script.src = url.href;
   script.async = false;
-  script.onload = resolve;
-  script.onerror = () => reject(new Error(`加载失败：${src}`));
+  script.onload = () => resolve();
+  script.onerror = () => reject(new Error(`加载失败：${url.href}`));
   document.head.appendChild(script);
 });
 
 const boot = async () => {
   const [aiDomain, storyDomain, chapterDomain, dictionaryDomain, schoolDomain,
-    projectDomain, workspaceDomain, narrativeDomain, settingsDomain] = await Promise.all([
+    projectDomain, workspaceDomain, narrativeDomain, settingsDomain, runtimeDomain] = await Promise.all([
     import('./core/ai-domain.js'),
     import('./core/story-domain.js'),
     import('./core/chapter-domain.js'),
@@ -27,11 +32,13 @@ const boot = async () => {
     import('./core/workspace-domain.js'),
     import('./core/narrative-domain.js'),
     import('./core/settings-domain.js'),
+    import('./core/runtime-domain.js'),
   ]);
 
   // Direct/pure modules publish their own legacy-compatible windows where
   // appropriate; these explicit bridges cover modules that historically relied
   // on app.js to expose their namespace.
+  runtimeDomain.exposeLegacyWindows();
   aiDomain.exposeLegacyWindows();
   storyDomain.exposeLegacyWindows();
   chapterDomain.exposeLegacyWindows();
@@ -62,10 +69,6 @@ const boot = async () => {
   // TellMeLegacyRegions registry is now an internal installation seam only.
 
   await loadClassic('./app-legacy.js');
-  // The foundation requires TellMeRuntime, which is created by the legacy
-  // lexical bridge, so it intentionally comes after app-legacy.js.
-  const runtimeDomain = await import('./core/runtime-domain.js');
-  runtimeDomain.exposeLegacyWindows();
 
   // Install the ten cohesive domains only after app-legacy.js has exposed its
   // lexical dependency scope. This preserves the existing closure contract.
@@ -77,6 +80,12 @@ const boot = async () => {
     // app-legacy.js owns the exact dependency object; the installer injects it
     // into every domain, preserving the existing lexical compatibility contract.
     window.__TellMeInstallLegacyRegions(domains);
+  }
+
+  if (typeof window.init === 'function') {
+    await window.init();
+  } else if (typeof window.TellMeLegacyDomains?.['runtime-domain']?.init === 'function') {
+    await window.TellMeLegacyDomains['runtime-domain'].init();
   }
 
   // import('./core/runtime-audit.js') — folded into runtime-domain.js

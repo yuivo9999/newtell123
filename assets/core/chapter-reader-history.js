@@ -1,7 +1,7 @@
 /* v30: cohesive legacy region — 章节历史 / 阅读器 / 阅读进度. */
 
 export function install(deps){
-  const {
+  let {
     CH_PAGE_SIZE,
     chPage,
     chapterBadgesHtml,

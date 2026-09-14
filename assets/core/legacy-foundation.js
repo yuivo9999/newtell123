@@ -1,18 +1,51 @@
 /* v25: first 50 legacy function bodies extracted into an explicit ESM foundation module. */
-const R = window.TellMeRuntime;
-const state = R.state;
-const $ = R.$; const $$ = R.$$;
-const KEY_PROJ_PREFIX = R.KEY_PROJ_PREFIX;
-const TOAST_LOG_KEY = R.TOAST_LOG_KEY;
-const SND_KEY = R.SND_KEY; const SND_VOL_KEY = R.SND_VOL_KEY;
-const SND_TSINGLE_KEY = R.SND_TSINGLE_KEY; const SND_TALL_KEY = R.SND_TALL_KEY;
-const SND_SINGLE_PRESETS = R.SND_SINGLE_PRESETS; const SND_ALL_PRESETS = R.SND_ALL_PRESETS;
-const THEMES = R.THEMES; const TM_KEYS = R.TM_KEYS;
-const CJK_ALL = R.CJK_ALL; const EN_WORD = R.EN_WORD;
-const document = window.document; const navigator = window.navigator; const localStorage = window.localStorage;
-const updateMechaNav = R.updateMechaNav; const updateWcTotal = R.updateWcTotal;
-const URL = window.URL; const Blob = window.Blob;
-const _snd = R.soundState;
+const W = globalThis;
+const getR = () => W.TellMeRuntime || (W.TellMeRuntime = {});
+const R = new Proxy({}, {
+  get(_, p){ return getR()[p]; },
+  set(_, p, v){ getR()[p] = v; return true; }
+});
+const state = new Proxy({}, {
+  get(_, p){ return getR().state?.[p]; },
+  set(_, p, v){ if (getR().state) getR().state[p] = v; return true; }
+});
+const $ = (s, r = document) => (r || document).querySelector(s);
+const $$ = (s, r = document) => [...(r || document).querySelectorAll(s)];
+const KEY_PROJ_PREFIX = 'tellme123:proj:';
+const KEY_CFG = 'tellme123:cfg';
+const TOAST_LOG_KEY = 'tellme123:toastLog_v1';
+const SND_KEY = 'tz_snd_done';
+const SND_VOL_KEY = 'tz_snd_vol';
+const SND_TSINGLE_KEY = 'tz_snd_t_beats';
+const SND_TALL_KEY = 'tz_snd_t_all';
+const SND_SINGLE_PRESETS = [
+  { id:'be_paper',  name:'纸页轻响',   seq:[[523.25,0,0.08],[659.25,0.09,0.16]] },
+  { id:'be_piano',  name:'柔钢琴点',   seq:[[659.25,0,0.22]] },
+  { id:'be_glass',  name:'晶石轻触',   seq:[[783.99,0,0.11],[1046.5,0.13,0.22]] },
+  { id:'be_bell',   name:'小钟清鸣',   seq:[[880.0,0,0.12],[1174.66,0.15,0.25]] },
+  { id:'be_wood',   name:'木铃短拍',   seq:[[587.33,0,0.09],[783.99,0.11,0.18]] },
+  { id:'be_spark',  name:'星屑三音',   seq:[[659.25,0,0.08],[880.0,0.1,0.09],[1318.51,0.21,0.22]] }
+];
+const SND_ALL_PRESETS = [
+  { id:'al_piano',   name:'钢琴上行',   seq:[[523.25,0,0.11],[659.25,0.12,0.12],[783.99,0.25,0.24]] },
+  { id:'al_glass',   name:'晶石琶音',   seq:[[659.25,0,0.08],[783.99,0.09,0.08],[1046.5,0.18,0.1],[1318.51,0.3,0.24]] },
+  { id:'al_chime',   name:'风铃庆成',   seq:[[783.99,0,0.1],[1046.5,0.11,0.1],[1318.51,0.23,0.28]] },
+  { id:'al_chord',   name:'柔和和弦',   seq:[[523.25,0,0.14],[659.25,0.02,0.14],[783.99,0.04,0.22]] },
+  { id:'al_spark',   name:'星光四步',   seq:[[659.25,0,0.08],[783.99,0.1,0.08],[1046.5,0.2,0.1],[1567.98,0.32,0.24]] },
+  { id:'al_finish',  name:'完成回响',   seq:[[587.33,0,0.1],[783.99,0.12,0.11],[987.77,0.25,0.12],[1174.66,0.39,0.3]] }
+];
+const THEMES = ['dark', 'cyber', 'mecha', 'writer', 'cream', 'blackboard', 'guofeng'];
+const TM_KEYS = ['idea','principal','teacher','dictmaster','dictEnrich','assets','title','chapter','qc','strip','subplot','rolling','contentAdvise','aiRecipe'];
+const CJK_ALL = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
+const EN_WORD = /[A-Za-z0-9_]+(?:'[A-Za-z0-9_]+)?/;
+const document = W.document; const navigator = W.navigator; const localStorage = W.localStorage;
+const updateMechaNav = (...a) => (getR().updateMechaNav || W.updateMechaNav)?.(...a);
+const updateWcTotal = (...a) => (getR().updateWcTotal || W.updateWcTotal)?.(...a);
+const URL = W.URL; const Blob = W.Blob;
+const _snd = new Proxy({}, {
+  get(_, p){ return (getR().soundState || {})[p]; },
+  set(_, p, v){ if(getR().soundState) getR().soundState[p] = v; return true; }
+});
 function startBgTask(label){ R.bgTaskCount++; if(label) R.bgTaskLabel = String(label); updateBgTaskIndicator(); }
 
 function endBgTask(){ R.bgTaskCount = Math.max(0, R.bgTaskCount - 1); updateBgTaskIndicator(); }
@@ -21,7 +54,7 @@ function updateBgTaskIndicator(){
   const el = $('#bgTaskIndicator');
   if(!el) return;
   if(R.bgTaskCount > 0){
-    el.textContent = '⏳ 后台任务 ' + _bgTaskCount + ' 项进行中' + (R.bgTaskLabel ? '：' + R.bgTaskLabel : '') + '…';
+    el.textContent = '⏳ 后台任务 ' + (R.bgTaskCount || 0) + ' 项进行中' + (R.bgTaskLabel ? '：' + R.bgTaskLabel : '') + '…';
     el.style.display = '';
   } else {
     if(!R.bgTaskCount) R.bgTaskLabel = '';
@@ -37,7 +70,12 @@ function _timeAnchorsAutoOn(){ return isLong() && state.timeAnchorsAuto !== fals
 
 function _timeBranch(s){ s = String(s||'').trim(); if(!s) return ''; const i = s.search(/[·|｜.．:：－\-]/); return i>0 ? s.slice(0,i).trim() : s; }
 
-function destroyCharTS(){ R.charTS.forEach(t=>{ try{ t.destroy(); }catch(e){} }); R.charTS = []; }
+function destroyCharTS(){
+  const list = (R && R.charTS) || (typeof window !== 'undefined' && window.charTS) || [];
+  list.forEach(t=>{ try{ t && t.destroy && t.destroy(); }catch(e){} });
+  if(R) { try { R.charTS = []; } catch(e){} }
+  if(typeof window !== 'undefined') { window.charTS = []; }
+}
 
 function parseAge(s){
   if(s==null || s==='') return null;

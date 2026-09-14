@@ -1,17 +1,17 @@
-const W = window;
-const R = W.TellMeRuntime;
-const $ = R.$;
-const $$ = R.$$;
-const esc = R.esc;
-const TM_KEYS = R.TM_KEYS;
-const TM_GROUPS = R.TM_GROUPS;
-const TM_TEMP = R.TM_TEMP;
+const W = typeof window !== 'undefined' ? window : globalThis;
+const getR = () => W.TellMeRuntime || {};
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = (...args) => (getR().esc ? getR().esc(...args) : (args[0] != null ? String(args[0]) : ''));
+const getTMKeys = () => getR().TM_KEYS || ['idea', 'principal', 'teacher', 'dictmaster', 'dictEnrich', 'chapter', 'strip', 'subplot', 'glossary', 'rolling', 'contentAdvice', 'assets', 'recipe'];
+const getTMGroups = () => getR().TM_GROUPS || W.TellMeLegacyShared?.TM_GROUPS || [];
+const getTMTemp = () => getR().TM_TEMP || W.TellMeLegacyShared?.TM_TEMP || {};
 
 let editTM = null;
 let editTemps = {};
 let _tmEscHandler = null;
 
-function tmCustomCount(tm){ return TM_KEYS.filter(k=> tm && tm[k]).length; }
+function tmCustomCount(tm){ return getTMKeys().filter(k=> tm && tm[k]).length; }
 function updateTmBadge(){
   const n = W.getCfg().taskModels ? tmCustomCount(W.getCfg().taskModels) : 0;
   const el = $('#tmBadge'); if(el) el.textContent = n ? ('已自定义 '+n+' 项') : '全部跟随全局';
@@ -30,7 +30,8 @@ function openTaskModelPanel(){
   editTM = JSON.parse(JSON.stringify(W.getCfg().taskModels || {}));
   editTemps = {};
   const g0 = W.getCfg();
-  Object.keys(TM_TEMP).forEach(k=>{ const f=TM_TEMP[k][0]; if(f && !(f in editTemps)) editTemps[f]=(g0[f]==null?TM_TEMP[k][1]:g0[f]); });
+  const tmTemp = getTMTemp();
+  Object.keys(tmTemp).forEach(k=>{ const f=tmTemp[k][0]; if(f && !(f in editTemps)) editTemps[f]=(g0[f]==null?tmTemp[k][1]:g0[f]); });
   $('#taskModelModal').classList.remove('hidden');
   const st=$('#tmStatus'); if(st){ st.className='status'; st.textContent=''; }
   renderTaskModelPanel();
@@ -64,13 +65,14 @@ function renderTaskModelPanel(){
   const optHtml = (arr, val, ph)=> arr.length
     ? arr.map(x=>`<option value="${esc(String(x.v))}" ${String(x.v)===String(val)?'selected':''}>${esc(x.t)}</option>`).join('')
     : `<option value="">${esc(ph)}</option>`;
+  const tmTemp = getTMTemp();
   const row = (key, name, note)=>{
     const tm = editTM[key] || '';
     const gid = tm ? tm.groupId : '';
     const grp = cfg.groups.find(g=>g.id===gid);
     const kid = tm ? tm.keyId : '';
     const mid = tm ? tm.model : '';
-    const tf = TM_TEMP[key];
+    const tf = tmTemp[key];
     const tval = tf ? (editTemps[tf[0]]==null ? tf[1] : editTemps[tf[0]]) : '';
     return `<div class="tm-row${tm?' tm-custom':''}" data-tm-row="${key}">
       <div class="tm-head"><span class="tm-name">${esc(name)}</span><span class="tm-note">${esc(note||'')}</span>
@@ -93,7 +95,7 @@ function renderTaskModelPanel(){
       <div class="set-block-head"><span>◆ 全局默认（未单独设置的任务都用它）</span></div>
       <div class="tm-preview">${esc((curGroup.label||'AI') + ' · ' + (curKey?(curKey.label||'账号'):'⚠️ 无账号') + ' · ' + (curModel?curModel.name:'⚠️ 无模型'))}（只读；去上方「AI 模型配置」修改）</div>
     </div>
-    ${TM_GROUPS.map(gr=>`<div class="set-block"><div class="set-block-head"><span>${esc(gr.title)}</span></div>${gr.keys.map(k=>row(k[0],k[1],k[2])).join('')}</div>`).join('')}`;
+    ${getTMGroups().map(gr=>`<div class="set-block"><div class="set-block-head"><span>${esc(gr.title)}</span></div>${gr.keys.map(k=>row(k[0],k[1],k[2])).join('')}</div>`).join('')}`;
   $$('#tmBody [data-tm-sel]').forEach(sel=>{
     sel.onchange = ()=>{
       const key = sel.dataset.tmKey, level = sel.dataset.tmSel;
@@ -115,7 +117,8 @@ function renderTaskModelPanel(){
   });
   $$('#tmBody [data-tm-temp]').forEach(inp=>{
     inp.addEventListener('change', ()=>{
-      const tf = TM_TEMP[inp.dataset.tmTemp]; if(!tf) return;
+      const tmTempCurrent = getTMTemp();
+      const tf = tmTempCurrent[inp.dataset.tmTemp]; if(!tf) return;
       const v = parseFloat(inp.value);
       editTemps[tf[0]] = (inp.value==='' || isNaN(v)) ? tf[1] : v;
       renderTaskModelPanel();
@@ -127,23 +130,25 @@ function renderTaskModelPanel(){
 function resetTaskModels(){
   if(!W.confirm('确定清除全部分任务设置，全部恢复跟随全局？')) return;
   if(!editTM) editTM = {};
-  TM_KEYS.forEach(k=>{ editTM[k]=''; });
+  getTMKeys().forEach(k=>{ editTM[k]=''; });
   renderTaskModelPanel();
   refreshTmResetBtn();
 }
 function saveTaskModels(){
   const cfg = W.getCfg();
   const clean = {};
-  TM_KEYS.forEach(k=>{
+  const tmKeys = getTMKeys();
+  const tmTemp = getTMTemp();
+  tmKeys.forEach(k=>{
     const v = editTM && editTM[k];
     const ok = v && typeof v==='object' && v.groupId && v.keyId && v.model && cfg.groups.some(g=>g.id===v.groupId);
     clean[k] = ok ? { groupId:v.groupId, keyId:v.keyId, model:v.model } : '';
   });
   const c = W.getCfg(); c.taskModels = clean;
-  Object.keys(TM_TEMP).forEach(k=>{ const f=TM_TEMP[k][0]; if(f && editTemps && (f in editTemps)) c[f]=editTemps[f]; });
+  Object.keys(tmTemp).forEach(k=>{ const f=tmTemp[k][0]; if(f && editTemps && (f in editTemps)) c[f]=editTemps[f]; });
   W.saveCfg(c);
   const n = tmCustomCount(clean);
-  const nT = Object.keys(TM_TEMP).filter(k=>{ const f=TM_TEMP[k][0]; return f && editTemps && editTemps[f]!=null; }).length;
+  const nT = Object.keys(tmTemp).filter(k=>{ const f=tmTemp[k][0]; return f && editTemps && editTemps[f]!=null; }).length;
   closeTaskModelPanel();
   W.updateCfgBadge();
   W.toast(n ? ('分任务模型已保存：'+n+' 项自定义，其余跟随全局') : '分任务模型已保存：全部跟随全局')+(nT?('；已同步 '+nT+' 项任务温度'):'');

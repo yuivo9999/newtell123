@@ -115,10 +115,10 @@ export const POLISH_MULTI_MODE = `\n\n【本次输出模式：多方案】在上
 
 
 
+export let aiRp = null;
+export let aiLog = [];
+
 export const legacyContext = Object.freeze({
   POLISH_PALETTE, AI_RECIPE_SYS_PRO, IDEA_POLISH_SYS_PRO, IDEA_POLISH_SYS, POLISH_MULTI_MODE,
   aiRp, aiLog,
 });
-
-export let aiRp = null;
-export let aiLog = [];

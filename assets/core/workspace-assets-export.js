@@ -1,7 +1,7 @@
 /* v27: cohesive workspace/assets/export region extracted from app-legacy.js. */
 
 export function install(deps){
-  const {
+  let {
     state,
     lib,
     currentStep,
@@ -22,6 +22,81 @@ export function install(deps){
     assetHistCount,
     hasAssetHist
   } = deps;
+  const W = typeof window !== 'undefined' ? window : globalThis;
+  const getFn = (name) => (...a) => {
+    if (typeof W[name] === 'function') return W[name](...a);
+    if (W.TellMeLegacyShared && typeof W.TellMeLegacyShared[name] === 'function') return W.TellMeLegacyShared[name](...a);
+    if (W.TellMeLegacyDomains) {
+      for (const d of Object.values(W.TellMeLegacyDomains)) {
+        if (d && typeof d[name] === 'function') return d[name](...a);
+      }
+    }
+    return undefined;
+  };
+  const bindPolishIdea = getFn('bindPolishIdea');
+  const genOutline = getFn('genOutline');
+  const currentTeamShape = (...a) => (W.currentTeamShape ? W.currentTeamShape(...a) : (W.TellMeLegacyDomains?.['story-domain']?.currentTeamShape ? W.TellMeLegacyDomains['story-domain'].currentTeamShape(...a) : { id: 'solo', label: '主角线' }));
+  const bindDictMaster = getFn('bindDictMaster');
+  const bindDictEnrich = getFn('bindDictEnrich');
+  const bindLongNovelMemoryRepo = getFn('bindLongNovelMemoryRepo');
+  const bindLongNovelControlDeck = getFn('bindLongNovelControlDeck');
+  const renderPolishCards = getFn('renderPolishCards');
+  const syncOrigIdeaCard = getFn('syncOrigIdeaCard');
+  const render = getFn('render');
+  const bindGlossary = getFn('bindGlossary');
+  const bindOrigIdea = getFn('bindOrigIdea');
+  const bindOutlineFold = getFn('bindOutlineFold');
+  const bindLoglineEdit = getFn('bindLoglineEdit');
+  const bindAiRecipe = getFn('bindAiRecipe');
+  const bindChapterPlan = getFn('bindChapterPlan');
+  const bindChapterPlanFold = getFn('bindChapterPlanFold');
+  const bindChapterTitles = getFn('bindChapterTitles');
+  const bindWriteStyle = getFn('bindWriteStyle');
+  const syncChaptersFromOutline = getFn('syncChaptersFromOutline');
+  const genManyChapters = getFn('genManyChapters');
+  const bindGenBatchControls = getFn('bindGenBatchControls');
+  const bindRangeGen = getFn('bindRangeGen');
+  const bindBeatSheet = getFn('bindBeatSheet');
+  const bindFactCard = getFn('bindFactCard');
+  const bindRollingSummaryCard = getFn('bindRollingSummaryCard');
+  const bindQualityReportCard = getFn('bindQualityReportCard');
+  const bindFixQueueCard = getFn('bindFixQueueCard');
+  const bindSceneEdit = getFn('bindSceneEdit');
+  const genCharacters = getFn('genCharacters');
+  const genScenes = getFn('genScenes');
+  const genCover = getFn('genCover');
+  const genStoryboard = getFn('genStoryboard');
+  const openAssetHistPanel = getFn('openAssetHistPanel');
+  const openReader = getFn('openReader');
+  const renderLongProgress = getFn('renderLongProgress');
+  const renderChapters = getFn('renderChapters');
+  const openSchoolPlanReader = getFn('openSchoolPlanReader');
+  const openChapterVersionPanel = getFn('openChapterVersionPanel');
+  const undoChapterEdit = getFn('undoChapterEdit');
+  const openChapterRegenPanel = getFn('openChapterRegenPanel');
+  const openChapterSummaryPanel = getFn('openChapterSummaryPanel');
+  const continueAndFinalizeChapter = getFn('continueAndFinalizeChapter');
+  const adoptChapterPartial = getFn('adoptChapterPartial');
+  const updateChapterWc = getFn('updateChapterWc');
+  const updateWcTotal = getFn('updateWcTotal');
+  const bindReader = getFn('bindReader');
+  const guardSwitchStep = (...a) => (W.guardSwitchStep ? W.guardSwitchStep(...a) : true);
+  const openingStrategyDef = getFn('openingStrategyDef');
+  const charFilters = new Proxy({}, {
+    get(_, p) { return (W.charFilters || {})[p]; },
+    set(_, p, v) { if (!W.charFilters) W.charFilters = {}; W.charFilters[p] = v; return true; }
+  });
+  const charTS = new Proxy([], {
+    get(_, p) {
+      const arr = W.charTS || (W.charTS = []);
+      return typeof arr[p] === 'function' ? arr[p].bind(arr) : arr[p];
+    },
+    set(_, p, v) {
+      const arr = W.charTS || (W.charTS = []);
+      arr[p] = v;
+      return true;
+    }
+  });
 
 function viewCharacters(){
   if(!readyForAssets()){

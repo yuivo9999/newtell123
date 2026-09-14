@@ -1,7 +1,19 @@
 // Extracted from app-legacy.js; legacy UI/runtime bridge.
 const W = globalThis;
-const state = W.TellMeRuntime?.state ?? W.state;
-const $=W.$, esc=W.esc, toast=W.toast, getCfg=W.getCfg, saveCfg=W.saveCfg, wsUndoLog=W.wsUndoLog, wsRemovedBuiltin=W.wsRemovedBuiltin, wsColorSchemeId=W.wsColorSchemeId, wsCustomColors=W.wsCustomColors, wsColorSchemesList=W.wsColorSchemesList, wsColorCfgOf=W.wsColorCfgOf, WS_COLOR_SCHEMES=W.WS_COLOR_SCHEMES, wsSchemeName=W.wsSchemeName, rebuildCustomColorCss=W.rebuildCustomColorCss, render=W.render;
+const getState = () => W.TellMeRuntime?.state ?? W.state;
+const esc = (...a) => W.esc ? W.esc(...a) : a[0];
+const toast = (...a) => W.toast?.(...a);
+const getCfg = (...a) => W.getCfg ? W.getCfg(...a) : {};
+const saveCfg = (...a) => W.saveCfg?.(...a);
+const wsUndoLog = (...a) => W.wsUndoLog ? W.wsUndoLog(...a) : [];
+const wsRemovedBuiltin = (...a) => W.wsRemovedBuiltin ? W.wsRemovedBuiltin(...a) : [];
+const wsColorSchemeId = (...a) => W.wsColorSchemeId ? W.wsColorSchemeId(...a) : 'none';
+const wsCustomColors = (...a) => W.wsCustomColors ? W.wsCustomColors(...a) : [];
+const wsColorSchemesList = (...a) => W.wsColorSchemesList ? W.wsColorSchemesList(...a) : [];
+const wsColorCfgOf = (...a) => W.wsColorCfgOf ? W.wsColorCfgOf(...a) : { undo: [], removedBuiltin: [], custom: [], removedCustom: [] };
+const wsSchemeName = (...a) => W.wsSchemeName ? W.wsSchemeName(...a) : '';
+const rebuildCustomColorCss = (...a) => W.rebuildCustomColorCss?.(...a);
+const render = (...a) => W.render?.(...a);
 export function wsColorToolbarHtml(){
   const undoN = wsUndoLog().length, rmB = wsRemovedBuiltin().length;
   return `<div class="ws-cs-toolbar">
@@ -61,7 +73,7 @@ export function wsColorDelete(id){
   if(id==='none') return;
   const c=getCfg(); const cs=wsColorCfgOf(c);
   const active=(c.styleCustom||{}).colorScheme;
-  const bi=WS_COLOR_SCHEMES.find(x=>x.id===id);
+  const bi=(W.WS_COLOR_SCHEMES||[]).find(x=>x.id===id);
   if(bi){
     if(cs.removedBuiltin.includes(id)) return;
     cs.removedBuiltin.push(id); cs.undo.push({type:'builtin',id:id});

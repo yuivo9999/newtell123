@@ -1,7 +1,7 @@
 /* v30: cohesive legacy region — AI 配方 / 历史 / 导入导出工作区. */
 
 export function install(deps){
-  const {
+  let {
     aiRp,
     aiRecipeSave,
     aiRecipeResultHtml,

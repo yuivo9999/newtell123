@@ -33,6 +33,14 @@ export function exposeLegacyWindows() {
   window.TellMeHistoryPanel = m2;
   window.TellMeLegacyDomains = window.TellMeLegacyDomains || {};
   window.TellMeLegacyDomains[domainName] = api;
+  if (m2) {
+    if (typeof m2.openHistPanel === 'function') window.openHistPanel = m2.openHistPanel;
+    if (typeof m2.closeHistPanel === 'function') window.closeHistPanel = m2.closeHistPanel;
+    if (typeof m2.renderHistList === 'function') window.renderHistList = m2.renderHistList;
+    if (typeof m2.fmtHistTime === 'function') window.fmtHistTime = m2.fmtHistTime;
+    if (typeof m2.histProgress === 'function') window.histProgress = m2.histProgress;
+    if (typeof m2.histItemPreview === 'function') window.histItemPreview = m2.histItemPreview;
+  }
   return true;
 }
 // v40 legacy constants/state ownership.

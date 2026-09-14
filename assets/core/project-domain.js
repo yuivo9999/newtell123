@@ -32,6 +32,19 @@ export function exposeLegacyWindows() {
   window.TellMeProjectFyp = m1;
   window.TellMeLegacyDomains = window.TellMeLegacyDomains || {};
   window.TellMeLegacyDomains[domainName] = api;
+  if (m0) {
+    if (typeof m0.switchProject === 'function') window.switchProject = m0.switchProject;
+    if (typeof m0.newProject === 'function') window.newProject = m0.newProject;
+    if (typeof m0.newLongProject === 'function') window.newLongProject = m0.newLongProject;
+    if (typeof m0.deleteProject === 'function') window.deleteProject = m0.deleteProject;
+    if (typeof m0.rebindHistPanel === 'function') window.rebindHistPanel = m0.rebindHistPanel;
+  }
+  if (m1) {
+    if (typeof m1.buildFyp === 'function') window.buildFyp = m1.buildFyp;
+    if (typeof m1.parseFyp === 'function') window.parseFyp = m1.parseFyp;
+    if (typeof m1.exportProjectFile === 'function') window.exportProjectFile = m1.exportProjectFile;
+    if (typeof m1.importProjectFile === 'function') window.importProjectFile = m1.importProjectFile;
+  }
   return true;
 }
 

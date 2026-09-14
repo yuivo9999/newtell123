@@ -349,6 +349,9 @@ export const TIME_ANCHOR_SYS = `你是长篇小说「章节收束时间锚」提
 
 
 export let genBatchN = 2;
+export let aiAdviceCand = null;
+export let chState = {};
+export let _dictRedlineOver = false;
 
 export const legacyContext = Object.freeze({
   LONG_CHAPTER_SYS_PRO, PROMPTS, SIZE_DEFAULT,

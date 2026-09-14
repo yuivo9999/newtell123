@@ -1,7 +1,7 @@
 /* v30: cohesive legacy region — 章节摘要 / 重生成 / AI 建议 / 对比工作区. */
 
 export function install(deps){
-  const {
+  let {
     PROMPTS,
     USER_PRIO_BILL,
     _abortBtn,

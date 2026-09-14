@@ -1,7 +1,7 @@
 /* v26: cohesive legacy region extracted from app-legacy.js. */
 
 export function install(deps){
-  const {
+  let {
     startBgTask,
     endBgTask,
     updateBgTaskIndicator,
@@ -676,6 +676,7 @@ export function install(deps){
 
   // v28: shared draft state moved with the cohesive writing-style workspace region.
   let wsDraft = null;
+  const schoolStageGroups = (...a) => (window.schoolStageGroups ? window.schoolStageGroups(...a) : (window.TellMeLegacyDomains?.['school-domain']?.schoolStageGroups ? window.TellMeLegacyDomains['school-domain'].schoolStageGroups(...a) : []));
 
 function parseCustomStyleNote(note){
   const tips=[], avoid=[], check=[];
@@ -1508,7 +1509,34 @@ function closeStyleLibReader(){ const p=$('#wsLibReader'); if(p) p.remove(); }
     sizeSlider,
     initDRS,
     pickSize,
-    scHealState
+    scHealState,
+    wsDraftInit,
+    wsDraftDirty,
+    refreshWsUI,
+    wsColorCfgOf,
+    wsColorCfg,
+    wsCustomColors,
+    wsRemovedBuiltin,
+    wsRemovedCustom,
+    wsUndoLog,
+    wsColorSchemesList,
+    wsSchemeColors,
+    wsSchemeName,
+    wsColorSchemeId,
+    rebuildCustomColorCss,
+    writeStyleChipsHtml,
+    toggleWriteTag,
+    writeStyleCard,
+    bindWriteStyle,
+    openStyleNewDialog,
+    closeStyleNewDialog,
+    applyWritePresetDraft,
+    openStyleLibPanel,
+    importWsStyleBundle,
+    closeStyleLibPanel,
+    openStyleLibReader,
+    closeStyleLibReader,
+    writeStyleState
   };
   const ns = window.TellMeLegacyRegions = window.TellMeLegacyRegions || {};
   ns['writing-style'] = Object.freeze(api);

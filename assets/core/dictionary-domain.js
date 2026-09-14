@@ -114,12 +114,7 @@ const { stripSegmentMarkers, splitChapterOutput, splitChapterCastout } = window.
 export const USER_PRIO_BILL = '\n\n【优先级契约（按维度裁决，禁止把不同维度混成一个选择题）】\n1. 表达层最高权威：用户已选写作风格。它决定怎么写（叙事、对白、语言质感、节奏表现、情绪表达、幽默/悬疑/治愈等表现机制），不得被优化构想或正文模型重新改写。\n2. 剧情层最高权威：本章老师教案。它决定写什么（事件、顺序、转折、出场、时间、承接与收束）；写作风格不得删改教案事件。\n3. 全书一致性权威：万物词典 + 上一章已落地事实 + 校长/老师已裁决的连续性规则。\n4. 人工干预只能在不破坏以上三层的前提下补充；若人工干预与用户风格冲突，保留用户风格；若与老师教案冲突，不得擅改教案核心事件。\n5. 优化构想只是创意建议：仅当校长已判断其与用户风格兼容时才执行；不得在正文阶段自行把优化构想升级成新的风格权威。\n设定词典中有台词/有戏份/反复出现的重要人地专名一致性为不可逾越红线；仅作氛围的临时路人/小地名/小专名（见正文【临时闲人】段）不属红线，可现场点缀、不入词典；上一章全文（如有）为承接类事实的最高权威，任何要求不得使其另起炉灶。';
 
 
-export const legacyContext = Object.freeze({
-  DICTMASTER_SYS, DICT_ENRICH_SYS, DICT_HARVEST_SYS, USER_PRIO_BILL,
-  GVT_CFG, gsUndoStack, GS_UNDO_MAX,
-});
-
-const esc = (...args) => window.TellMeLegacyFoundation.esc(...args);
+const esc = (...args) => (window.TellMeLegacyFoundation?.esc ? window.TellMeLegacyFoundation.esc(...args) : (args[0] != null ? String(args[0]) : ''));
 export const GVT_CFG = {
   rel: { name:'👥 人物关系表', key:'_relationshipTable', empty:'暂无人物关系记录', fields:[
     {k:'a',  ph:'人物A'}, {k:'relation', ph:'关系'}, {k:'b', ph:'人物B'}, {k:'note', ph:'备注(可选)'} ],
@@ -136,3 +131,8 @@ export const GVT_CFG = {
 };
 export let gsUndoStack = [];
 export const GS_UNDO_MAX = 10;
+
+export const legacyContext = Object.freeze({
+  DICTMASTER_SYS, DICT_ENRICH_SYS, DICT_HARVEST_SYS, USER_PRIO_BILL,
+  GVT_CFG, gsUndoStack, GS_UNDO_MAX,
+});

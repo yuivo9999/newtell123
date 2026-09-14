@@ -6,6 +6,8 @@
  * at call time while exposing named ESM exports for the modern core.
  */
 
+const runtime = () => window.TellMeRuntime || window || {};
+
 const TEAM_OPTIONS = [
   { id:'solo',  label:'主角线',      n:1, kind:'solo', desc:'一位主角，个人视角贯穿全书' },
   { id:'dual',  label:'双主角',      n:2, kind:'dual', desc:'男女主角同为第一主角，双线叙事、双视角（如互为镜像与对照）' },

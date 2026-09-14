@@ -1,7 +1,7 @@
 /* v31: cohesive legacy region — chapter-layout-tools */
 
 export function install(deps){
-  const {
+  let {
     BEAT_OPTIONS,
     chTitleHistory,
     currentBeatId,

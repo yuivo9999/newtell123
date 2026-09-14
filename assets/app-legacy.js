@@ -110,6 +110,8 @@ const MAX_PROJECTS = window.TellMeLegacyShared.MAX_PROJECTS;
 let lib = window.TellMeLegacyShared.lib;
 let gglib = window.TellMeLegacyShared.gglib;
 const state = window.TellMeLegacyShared.state;
+let charTS = [];
+window.charTS = charTS;
 
 // Runtime bridge used by ESM planning modules. Keep the mutable state private.
 window.TellMeRuntime = {
@@ -144,6 +146,7 @@ window.TellMeRuntime = {
   get $(){ return $; },
   get $$(){ return $$; },
   get KEY_PROJ_PREFIX(){ return KEY_PROJ_PREFIX; },
+  get KEY_CFG(){ return KEY_CFG; },
   get TOAST_LOG_KEY(){ return TOAST_LOG_KEY; },
   get SND_KEY(){ return SND_KEY; },
   get SND_VOL_KEY(){ return SND_VOL_KEY; },
@@ -200,8 +203,8 @@ state.aiNetwork = state.aiNetwork || {
 function destroyCharTS(...args){ return window.TellMeLegacyFoundation.destroyCharTS(...args); }
 function parseAge(...args){ return window.TellMeLegacyFoundation.parseAge(...args); }
 
-const $ = (s, r=document) => r.querySelector(s);
-const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const $ = (window.$ = (s, r=document) => (r||document).querySelector(s));
+const $$ = (window.$$ = (s, r=document) => [...(r||document).querySelectorAll(s)]);
 
 const TOAST_LOG_KEY = nsKey('toastLog_v1');
 function toastLogPush(...args){ return window.TellMeLegacyFoundation.toastLogPush(...args); }
@@ -211,8 +214,8 @@ function toast(...args){ return window.TellMeLegacyFoundation.toast(...args); }
 const SND_KEY = (typeof nsKey==='function') ? nsKey('snd') : 'tz_snd_done';
 const SND_VOL_KEY = (typeof nsKey==='function') ? nsKey('snd_vol') : 'tz_snd_vol';
 const _snd = { ctx:null, enabled: (localStorage.getItem(SND_KEY) !== '0'), vol: (()=>{ try{ const v=parseFloat(localStorage.getItem(SND_VOL_KEY)); return isFinite(v)?Math.max(0,Math.min(1,v)):0.8; }catch(e){ return 0.8; } })() };
-function _sndEnabled(...args){ return window.TellMeLegacyFoundation._sndEnabled(...args); }
-function _sndVol(...args){ return window.TellMeLegacyFoundation._sndVol(...args); }
+function _sndEnabled(...args){ return window.TellMeLegacyFoundation?._sndEnabled ? window.TellMeLegacyFoundation._sndEnabled(...args) : !!_snd.enabled; }
+function _sndVol(...args){ return window.TellMeLegacyFoundation?._sndVol ? window.TellMeLegacyFoundation._sndVol(...args) : (_snd.vol ?? 0.8); }
 function unlockAudio(...args){ return window.TellMeLegacyFoundation.unlockAudio(...args); }
 function _sndBeep(...args){ return window.TellMeLegacyFoundation._sndBeep(...args); }
 const SND_SINGLE_PRESETS = [
@@ -509,13 +512,17 @@ function renderSchoolPrincipalBody(...args){ return window.TellMeLegacyDomains?.
 function openSchoolRawPanel(...args){ return window.TellMeLegacyDomains?.['school-domain']?.openSchoolRawPanel(...args); }
 
 
+function validateSubplotOutput(...args){ return (window.TellMeLegacyDomains?.['narrative-domain']?.validateSubplotOutput?.(...args) ?? window.validateSubplotOutput?.(...args)); }
+function validateGlossaryExtract(...args){ return (window.TellMeLegacyDomains?.['dictionary-domain']?.validateGlossaryExtract?.(...args) ?? window.validateGlossaryExtract?.(...args)); }
+function validateDictMasterOutput(...args){ return (window.validateDictMasterOutput?.(...args) ?? window.TellMeLegacyDomains?.['dictionary-domain']?.validateDictMasterOutput?.(...args)); }
+
 const AIValidators = {
-  idea: validateIdeaProOutput,
-  titles: validateTitleOutput,
-  subplot: validateSubplotOutput,
-    glossary: validateGlossaryExtract,
-    strip: validateStripLen,
-    dictmaster: validateDictMasterOutput
+  idea: (...args) => validateIdeaProOutput(...args),
+  titles: (...args) => validateTitleOutput(...args),
+  subplot: (...args) => validateSubplotOutput(...args),
+  glossary: (...args) => validateGlossaryExtract(...args),
+  strip: (...args) => validateStripLen(...args),
+  dictmaster: (...args) => validateDictMasterOutput(...args)
 };
 
 function ideaKeyTerms(...args){ return window.TellMeLegacyDomains?.['ai-domain']?.ideaKeyTerms(...args); }
@@ -830,8 +837,20 @@ function fmtHistTime(...args){ return window.TellMeHistoryPanel.fmtHistTime(...a
 function histProgress(...args){ return window.TellMeHistoryPanel.histProgress(...args); }
 function renderHistList(...args){ return window.TellMeHistoryPanel.renderHistList(...args); }
 function histItemPreview(...args){ return window.TellMeHistoryPanel.histItemPreview(...args); }
-function openHistPanel(...args){ return window.TellMeHistoryPanel.openHistPanel(...args); }
-function closeHistPanel(...args){ return window.TellMeHistoryPanel.closeHistPanel(...args); }
+function openHistPanel(...args){
+  if (window.TellMeHistoryPanel && typeof window.TellMeHistoryPanel.openHistPanel === 'function') {
+    return window.TellMeHistoryPanel.openHistPanel(...args);
+  }
+  const p = document.getElementById('histPanel');
+  if (p) p.classList.remove('hidden');
+}
+function closeHistPanel(...args){
+  if (window.TellMeHistoryPanel && typeof window.TellMeHistoryPanel.closeHistPanel === 'function') {
+    return window.TellMeHistoryPanel.closeHistPanel(...args);
+  }
+  const p = document.getElementById('histPanel');
+  if (p) p.classList.add('hidden');
+}
 function switchProject(...args){ return window.TellMeProjectHistory.switchProject(...args); }
 function newProject(...args){ return window.TellMeProjectHistory.newProject(...args); }
 function newLongProject(...args){ return window.TellMeProjectHistory.newLongProject(...args); }
@@ -1636,7 +1655,7 @@ window.__TellMeInstallLegacyRegions = (mods) => {
     chPage,
     CH_PAGE_SIZE,
     readerCur,
-    lnER,
+    lnER: (typeof lnER !== 'undefined' ? lnER : null),
     genOutline,
     DICTMASTER_SYS,
     DICT_ENRICH_SYS,

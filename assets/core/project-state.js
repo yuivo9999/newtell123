@@ -4,7 +4,7 @@ const _m0 = (() => {
 /* v26: cohesive legacy region extracted from app-legacy.js. */
 
 function install(deps){
-  const {
+  let {
     startBgTask,
     endBgTask,
     updateBgTaskIndicator,
@@ -593,9 +593,9 @@ function install(deps){
     KEY_GLIB,
     LS_SINGLE_SAFE,
     MAX_PROJECTS,
-    lib,
+    lib: rawLib,
     gglib,
-    state,
+    state: rawState,
     currentStep,
     TOAST_LOG_KEY,
     SND_KEY,
@@ -707,6 +707,25 @@ function install(deps){
     TM_TEMP
   } = deps;
 
+  const state = new Proxy({}, {
+    get(_, p) { return (rawState ?? deps.state ?? window.TellMeRuntime?.state ?? window.state ?? (window.TellMeLegacyShared && window.TellMeLegacyShared.state) ?? {})[p]; },
+    set(_, p, v) {
+      const target = rawState ?? deps.state ?? window.TellMeRuntime?.state ?? window.state ?? (window.TellMeLegacyShared && window.TellMeLegacyShared.state);
+      if (target) { target[p] = v; }
+      else if (window.state) { window.state[p] = v; }
+      return true;
+    }
+  });
+  const lib = new Proxy({}, {
+    get(_, p) { return (rawLib ?? deps.lib ?? window.TellMeRuntime?.lib ?? window.lib ?? (window.TellMeLegacyShared && window.TellMeLegacyShared.lib) ?? { curId: null, items: [] })[p]; },
+    set(_, p, v) {
+      const target = rawLib ?? deps.lib ?? window.TellMeRuntime?.lib ?? window.lib ?? (window.TellMeLegacyShared && window.TellMeLegacyShared.lib);
+      if (target) { target[p] = v; }
+      else if (window.lib) { window.lib[p] = v; }
+      return true;
+    }
+  });
+
 function projectSnapshot(){
   return {
     mode: state.mode || 'shortfilm',
@@ -714,8 +733,8 @@ function projectSnapshot(){
     chapterRange: state.chapterRange || null,
     totalWords: state.totalWords || null,
     chapterCount: (state.chapterCount && +state.chapterCount>0) ? +state.chapterCount : null,
-    bookBeat: currentBookBeatId(),
-    openingStrategy: currentOpeningStrategyId(),
+    bookBeat: (typeof currentBookBeatId === 'function' ? currentBookBeatId() : (state.bookBeat || null)),
+    openingStrategy: (typeof currentOpeningStrategyId === 'function' ? currentOpeningStrategyId() : (state.openingStrategy || 'auto')),
     idea: state.idea,
     coverPrompt: state.coverPrompt,
     coverWithTitle: state.coverWithTitle,
@@ -776,8 +795,9 @@ function applyProject(p){
   state.chapterRange = (p.chapterRange && p.chapterRange.min && p.chapterRange.max) ? {min:+p.chapterRange.min, max:+p.chapterRange.max} : null;
   state.totalWords = (p.totalWords && +p.totalWords>0) ? +p.totalWords : null;
   state.chapterCount = (p.chapterCount && +p.chapterCount>0) ? +p.chapterCount : null;
-  state.bookBeat = [4,7,12,15].includes(Number(p.bookBeat)) ? Number(p.bookBeat) : (state.bookBeat || BOOK_BEAT_DEFAULT_ID);
-  state.openingStrategy = openingStrategyDef(p.openingStrategy) ? p.openingStrategy : 'auto';
+  state.bookBeat = [4,7,12,15].includes(Number(p.bookBeat)) ? Number(p.bookBeat) : (state.bookBeat || (typeof BOOK_BEAT_DEFAULT_ID !== 'undefined' ? BOOK_BEAT_DEFAULT_ID : 7));
+  const hasOpeningDef = typeof openingStrategyDef === 'function';
+  state.openingStrategy = hasOpeningDef ? (openingStrategyDef(p.openingStrategy) ? p.openingStrategy : 'auto') : (p.openingStrategy || 'auto');
   state.longMemory = (p.longMemory && typeof p.longMemory === 'object') ? p.longMemory : { uiOpen:false, foreshadow:[], lastAuditAt:0 };
   state.idea = p.idea || '';
   state.coverPrompt = p.coverPrompt || '';
@@ -822,7 +842,7 @@ function applyProject(p){
   state.chapterStyle = (p.chapterStyle && typeof p.chapterStyle === 'object')
     ? { tags: Array.isArray(p.chapterStyle.tags)?p.chapterStyle.tags:[], collapsed: !!p.chapterStyle.collapsed }
     : { tags: [], collapsed: false };
-  setWsDraft(null);
+  if(typeof setWsDraft === 'function') setWsDraft(null); else try { (window.TellMeLegacyDomains?.['workspace-domain']?.setWsDraft || window.setWsDraft)?.(null); } catch(e){}
   state.scenes = p.scenes || [];
   state.storyboard = p.storyboard || [];
   state.boardConcepts = p.boardConcepts || [];
@@ -845,7 +865,8 @@ function applyProject(p){
   if(!Array.isArray(state.school.teachers)) state.school.teachers = [];
   state.teamShape = (p.teamShape==='dual'||p.teamShape==='trio'||p.teamShape==='quad'||p.teamShape==='quint') ? p.teamShape : 'solo';
   state._chapterPartial = (p._chapterPartial && typeof p._chapterPartial === 'object') ? p._chapterPartial : {};
-  normalizeOutline(state.outline);
+  if(typeof normalizeOutline === 'function') normalizeOutline(state.outline);
+  else try { (window.TellMeLegacyDomains?.['story-domain']?.normalizeOutline || window.normalizeOutline)?.(state.outline); } catch(e){}
 }
 
 function clearState(){
@@ -876,7 +897,7 @@ function clearState(){
   state._chapterPartial = {};
   state.aiNetwork = { stage:'idle', running:[], completed:[], blockedBy:{} };
   state._lastCpRaw = '';
-  setWsDraft(null);
+  if(typeof setWsDraft === 'function') setWsDraft(null); else try { (window.TellMeLegacyDomains?.['workspace-domain']?.setWsDraft || window.setWsDraft)?.(null); } catch(e){}
   currentStep = 1;
 }
 
@@ -1090,8 +1111,65 @@ return Object.freeze({install});
 const _m1 = (() => {
 // Extracted from app-legacy.js; legacy UI/runtime bridge.
 const W = globalThis;
-const state = W.TellMeRuntime?.state ?? W.state;
-const $=W.$, toast=W.toast, persist=W.persist, applyProject=W.applyProject, saveLib=W.saveLib, clearState=W.clearState, projectSnapshot=W.projectSnapshot, makeId=W.makeId, render=W.render, renderHistList=W.renderHistList, importProjectFile=W.importProjectFile, closeHistPanel=W.closeHistPanel; const MAX_PROJECTS= W.TellMeRuntime?.MAX_PROJECTS ?? 500; const lib = W.TellMeRuntime?.lib;
+const state = new Proxy({}, {
+  get(_, p) { return (W.TellMeRuntime?.state ?? W.state ?? {})[p]; },
+  set(_, p, v) { if (!W.state) W.state = {}; (W.TellMeRuntime?.state ?? W.state)[p] = v; return true; }
+});
+const lib = new Proxy({}, {
+  get(_, p) { return (W.TellMeRuntime?.lib ?? W.lib ?? (W.TellMeLegacyShared && W.TellMeLegacyShared.lib) ?? { curId: null, items: [] })[p]; },
+  set(_, p, v) {
+    const target = W.TellMeRuntime?.lib ?? W.lib ?? (W.TellMeLegacyShared && W.TellMeLegacyShared.lib);
+    if (target) target[p] = v;
+    return true;
+  }
+});
+
+function getFn(name, fallback) {
+  return (...args) => {
+    if (typeof W[name] === 'function') return W[name](...args);
+    if (W.TellMeHistoryPanel && typeof W.TellMeHistoryPanel[name] === 'function') {
+      return W.TellMeHistoryPanel[name](...args);
+    }
+    if (W.TellMeLegacyShared && typeof W.TellMeLegacyShared[name] === 'function') {
+      return W.TellMeLegacyShared[name](...args);
+    }
+    if (W.TellMeLegacyDomains) {
+      for (const d of Object.values(W.TellMeLegacyDomains)) {
+        if (d && typeof d[name] === 'function') return d[name](...args);
+      }
+    }
+    if (W.TellMeLegacyRegions) {
+      for (const r of Object.values(W.TellMeLegacyRegions)) {
+        if (r && typeof r[name] === 'function') return r[name](...args);
+      }
+    }
+    if (typeof fallback === 'function') return fallback(...args);
+    console.warn(`[project-state] function not found: ${name}`);
+  };
+}
+
+const $ = (s, r) => (W.$ ? W.$(s, r) : (r || document).querySelector(s));
+const $$ = (s, r) => (W.$$ ? W.$$(s, r) : [...((r || document).querySelectorAll(s) || [])]);
+const toast = getFn('toast', (msg) => console.log(msg));
+const persist = getFn('persist');
+const applyProject = getFn('applyProject');
+const saveLib = getFn('saveLib');
+const clearState = getFn('clearState');
+const projectSnapshot = getFn('projectSnapshot');
+const makeId = getFn('makeId', () => Math.random().toString(36).slice(2, 9));
+const render = getFn('render');
+const renderHistList = getFn('renderHistList');
+const importProjectFile = (...args) => (typeof _m2 !== 'undefined' && _m2.importProjectFile ? _m2.importProjectFile(...args) : getFn('importProjectFile')(...args));
+const closeHistPanel = getFn('closeHistPanel', () => {
+  const p = $('#histPanel');
+  if (p) p.classList.add('hidden');
+});
+const openHistPanel = getFn('openHistPanel', () => {
+  try { renderHistList(); } catch(e){}
+  const p = $('#histPanel');
+  if (p) p.classList.remove('hidden');
+});
+const MAX_PROJECTS = W.TellMeRuntime?.MAX_PROJECTS ?? 500;
 function switchProject(id){
   if(id === lib.curId){ closeHistPanel(); return; }
   persist(); // 先保存当前项目
@@ -1134,7 +1212,8 @@ function newLongProject(){
 function deleteProject(id){
   const it = lib.items.find(i=> i.id === id);
   if(!it) return;
-  if(!confirm(`确定删除「${it.title||'未命名作品'}」？此操作不可恢复。`)) return;
+  const cfm = typeof confirm === 'function' ? confirm : (W.confirm || (() => true));
+  if(!cfm(`确定删除「${it.title||'未命名作品'}」？此操作不可恢复。`)) return;
   const wasCur = id === lib.curId;
   lib.items = lib.items.filter(i=> i.id !== id);
   if(wasCur){
@@ -1179,8 +1258,55 @@ return Object.freeze({switchProject, newProject, newLongProject, deleteProject, 
 const _m2 = (() => {
 // Extracted from app-legacy.js; legacy UI/runtime bridge.
 const W = globalThis;
-const state = W.TellMeRuntime?.state ?? W.state;
-const toast=W.toast, downloadBlob=W.downloadBlob, makeId=W.makeId, saveLib=W.saveLib, applyProject=W.applyProject, closeHistPanel=W.closeHistPanel, render=W.render, MAX_PROJECTS=W.TellMeRuntime?.MAX_PROJECTS ?? 500, APP_VERSION=W.TellMeRuntime?.APP_VERSION ?? ''; const lib=W.TellMeRuntime?.lib;
+const state = new Proxy({}, {
+  get(_, p) { return (W.TellMeRuntime?.state ?? W.state ?? {})[p]; },
+  set(_, p, v) { if (!W.state) W.state = {}; (W.TellMeRuntime?.state ?? W.state)[p] = v; return true; }
+});
+const lib = new Proxy({}, {
+  get(_, p) { return (W.TellMeRuntime?.lib ?? W.lib ?? (W.TellMeLegacyShared && W.TellMeLegacyShared.lib) ?? { curId: null, items: [] })[p]; },
+  set(_, p, v) {
+    const target = W.TellMeRuntime?.lib ?? W.lib ?? (W.TellMeLegacyShared && W.TellMeLegacyShared.lib);
+    if (target) target[p] = v;
+    return true;
+  }
+});
+
+function getFn2(name, fallback) {
+  return (...args) => {
+    if (typeof W[name] === 'function') return W[name](...args);
+    if (W.TellMeHistoryPanel && typeof W.TellMeHistoryPanel[name] === 'function') {
+      return W.TellMeHistoryPanel[name](...args);
+    }
+    if (W.TellMeLegacyShared && typeof W.TellMeLegacyShared[name] === 'function') {
+      return W.TellMeLegacyShared[name](...args);
+    }
+    if (W.TellMeLegacyDomains) {
+      for (const d of Object.values(W.TellMeLegacyDomains)) {
+        if (d && typeof d[name] === 'function') return d[name](...args);
+      }
+    }
+    if (W.TellMeLegacyRegions) {
+      for (const r of Object.values(W.TellMeLegacyRegions)) {
+        if (r && typeof r[name] === 'function') return r[name](...args);
+      }
+    }
+    if (typeof fallback === 'function') return fallback(...args);
+    console.warn(`[project-fyp] function not found: ${name}`);
+  };
+}
+
+const toast = getFn2('toast', (msg) => console.log(msg));
+const downloadBlob = getFn2('downloadBlob');
+const makeId = getFn2('makeId', () => Math.random().toString(36).slice(2, 9));
+const saveLib = getFn2('saveLib');
+const applyProject = getFn2('applyProject');
+const closeHistPanel = getFn2('closeHistPanel', () => {
+  const p = (W.$ ? W.$('#histPanel') : document.getElementById('histPanel'));
+  if (p) p.classList.add('hidden');
+});
+const render = getFn2('render');
+const MAX_PROJECTS = W.TellMeRuntime?.MAX_PROJECTS ?? 500;
+const APP_VERSION = W.TellMeRuntime?.APP_VERSION ?? '';
 function buildFyp(project){
   return {
     format: 'fyp-project',

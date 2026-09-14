@@ -1,7 +1,7 @@
 /* v30: cohesive legacy region — 长篇控制台 / 记忆仓与创建进度. */
 
 export function install(deps){
-  const {
+  let {
     CYBER_HOME_GRID,
     aiRecipeCard,
     beatStructureCardHtml,
@@ -32,6 +32,14 @@ export function install(deps){
     titleManagerHtml,
     writeStyleCard,
   } = deps;
+  const TEAM_OPTIONS = window.TellMeLegacyShared?.TEAM_OPTIONS || window.TellMeLegacyDomains?.['story-domain']?.TEAM_OPTIONS || [
+    { id:'solo', label:'单人视角', desc:'聚焦单主角内心与行动' },
+    { id:'dual', label:'双主角视角', desc:'双线交织或双重视角' },
+    { id:'trio', label:'三人小队', desc:'铁三角互动' },
+    { id:'quad', label:'四人团队', desc:'群像协作' },
+    { id:'ensemble', label:'群像多视角', desc:'宏大叙事与多方交锋' }
+  ];
+  const currentTeamShape = (...a) => (window.currentTeamShape ? window.currentTeamShape(...a) : (window.TellMeLegacyDomains?.['story-domain']?.currentTeamShape ? window.TellMeLegacyDomains['story-domain'].currentTeamShape(...a) : (TEAM_OPTIONS[0])));
 
 
 

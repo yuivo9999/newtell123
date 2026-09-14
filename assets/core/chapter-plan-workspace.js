@@ -1,7 +1,7 @@
 /* v30: cohesive legacy region — 节拍表 / 章节规划工作区. */
 
 export function install(deps){
-  const {
+  let {
     bindPlannerSoundTool,
     bindSchoolSteps,
     buildChapterUser,
@@ -20,6 +20,7 @@ export function install(deps){
     state,
     toast,
   } = deps;
+  const schoolStageGroups = (...a) => (window.schoolStageGroups ? window.schoolStageGroups(...a) : (window.TellMeLegacyDomains?.['school-domain']?.schoolStageGroups ? window.TellMeLegacyDomains['school-domain'].schoolStageGroups(...a) : []));
 
 
 

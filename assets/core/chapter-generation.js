@@ -574,7 +574,7 @@ const _m5 = (() => {
 /* v31: cohesive legacy region — chapter-generation-controls */
 
 function install(deps){
-  const {
+  let {
     autoUpdateSubplots,
     autoUpdateTimeAnchors,
     genManyChapters,
@@ -676,7 +676,7 @@ const _m6 = (() => {
 /* v31: cohesive legacy region — chapter-batch-generation */
 
 function install(deps){
-  const {
+  let {
     CH_PAGE_SIZE,
     autoUpdateSubplots,
     autoUpdateTimeAnchors,
@@ -745,7 +745,7 @@ const _m7 = (() => {
 /* v31: cohesive legacy region — chapter-single-generation-legacy */
 
 function install(deps){
-  const {
+  let {
     PROMPTS,
     buildChapterUser,
     callDeepSeek,

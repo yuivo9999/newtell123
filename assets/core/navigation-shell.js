@@ -1,7 +1,7 @@
 /* v30: cohesive legacy region — Navigation / 主流程导航与长篇健康总览. */
 
 export function install(deps){
-  const {
+  let {
     FLOW_NAV,
     LONG_CHAPTER_SYS_PRO,
     beatCnt,
@@ -28,6 +28,9 @@ export function install(deps){
     viewStory,
     viewStoryboard,
   } = deps;
+  const $ = (s, r = document) => (r || document).querySelector(s);
+  const $$ = (s, r = document) => [...(r || document).querySelectorAll(s)];
+  const normalizeOutline = (...a) => (window.normalizeOutline ? window.normalizeOutline(...a) : window.TellMeLegacyDomains?.['story-domain']?.normalizeOutline?.(...a));
 
 
 function chapterSysBase(){

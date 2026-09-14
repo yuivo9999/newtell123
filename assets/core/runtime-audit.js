@@ -115,4 +115,4 @@ import { validateRuntimePacket } from './novel-runtime.js';
     if(view && root.MutationObserver) new MutationObserver(function(){ paintBadges(); }).observe(view,{childList:true,subtree:true});
   }
   root.setTimeout(function(){ tick(); root.setInterval(tick,1500); },300);
-})(window);
+})(typeof window !== 'undefined' ? window : globalThis);

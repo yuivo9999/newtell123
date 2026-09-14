@@ -4,7 +4,7 @@ const _m0 = (() => {
 /* v31: cohesive legacy region — dict-enrich-compose */
 
 function install(deps){
-  const {
+  let {
     banListChars,
     banListNames,
     cleanEntityName,
@@ -151,7 +151,7 @@ const _m1 = (() => {
 /* v30: cohesive legacy region — 词典增强 / 演员收集 / AI 补全工作区. */
 
 function install(deps){
-  const {
+  let {
     DICT_ENRICH_SYS,
     DICT_HARVEST_SYS,
     _abortCtl,

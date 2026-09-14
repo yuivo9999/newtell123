@@ -1,7 +1,7 @@
 /* v31: cohesive legacy region — boot-ui */
 
 export function install(deps){
-  const {
+  let {
     
   } = deps;
   const $ = (s,r=document) => r.querySelector(s);

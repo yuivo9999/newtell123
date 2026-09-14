@@ -1,7 +1,7 @@
 /* v30: cohesive legacy region — 章节标题工作区. */
 
 export function install(deps){
-  const {
+  let {
     _aiOptBusy,
     addAdvHist,
     aiHistEntryId,

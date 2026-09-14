@@ -3,12 +3,20 @@
 const _m0 = (() => {
 // Extracted from app-legacy.js.
 const W=globalThis;
-const state=W.TellMeRuntime?.state ?? W.state;
-const R=W.TellMeRuntime;
-const $=W.$, getCfg=W.getCfg, renderGroupsList=W.renderGroupsList, renderGroupDetail=W.renderGroupDetail, renderActiveSelects=W.renderActiveSelects, updateTmBadge=W.updateTmBadge;
+const getR = () => W.TellMeRuntime || (W.TellMeRuntime = {});
+const R = new Proxy({}, {
+  get(_, p){ return getR()[p]; },
+  set(_, p, v){ getR()[p] = v; return true; }
+});
+const $ = (s, r = document) => (r || document).querySelector(s);
+const getCfg = (...a) => (W.getCfg ? W.getCfg(...a) : (W.TellMeLegacyFoundation?.getCfg ? W.TellMeLegacyFoundation.getCfg(...a) : { groups: [], active: {} }));
+const renderGroupsList = (...a) => W.renderGroupsList?.(...a);
+const renderGroupDetail = (...a) => W.renderGroupDetail?.(...a);
+const renderActiveSelects = (...a) => W.renderActiveSelects?.(...a);
+const updateTmBadge = (...a) => W.updateTmBadge?.(...a);
 function openSettings(){
   R.editCfg = JSON.parse(JSON.stringify(getCfg()));
-  R.selGroupId = R.editCfg.active ? R.editCfg.active.groupId : (R.editCfg.groups[0] && R.editCfg.groups[0].id);
+  R.selGroupId = R.editCfg.active ? R.editCfg.active.groupId : ((R.editCfg.groups && R.editCfg.groups[0]) ? R.editCfg.groups[0].id : null);
   $('#settingsModal').classList.remove('hidden');
   echoTemps();
   const st = $('#cfgStatus'); if(st){ st.className='status'; st.textContent=''; }
@@ -24,18 +32,19 @@ function echoTemps(){
 
 function saveTemps(){
   const rd = (id, def)=>{ const v=parseFloat($(id) && $(id).value); return isNaN(v)?def:v; };
-  R.editCfg.temperature = rd('#cfgTemp', 0.7);
+  if(R.editCfg) R.editCfg.temperature = rd('#cfgTemp', 0.7);
   const live = getCfg();
   const TM_FIELDS = ['ideaTemp','principalTemp','teacherTemp','dictmasterTemp','dictEnrichTemp','assetsTemp','titleTemp','chapterTemp','qcTemp','stripTemp','subplotTemp','rollingTemp','contentAdviseTemp','aiRecipeTemp'];
-  TM_FIELDS.forEach(f=>{ if(live && typeof live[f]==='number') R.editCfg[f]=live[f]; });
+  TM_FIELDS.forEach(f=>{ if(live && typeof live[f]==='number' && R.editCfg) R.editCfg[f]=live[f]; });
 }
 
 function _curSpec(){
   const cfg = (R.editCfg && R.editCfg.groups) ? R.editCfg : getCfg();
-  const act = cfg.active || {};
-  const g = cfg.groups.find(x=>x.id===act.groupId) || cfg.groups[0];
-  const m = g && (g.models.find(x=>x.name===act.model) || g.models[0]);
-  const k = g && (g.keys.find(x=>x.id===act.keyId) || g.keys[0]);
+  const act = (cfg && cfg.active) || {};
+  const groups = (cfg && Array.isArray(cfg.groups)) ? cfg.groups : [];
+  const g = groups.find(x=>x.id===act.groupId) || groups[0];
+  const m = g && ((g.models && g.models.find(x=>x.name===act.model)) || (g.models && g.models[0]));
+  const k = g && ((g.keys && g.keys.find(x=>x.id===act.keyId)) || (g.keys && g.keys[0]));
   return { group: g?g.label:'', key: k?k.label:'', model: m?m.name:'', flash: !!(m && m.kind==='flash') };
 }
 
@@ -62,7 +71,7 @@ const _m1 = (() => {
 /* v31: cohesive legacy region — settings-group-editor */
 
 function install(deps){
-  const {
+  let {
     copyText,
     defaultModels,
     esc,
@@ -85,7 +94,7 @@ function renderGroupDetail(){
   const el=$('#groupDetail'); if(!el) return;
   const g=_dg();
   if(!g){ el.innerHTML='<div class="muted">选择左侧一个服务，或点上方「＋ 新增组」添加。</div>'; return; }
-  getSelGroupId()=g.id;
+  setSelGroupId(g.id);
   el.innerHTML = `
     <div class="set-block-head">
       <span>${esc(g.label)} · 详情</span>
@@ -174,7 +183,7 @@ function addGroup(){
   if(!label.trim()){ toast('名称为空，未添加'); return; }
   const base=prompt('接口地址（OpenAI 兼容，如 https://api.deepseek.com）：','');
   const g={ id:uid('g'), kind:'openai', label:label.trim(), baseUrl:(base||'').trim(), keys:[], models:defaultModels(), keyInBody:false };
-  getEditCfg().groups.push(g); getSelGroupId()=g.id; refreshAfter();
+  getEditCfg().groups.push(g); setSelGroupId(g.id); refreshAfter();
 }
 
 function renderActiveSelects(){
@@ -213,7 +222,7 @@ const _m2 = (() => {
 /* v31: cohesive legacy region — settings-save-test */
 
 function install(deps){
-  const {
+  let {
     callDeepSeek,
     getEditCfg,
     saveCfg,
@@ -272,26 +281,28 @@ return Object.freeze({install});
 
 // ---- merged source: groups.js ----
 const _m3 = (() => {
-const W = window;
-const R = W.TellMeRuntime;
-const $ = R.$;
-const esc = R.esc;
+const W = typeof window !== 'undefined' ? window : globalThis;
+const getR = () => W.TellMeRuntime || {};
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (...args) => (getR().esc ? getR().esc(...args) : (args[0] != null ? String(args[0]) : ''));
 
 function renderGroupsList(){
-  const el=$('#groupsList'); if(!el) return;
-  el.innerHTML='';
-  if(!R.editCfg.groups.length){ el.innerHTML='<div class="muted">暂无服务，点上方「＋ 新增组」添加。</div>'; return; }
+  const R = getR();
+  const el = $('#groupsList'); if(!el) return;
+  el.innerHTML = '';
+  if(!R.editCfg || !Array.isArray(R.editCfg.groups) || !R.editCfg.groups.length){
+    el.innerHTML = '<div class="muted">暂无服务，点上方「＋ 新增组」添加。</div>';
+    return;
+  }
   R.editCfg.groups.forEach(g=>{
-    if(!R.selGroupId) R.selGroupId=g.id;
-    const d=document.createElement('div');
-    d.className='group-item' + (g.id===R.selGroupId ? ' active' : '');
+    if(!R.selGroupId) R.selGroupId = g.id;
+    const d = document.createElement('div');
+    d.className = 'group-item' + (g.id === R.selGroupId ? ' active' : '');
     d.innerHTML = `<span class="gi-label">${esc(g.label)}</span><span class="gi-meta">${g.keys.length} 账号 · ${g.models.length} 模型</span>`;
-    d.onclick = ()=>{ R.selGroupId=g.id; renderGroupsList(); W.renderGroupDetail(); };
+    d.onclick = ()=>{ R.selGroupId = g.id; renderGroupsList(); W.renderGroupDetail?.(); };
     el.appendChild(d);
   });
 }
-
-
 
 return Object.freeze({renderGroupsList});
 })();

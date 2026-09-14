@@ -1,7 +1,7 @@
 /* v30: cohesive legacy region — 正文主视图 / 节拍与故事事实卡. */
 
 export function install(deps){
-  const {
+  let {
     aiRecipeAddGap,
     aiRecipeAddGapAll,
     aiRecipeApply,
@@ -438,7 +438,6 @@ function bindLoglineEdit(){
     bindOrigIdea,
     bindOutlineFold,
     bindLoglineEdit,
-    bindAiRecipe,
   };
   const ns = window.TellMeLegacyRegions = window.TellMeLegacyRegions || {};
   ns['story-viewer'] = Object.freeze(api);

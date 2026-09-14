@@ -1,7 +1,7 @@
 /* v26: cohesive legacy region extracted from app-legacy.js. */
 
 export function install(deps){
-  const {
+  let {
     startBgTask,
     endBgTask,
     updateBgTaskIndicator,
@@ -674,6 +674,7 @@ export function install(deps){
     TM_GROUPS,
     TM_TEMP
   } = deps;
+  const schoolStageGroups = (...a) => (window.schoolStageGroups ? window.schoolStageGroups(...a) : (window.TellMeLegacyDomains?.['school-domain']?.schoolStageGroups ? window.TellMeLegacyDomains['school-domain'].schoolStageGroups(...a) : []));
 
 function scState(){
   if(!state.school || typeof state.school !== 'object') state.school = {};

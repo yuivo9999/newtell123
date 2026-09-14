@@ -3,8 +3,26 @@
 const _m0 = (() => {
 // Extracted from app-legacy.js; legacy UI/runtime bridge.
 const W = globalThis;
-const state = W.TellMeRuntime?.state ?? W.state;
-const $=W.$, toast=W.toast, stateBanEnabled=W.stateBanEnabled, toastLogGet=W.toastLogGet, openFactCardModal=W.openFactCardModal, openRollingSummaryModal=W.openRollingSummaryModal, openConsistencyCheck=W.openConsistencyCheck, openToastBoard=W.openToastBoard, continueAndFinalizeChapter=W.continueAndFinalizeChapter, handleBanListAction=W.handleBanListAction, renderResumePanel=W.renderResumePanel, renderIronPanel=W.renderIronPanel, renderBanListPanel=W.renderBanListPanel, persist=W.persist, esc=W.esc;
+const getState = () => W.TellMeRuntime?.state ?? W.state;
+const state = new Proxy({}, {
+  get(_, p) { return getState()?.[p]; },
+  set(_, p, v) { const s = getState(); if (s) s[p] = v; return true; }
+});
+const $ = (s, r = document) => (r || document).querySelector(s);
+const toast = (...a) => W.toast?.(...a);
+const stateBanEnabled = (...a) => W.stateBanEnabled ? W.stateBanEnabled(...a) : true;
+const toastLogGet = (...a) => W.toastLogGet ? W.toastLogGet(...a) : [];
+const openFactCardModal = (...a) => W.openFactCardModal?.(...a);
+const openRollingSummaryModal = (...a) => W.openRollingSummaryModal?.(...a);
+const openConsistencyCheck = (...a) => W.openConsistencyCheck?.(...a);
+const openToastBoard = (...a) => W.openToastBoard?.(...a);
+const continueAndFinalizeChapter = (...a) => W.continueAndFinalizeChapter?.(...a);
+const handleBanListAction = (...a) => W.handleBanListAction ? W.handleBanListAction(...a) : _m1.handleBanListAction(...a);
+const renderResumePanel = (...a) => W.renderResumePanel ? W.renderResumePanel(...a) : _m1.renderResumePanel(...a);
+const renderIronPanel = (...a) => W.renderIronPanel ? W.renderIronPanel(...a) : _m1.renderIronPanel(...a);
+const renderBanListPanel = (...a) => W.renderBanListPanel ? W.renderBanListPanel(...a) : _m1.renderBanListPanel(...a);
+const persist = (...a) => W.persist?.(...a);
+const esc = (...a) => W.esc ? W.esc(...a) : a[0];
 function openNarrativeEngine(){
   const p = $('#narrativeEnginePanel'); if(!p) return;
   renderNarrativeEngineMenu();
@@ -78,8 +96,27 @@ return Object.freeze({openNarrativeEngine, closeNarrativeEngine, openNeModal, cl
 const _m1 = (() => {
 // Extracted from app-legacy.js; legacy UI/runtime bridge.
 const W = globalThis;
-const state = W.TellMeRuntime?.state ?? W.state;
-const $=W.$, esc=W.esc, toast=W.toast, countWords=W.countWords, openNeModal=W.openNeModal, closeNeModal=W.closeNeModal, persist=W.persist, renderNarrativeEngineMenu=W.renderNarrativeEngineMenu, banListRaw=W.banListRaw, normalizeBanList=W.normalizeBanList, stateBanEnabled=W.stateBanEnabled, banListChars=W.banListChars, banListNames=W.banListNames, BANLIST_DEFAULT=W.BANLIST_DEFAULT, NARRATIVE_IRON_HARD=W.NARRATIVE_IRON_HARD, NARRATIVE_IRON_SOFT=W.NARRATIVE_IRON_SOFT;
+const getState = () => W.TellMeRuntime?.state ?? W.state;
+const state = new Proxy({}, {
+  get(_, p) { return getState()?.[p]; },
+  set(_, p, v) { const s = getState(); if (s) s[p] = v; return true; }
+});
+const $ = (s, r = document) => (r || document).querySelector(s);
+const esc = (...a) => W.esc ? W.esc(...a) : a[0];
+const toast = (...a) => W.toast?.(...a);
+const countWords = (...a) => W.countWords ? W.countWords(...a) : { total: 0 };
+const openNeModal = (...a) => W.openNeModal ? W.openNeModal(...a) : _m0.openNeModal(...a);
+const closeNeModal = (...a) => W.closeNeModal ? W.closeNeModal(...a) : _m0.closeNeModal(...a);
+const persist = (...a) => W.persist?.(...a);
+const renderNarrativeEngineMenu = (...a) => W.renderNarrativeEngineMenu ? W.renderNarrativeEngineMenu(...a) : _m0.renderNarrativeEngineMenu(...a);
+const banListRaw = (...a) => W.banListRaw ? W.banListRaw(...a) : '';
+const normalizeBanList = (...a) => W.normalizeBanList ? W.normalizeBanList(...a) : null;
+const stateBanEnabled = (...a) => W.stateBanEnabled ? W.stateBanEnabled(...a) : true;
+const banListChars = (...a) => W.banListChars ? W.banListChars(...a) : [];
+const banListNames = (...a) => W.banListNames ? W.banListNames(...a) : [];
+const BANLIST_DEFAULT = new Proxy({}, { get(_, p) { return W.BANLIST_DEFAULT?.[p]; } });
+const NARRATIVE_IRON_HARD = new Proxy([], { get(_, p) { return W.NARRATIVE_IRON_HARD?.[p]; } });
+const NARRATIVE_IRON_SOFT = new Proxy([], { get(_, p) { return W.NARRATIVE_IRON_SOFT?.[p]; } });
 function renderResumePanel(){
   const partials = state._chapterPartial || {};
   const keys = Object.keys(partials).filter(k=> String(partials[k]||'').trim().length>=50);
@@ -235,9 +272,14 @@ return Object.freeze({renderResumePanel, handleBanListAction, renderIronPanel, r
 const _m2 = (() => {
 // Extracted from app-legacy.js.
 const W=globalThis;
-const state=W.TellMeRuntime?.state ?? W.state;
-const R=W.TellMeRuntime;
-const $=W.$, esc=W.esc, switchProject=W.switchProject, deleteProject=W.deleteProject, exportProjectFile=W.exportProjectFile, cleanChapterTitle=W.cleanChapterTitle;
+const getR = () => W.TellMeRuntime || {};
+const getLib = () => W.TellMeRuntime?.lib ?? W.lib ?? { items: [], curId: null };
+const $ = (s, r = document) => (r || document).querySelector(s);
+const esc = (...a) => W.esc ? W.esc(...a) : a[0];
+const switchProject = (...a) => W.switchProject?.(...a);
+const deleteProject = (...a) => W.deleteProject?.(...a);
+const exportProjectFile = (...a) => W.exportProjectFile?.(...a);
+const cleanChapterTitle = (...a) => W.cleanChapterTitle ? W.cleanChapterTitle(...a) : a[0];
 function fmtHistTime(ts){
   if(!ts) return '';
   const d = new Date(ts), now = new Date();
@@ -261,10 +303,12 @@ function histProgress(p){
 
 function renderHistList(){
   const list = $('#histList'); if(!list) return;
-  const items = [...lib.items].sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
+  const curLib = getLib();
+  const items = [...(curLib.items || [])].sort((a,b)=> (b.updatedAt||0) - (a.updatedAt||0));
+  const curHistOpenId = getR().histOpenId;
   list.innerHTML = items.map(p=>{
-    const isCur = p.id === lib.curId;
-    const open = histOpenId === p.id;
+    const isCur = p.id === curLib.curId;
+    const open = curHistOpenId === p.id;
     const preview = histItemPreview(p);
     return `<div class="hist-item ${isCur?'active':''} ${open?'open':''}" data-hist="${p.id}">
       <div class="hist-head" data-hist-toggle="${p.id}">
@@ -288,7 +332,8 @@ function renderHistList(){
     if(e.target.closest('[data-del]')) return;
     if(e.target.closest('[data-fypexp]')) return;   // .fyp 导出按钮不触发折叠
     const id = h.dataset.histToggle;
-    histOpenId = (histOpenId===id) ? null : id;
+    const R = getR();
+    R.histOpenId = (R.histOpenId===id) ? null : id;
     renderHistList();                               // 重新渲染以切折叠态
   });
 }

@@ -8,8 +8,9 @@ const _m0 = (() => {
  * Context7/MDN-guided ESM boundary: prompt construction and output validation
  * are pure-ish named exports; UI/AI orchestration remains in app-legacy.js.
  */
-const runtime = () => window.TellMeRuntime || {};
+const runtime = () => window.TellMeRuntime || window || {};
 const state = () => runtime().state || window.state || {};
+const dictmasterLocked = (...a) => (window.dictmasterLocked ? window.dictmasterLocked(...a) : (window.TellMeLegacyDomains?.['story-domain']?.dictmasterLocked ? window.TellMeLegacyDomains['story-domain'].dictmasterLocked(...a) : false));
 
 function buildDictMasterUser(ctx){
   const cand = ctx && ctx.candidate;
@@ -62,7 +63,7 @@ const _m1 = (() => {
 /* v31: cohesive legacy region — dict-master-generation */
 
 function install(deps){
-  const {
+  let {
     _abortCtl,
     addToFixQueue,
     busy,
@@ -83,6 +84,7 @@ function install(deps){
   } = deps;
   const $ = (s,r=document) => r.querySelector(s);
   const $$ = (s,r=document) => [...r.querySelectorAll(s)];
+  const dictmasterLocked = (...a) => (window.dictmasterLocked ? window.dictmasterLocked(...a) : (window.TellMeLegacyDomains?.['story-domain']?.dictmasterLocked ? window.TellMeLegacyDomains['story-domain'].dictmasterLocked(...a) : false));
 
 
 async function genDictMaster(btn){
@@ -260,7 +262,7 @@ const _m2 = (() => {
 /* v30: cohesive legacy region — 万物词典主词典工作区. */
 
 function install(deps){
-  const {
+  let {
     esc,
     state,
     toast,

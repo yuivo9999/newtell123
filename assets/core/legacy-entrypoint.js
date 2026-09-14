@@ -1,7 +1,7 @@
 /* v31: cohesive legacy region — legacy-entrypoint */
 
 export function install(deps){
-  const {
+  let {
     addGroup,
     applyTheme,
     closeHistPanel,
@@ -67,9 +67,21 @@ async function init(){
     toast('温度已保存');
   };
   document.addEventListener('click', (e)=>{
-    const t = $('#themePanel'); if(t && !t.classList.contains('hidden') && !t.contains(e.target) && !e.target.closest('#btnTheme')) closeThemePanel();
-    const h = $('#histPanel'); if(h && !h.classList.contains('hidden') && !h.contains(e.target) && !e.target.closest('#btnHist')) closeHistPanel();
-    const col = $('#wsColorPanel'); if(col && !col.classList.contains('hidden') && !col.contains(e.target) && !e.target.closest('#btnWsColor')) closeWsColorPanel();
+    const t = $('#themePanel'); if(t && !t.classList.contains('hidden') && !t.contains(e.target) && !e.target.closest('#btnTheme')) {
+      if (typeof closeThemePanel === 'function') closeThemePanel();
+      else if (window.closeThemePanel) window.closeThemePanel();
+      else t.classList.add('hidden');
+    }
+    const h = $('#histPanel'); if(h && !h.classList.contains('hidden') && !h.contains(e.target) && !e.target.closest('#btnHist')) {
+      if (typeof closeHistPanel === 'function') closeHistPanel();
+      else if (window.closeHistPanel) window.closeHistPanel();
+      else h.classList.add('hidden');
+    }
+    const col = $('#wsColorPanel'); if(col && !col.classList.contains('hidden') && !col.contains(e.target) && !e.target.closest('#btnWsColor')) {
+      if (typeof closeWsColorPanel === 'function') closeWsColorPanel();
+      else if (window.closeWsColorPanel) window.closeWsColorPanel();
+      else col.classList.add('hidden');
+    }
   });
   $$('[data-close]').forEach(b=> b.onclick = closeSettings);
   $('#btnCfgSave').onclick = ()=>{ saveSettings(); closeSettings(); };

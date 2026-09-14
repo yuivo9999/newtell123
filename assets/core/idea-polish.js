@@ -1,7 +1,7 @@
 /* v26: cohesive legacy region extracted from app-legacy.js. */
 
 export function install(deps){
-  const {
+  let {
     startBgTask,
     endBgTask,
     updateBgTaskIndicator,
