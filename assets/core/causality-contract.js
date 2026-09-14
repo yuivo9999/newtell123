@@ -1,0 +1,8 @@
+/** v47 causal graph. Pure/browser-independent. */
+'use strict';
+export const CAUSALITY_CONTRACT_VERSION=1;
+export const CAUSAL_TYPES=Object.freeze(['CAUSE','EFFECT','PRECONDITION','TRIGGER','CONSEQUENCE','REVERSAL','DEPENDENCY']);
+const text=v=>String(v==null?'':v).trim();
+export function normalizeCausalLink(input={},defaults={}){const x={...(input||{})};return {version:CAUSALITY_CONTRACT_VERSION,id:text(x.id)||`ca_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,from:text(x.from),to:text(x.to),type:CAUSAL_TYPES.includes(x.type)?x.type:'CAUSE',chapterId:Number(x.chapterId||defaults.chapterId)||null,evidence:text(x.evidence),authority:x.authority};}
+export function validateCausalGraph(links=[]){const issues=[];const ids=new Set();for(const l0 of links){const l=normalizeCausalLink(l0);if(ids.has(l.id))issues.push({code:'CAUSAL_DUPLICATE',severity:'fail',id:l.id});ids.add(l.id);if(!l.from||!l.to)issues.push({code:'CAUSAL_ENDPOINT_MISSING',severity:'fail'});if(l.from===l.to)issues.push({code:'CAUSAL_SELF_LOOP',severity:'fail',id:l.id});if(!l.chapterId)issues.push({code:'CAUSAL_CHAPTER_MISSING',severity:'fail'});}return {status:issues.length?'FAIL':'PASS',issues};}
+export function detectCausalCycle(links=[]){const g=new Map();for(const l0 of links){const l=normalizeCausalLink(l0);if(!g.has(l.from))g.set(l.from,[]);g.get(l.from).push(l.to);}const visiting=new Set(),done=new Set();function dfs(n){if(visiting.has(n))return true;if(done.has(n))return false;visiting.add(n);for(const x of g.get(n)||[])if(dfs(x))return true;visiting.delete(n);done.add(n);return false;}for(const n of g.keys())if(dfs(n))return {status:'FAIL',code:'CAUSAL_CYCLE'};return {status:'PASS'};}
