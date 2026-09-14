@@ -784,7 +784,7 @@ const genOutline = async function(){
   if(btn) busy(btn,true,'搬运大纲中…');
   try{
     const o = buildOutlineFromPolishCandidate(cand);
-    applyOutlineObject(o, { silent: true });
+    applyOutlineObject(o, { silent: true, candidate: cand });
     state.outlineConfirmed = true;
     state.polishCollapsed = true;
     markAIDone('outline');   // 成功后标记完成
@@ -802,6 +802,16 @@ const genOutline = async function(){
     hideStopBtn(); if(btn) busy(btn,false);
   }
 };
+window.genOutline = genOutline;
+if (window.TellMeLegacyShared) {
+  window.TellMeLegacyShared.genOutline = genOutline;
+}
+if (window.TellMeRuntime) {
+  window.TellMeRuntime.genOutline = genOutline;
+}
+if (window.TellMeLegacyDomains?.['story-domain']) {
+  window.TellMeLegacyDomains['story-domain'] = Object.assign({}, window.TellMeLegacyDomains['story-domain'], { genOutline });
+}
 
 let _dictRedlineOver = window.TellMeLegacyShared._dictRedlineOver;function buildChapterUser(...args){ return window.TellMeLegacyDomains?.['chapter-domain']?.buildChapterUser(...args); }
 

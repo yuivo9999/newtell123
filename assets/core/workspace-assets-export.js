@@ -24,6 +24,7 @@ export function install(deps){
   } = deps;
   const W = typeof window !== 'undefined' ? window : globalThis;
   const getFn = (name) => (...a) => {
+    if (deps && typeof deps[name] === 'function') return deps[name](...a);
     if (typeof W[name] === 'function') return W[name](...a);
     if (W.TellMeLegacyShared && typeof W.TellMeLegacyShared[name] === 'function') return W.TellMeLegacyShared[name](...a);
     if (W.TellMeLegacyDomains) {

@@ -36,6 +36,8 @@ function applyOutlineObject(o, opts){
   const newN = state.chapterCount || oldChapters.length;
   if(newN && oldChapters.length === newN){
     o.chapters = oldChapters;
+  } else if(newN && newN > 0){
+    o.chapters = Array.from({ length: newN }, (_, i) => oldChapters[i] || { title: '', summary: '' });
   } else {
     o.chapters = [];
   }
@@ -45,8 +47,11 @@ function applyOutlineObject(o, opts){
   state.outlineConfirmed = false;
   if(prevGloss) o.glossary = prevGloss;
   else if(!o.glossary) o.glossary = {characters:[], places:[], propernouns:[]};
+  if(opts && opts.candidate && opts.candidate._v45){
+    try { applyV45ToOutline(o, opts.candidate._v45); } catch(e){}
+  }
   if(state.pendingV45){
-    applyV45ToOutline(o, state.pendingV45);
+    try { applyV45ToOutline(o, state.pendingV45); } catch(e){}
     state.pendingV45 = null;
   }
   if(!o.navBeacon){
@@ -66,7 +71,7 @@ function applyOutlineObject(o, opts){
     state.chapters = o.chapters.map((c,ci)=>{
       const p = _prev && _prev[ci];
       return {
-        title: c.title,
+        title: c.title || '',
         content: p ? String(p.content||'') : '',
         strip: p ? String(p.strip||'') : '',
         confirmed: p ? !!p.confirmed : false,
@@ -167,7 +172,8 @@ function buildOutlineFromPolishCandidate(cand){
   const txt = String((cand && cand.text) || '').trim();
   const o = state.outline || {};
   const curTitle = (o && o.title) || '';
-  const title = extractCandidateBookName(txt) || curTitle || '';
+  const candName = (cand && cand.name && !/^方案\d+$/.test(String(cand.name).trim())) ? String(cand.name).trim() : '';
+  const title = extractCandidateBookName(txt) || (cand && (cand.bookName || cand.title)) || candName || curTitle || '';
   const prevGloss = (o && o.glossary && sourceHasGlossary(o.glossary)) ? o.glossary : null;
   const build = {
     title,
@@ -177,10 +183,53 @@ function buildOutlineFromPolishCandidate(cand){
   };
   if(prevGloss) build.glossary = prevGloss;
   else build.glossary = { characters:[], places:[], propernouns:[], subplots:[] };
+  if(cand && cand._v45){
+    try { applyV45ToOutline(build, cand._v45); } catch(e){}
+  }
   return build;
 }
 
+async function genOutline(){
+  const W = typeof window !== 'undefined' ? window : globalThis;
+  if (typeof W.genOutline === 'function' && W.genOutline !== genOutline) {
+    return W.genOutline();
+  }
+  const btn = document.querySelector('#btnGenOutline') || document.querySelector('[data-gen-outline]');
+  const st = document.querySelector('#outlineStatus');
+  if(st){ st.className='status'; st.textContent=''; }
+  const noOpt = !(Array.isArray(state.polishOptions) && state.polishOptions.length);
+  if(noOpt){
+    toast('请先点「✨ 优化构想」生成方案，再点「生成大纲」搬入书名 / 简介 / 节拍');
+    return;
+  }
+  const cand = selectedPolishCandidate();
+  if(!cand){
+    toast('先选择一个优化方案（在②优化构想中点击某张候选卡「✔ 采用此方案」）');
+    return;
+  }
+  if(dictmasterLocked()){
+    toast('词典达人已产出万物词典，②方案已锁定，不可再换选重搬');
+    return;
+  }
+  if(!confirmOutlineContentGuard()){ return; }
+  try{
+    const o = buildOutlineFromPolishCandidate(cand);
+    applyOutlineObject(o, { silent: true, candidate: cand });
+    state.outlineConfirmed = true;
+    state.polishCollapsed = true;
+    if (state.aiNetwork) {
+      state.aiNetwork.completed = Array.from(new Set([...(state.aiNetwork.completed||[]), 'outline']));
+      state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='outline');
+    }
+    persist();
+    render();
+    toast('已生成大纲：书名 / 小说简介 / 全书节拍已搬入，直接进入正文写作（书名仅用户可改）');
+  }catch(e){
+    if(st){ st.className='status err'; st.textContent = e.message; }
+    toast('大纲生成失败：'+e.message);
+  }
+}
 
-Object.assign(window, { applyOutlineObject, syncChaptersFromOutline, chapterContentStat, confirmOutlineContentGuard, selectedPolishCandidate, dictmasterLocked, extractCandidateBookName, stripStructureFromIntro, renderLoglineHtml, buildOutlineFromPolishCandidate });
+Object.assign(window, { applyOutlineObject, syncChaptersFromOutline, chapterContentStat, confirmOutlineContentGuard, selectedPolishCandidate, dictmasterLocked, extractCandidateBookName, stripStructureFromIntro, renderLoglineHtml, buildOutlineFromPolishCandidate, genOutline });
 
-export { applyOutlineObject, syncChaptersFromOutline, chapterContentStat, confirmOutlineContentGuard, selectedPolishCandidate, dictmasterLocked, extractCandidateBookName, stripStructureFromIntro, renderLoglineHtml, buildOutlineFromPolishCandidate };
+export { applyOutlineObject, syncChaptersFromOutline, chapterContentStat, confirmOutlineContentGuard, selectedPolishCandidate, dictmasterLocked, extractCandidateBookName, stripStructureFromIntro, renderLoglineHtml, buildOutlineFromPolishCandidate, genOutline };
