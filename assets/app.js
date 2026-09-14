@@ -9,6 +9,28 @@
 globalThis.$ = window.$ = (s, r = document) => (r || document).querySelector(s);
 globalThis.$$ = window.$$ = (s, r = document) => [...(r || document).querySelectorAll(s)];
 
+// Sandboxed iframe protection: ensure window.prompt and window.confirm don't throw DOMException
+if (typeof window !== 'undefined') {
+  const _origPrompt = window.prompt;
+  window.prompt = function(msg, def = '') {
+    try {
+      return _origPrompt ? _origPrompt.call(window, msg, def) : null;
+    } catch (e) {
+      console.warn('[tellme123] window.prompt suppressed by environment:', e);
+      return null;
+    }
+  };
+  const _origConfirm = window.confirm;
+  window.confirm = function(msg) {
+    try {
+      return _origConfirm ? _origConfirm.call(window, msg) : true;
+    } catch (e) {
+      console.warn('[tellme123] window.confirm suppressed by environment:', e);
+      return true;
+    }
+  };
+}
+
 const loadClassic = (src) => new Promise((resolve, reject) => {
   const script = document.createElement('script');
   const url = new URL(src, import.meta.url);

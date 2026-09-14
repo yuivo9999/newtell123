@@ -54,7 +54,22 @@ async function init(){
   rebindHistPanel();
   rebindWsColorPanel();
   const btnTheme = $('#btnTheme');
-  if(btnTheme) btnTheme.onclick = (e)=>{ e.stopPropagation(); const p=$('#themePanel'); if(p.classList.contains('hidden')) openThemePanel(); else closeThemePanel(); };
+  if(btnTheme) btnTheme.onclick = (e)=>{
+    e.stopPropagation();
+    const p=$('#themePanel');
+    if(!p) return;
+    if(p.classList.contains('hidden')){
+      if(typeof openThemePanel === 'function') openThemePanel();
+      else if(window.openThemePanel) window.openThemePanel();
+      else if(window.TellMeThemePanel?.openThemePanel) window.TellMeThemePanel.openThemePanel();
+      else p.classList.remove('hidden');
+    } else {
+      if(typeof closeThemePanel === 'function') closeThemePanel();
+      else if(window.closeThemePanel) window.closeThemePanel();
+      else if(window.TellMeThemePanel?.closeThemePanel) window.TellMeThemePanel.closeThemePanel();
+      else p.classList.add('hidden');
+    }
+  };
   initThemeSoundPanel();
   rebindNarrativeEngine();
   const btnTS = $('#btnTempSave');
@@ -92,12 +107,20 @@ async function init(){
   $$('#taskModelModal [data-tm-close]').forEach(el=> el.onclick = requestCloseTaskModelPanel);
   const btnAddG = $('#btnAddGroup'); if(btnAddG) btnAddG.onclick = addGroup;
   const selG=$('#c_selGroup'), selK=$('#c_selKey'), selM=$('#c_selModel');
-  if(selG) selG.onchange = ()=>{ if(getEditCfg()){ editCfg.active.groupId = selG.value; renderActiveSelects(); updateCfgBadge(); } };
-  if(selK) selK.onchange = ()=>{ if(getEditCfg()){ editCfg.active.keyId = selK.value; updateCfgBadge(); } };
-  if(selM) selM.onchange = ()=>{ if(getEditCfg()){ editCfg.active.model = selM.value; updateCfgBadge(); } };
+  if(selG) selG.onchange = ()=>{ const ecfg = getEditCfg(); if(ecfg){ ecfg.active.groupId = selG.value; renderActiveSelects(); updateCfgBadge(); } };
+  if(selK) selK.onchange = ()=>{ const ecfg = getEditCfg(); if(ecfg){ ecfg.active.keyId = selK.value; updateCfgBadge(); } };
+  if(selM) selM.onchange = ()=>{ const ecfg = getEditCfg(); if(ecfg){ ecfg.active.model = selM.value; updateCfgBadge(); } };
   const cfgBadge=$('#cfgBadge'); if(cfgBadge) cfgBadge.onclick = openSettings;
   updateCfgBadge();
-  $$('.theme-btns .theme').forEach(b=> b.onclick = ()=>{ applyTheme(b.dataset.theme); closeThemePanel(); });
+  $$('.theme-btns .theme').forEach(b=> b.onclick = (e)=>{
+    e.stopPropagation();
+    const fn = (typeof applyTheme === 'function' ? applyTheme : (window.applyTheme || window.TellMeLegacyFoundation?.applyTheme));
+    if (typeof fn === 'function') fn(b.dataset.theme);
+    else document.documentElement?.setAttribute('data-theme', b.dataset.theme);
+    if (typeof closeThemePanel === 'function') closeThemePanel();
+    else if (window.closeThemePanel) window.closeThemePanel();
+    else $('#themePanel')?.classList.add('hidden');
+  });
   const mtn = $('#mechaTopNav');
   if(mtn){
     $$('.cap', mtn).forEach(c=> c.onclick = ()=>{

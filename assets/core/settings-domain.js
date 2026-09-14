@@ -29,7 +29,12 @@ export const api = Object.freeze(Object.assign({}, ...modules));
 export function exposeLegacyWindows() {
   window.TellMeSettingsCore = m0;
   window.TellMeTaskModels = m1;
-  window.TellMeGroups = m2;
+  window.TellMeGroupEditor = m2;
+  window.TellMeSettingsSaveTest = m3;
+  window.TellMeGroups = m4;
+  if (typeof window.renderGroupsList !== "function" && m4 && typeof m4.renderGroupsList === "function") {
+    window.renderGroupsList = m4.renderGroupsList;
+  }
   window.TellMeLegacyDomains = window.TellMeLegacyDomains || {};
   window.TellMeLegacyDomains[domainName] = api;
   return true;

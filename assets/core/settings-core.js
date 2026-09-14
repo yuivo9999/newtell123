@@ -10,9 +10,9 @@ const R = new Proxy({}, {
 });
 const $ = (s, r = document) => (r || document).querySelector(s);
 const getCfg = (...a) => (W.getCfg ? W.getCfg(...a) : (W.TellMeLegacyFoundation?.getCfg ? W.TellMeLegacyFoundation.getCfg(...a) : { groups: [], active: {} }));
-const renderGroupsList = (...a) => W.renderGroupsList?.(...a);
-const renderGroupDetail = (...a) => W.renderGroupDetail?.(...a);
-const renderActiveSelects = (...a) => W.renderActiveSelects?.(...a);
+const renderGroupsList = (...a) => (W.renderGroupsList ? W.renderGroupsList(...a) : (typeof _m3?.renderGroupsList === 'function' ? _m3.renderGroupsList(...a) : undefined));
+const renderGroupDetail = (...a) => (W.renderGroupDetail ? W.renderGroupDetail(...a) : (W.TellMeLegacyDomains?.['settings-domain']?.renderGroupDetail ? W.TellMeLegacyDomains['settings-domain'].renderGroupDetail(...a) : undefined));
+const renderActiveSelects = (...a) => (W.renderActiveSelects ? W.renderActiveSelects(...a) : (W.TellMeLegacyDomains?.['settings-domain']?.renderActiveSelects ? W.TellMeLegacyDomains['settings-domain'].renderActiveSelects(...a) : undefined));
 const updateTmBadge = (...a) => W.updateTmBadge?.(...a);
 function openSettings(){
   R.editCfg = JSON.parse(JSON.stringify(getCfg()));
@@ -88,13 +88,14 @@ function install(deps){
   const $$ = (s,r=document) => [...r.querySelectorAll(s)];
 
 
-function _dg(){ return getEditCfg().groups.find(x=>x.id===getSelGroupId()) || getEditCfg().groups[0]; }
+function _dg(){ return (getEditCfg() && getEditCfg().groups && (getEditCfg().groups.find(x=>x.id===getSelGroupId()) || getEditCfg().groups[0])) || null; }
 
 function renderGroupDetail(){
   const el=$('#groupDetail'); if(!el) return;
   const g=_dg();
   if(!g){ el.innerHTML='<div class="muted">选择左侧一个服务，或点上方「＋ 新增组」添加。</div>'; return; }
   setSelGroupId(g.id);
+  const R = globalThis.TellMeRuntime || {};
   el.innerHTML = `
     <div class="set-block-head">
       <span>${esc(g.label)} · 详情</span>
@@ -118,8 +119,26 @@ function renderGroupDetail(){
         <button class="btn small ghost k-eye" data-key-eye="${i}" type="button" title="显示/隐藏 Key">👁</button>
         <button class="btn small ghost k-copy" data-key-copy="${i}" type="button" title="复制 Key">📋</button>
         <button class="btn small ghost del" data-act="delkey" data-id="${k.id}" type="button">删</button>
-      </div>`).join('') : '<div class="muted">该组还没有账号，点「＋ 账号」粘贴 API Key。</div>'}
+      </div>`).join('') : '<div class="muted">该组还没有账号，点「＋ 账号」直接新增。</div>'}
     <div class="gd-title">模型清单</div>
+    ${R.showAddModel ? `
+      <div class="add-model-panel" style="margin-bottom:8px;padding:8px 10px;background:var(--panel2);border:1px dashed var(--accent,#58a6ff);border-radius:8px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--txt)">添加 AI 模型</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="m-add-input" type="text" placeholder="输入模型名，如 deepseek-chat 或 gpt-4o" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt)">
+          <button class="btn small primary m-confirm-add" type="button">确定添加</button>
+          <button class="btn small ghost m-cancel-add" type="button">取消</button>
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;align-items:center">
+          <span style="font-size:11px;color:var(--muted)">推荐：</span>
+          <button type="button" class="btn small ghost m-tag" data-val="deepseek-chat">deepseek-chat</button>
+          <button type="button" class="btn small ghost m-tag" data-val="deepseek-reasoner">deepseek-reasoner</button>
+          <button type="button" class="btn small ghost m-tag" data-val="glm-4-flash">glm-4-flash</button>
+          <button type="button" class="btn small ghost m-tag" data-val="gpt-4o-mini">gpt-4o-mini</button>
+          <button type="button" class="btn small ghost m-tag" data-val="claude-3-5-sonnet">claude-3-5-sonnet</button>
+        </div>
+      </div>
+    ` : ''}
     ${g.models.length ? g.models.map(m=>`
       <div class="model-row">
         <span class="m-name">${esc(m.name)}</span>
@@ -128,8 +147,33 @@ function renderGroupDetail(){
       </div>`).join('') : '<div class="muted">请点「＋ 模型」添加模型名。</div>'}
   `;
   el.onclick = onDetail;
-  el.querySelectorAll('.k-lab').forEach(inp=> inp.onchange=()=>{ const gg=_dg(); gg.keys[+inp.dataset.idx].label = inp.value || ('账号'+(+inp.dataset.idx+1)); });
-  el.querySelectorAll('.k-key').forEach(inp=> { inp.onchange=()=>{ const gg=_dg(); gg.keys[+inp.dataset.idx].key = inp.value.trim(); updateCfgBadge(); }; });
+
+  const addPanel = el.querySelector('.add-model-panel');
+  if (addPanel) {
+    const inp = addPanel.querySelector('.m-add-input');
+    const doAddM = (nameVal) => {
+      const n = (nameVal || (inp && inp.value) || '').trim();
+      if (!n) { toast('模型名不能为空'); if (inp) inp.focus(); return; }
+      g.models.push({ name: n, label: n, kind: n.includes('flash') ? 'flash' : '' });
+      R.showAddModel = false;
+      refreshAfter();
+      toast('已添加模型：' + n);
+    };
+    addPanel.querySelectorAll('.m-tag').forEach(btn => {
+      btn.onclick = (e) => { e.stopPropagation(); doAddM(btn.dataset.val); };
+    });
+    const confBtn = addPanel.querySelector('.m-confirm-add');
+    if (confBtn) confBtn.onclick = (e) => { e.stopPropagation(); doAddM(); };
+    const cancBtn = addPanel.querySelector('.m-cancel-add');
+    if (cancBtn) cancBtn.onclick = (e) => { e.stopPropagation(); R.showAddModel = false; renderGroupDetail(); };
+    if (inp) {
+      inp.onkeydown = (e) => { if (e.key === 'Enter') { e.stopPropagation(); doAddM(); } };
+      setTimeout(() => inp?.focus?.(), 30);
+    }
+  }
+
+  el.querySelectorAll('.k-lab').forEach(inp=> inp.onchange=()=>{ const gg=_dg(); if(gg&&gg.keys[+inp.dataset.idx]) gg.keys[+inp.dataset.idx].label = inp.value || ('账号'+(+inp.dataset.idx+1)); });
+  el.querySelectorAll('.k-key').forEach(inp=> { inp.onchange=()=>{ const gg=_dg(); if(gg&&gg.keys[+inp.dataset.idx]){ gg.keys[+inp.dataset.idx].key = inp.value.trim(); updateCfgBadge(); } }; });
   el.querySelectorAll('[data-key-eye]').forEach(btn=>{
     btn.onclick = ()=>{
       const inp = el.querySelector('.k-key[data-idx="'+btn.dataset.keyEye+'"]');
@@ -147,30 +191,41 @@ function renderGroupDetail(){
       copyText(inp.value.trim());
     };
   });
-  const base = el.querySelector('.g-base'); if(base) base.onchange=(ev)=>{ const gg=_dg(); gg.baseUrl = ev.target.value.trim(); };
-  const kib = el.querySelector('.g-kib-cb'); if(kib) kib.onchange=(ev)=>{ const gg=_dg(); gg.keyInBody = ev.target.checked; };
+  const base = el.querySelector('.g-base'); if(base) base.onchange=(ev)=>{ const gg=_dg(); if(gg) gg.baseUrl = ev.target.value.trim(); };
+  const kib = el.querySelector('.g-kib-cb'); if(kib) kib.onchange=(ev)=>{ const gg=_dg(); if(gg) gg.keyInBody = ev.target.checked; };
 }
 
 function onDetail(ev){
   const b = ev.target && ev.target.closest('[data-act]'); if(!b) return;
   const act = b.dataset.act, g = _dg(); if(!g) return;
+  const R = globalThis.TellMeRuntime || {};
   if(act==='addkey'){
-    const v=prompt('粘贴该账号的 API Key（sk-...）：');
-    if(v==null) return;
-    if(!v.trim()){ toast('Key 为空，未添加'); return; }
-    g.keys.push({ id: uid('k'), label:'账号'+(g.keys.length+1), key:v.trim() });
+    g.keys.push({ id: uid('k'), label:'账号'+(g.keys.length+1), key:'' });
+    refreshAfter();
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('#groupDetail .k-key');
+      if (inputs.length) inputs[inputs.length - 1]?.focus?.();
+    }, 50);
+    toast('已新增账号，请在输入框内输入或粘贴 API Key');
+    return;
   } else if(act==='addmodel'){
-    const n=prompt('模型名（如 deepseek-v4-flash 或第三方模型名）：');
-    if(n==null) return;
-    if(!n.trim()){ toast('模型名为空，未添加'); return; }
-    g.models.push({ name:n.trim(), label:n.trim(), kind:'' });
+    R.showAddModel = !R.showAddModel;
+    renderGroupDetail();
+    return;
   } else if(act==='delkey'){
     g.keys = g.keys.filter(x=>x.id!==b.dataset.id);
   } else if(act==='delmodel'){
     g.models = g.models.filter(x=>x.name!==b.dataset.name);
   } else if(act==='delgroup'){
+    let ok = true;
+    try {
+      ok = window.confirm ? window.confirm(`确定删除「${g.label}」服务组吗？`) : true;
+    } catch(e) { ok = true; }
+    if (!ok) return;
     getEditCfg().groups = getEditCfg().groups.filter(x=>x.id!==g.id);
     setSelGroupId(null);
+    R.selGroupId = null;
+    toast('已删除服务组');
   }
   refreshAfter();
 }
@@ -178,12 +233,9 @@ function onDetail(ev){
 function refreshAfter(){ renderGroupsList(); renderGroupDetail(); renderActiveSelects(); updateCfgBadge(); }
 
 function addGroup(){
-  const label=prompt('新服务名称（如：Kimi / 智谱 / 我的中转）：');
-  if(label==null) return;
-  if(!label.trim()){ toast('名称为空，未添加'); return; }
-  const base=prompt('接口地址（OpenAI 兼容，如 https://api.deepseek.com）：','');
-  const g={ id:uid('g'), kind:'openai', label:label.trim(), baseUrl:(base||'').trim(), keys:[], models:defaultModels(), keyInBody:false };
-  getEditCfg().groups.push(g); setSelGroupId(g.id); refreshAfter();
+  const R = globalThis.TellMeRuntime || {};
+  R.showAddGroup = !R.showAddGroup;
+  renderGroupsList();
 }
 
 function renderActiveSelects(){
@@ -290,8 +342,88 @@ function renderGroupsList(){
   const R = getR();
   const el = $('#groupsList'); if(!el) return;
   el.innerHTML = '';
+
+  if (R.showAddGroup) {
+    const card = document.createElement('div');
+    card.className = 'new-group-card';
+    card.style.cssText = 'padding:10px;margin-bottom:8px;background:var(--panel2);border:1px dashed var(--accent,#58a6ff);border-radius:10px';
+    card.innerHTML = `
+      <div style="font-size:12px;font-weight:700;color:var(--txt);margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+        <span>新增服务商 / 组</span>
+        <button class="btn small ghost g-cancel-new" type="button">✕</button>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
+        <button type="button" class="btn small ghost g-preset" data-label="DeepSeek" data-base="https://api.deepseek.com">DeepSeek</button>
+        <button type="button" class="btn small ghost g-preset" data-label="Kimi" data-base="https://api.moonshot.cn/v1">Kimi</button>
+        <button type="button" class="btn small ghost g-preset" data-label="智谱 GLM" data-base="https://open.bigmodel.cn/api/paas/v4">智谱</button>
+        <button type="button" class="btn small ghost g-preset" data-label="硅基流动" data-base="https://api.siliconflow.cn/v1">硅基流动</button>
+        <button type="button" class="btn small ghost g-preset" data-label="OpenRouter" data-base="https://openrouter.ai/api/v1">OpenRouter</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <input class="g-new-label" type="text" placeholder="服务名称（如：Kimi / 我的中转）" style="padding:5px 8px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt)">
+        <input class="g-new-base" type="text" placeholder="接口地址（如 https://api.deepseek.com）" style="padding:5px 8px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--txt)">
+        <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:2px">
+          <button type="button" class="btn small ghost g-cancel-new">取消</button>
+          <button type="button" class="btn small primary g-confirm-new">确认添加</button>
+        </div>
+      </div>
+    `;
+    const lblInp = card.querySelector('.g-new-label');
+    const baseInp = card.querySelector('.g-new-base');
+    card.querySelectorAll('.g-preset').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        lblInp.value = btn.dataset.label || '';
+        baseInp.value = btn.dataset.base || '';
+      };
+    });
+    card.querySelectorAll('.g-cancel-new').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        R.showAddGroup = false;
+        renderGroupsList();
+      };
+    });
+    const doAddGroup = () => {
+      const label = (lblInp.value || '').trim();
+      if (!label) {
+        if (typeof W.toast === 'function') W.toast('服务名称不能为空');
+        lblInp.focus();
+        return;
+      }
+      const base = (baseInp.value || '').trim();
+      const cfg = R.editCfg || (typeof W.getEditCfg === 'function' ? W.getEditCfg() : null);
+      if (!cfg) return;
+      if (!Array.isArray(cfg.groups)) cfg.groups = [];
+      const defModels = (typeof W.defaultModels === 'function') ? W.defaultModels() : [{ name: 'deepseek-chat', label: 'deepseek-chat' }];
+      const makeUid = (typeof W.uid === 'function') ? W.uid : (p => p + '_' + Math.random().toString(36).slice(2, 8));
+      const g = { id: makeUid('g'), kind: 'openai', label, baseUrl: base, keys: [], models: defModels, keyInBody: false };
+      cfg.groups.push(g);
+      R.selGroupId = g.id;
+      if (typeof W.setSelGroupId === 'function') W.setSelGroupId(g.id);
+      R.showAddGroup = false;
+      if (typeof W.refreshAfter === 'function') W.refreshAfter();
+      else {
+        renderGroupsList();
+        W.renderGroupDetail?.();
+        W.renderActiveSelects?.();
+        W.updateCfgBadge?.();
+      }
+      if (typeof W.toast === 'function') W.toast('已新建服务组：' + label);
+    };
+    const confirmBtn = card.querySelector('.g-confirm-new');
+    if (confirmBtn) confirmBtn.onclick = (e) => { e.stopPropagation(); doAddGroup(); };
+    lblInp.onkeydown = (e) => { if (e.key === 'Enter') { e.stopPropagation(); doAddGroup(); } };
+    baseInp.onkeydown = (e) => { if (e.key === 'Enter') { e.stopPropagation(); doAddGroup(); } };
+    el.appendChild(card);
+    setTimeout(() => lblInp?.focus?.(), 30);
+  }
+
   if(!R.editCfg || !Array.isArray(R.editCfg.groups) || !R.editCfg.groups.length){
-    el.innerHTML = '<div class="muted">暂无服务，点上方「＋ 新增组」添加。</div>';
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'muted';
+    emptyDiv.textContent = '暂无服务，点上方「＋ 新增组」添加。';
+    el.appendChild(emptyDiv);
     return;
   }
   R.editCfg.groups.forEach(g=>{
@@ -299,7 +431,7 @@ function renderGroupsList(){
     const d = document.createElement('div');
     d.className = 'group-item' + (g.id === R.selGroupId ? ' active' : '');
     d.innerHTML = `<span class="gi-label">${esc(g.label)}</span><span class="gi-meta">${g.keys.length} 账号 · ${g.models.length} 模型</span>`;
-    d.onclick = ()=>{ R.selGroupId = g.id; renderGroupsList(); W.renderGroupDetail?.(); };
+    d.onclick = ()=>{ R.selGroupId = g.id; if (typeof W.setSelGroupId === 'function') W.setSelGroupId(g.id); renderGroupsList(); W.renderGroupDetail?.(); };
     el.appendChild(d);
   });
 }

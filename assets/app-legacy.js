@@ -928,7 +928,7 @@ function renderTaskModelPanel(...args){ return window.TellMeTaskModels.renderTas
 function saveTaskModels(...args){ return window.TellMeTaskModels.saveTaskModels(...args); }
 function resetTaskModels(...args){ return window.TellMeTaskModels.resetTaskModels(...args); }
 
-function renderGroupsList(...args){ return window.TellMeGroups.renderGroupsList(...args); }
+function renderGroupsList(...args){ return (window.TellMeGroups?.renderGroupsList || window.TellMeLegacyDomains?.["settings-domain"]?.renderGroupsList)?.(...args); }
 
 function _dg(){ return window.TellMeLegacyDomains?.["settings-domain"]?._dg(...arguments); }
 function renderGroupDetail(){ return window.TellMeLegacyDomains?.["settings-domain"]?.renderGroupDetail(...arguments); }

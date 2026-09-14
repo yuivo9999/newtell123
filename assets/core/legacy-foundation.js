@@ -34,7 +34,7 @@ const SND_ALL_PRESETS = [
   { id:'al_spark',   name:'星光四步',   seq:[[659.25,0,0.08],[783.99,0.1,0.08],[1046.5,0.2,0.1],[1567.98,0.32,0.24]] },
   { id:'al_finish',  name:'完成回响',   seq:[[587.33,0,0.1],[783.99,0.12,0.11],[987.77,0.25,0.12],[1174.66,0.39,0.3]] }
 ];
-const THEMES = ['dark', 'cyber', 'mecha', 'writer', 'cream', 'blackboard', 'guofeng'];
+const THEMES = ['dark', 'light', 'blackboard', 'mecha', 'cyber', 'guofeng', 'aurora', 'paper', 'writer', 'cream'];
 const TM_KEYS = ['idea','principal','teacher','dictmaster','dictEnrich','assets','title','chapter','qc','strip','subplot','rolling','contentAdvise','aiRecipe'];
 const CJK_ALL = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
 const EN_WORD = /[A-Za-z0-9_]+(?:'[A-Za-z0-9_]+)?/;
@@ -419,15 +419,18 @@ function currentIsDeepSeek(){
 function applyTheme(theme){
   if(THEMES.indexOf(theme) < 0) theme = 'dark';
   document.documentElement.setAttribute('data-theme', theme);
-  const c = getCfg(); c.theme = theme; saveCfg(c);
+  try {
+    const c = getCfg();
+    if(c){ c.theme = theme; saveCfg(c); }
+  } catch(e){}
   const mtn = $('#mechaTopNav');
   if(mtn) mtn.classList.toggle('hidden', theme !== 'mecha');
   document.body.classList.toggle('has-mecha-bg', theme === 'mecha');
   document.body.classList.toggle('has-cyber-bg', theme === 'cyber');
   document.body.classList.toggle('has-guofeng-bg', theme === 'guofeng');
   $$('.theme-btns .theme').forEach(b=> b.classList.toggle('active', b.dataset.theme === theme));
-  updateMechaNav();
-  updateWcTotal(); // 主题切换后刷新内嵌总字数
+  try { updateMechaNav(); } catch(e){}
+  try { updateWcTotal(); } catch(e){} // 主题切换后刷新内嵌总字数
 }
 
 function restartCascade(){
