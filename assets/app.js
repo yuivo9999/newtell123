@@ -91,6 +91,7 @@ const boot = async () => {
   // TellMeLegacyRegions registry is now an internal installation seam only.
 
   await loadClassic('./app-legacy.js');
+  await loadClassic('./app-shell.js');
 
   // Install the ten cohesive domains only after app-legacy.js has exposed its
   // lexical dependency scope. This preserves the existing closure contract.
