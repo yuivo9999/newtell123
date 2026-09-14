@@ -3,13 +3,15 @@
 // Leaf files remain compatibility seams for older tests/tools; runtime ownership belongs to this domain.
 import { narrative_workspaceModules } from "./narrative-workspace.js";
 const [m0, m1, m2] = narrative_workspaceModules;
+import * as m3 from "./narrative-ai.js";
 
 import { domainCapability } from "./domain-capabilities.js";
 
 export const domainName = "narrative-domain";
 export const modules = Object.freeze([m0,
   m1,
-  m2]);
+  m2,
+  m3]);
 
 export function install(deps = {}) {
   const installed = [];
@@ -32,7 +34,7 @@ export function exposeLegacyWindows() {
   window.TellMeNarrativeControls = m1;
   window.TellMeHistoryPanel = m2;
   window.TellMeLegacyDomains = window.TellMeLegacyDomains || {};
-  window.TellMeLegacyDomains[domainName] = api;
+  window.TellMeLegacyDomains[domainName] = window.TellMeLegacyDomains[domainName] || api;
   if (m2) {
     if (typeof m2.openHistPanel === 'function') window.openHistPanel = m2.openHistPanel;
     if (typeof m2.closeHistPanel === 'function') window.closeHistPanel = m2.closeHistPanel;

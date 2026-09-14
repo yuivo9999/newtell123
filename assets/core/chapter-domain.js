@@ -76,7 +76,7 @@ export function exposeLegacyWindows() {
   window.TellMeChapterContinuation = m3;
   window.TellMeChapterCompare = m4;
   window.TellMeLegacyDomains = window.TellMeLegacyDomains || {};
-  window.TellMeLegacyDomains[domainName] = api;
+  window.TellMeLegacyDomains[domainName] = window.TellMeLegacyDomains[domainName] || api;
   return true;
 }
 // v40 legacy constants/state ownership.

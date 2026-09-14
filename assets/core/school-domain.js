@@ -28,7 +28,7 @@ export const api = Object.freeze(Object.assign({}, ...modules));
 
 export function exposeLegacyWindows() {
   window.TellMeLegacyDomains = window.TellMeLegacyDomains || {};
-  window.TellMeLegacyDomains[domainName] = api;
+  window.TellMeLegacyDomains[domainName] = window.TellMeLegacyDomains[domainName] || api;
   return true;
 }
 // v40 legacy constants/state ownership.

@@ -31,7 +31,7 @@ export function exposeLegacyWindows() {
   window.TellMeProjectHistory = m0;
   window.TellMeProjectFyp = m1;
   window.TellMeLegacyDomains = window.TellMeLegacyDomains || {};
-  window.TellMeLegacyDomains[domainName] = api;
+  window.TellMeLegacyDomains[domainName] = window.TellMeLegacyDomains[domainName] || api;
   if (m0) {
     if (typeof m0.switchProject === 'function') window.switchProject = m0.switchProject;
     if (typeof m0.newProject === 'function') window.newProject = m0.newProject;

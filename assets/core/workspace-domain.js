@@ -40,7 +40,7 @@ export function exposeLegacyWindows() {
   window.TellMeWorkspaceColors = m2;
   window.TellMeThemePanel = m3;
   window.TellMeLegacyDomains = window.TellMeLegacyDomains || {};
-  window.TellMeLegacyDomains[domainName] = api;
+  window.TellMeLegacyDomains[domainName] = window.TellMeLegacyDomains[domainName] || api;
   return true;
 }
 // v40 legacy constants/state ownership.

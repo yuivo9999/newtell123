@@ -52,7 +52,7 @@ export function exposeLegacyWindows() {
   window.TellMeStoryContract = m0;
   window.TellMeSubplotPipeline = m4;
   window.TellMeLegacyDomains = window.TellMeLegacyDomains || {};
-  window.TellMeLegacyDomains[domainName] = api;
+  window.TellMeLegacyDomains[domainName] = window.TellMeLegacyDomains[domainName] || api;
   return true;
 }
 // v40 legacy constants/state ownership.
