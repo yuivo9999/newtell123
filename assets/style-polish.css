@@ -122,28 +122,26 @@ input[type="checkbox"], input[type="radio"]{ accent-color: var(--accent); width:
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .brand .logo svg{ width:19px; height:19px; }
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .brand .title{ font-weight:800; letter-spacing:.3px; }
 
-/* 模型胶囊：渐变描边 */
+/* 模型胶囊：平滑扁平样式 */
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .cfg-badge{
   position:relative; border-radius:999px; padding:6px 14px; font-weight:600;
-  border:1px solid transparent;
-  background:
-    linear-gradient(var(--panel2), var(--panel2)) padding-box,
-    linear-gradient(135deg, color-mix(in srgb, var(--accent) 65%, transparent), color-mix(in srgb, var(--accent2) 55%, transparent)) border-box;
-  box-shadow: var(--shadow-sm);
-  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  border:1px solid var(--line);
+  background: var(--panel2);
+  box-shadow: none;
+  transition: none;
 }
-:where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .cfg-badge:hover{ transform:translateY(-1px); box-shadow: var(--shadow-md); }
+:where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .cfg-badge:hover{ transform:none; box-shadow: none; }
 
 /* 顶栏图标按钮（含 SVG 图标） */
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .topbar .icon-btn{
   display:inline-flex; align-items:center; gap:5px;
   min-height:36px; border-radius:12px;
-  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease), color var(--dur) var(--ease);
+  transition: none;
 }
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .topbar .icon-btn svg{ width:19px; height:19px; }
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .topbar .icon-btn:hover{
-  background: color-mix(in srgb, var(--panel2) 85%, transparent);
-  color: var(--txt); transform: translateY(-1px);
+  background: var(--panel2);
+  color: var(--txt); transform: none;
 }
 
 /* ---------- 4. 步骤指示器：点线式（系统四主题） ---------- */

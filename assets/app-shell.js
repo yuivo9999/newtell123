@@ -56,10 +56,13 @@
   function showLegacy() {
     $('#suCanvas')?.classList.add('hidden');
     $('#view')?.classList.remove('su-legacy-hidden');
+    closeNavDrawer();
   }
 
   function openPanel(id) {
-    $(id)?.classList.remove('hidden');
+    showLegacy();
+    const el = $(id);
+    if (el) el.classList.remove('hidden');
   }
 
   function overview(s) {
@@ -232,30 +235,155 @@
     </div>`;
   }
 
+  function isNavOpen() {
+    const app = $('#app');
+    if (!app) return false;
+    const isMobile = window.innerWidth <= 680;
+    if (isMobile) {
+      return app.classList.contains('su-nav-open');
+    } else {
+      return !app.classList.contains('su-nav-closed');
+    }
+  }
+
+  function closeNavDrawer() {
+    const app = $('#app');
+    if (!app) return;
+    const isMobile = window.innerWidth <= 680;
+    if (isMobile) {
+      app.classList.remove('su-nav-open');
+    } else {
+      app.classList.add('su-nav-closed');
+    }
+  }
+
+  function openNavDrawer() {
+    const app = $('#app');
+    if (!app) return;
+    const isMobile = window.innerWidth <= 680;
+    if (isMobile) {
+      app.classList.add('su-nav-open');
+    } else {
+      app.classList.remove('su-nav-closed');
+    }
+  }
+
+  function toggleNavDrawer() {
+    if (isNavOpen()) {
+      closeNavDrawer();
+    } else {
+      openNavDrawer();
+    }
+  }
+
+  function promptAndToggleMode() {
+    const s = state();
+    const current = s.mode;
+    const isLongNow = (current === 'longnovel' || current !== 'shortfilm');
+    const currentName = isLongNow ? '📚 长篇小说模式' : '🎬 普通小说模式';
+    const targetName = isLongNow ? '🎬 普通小说模式' : '📚 长篇小说模式';
+    const detailDesc = isLongNow 
+      ? '切换为【普通小说模式】后，底部导航栏将包含 5 个页面（故事、角色、场景、分镜、导出）。'
+      : '切换为【长篇小说模式】后，底部导航栏将精简为 3 个页面（故事、场景、导出）。';
+
+    let modal = $('#suModeModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'suModeModal';
+      modal.className = 'su-modal-overlay';
+      document.body.appendChild(modal);
+    }
+
+    modal.innerHTML = `
+      <div class="su-modal-card">
+        <div class="su-modal-head">
+          <span>⚙ 切换小说创作模式</span>
+          <button class="su-modal-close" type="button" aria-label="关闭">✕</button>
+        </div>
+        <div class="su-modal-body">
+          <p>当前处于：<b>${currentName}</b></p>
+          <p>确定要切换至：<b style="color:#8f78ff">${targetName}</b> 吗？</p>
+          <div class="su-modal-tip">${detailDesc}</div>
+        </div>
+        <div class="su-modal-foot">
+          <button class="su-modal-cancel" type="button">取消</button>
+          <button class="su-modal-confirm" type="button">确认切换</button>
+        </div>
+      </div>
+    `;
+
+    modal.classList.add('active');
+
+    const close = () => modal.classList.remove('active');
+    $('.su-modal-close', modal).onclick = close;
+    $('.su-modal-cancel', modal).onclick = close;
+    $('.su-modal-confirm', modal).onclick = () => {
+      close();
+      toggleMode();
+    };
+  }
+
+  function updateModeBadgeUI() {
+    const badge = $('#modeBadge');
+    if (!badge) return;
+    const s = state();
+    const isLongMode = s.mode === 'longnovel' || s.mode !== 'shortfilm';
+    badge.textContent = isLongMode ? '📚 长篇小说模式' : '🎬 普通小说模式';
+  }
+
+  function toggleMode() {
+    const s = state();
+    const current = s.mode;
+    const nextMode = (current === 'longnovel' || current !== 'shortfilm') ? 'shortfilm' : 'longnovel';
+    s.mode = nextMode;
+    if (typeof window.TellMeLegacyShared?.persist === 'function') {
+      window.TellMeLegacyShared.persist();
+    }
+    if (typeof window.TellMeLegacyShared?.render === 'function') {
+      window.TellMeLegacyShared.render();
+    }
+    updateModeBadgeUI();
+    if (typeof window.toast === 'function') {
+      window.toast(nextMode === 'longnovel' ? '已切换至 📚 长篇小说模式（底部保留：故事/场景/导出）' : '已切换至 🎬 普通小说模式（底部包含：故事/角色/场景/分镜/导出）');
+    }
+  }
+
   function page(id) {
+    // Close drawer on selection
+    closeNavDrawer();
+
+    // Direct tab mappings to core workspace sections
+    if (id === 'story') return legacy(1, '[data-flow="3"]');
+    if (id === 'world') return legacy(2, '#glossarySection');
+    if (id === 'timeline') return legacy(3, '#timelineSection');
+    if (id === 'foreshadow') return legacy(4, '#foreshadowSection');
+    if (id === 'writing') return legacy(5, '#exportSection');
+
     const s = state(), c = $('#suCanvas');
     if (!c) return;
-    // Un-hide canvas and hide legacy view when navigating in App Shell
+    // Un-hide canvas and hide legacy view when navigating in App Shell sub-pages (overview, runtime)
     c.classList.remove('hidden');
     $('#view')?.classList.add('su-legacy-hidden');
-    // On narrow screen, close sidebar drawer upon item selection
-    if (window.innerWidth <= 680) $('#app')?.classList.remove('su-nav-collapsed');
 
-    const f = { overview, story, world, timeline, foreshadow, writing, runtime: runtimePage }[id] || overview;
+    const f = { overview, runtime: runtimePage }[id] || overview;
     c.innerHTML = f(s);
     $$('.su-nav-item').forEach(b => b.classList.toggle('active', b.dataset.nav === id));
     $$('[data-a]', c).forEach(b => b.onclick = () => {
       const a = b.dataset.a;
-      if (['overview', 'story', 'world', 'timeline', 'foreshadow', 'writing', 'runtime'].includes(a)) {
+      if (['overview', 'runtime'].includes(a)) {
         page(a);
         return;
       }
-      if (a === 'legacy-story') return legacy(1, '[data-flow="3"]');
-      if (a === 'legacy-dict') return legacy(1, '[data-flow="6"]');
-      if (a === 'legacy-timeline') return legacy(1, '[data-flow="5"]');
-      if (a === 'legacy-writing') return legacy(1, '[data-flow="9"]');
-      if (a === 'legacy-narrative') return openPanel('#narrativeEnginePanel');
-      if (a === 'plan') return legacy(1, '[data-flow="5"]');
+      if (a === 'story' || a === 'legacy-story') return legacy(1, '[data-flow="3"]');
+      if (a === 'world' || a === 'legacy-dict') return legacy(2, '#glossarySection');
+      if (a === 'timeline' || a === 'legacy-timeline') return legacy(3, '#timelineSection');
+      if (a === 'foreshadow') return legacy(4, '#foreshadowSection');
+      if (a === 'writing' || a === 'legacy-writing') return legacy(5, '#exportSection');
+      if (a === 'legacy-narrative') {
+        openPanel('#narrativeEnginePanel');
+        return;
+      }
+      if (a === 'plan') return legacy(3, '#timelineSection');
     });
   }
 
@@ -266,7 +394,7 @@
 
     const l = document.createElement('link');
     l.rel = 'stylesheet';
-    l.href = new URL('./app-shell.css?v=2', import.meta.url).href;
+    l.href = new URL('assets/app-shell.css?v=3', window.location.href).href;
     document.head.appendChild(l);
 
     const e = document.createElement('aside');
@@ -275,7 +403,7 @@
     e.innerHTML = `<div class="su-shell-head">
       <div class="su-mark">N</div>
       <div><b>NEWTELL123</b><small>STORY WORKSPACE</small></div>
-      <button class="su-collapse" aria-label="导航">‹</button>
+      <button class="su-collapse" aria-label="关闭导航">‹</button>
     </div>
     <nav class="su-nav">
       ${groups.map(g => `<button class="su-nav-item" data-nav="${g[0]}">
@@ -290,17 +418,20 @@
 
     app.insertBefore(e, app.firstChild);
 
-    // Mobile hamburger toggle button in header
-    const tbLeft = $('.tb-left');
-    if (tbLeft && !$('#suMobileToggle')) {
-      const mobBtn = document.createElement('button');
-      mobBtn.id = 'suMobileToggle';
-      mobBtn.type = 'button';
-      mobBtn.className = 'icon-btn su-mobile-toggle';
-      mobBtn.title = '展开/收起主导航';
-      mobBtn.innerHTML = `<span style="font-size:16px">☰</span><span class="tb-lab">导航</span>`;
-      mobBtn.onclick = () => app.classList.toggle('su-nav-collapsed');
-      tbLeft.prepend(mobBtn);
+    // Bind header nav toggle button
+    const navBtn = $('#btnNavToggle');
+    if (navBtn) {
+      navBtn.onclick = toggleNavDrawer;
+    }
+
+    // Bind header brand title click to promptAndToggleMode
+    const brandTitle = $('#brandTitle') || $('.brand .title') || $('.brand');
+    if (brandTitle) {
+      brandTitle.addEventListener('click', (e) => {
+        if (e.target && e.target.classList && e.target.classList.contains('ver-badge')) return;
+        if (e.target && (e.target.id === 'btnNavToggle' || e.target.classList.contains('nav-toggle-btn'))) return;
+        promptAndToggleMode();
+      });
     }
 
     const c = document.createElement('section');
@@ -310,12 +441,39 @@
     v.parentNode.insertBefore(c, v);
 
     $$('.su-nav-item', e).forEach(b => b.onclick = () => page(b.dataset.nav));
-    $('.su-collapse', e).onclick = () => app.classList.toggle('su-nav-collapsed');
-    $('[data-sys="history"]', e).onclick = () => openPanel('#histPanel');
-    $('[data-sys="settings"]', e).onclick = () => $('#btnSettings')?.click();
+    $('.su-collapse', e).onclick = toggleNavDrawer;
+    $('[data-sys="history"]', e).onclick = () => {
+      showLegacy();
+      if (typeof window.openHistPanel === 'function') {
+        window.openHistPanel();
+      } else {
+        $('#btnHist')?.click();
+      }
+    };
+    $('[data-sys="settings"]', e).onclick = () => {
+      showLegacy();
+      $('#btnSettings')?.click();
+    };
 
-    $('.stepper')?.classList.add('su-legacy-secondary');
-    $('.tabbar')?.classList.add('su-legacy-secondary');
+    // Bind tab clicks to switch view to legacy workspace smoothly
+    $$('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        showLegacy();
+        closeNavDrawer();
+      });
+    });
+
+    // Click outside side menu to auto collapse
+    document.addEventListener('click', (ev) => {
+      if (!isNavOpen()) return;
+      const target = ev.target;
+      if (!target) return;
+      const shellEl = $('#suShell');
+      if (shellEl && shellEl.contains(target)) return;
+      if (target.closest && (target.closest('#btnNavToggle') || target.closest('.nav-toggle-btn') || target.closest('.su-collapse'))) return;
+      closeNavDrawer();
+    }, true);
+
     page('overview');
   }
 

@@ -728,7 +728,7 @@ function install(deps){
 
 function projectSnapshot(){
   return {
-    mode: state.mode || 'shortfilm',
+    mode: state.mode || 'longnovel',
     wordRange: state.wordRange || null,
     chapterRange: state.chapterRange || null,
     totalWords: state.totalWords || null,
@@ -790,7 +790,7 @@ function projectSnapshot(){
 }
 
 function applyProject(p){
-  state.mode = (p.mode === 'longnovel') ? 'longnovel' : 'shortfilm';
+  state.mode = (p.mode === 'shortfilm') ? 'shortfilm' : 'longnovel';
   state.wordRange = (p.wordRange && p.wordRange.min && p.wordRange.max) ? {min:+p.wordRange.min, max:+p.wordRange.max} : (p.chapterRange ? null : null);
   state.chapterRange = (p.chapterRange && p.chapterRange.min && p.chapterRange.max) ? {min:+p.chapterRange.min, max:+p.chapterRange.max} : null;
   state.totalWords = (p.totalWords && +p.totalWords>0) ? +p.totalWords : null;
@@ -870,7 +870,7 @@ function applyProject(p){
 }
 
 function clearState(){
-  state.mode = 'shortfilm';
+  state.mode = 'longnovel';
   state.wordRange = null; state.chapterRange = null; state.totalWords = null; state.chapterCount = null;
   state.idea = ''; state.outline = null; state.coverPrompt = ''; state.coverWithTitle = false; state.outlineConfirmed = false;
   state.glossAdherence = 60; state.glossAllowFill = false; state.gsCollapsed = false;

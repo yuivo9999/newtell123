@@ -66,7 +66,7 @@ function fullStoryText(){
 
 
 
-function isLong(){ return state.mode === 'longnovel'; }
+function isLong(){ return state.mode === 'longnovel' || state.mode !== 'shortfilm'; }
 
 
 
@@ -100,9 +100,13 @@ function render(){
   restartCascade();
   renderStepper();
   updateMechaNav();
+  if (isLong() && (currentStep === 2 || currentStep === 4)) {
+    currentStep = 1;
+  }
   $$('.tab').forEach(t=>{
     const n = +t.dataset.step;
     const hideLong = isLong() && (n===2 || n===4);
+    t.style.display = hideLong ? 'none' : 'flex';
     t.classList.toggle('hidden', hideLong);
     t.classList.toggle('active', n===currentStep);
   });
