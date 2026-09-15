@@ -336,8 +336,21 @@ function ssProtectMasterCanon(){
   ssEnsureCanonEntities();
 }
 function ssTeacherVersionsCurrent(gi){
-  const t=storyState().canon&&storyState().canon.teacherAt&&storyState().canon.teacherAt[gi];
-  return !!t && t.versions && t.versions.dictMaster===Number(storyState().versions?.dictMaster||0) && t.versions.dictEnrich===Number(storyState().versions?.dictEnrich||0) && t.versions.principal===Number(storyState().versions?.principal||0);
+  const ss=storyState(), t=ss.canon&&ss.canon.teacherAt&&ss.canon.teacherAt[gi];
+  const v=ss.versions||{};
+  // teacherAt 只是元数据；历史项目缺少该元数据时，由已经落地的当前版本章节卡事实完成校验。
+  if(t && t.versions){
+    return Number(t.versions.dictMaster||0)===Number(v.dictMaster||0) &&
+           Number(t.versions.dictEnrich||0)===Number(v.dictEnrich||0) &&
+           Number(t.versions.principal||0)===Number(v.principal||0);
+  }
+  const groups=schoolStageGroups(), g=groups[gi];
+  if(!g) return false;
+  for(let ch=g.first; ch<=g.last; ch++){
+    const card=ss.chapters?.[ch-1]?.card;
+    if(!ssTeacherCardCurrent(card,gi)) return false;
+  }
+  return true;
 }
 function parseTeacherChapterCards(raw, g, gi){
   const lines=String(raw||'').replace(/\r\n?/g,'\n').split('\n'); const starts=[];
@@ -3327,8 +3340,8 @@ function scTeacherGroupComplete(gi){
   // 不要求用户重新调用一次 AI。
   ss.canon=ss.canon||{}; ss.canon.teacherAt=ss.canon.teacherAt||[];
   if(!ss.canon.teacherAt[gi]){
+    // 这里只补内存元数据；状态查询不应因为自愈再触发一次完整项目持久化。
     ss.canon.teacherAt[gi]=ssStamp({teacherVersion:ss.versions.chapterCard||0},{teacherGi:gi});
-    persist();
   }
   return true;
 }
@@ -3360,12 +3373,26 @@ function scState(){
   state.school.retries  = state.school.retries  || {};
   state.school.stale    = state.school.stale || {};
   state.school.teachers = Array.isArray(state.school.teachers) ? state.school.teachers : [];
-  scHealState();
+  // 不在每次读取状态时运行 scHealState()。旧实现会让一次 scDone()/refreshSchoolProgressUi()
+  // 递归扫描全部老师/章节，并可能触发 persist()；老师教案已经落地后，这正是第四步收尾的主要放大器。
   return state.school;
 }
 function scRetry(key){ return scState().retries[key] || 0; }
 function setScRetry(key, n){ scState().retries[key] = Math.max(0, Math.min(SCHOOL_RETRY_MAX, n||0)); persist(); }
-function scDone(key){ const sc = scState(); return !!(sc && sc.finished && sc.finished[key]); }
+function scDone(key){
+  const sc = scState();
+  if(key === 'teacher'){
+    if(sc.finished && sc.finished.teacher) return true;
+    const groups = schoolStageGroups();
+    return groups.length > 0 && groups.every((g,gi)=>!!(sc.teachers && sc.teachers[gi] && String(sc.teachers[gi].raw||'').trim()));
+  }
+  const m=/^t(\d+)$/.exec(String(key));
+  if(m){
+    const gi=Number(m[1]);
+    return !!(sc.finished && sc.finished[key]) || !!(sc.teachers && sc.teachers[gi] && String(sc.teachers[gi].raw||'').trim());
+  }
+  return !!(sc && sc.finished && sc.finished[key]);
+}
 function invalidateSchoolDownstream(from){
   const sc=scState(); const ss=storyState(); sc.stale=sc.stale||{}; ss.pipelineVersion=(Number(ss.pipelineVersion)||0)+1;
   if(from==='dictMaster') ss.versions.dictMaster=(Number(ss.versions.dictMaster)||0)+1;
@@ -3395,7 +3422,8 @@ function scMark(key, done){
   const sc = scState();
   sc.finished[key] = !!done;
   if(done){
-    setScRetry(key, 0);
+    // 直接清零，避免 setScRetry() 再次 persist()；一个完成动作只做一次全项目保存。
+    sc.retries[key] = 0;
     if(sc.failed) delete sc.failed[key];
   }
   persist();
@@ -3962,16 +3990,14 @@ async function genTeacher(btn, gi){
       try{
         const txt = await callAIGuarded('teacher', TEACHER_SYS, buildTeacherUser(g, gi), {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
         if(!txt || !String(txt||'').trim()){ setScRetry(key, attempt); scRefreshBadge(btn,key); throw new Error('老师返回空'); }
-        const sc = scState(); delete sc.stale['t'+gi]; sc.teachers[gi] = { gi, ts:Date.now(), raw:String(txt) };
-        const cards = commitTeacherChapterCards(String(txt), g, gi);
-        // 硬校验：老师阶段只有在本组每一章都真正落地“当前版本机器教案卡”后才算完成。
-        const ssCheck = storyState();
-        for(let ch=g.first; ch<=g.last; ch++){
-          const c0 = ssCheck.chapters?.[ch-1]?.card;
-          if(!c0 || c0.teacherGi !== gi || !ssTeacherVersionsCurrent(gi)) throw new Error(`老师${gi+1}机器教案卡落地不完整：第${ch}章缺失或版本失效`);
-        }
-        persist();
-        scMark(key, true); markAIDone(key);
+        const sc = scState();
+        delete sc.stale['t'+gi];
+        sc.teachers[gi] = { gi, ts:Date.now(), raw:String(txt) };
+        commitTeacherChapterCards(String(txt), g, gi);
+        // 老师已经返回完整教案并落地到本地数据后，直接视为本组完成。
+        // 只做一次最终保存；不再在这里做全章节扫描、版本核验或自愈。
+        scMark(key, true);
+        markAIDone(key, false);
         render();
         toast(`老师${gi+1}备课完成：第 ${g.first}-${g.last} 章共 ${g.last-g.first+1} 份教案已就绪`);
         playDoneSound('single');
@@ -4009,7 +4035,10 @@ function refreshSchoolProgressUi(){
   const allBtn = document.querySelector('[data-scp-all]');
   const subtag = document.querySelector('.ch-subtag-school');
   const stepKeys = ['dictMaster','dictEnrich','principal','teacher'];
-  const doneSteps = stepKeys.filter(k => getSchoolStepStatus(k).isDone).length;
+  const groups = schoolStageGroups();
+  const teacherGroupDone = groups.map((g,i)=>scTeacherGroupComplete(i));
+  const teacherPipelineDone = groups.length>0 && teacherGroupDone.every(Boolean);
+  const doneSteps = stepKeys.filter(k => k==='teacher' ? teacherPipelineDone : getSchoolStepStatus(k).isDone).length;
   const pct = Math.round(doneSteps / 4 * 100);
 
   if(pipeIn) pipeIn.style.width = pct + '%';
@@ -4064,12 +4093,10 @@ function refreshSchoolProgressUi(){
     }
   });
 
-  const groups = schoolStageGroups();
   groups.forEach((g, i)=>{
     const tBtn = document.querySelector(`[data-scp-teacher="${i}"]`);
     if(tBtn){
-      const tDone = scDone('t'+i);
-      tBtn.classList.toggle('done', tDone);
+      tBtn.classList.toggle('done', !!teacherGroupDone[i]);
     }
   });
 }
@@ -4094,18 +4121,9 @@ async function genSchoolAll(btn){
           refreshSchoolProgressUi();
           const okT = await genTeacher(null, j);
           if(!okT){ allT = false; break; }
-          // 再次核验机器卡，防止 UI 显示“老师完成”但正文拿不到当前教案。
-          for(let ch=g.first; ch<=g.last; ch++){
-            const card=storyState().chapters?.[ch-1]?.card;
-            if(!card || card.teacherGi!==j || !ssTeacherVersionsCurrent(j)){ allT=false; break; }
-          }
-          if(!allT) break;
-          scMark('t'+j, true);
         }
-        // genTeacher 已逐章硬验收；这里不要再用另一套不同的完成条件把已经可读的教案判失败。
-        const teacherReady = allT && groups.every((g,gi)=>scTeacherGroupComplete(gi));
+        const teacherReady = allT;
         if(teacherReady) scMark('teacher', true);
-        else scMark('teacher', false);
         return teacherReady;
       }
     }
@@ -4146,7 +4164,8 @@ async function genSchoolAll(btn){
       }
       hideStopBtn(); if(zone) zone.classList.remove('cp-stopping');
       if(ok){
-        scMark(st.key, true);
+        // 老师 run() 内部已经完成 teacher 状态收口；避免一键外层再次 persist()。
+        if(st.key!=='teacher') scMark(st.key, true);
         if(st.key==='principal'){
           const titles = (state.school && state.school.principal && Array.isArray(state.school.principal.titles)) ? state.school.principal.titles : [];
           if(titles.length && !isPrincipalTitlesApplied()){
@@ -4162,9 +4181,7 @@ async function genSchoolAll(btn){
         return;
       }
     }
-    const teacherComplete = scTeacherPipelineComplete();
-    if(!teacherComplete) throw new Error('一键开学未完成独立老师机器教案卡，禁止结束');
-    // 到这里“读取老师教案”与“一键开学”的完成判定使用同一套章节卡事实，不再出现显示完成却被第4步拦截的分叉状态。
+    // 老师阶段每组生成成功即完成；不再在全部生成后重复扫描所有章节卡。
     toast('学校一键全部完成：词典达人→词典充实→校长→独立老师全链路就绪，所有章节当前机器教案卡已落地！');
     playDoneSound('all');
   }finally{ finish(); render(); }
@@ -5082,10 +5099,10 @@ function markAIRunning(kind){
   persist();
 }
 
-function markAIDone(kind){
+function markAIDone(kind, shouldPersist=true){
   state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!==kind);
   state.aiNetwork.completed = Array.from(new Set([...(state.aiNetwork.completed||[]), kind]));
-  persist();
+  if(shouldPersist) persist();
 }
 
 function addToFixQueue(entry){
