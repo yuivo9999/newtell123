@@ -3,28 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0e0d1b">
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f3fc">
+<meta name="theme-color" content="#0f1115">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f6f8">
 <title>小说与提示词</title>
 <meta name="description" content="影视前期提示词与小说生成器 H5 应用">
-<meta name="application-flow" content="创作总览 → 故事河流 → 世界设定 → 时间线 → 伏笔 → 正文写作 → Runtime">
+<meta name="application-flow" content="写作风格 → 故事构想与优化 → 写作配方 → 全书节拍 → 词典达人 → 词典充实 → 学校统筹 → 正文作家">
 <meta property="og:title" content="小说与提示词">
 <meta property="og:description" content="影视前期提示词与小说生成器 H5 应用">
-<meta name="app-version" content="1.0.338">
+<meta name="app-version" content="1.0.342">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="assets/style.css?v=213">
 <link rel="stylesheet" href="assets/vendor/nouislider/nouislider.min.css">
   <link rel="stylesheet" href="assets/vendor/tom-select/tom-select.css">
-<link rel="stylesheet" href="assets/skins/themes/theme-light.css?v=4">
-<link rel="stylesheet" href="assets/skins/themes/theme-mecha.css?v=8">
-  <link rel="stylesheet" href="assets/skins/themes/theme-blackboard.css?v=4">
-<link rel="stylesheet" href="assets/skins/themes/theme-cyber.css?v=7">
-<link rel="stylesheet" href="assets/skins/themes/theme-guofeng.css?v=7">
-<link rel="stylesheet" href="assets/skins/themes/theme-aurora.css?v=2">
-<link rel="stylesheet" href="assets/skins/themes/theme-paper.css?v=4">
+<link rel="stylesheet" href="assets/theme-light.css?v=4">
+<link rel="stylesheet" href="assets/theme-mecha.css?v=8">
+  <link rel="stylesheet" href="assets/theme-blackboard.css?v=4">
+<link rel="stylesheet" href="assets/theme-cyber.css?v=7">
+<link rel="stylesheet" href="assets/theme-guofeng.css?v=7">
+<link rel="stylesheet" href="assets/theme-aurora.css?v=2">
+<link rel="stylesheet" href="assets/theme-paper.css?v=4">
 <link rel="stylesheet" href="assets/style-polish.css?v=3">
-<link rel="stylesheet" href="assets/story-universe.css?v=2">
-<meta name="story-engine-version" content="1.0.346">
+<meta name="story-engine-version" content="1.0.345">
   <!-- v1.0.325：创作决策链 2.0 + 事件因果闭环锁；CSS/JS cache-bust 同步升级 -->
 </head>
 <body>
@@ -127,6 +126,15 @@
 
   <!-- 步骤指示 -->
   <nav id="stepper" class="stepper"></nav>
+
+  <!-- 机甲主题专用顶部胶囊导航 -->
+  <nav id="mechaTopNav" class="mecha-top-nav">
+    <button class="cap" data-step="1">故事构想</button>
+    <button class="cap" data-step="2">角色提示词</button>
+    <button class="cap" data-step="3">场景提示词</button>
+    <button class="cap" data-step="4">分镜文字</button>
+    <button class="cap" data-export>导出资产包</button>
+  </nav>
 
   <!-- 主内容 -->
   <main id="view" class="view"></main>
@@ -274,6 +282,6 @@
   <script src="assets/vendor/tom-select/tom-select.complete.min.js"></script>
 <script src="assets/vendor/jszip.min.js"></script>
 <script src="assets/idb.js?v=5"></script>
-  <script type="module" src="assets/app.js?v=modern-1"></script>
+  <script src="assets/app.js?v=386"></script>
   </body>
 </html>
