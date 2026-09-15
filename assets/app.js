@@ -3098,7 +3098,7 @@ function chapterMaxTokens(){
 }
 function clampMaxTokens(task){
   const limits = {
-    chapter: 7000,      // 正文最大单次输出（目标 3000—3600 字，留约 2 倍缓冲；上限过高会放任模型把单章拖成 1.6w）
+    chapter: 10000,     // 正文单次输出提高：给“按教案展开成完整正文”留足空间，避免详细教案被压成短章
     principal: 16384,   // 校长统筹总控
     teacher: 16384,     // 老师分批教案
     dictmaster: 16384,  // 万物词典生成
@@ -5882,7 +5882,7 @@ function sizeChapterInjection(){
   const total = n ? `全书共 ${n} 章；` : '';
   return `${total}本章正文目标 ${b.lo.toLocaleString()}—${b.hi.toLocaleString()} 字，硬下限 ${floor.toLocaleString()} 字（一次写完、当场达标，禁止靠事后补字数）。
 【字数铁律 · 首写即达标】
-· 本章必须一次写足到 ≥ ${floor.toLocaleString()} 字才算完成；这是硬性交付标准，禁止写成梗概式短场景、禁止一笔带过、禁止提前收尾。
+· 本章必须一次写足到 ≥ ${floor.toLocaleString()} 字才算完成；这是硬性交付标准，禁止写成梗概式短场景、禁止一笔带过、禁止提前收尾。若老师机器教案本身已经达到约 800—1000 字以上，正文必须把教案中的既有事件、场景和过程充分文学化展开，不能只做一遍概括；正文应明显长于教案，通常至少达到教案有效文字量的约 2 倍，随后再以本章目标字数为最终准绳。
 · 开写前先按节拍表里每一拍标注的「（约X字）」明确各段分量：**每一拍都要被展开到接近其标注的约X字篇幅**（例如「冲突推进（约800字）」就须写出约800字的正文，而不是150字一带而过），逐拍累加即达本章目标；写正文时把它们自然衔接成一篇连续正文、不拆成独立小节，由上拍剧情引到下拍；某拍在节拍表里素材偏少时，允许在该拍内通过场景铺陈、动作拆解、多轮对话、人物可观察反应与环境氛围的合理扩写来凑足该拍字数；严禁把多个节拍事件挤进一句话带过；每段事件一律用五感细节（视觉/听觉/触觉/嗅觉/味觉）、连贯动作、人物对话、可观察反应与环境氛围写实写足；不得为了扩写而堆叠直白心理解释。
 · 剧情完整的前提下优先增厚铺垫、交锋与收官，禁止把多个节拍事件挤进一句话带过，也不得堆砌标点/空行凑数。
 · 一边写一边对照：节拍表里每一段事件是否都已写到、是否写足应有的分量；不足必须继续扩写到位，而不是就此了事。
@@ -12322,6 +12322,41 @@ function stripSegmentMarkers(txt){
 function splitChapterOutput(txt){
   return { content: stripSegmentMarkers(txt), strip: '' };
 }
+async function expandShortChapter(i, content, floor, signal){
+  let out = String(content||'').trim();
+  const card = chapterPlanAuthority(i);
+  if(!card) return out;
+  const target = Math.max(200, Math.round(Number(floor)||0));
+  for(let round=0; round<2 && countWords(out).total < target; round++){
+    const cur = countWords(out).total;
+    const remain = Math.max(300, target-cur);
+    const tail = out.slice(-1800);
+    const user = `【本章老师机器教案（唯一剧情依据）】
+${String(card.raw||card).slice(0,12000)}
+
+【当前已写正文】
+${out.slice(0,50000)}
+
+【当前正文尾部】
+${tail}
+
+【扩写任务】
+当前正文只有约 ${cur} 字，本章硬下限为 ${target} 字，仍缺约 ${remain} 字。你不是另起炉灶，也不是新增主线；请在现有正文基础上“补厚已经发生的内容”：优先把老师教案中已经写明但正文写得过快的场景、动作过程、对白往返、人物可观察反应、环境与感官细节、因果过渡、事件余波展开完整，并把相邻事件自然连成连续段落。若正文已经走到原定结尾，就回填前面已经发生的场景来补足，而不是凭空开启下一章或新增重大事件。
+严禁重复已有句子、严禁概括式复述教案、严禁写成分析/提纲；直接输出“需要追加到正文末尾的小说正文”，从当前尾部无缝接续。追加约 ${Math.max(remain,500)}—${Math.max(remain+500,900)} 字，达到本章硬下限附近即可自然收束。`;
+    try{
+      const res = await callDeepSeek(longChapterSys(), user, {maxTokens: clampMaxTokens('continue'), temperature: Math.min(0.9, dynamicChapterParams(i).temperature), topP: 0.95, signal: signal || _abortCtl?.signal, taskKey:'chapter'});
+      let add = String(res.text||'').trim();
+      if(!add) break;
+      const lcp = longestCommonPrefix(tail, add);
+      if(lcp.length > 20) add = add.slice(lcp.length).trim();
+      add = stripSegmentMarkers(add).replace(/<!--\s*LEN:[\s\S]*?-->/g,'').trim();
+      if(!add) break;
+      out += '\n\n' + add;
+    }catch(e){ break; }
+  }
+  return out.trim();
+}
+
 async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride, signal){
   const mt = chapterMaxTokens();
   onPhase = onPhase || (()=>{});
@@ -12349,6 +12384,14 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
   let content = String(sp.content).replace(/<!--\s*LEN:[\s\S]*?-->/g, '').trim();
   const _cs = splitChapterCastout(content);
   content = _cs.body;
+  // 老师教案已经写得详细时，正文不得把它压缩成 1000 多字的“剧情摘要”。
+  // 首写不足硬下限时，自动在既有事件内部补厚：不新增主线，只扩写场景、动作、对白、反应与过渡。
+  const _minFloor = (chapterLenBounds() || {floor:2700}).floor;
+  if(countWords(content).total < _minFloor){
+    const before = content;
+    content = await expandShortChapter(i, content, _minFloor, signal);
+    if(content !== before && onStream) onStream('\n\n[正文已按老师教案自动补厚至硬下限附近]');
+  }
   if(state.chapters && state.chapters[i]){ state.chapters[i].castOut = _cs.castOut; }
   const _o = state.outline;
   if(_o && Array.isArray(_o.chapters) && _o.chapters[i]){ _o.chapters[i].castOut = _cs.castOut; }
