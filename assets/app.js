@@ -2186,30 +2186,30 @@ setup / rise / climax / hook
 
 以下内容必须在输出前内部完成，不得写出来：
 
-□ 当前节拍数量与老师教案一致
-□ 每个节拍核心功能都已完成
-□ 没有重新设计老师剧情
-□ 没有遗漏核心事件
-□ 没有凭空新增关键人物
-□ 没有凭空新增关键地点
-□ 没有凭空新增关键道具
-□ 没有凭空新增关键能力
-□ 人物知识边界正确
-□ 人物能力边界正确
-□ 人物性格正确
-□ 上一章物理状态已自然承接
-□ 时间没有倒退
-□ 时间没有重复开启已经结束的时段
-□ 没有机械报时
-□ 场景转换合理
-□ 重大事件因果闭环成立
-□ 视角没有无标记乱跳
-□ 没有大段作者广播
-□ 教案章末状态已经真正落地
-□ 下一章接口自然存在
-□ 正文达到篇幅硬下限
-□ 没有把教案标签写进正文
-□ 没有输出元评论
+  当前节拍数量与老师教案一致
+  每个节拍核心功能都已完成
+  没有重新设计老师剧情
+  没有遗漏核心事件
+  没有凭空新增关键人物
+  没有凭空新增关键地点
+  没有凭空新增关键道具
+  没有凭空新增关键能力
+  人物知识边界正确
+  人物能力边界正确
+  人物性格正确
+  上一章物理状态已自然承接
+  时间没有倒退
+  时间没有重复开启已经结束的时段
+  没有机械报时
+  场景转换合理
+  重大事件因果闭环成立
+  视角没有无标记乱跳
+  没有大段作者广播
+  教案章末状态已经真正落地
+  下一章接口自然存在
+  正文达到篇幅硬下限
+  没有把教案标签写进正文
+  没有输出元评论
 
 ━━━━━━━━━━━━━━━━━━
 【二十、输出格式】
@@ -2228,7 +2228,7 @@ setup / rise / climax / hook
 - 节拍标签
 - 时间标签
 - AI_NOTE
-- 任何元评论
+- 任何元评论`,
 
 
 
@@ -3425,12 +3425,12 @@ function parseCustomStyleNote(note){
     if((m=/^指令[:：]\s*(.*)$/.exec(t))){ mode='intro'; if(m[1]) intro=m[1]; return; }
     if((m=/^写法[:：]\s*(.*)$/.exec(t))){ mode='tips'; if(m[1]) tips.push(m[1].replace(/^[①②③④⑤]?[.、）)]?\s*/,'')); return; }
     if((m=/^避免[:：]\s*(.*)$/.exec(t))){ mode='avoid'; if(m[1]) avoid.push(m[1].replace(/^[✗×\-\s]+/,'')); return; }
-    if((m=/^自查[:：]\s*(.*)$/.exec(t))){ mode='check'; if(m[1]) check.push(m[1].replace(/^[□✅◇\-\s]+/,'')); return; }
+    if((m=/^自查[:：]\s*(.*)$/.exec(t))){ mode='check'; if(m[1]) check.push(m[1].replace(/^[ ✅◇\-\s]+/,'')); return; }
     if((m=/^示例[:：]\s*(.*)$/.exec(t))){ mode='demo'; if(m[1]) demo=m[1]; return; }
     if(mode==='intro'){ if(!intro) intro=t; }
     else if(mode==='tips') tips.push(t.replace(/^[①②③④⑤]?[.、）)]?\s*/,''));
     else if(mode==='avoid') avoid.push(t.replace(/^[✗×\-\s]+/,''));
-    else if(mode==='check') check.push(t.replace(/^[□✅◇\-\s]+/,''));
+    else if(mode==='check') check.push(t.replace(/^[ ✅◇\-\s]+/,''));
     else if(mode==='demo'){ if(!demo) demo=t; }
   });
   return { intro, tips, avoid, check, demo };
@@ -3485,7 +3485,7 @@ function wsStyleNoteBlock(items, headTitle, intro){
     if(Array.isArray(s.tips) && s.tips.length) lines.push('  写法：' + s.tips.map((t,i)=>`${['①','②','③','④','⑤'][i]||(i+1)+'.'} ${t}`).join('；'));
     if(Array.isArray(s.avoid) && s.avoid.length) lines.push('  避免：✗ ' + s.avoid.join('；✗ '));
     if(s.demo) lines.push('  示范写法：「'+s.demo+'」（可模仿其语感，不要照抄句子）');
-    if(Array.isArray(s.check) && s.check.length) lines.push('  自查：' + s.check.map(c=>'□ '+c).join(' '));
+    if(Array.isArray(s.check) && s.check.length) lines.push('  自查：' + s.check.map(c=>'  '+c).join(' '));
   });
   lines.push('红线：以上风格仅约束表达方式，不得破坏人名/地名/专名一致性，不得违反基础剧情逻辑与人物设定。');
   return '\n\n' + lines.join('\n');
@@ -4679,9 +4679,9 @@ L3 · 正文作家
 第1章《……》
 第2章《……》
 ……
-第N章《……》`;
+第N章《……》`,
 
-const PRINCIPAL_FOLDED_SYS = `【已废弃】不得启用校长兼任老师模式。无论章节数多少，校长只负责全校统筹，老师必须独立生成机器教案。
+const PRINCIPAL_FOLDED_SYS = `【已废弃】不得启用校长兼任老师模式。无论章节数多少，校长只负责全校统筹，老师必须独立生成机器教案。`,
 
 
 
@@ -5359,7 +5359,7 @@ L3 · 正文作家的文学表达
 
 1. 【主线核心悬念/危机】：……
 2. 【核心角色定格状态与处境】：……
-3. 【阶段高潮结算与关键道具/情报】：……`;  
+3. 【阶段高潮结算与关键道具/情报】：……`,
      
      
 function buildTeacherUser(g, gi){
@@ -8099,7 +8099,7 @@ function openStyleLibReader(){
         <p><strong>指令：</strong>${esc(s.note||'')}</p>
         ${s.tips && s.tips.length ? `<p><strong>写法：</strong>${s.tips.map((t,i)=>`${i+1}. ${esc(t)}`).join('；')}</p>` : ''}
         ${s.avoid && s.avoid.length ? `<p><strong>避免：</strong>${s.avoid.map(a=>'✗ '+esc(a)).join('；')}</p>` : ''}
-        ${s.check && s.check.length ? `<p><strong>自查：</strong>${s.check.map(c=>'□ '+esc(c)).join('　')}</p>` : ''}
+        ${s.check && s.check.length ? `<p><strong>自查：</strong>${s.check.map(c=>'  '+esc(c)).join('　')}</p>` : ''}
         ${s.demo ? `<p><strong>示例：</strong>「${esc(s.demo)}」</p>` : ''}
       </div>`).join('');
     return catHtml;
@@ -8126,7 +8126,7 @@ function openStyleLibReader(){
         if(s.note) txt += `指令：${s.note}\n`;
         if(s.tips && s.tips.length) txt += `写法：${s.tips.map((t,i)=>`${i+1}. ${t}`).join('；')}\n`;
         if(s.avoid && s.avoid.length) txt += `避免：✗ ${s.avoid.join('；✗ ')}\n`;
-        if(s.check && s.check.length) txt += `自查：${s.check.map(c=>`□ ${c}`).join('　')}\n`;
+        if(s.check && s.check.length) txt += `自查：${s.check.map(c=>`  ${c}`).join('　')}\n`;
         if(s.demo) txt += `示例：「${s.demo}」\n`;
       });
       txt += '\n';
