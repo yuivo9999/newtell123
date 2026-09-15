@@ -3184,37 +3184,84 @@ function mergedBeatName(full, s, e){
   if(e <= s) return a;
   return `${a}→${full[e] || a}`;
 }
-const SCHOOL_GROUP_MIN = 1;    // 老师分组不再为了“阶段完整”强行合并，避免单个老师一次承载过多章节
-const SCHOOL_GROUP_MAX = 8;    // 单次老师 AI 教案硬上限：8章，避免16384 tokens截断
+const SCHOOL_GROUP_MIN = 1;
+const SCHOOL_GROUP_MAX = 10;    // 老师单人任务超过10章才拆分；不再死板固定8章
 function schoolStageGroups(){
   const o = state.outline || {};
   let N = Array.isArray(o.chapters) ? o.chapters.length : 0;
   if(!N){ const c = Math.floor(Number(chapterCountVal())||0); if(c>=1&&c<=200) N = c; }
   if(!N) return [];
-  const k = Math.max(1, Math.ceil(N / SCHOOL_GROUP_MAX));
-  const base = Math.floor(N / k), rem = N % k;
-  const groups = [];
-  let cur = 1;
-  for(let i=0;i<k;i++){
-    const c = base + (i < rem ? 1 : 0);
-    const first = cur, last = cur + c - 1;
-    let stage = `第${i+1}组`;
-    try{
-      const plan = bookStagePlan(N);
-      if(Array.isArray(plan) && plan.length){
-        const covered = []; let pos = 1;
-        for(const st of plan){
-          const sn = Math.max(0, Math.floor(st.n)||0); if(!sn) continue;
-          covered.push({name:st.name||'', first:pos, last:pos+sn-1}); pos += sn;
-        }
-        const hits = covered.filter(x => x.last >= first && x.first <= last).map(x=>x.name).filter(Boolean);
-        if(hits.length) stage = hits.length===1 ? hits[0] : hits[0]+'→'+hits[hits.length-1];
-      }
-    }catch(e){}
-    groups.push({stage, first, last});
-    cur = last + 1;
+
+  // 少量章节不人为拆老师：10章及以下默认一位老师完成全书。
+  if(N <= SCHOOL_GROUP_MAX) return [{stage:'全书', first:1, last:N}];
+
+  // 先尊重全书剧情节拍。bookStagePlan 是全书节拍的权威来源；
+  // 每个主要节拍优先由一位老师负责（铺垫/推进/高潮/收尾等），
+  // 但不是死板固定4位：实际节拍数由当前小说的全书结构决定。
+  let plan = null;
+  try{ plan = bookStagePlan(N); }catch(e){ plan = null; }
+  const beats = [];
+  if(Array.isArray(plan) && plan.length){
+    let pos = 1;
+    for(const st of plan){
+      const n = Math.max(0, Math.floor(st && st.n)||0);
+      if(!n) continue;
+      beats.push({name:String(st.name||'').trim(), first:pos, last:pos+n-1});
+      pos += n;
+    }
   }
-  return groups;
+
+  // 没有可靠节拍时才退回到按10章拆分；正常情况下不走这里。
+  if(!beats.length){
+    const groups=[]; let cur=1;
+    while(cur<=N){ const last=Math.min(N,cur+SCHOOL_GROUP_MAX-1); groups.push({stage:`第${groups.length+1}组`,first:cur,last}); cur=last+1; }
+    return groups;
+  }
+
+  // 节拍太碎时，把相邻小节拍合并；只有合并后不超过10章才合并。
+  // 这样既保留剧情节拍，又避免出现“1章一个老师”的僵硬安排。
+  const merged=[];
+  for(const beat of beats){
+    const count=beat.last-beat.first+1;
+    const prev=merged[merged.length-1];
+    if(prev && count < 3 && (prev.last-prev.first+1+count) <= SCHOOL_GROUP_MAX){
+      prev.last=beat.last;
+      prev.stage = prev.stage && beat.name ? `${prev.stage}→${beat.name}` : (prev.stage||beat.name||'剧情段');
+    }else{
+      merged.push({stage:beat.name||'剧情段',first:beat.first,last:beat.last});
+    }
+  }
+
+  // 如果某个剧情节拍超过10章，再在这个节拍内部按10章拆分。
+  // 注意：这是“任务量保护”，不是固定的全书分组规则。
+  const groups=[];
+  for(const g of merged){
+    let cur=g.first;
+    let part=0;
+    while(cur<=g.last){
+      const last=Math.min(g.last,cur+SCHOOL_GROUP_MAX-1);
+      const span = g.last-g.first+1 > SCHOOL_GROUP_MAX;
+      let stage=g.stage||'剧情段';
+      if(span){
+        part++;
+        stage += `·${part}`;
+      }
+      groups.push({stage,first:cur,last});
+      cur=last+1;
+    }
+  }
+
+  // 极端情况下节拍切分仍造成相邻组都很小，再做一次安全合并；绝不超过10章。
+  const compact=[];
+  for(const g of groups){
+    const prev=compact[compact.length-1];
+    const gc=g.last-g.first+1;
+    if(prev && gc < 3 && (prev.last-prev.first+1+gc)<=SCHOOL_GROUP_MAX){
+      prev.last=g.last;
+      prev.stage = prev.stage && g.stage ? `${prev.stage}→${g.stage}` : (prev.stage||g.stage||'剧情段');
+    }else compact.push({...g});
+  }
+  return compact;
 }
 function schoolGroupsLabel(){
   const g = schoolStageGroups();
