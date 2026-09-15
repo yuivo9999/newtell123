@@ -1,1 +1,0 @@
-(function(){'use strict';function apply(){var n=document.getElementById('mechaTopNav');if(n)n.remove();document.querySelectorAll('.tabbar,.stepper').forEach(function(el){el.classList.remove('su-legacy-secondary');});}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',apply,{once:true});else apply();window.addEventListener('tellme:ready',apply);})();
