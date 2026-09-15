@@ -6,45 +6,18 @@
  * modules remain internal installation seams; canonical Domain APIs are the only
  * cross-domain runtime contract.
  */
-globalThis.$ = window.$ = (s, r = document) => (r || document).querySelector(s);
-globalThis.$$ = window.$$ = (s, r = document) => [...(r || document).querySelectorAll(s)];
-
-// Sandboxed iframe protection: ensure window.prompt and window.confirm don't throw DOMException
-if (typeof window !== 'undefined') {
-  const _origPrompt = window.prompt;
-  window.prompt = function(msg, def = '') {
-    try {
-      return _origPrompt ? _origPrompt.call(window, msg, def) : null;
-    } catch (e) {
-      console.warn('[tellme123] window.prompt suppressed by environment:', e);
-      return null;
-    }
-  };
-  const _origConfirm = window.confirm;
-  window.confirm = function(msg) {
-    try {
-      return _origConfirm ? _origConfirm.call(window, msg) : true;
-    } catch (e) {
-      console.warn('[tellme123] window.confirm suppressed by environment:', e);
-      return true;
-    }
-  };
-}
-
 const loadClassic = (src) => new Promise((resolve, reject) => {
   const script = document.createElement('script');
-  const url = new URL(src, import.meta.url);
-  url.searchParams.set('v', 'modern-1');
-  script.src = url.href;
+  script.src = `${src}?v=modern-1`;
   script.async = false;
-  script.onload = () => resolve();
-  script.onerror = () => reject(new Error(`加载失败：${url.href}`));
+  script.onload = resolve;
+  script.onerror = () => reject(new Error(`加载失败：${src}`));
   document.head.appendChild(script);
 });
 
 const boot = async () => {
   const [aiDomain, storyDomain, chapterDomain, dictionaryDomain, schoolDomain,
-    projectDomain, workspaceDomain, narrativeDomain, settingsDomain, runtimeDomain] = await Promise.all([
+    projectDomain, workspaceDomain, narrativeDomain, settingsDomain] = await Promise.all([
     import('./core/ai-domain.js'),
     import('./core/story-domain.js'),
     import('./core/chapter-domain.js'),
@@ -54,13 +27,11 @@ const boot = async () => {
     import('./core/workspace-domain.js'),
     import('./core/narrative-domain.js'),
     import('./core/settings-domain.js'),
-    import('./core/runtime-domain.js'),
   ]);
 
   // Direct/pure modules publish their own legacy-compatible windows where
   // appropriate; these explicit bridges cover modules that historically relied
   // on app.js to expose their namespace.
-  runtimeDomain.exposeLegacyWindows();
   aiDomain.exposeLegacyWindows();
   storyDomain.exposeLegacyWindows();
   chapterDomain.exposeLegacyWindows();
@@ -91,7 +62,10 @@ const boot = async () => {
   // TellMeLegacyRegions registry is now an internal installation seam only.
 
   await loadClassic('./app-legacy.js');
-  await loadClassic('./app-shell.js');
+  // The foundation requires TellMeRuntime, which is created by the legacy
+  // lexical bridge, so it intentionally comes after app-legacy.js.
+  const runtimeDomain = await import('./core/runtime-domain.js');
+  runtimeDomain.exposeLegacyWindows();
 
   // Install the ten cohesive domains only after app-legacy.js has exposed its
   // lexical dependency scope. This preserves the existing closure contract.
@@ -105,17 +79,15 @@ const boot = async () => {
     window.__TellMeInstallLegacyRegions(domains);
   }
 
-  if (typeof window.init === 'function') {
-    await window.init();
-  } else if (typeof window.TellMeLegacyDomains?.['runtime-domain']?.init === 'function') {
-    await window.TellMeLegacyDomains['runtime-domain'].init();
-  }
-
   // import('./core/runtime-audit.js') — folded into runtime-domain.js
 
   window.dispatchEvent(new CustomEvent('tellme:ready', {
-    detail: { architecture: 'esm-core-domains + legacy-ui', version: 2 },
+    detail: { architecture: 'esm-core-domains + app-shell + legacy-ui', version: 3 },
   }));
+
+  // v51: first-class App Shell navigation is layered after the mature legacy UI
+  // has initialized, so existing editors remain the write-back authority.
+  await import('./app-shell.js?v=1');
 };
 
 boot().catch((error) => {

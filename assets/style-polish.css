@@ -122,26 +122,28 @@ input[type="checkbox"], input[type="radio"]{ accent-color: var(--accent); width:
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .brand .logo svg{ width:19px; height:19px; }
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .brand .title{ font-weight:800; letter-spacing:.3px; }
 
-/* 模型胶囊：平滑扁平样式 */
+/* 模型胶囊：渐变描边 */
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .cfg-badge{
   position:relative; border-radius:999px; padding:6px 14px; font-weight:600;
-  border:1px solid var(--line);
-  background: var(--panel2);
-  box-shadow: none;
-  transition: none;
+  border:1px solid transparent;
+  background:
+    linear-gradient(var(--panel2), var(--panel2)) padding-box,
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 65%, transparent), color-mix(in srgb, var(--accent2) 55%, transparent)) border-box;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
 }
-:where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .cfg-badge:hover{ transform:none; box-shadow: none; }
+:where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .cfg-badge:hover{ transform:translateY(-1px); box-shadow: var(--shadow-md); }
 
 /* 顶栏图标按钮（含 SVG 图标） */
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .topbar .icon-btn{
   display:inline-flex; align-items:center; gap:5px;
   min-height:36px; border-radius:12px;
-  transition: none;
+  transition: background var(--dur) var(--ease), transform var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .topbar .icon-btn svg{ width:19px; height:19px; }
 :where([data-theme="dark"],[data-theme="light"],[data-theme="aurora"],[data-theme="paper"]) .topbar .icon-btn:hover{
-  background: var(--panel2);
-  color: var(--txt); transform: none;
+  background: color-mix(in srgb, var(--panel2) 85%, transparent);
+  color: var(--txt); transform: translateY(-1px);
 }
 
 /* ---------- 4. 步骤指示器：点线式（系统四主题） ---------- */
@@ -1011,3 +1013,145 @@ input::placeholder {
 
 
 
+
+/* ================================================================
+   v1.0.338 一键开学 · 全主题视觉契约
+   学校管线是全主题共享功能，状态色必须随皮肤变化；布局也不能
+   被某一套强皮肤挤压。语义仍固定：默认=待运行、运行=进行中、
+   完成=成功、失败=错误；一键开学保持主题主色。
+   ================================================================ */
+.school-card .school-zone{min-width:0;box-sizing:border-box;}
+.school-card .school-steps{align-items:center;gap:10px;}
+.school-card .school-steps-main{min-width:0;}
+.school-card .school-steps-tools{min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+.school-card .sc-step,.school-card .sc-plan-btn{font-family:inherit;}
+.school-card .sc-pipe-steps .sc-step{min-height:38px;box-sizing:border-box;}
+.school-card .sc-teacher-card{min-width:0;}
+.school-card .sc-tc-b{align-items:stretch;}
+.school-card .sc-tc-b .sc-plan-btn{white-space:nowrap;}
+
+/* Dark */
+[data-theme="dark"] .school-card{--school-main:#8b7cff;--school-alt:#6ea8ff;--school-ok:#63e6a5;--school-done:#f5c451;--school-fail:#ff7777;}
+/* Light */
+[data-theme="light"] .school-card{--school-main:#ea580c;--school-alt:#1d4ed8;--school-ok:#15803d;--school-done:#b45309;--school-fail:#dc2626;}
+/* Blackboard */
+[data-theme="blackboard"] .school-card{--school-main:#ffd27f;--school-alt:#9be8c8;--school-ok:#7fe3b0;--school-done:#ffd27f;--school-fail:#ff9b9b;}
+/* Mecha */
+[data-theme="mecha"] .school-card{--school-main:#f5b041;--school-alt:#00e676;--school-ok:#00e676;--school-done:#ffe08a;--school-fail:#ff6262;}
+/* Cyber */
+[data-theme="cyber"] .school-card{--school-main:#22d3ee;--school-alt:#a855f7;--school-ok:#34d399;--school-done:#fbbf24;--school-fail:#f87171;}
+/* Guofeng */
+[data-theme="guofeng"] .school-card{--school-main:#a63232;--school-alt:#d4a84b;--school-ok:#2f7f5f;--school-done:#b07a18;--school-fail:#b42318;}
+/* Aurora */
+[data-theme="aurora"] .school-card{--school-main:#7c6cff;--school-alt:#41e6d0;--school-ok:#3ddc97;--school-done:#f5b942;--school-fail:#ff7272;}
+/* Paper */
+[data-theme="paper"] .school-card{--school-main:#b45309;--school-alt:#1e588f;--school-ok:#2e7d32;--school-done:#a16207;--school-fail:#b91c1c;}
+
+/* 待运行：不再让浅色/古风/机甲等主题继承一套错误的蓝色视觉。 */
+.school-card .sc-step.sc-step-default{
+  color:var(--school-alt)!important;
+  border-color:color-mix(in srgb,var(--school-alt) 45%,var(--line))!important;
+  background:color-mix(in srgb,var(--school-alt) 10%,var(--panel2))!important;
+}
+.school-card .sc-step.sc-step-default:hover{
+  color:var(--school-alt)!important;
+  border-color:var(--school-alt)!important;
+  background:color-mix(in srgb,var(--school-alt) 18%,var(--panel2))!important;
+}
+.school-card .sc-step.running{
+  color:var(--school-ok)!important;
+  border-color:var(--school-ok)!important;
+  background:color-mix(in srgb,var(--school-ok) 15%,var(--panel2))!important;
+  box-shadow:0 0 12px color-mix(in srgb,var(--school-ok) 28%,transparent)!important;
+}
+.school-card .sc-step.done{
+  color:var(--school-done)!important;
+  border-color:color-mix(in srgb,var(--school-done) 65%,var(--line))!important;
+  background:color-mix(in srgb,var(--school-done) 14%,var(--panel2))!important;
+  box-shadow:0 1px 5px color-mix(in srgb,var(--school-done) 18%,transparent)!important;
+}
+.school-card .sc-step.failed,.school-card .sc-step.sc-failed{
+  color:var(--school-fail)!important;
+  border-color:color-mix(in srgb,var(--school-fail) 70%,var(--line))!important;
+  background:color-mix(in srgb,var(--school-fail) 13%,var(--panel2))!important;
+}
+.school-card .sc-step.sc-runall{
+  color:var(--on-accent,#fff)!important;
+  background:linear-gradient(135deg,var(--school-main),var(--school-alt))!important;
+  border-color:transparent!important;
+  box-shadow:0 3px 10px color-mix(in srgb,var(--school-main) 30%,transparent)!important;
+}
+.school-card .sc-step.sc-runall:hover{filter:brightness(1.06);}
+.school-card .sc-tc-st.done{color:var(--school-ok)!important;background:color-mix(in srgb,var(--school-ok) 14%,transparent)!important;}
+.school-card .sc-plan-btn{color:var(--school-main);border-color:color-mix(in srgb,var(--school-main) 42%,var(--line));background:color-mix(in srgb,var(--school-main) 8%,var(--panel2));}
+.school-card .sc-plan-btn:hover{background:color-mix(in srgb,var(--school-main) 16%,var(--panel2));}
+.school-card .sc-plan-btn.sc-plan-apply-t.applied{color:var(--school-ok)!important;border-color:color-mix(in srgb,var(--school-ok) 48%,var(--line))!important;background:color-mix(in srgb,var(--school-ok) 10%,var(--panel2))!important;}
+.school-card .sc-pipe-t b{color:var(--school-main);}
+.school-card .sc-pipe-in{background:linear-gradient(90deg,var(--school-alt),var(--school-main),var(--school-ok));}
+
+/* 强皮肤的语义色只保留皮肤自己的质感，不覆盖状态含义。 */
+[data-theme="blackboard"] .school-card .sc-step.sc-runall{color:#0f2a20!important;}
+[data-theme="mecha"] .school-card .sc-step.sc-runall{color:#111418!important;}
+[data-theme="cyber"] .school-card .sc-step.sc-runall{color:#080614!important;}
+[data-theme="guofeng"] .school-card .sc-step.sc-runall{color:#fff!important;}
+[data-theme="paper"] .school-card .sc-step.sc-runall{color:#fff!important;}
+
+/* 小屏：操作按钮独立一行，避免「一键开学」与校长按钮挤在一起。 */
+@media screen and (max-width:560px){
+  .school-card .school-steps{align-items:stretch;}
+  .school-card .school-steps-main{width:100%;}
+  .school-card .school-steps-main .sc-runall{width:100%;justify-content:center;}
+  .school-card .school-steps-tools{width:100%;justify-content:flex-start;}
+  .school-card .school-steps-tools .sc-plan-btn{flex:1 1 auto;justify-content:center;min-height:38px;}
+}
+
+/* ================================================================
+   v1.0.338 一键开学 · 全主题视觉契约
+   学校管线是全主题共享功能，状态色必须随皮肤变化；布局也不能
+   被某一套强皮肤挤压。语义固定：默认=待运行、运行=进行中、
+   完成=成功、失败=错误；一键开学保持主题主色。
+   ================================================================ */
+.school-card .school-zone{min-width:0;box-sizing:border-box;}
+.school-card .school-steps{align-items:center;gap:10px;}
+.school-card .school-steps-main{min-width:0;}
+.school-card .school-steps-tools{min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+.school-card .sc-step,.school-card .sc-plan-btn{font-family:inherit;}
+.school-card .sc-pipe-steps .sc-step{min-height:38px;box-sizing:border-box;}
+.school-card .sc-teacher-card{min-width:0;}
+.school-card .sc-tc-b{align-items:stretch;}
+.school-card .sc-tc-b .sc-plan-btn{white-space:nowrap;}
+
+[data-theme="dark"] .school-card{--school-main:#8b7cff;--school-alt:#6ea8ff;--school-ok:#63e6a5;--school-done:#f5c451;--school-fail:#ff7777;}
+[data-theme="light"] .school-card{--school-main:#ea580c;--school-alt:#1d4ed8;--school-ok:#15803d;--school-done:#b45309;--school-fail:#dc2626;}
+[data-theme="blackboard"] .school-card{--school-main:#ffd27f;--school-alt:#9be8c8;--school-ok:#7fe3b0;--school-done:#ffd27f;--school-fail:#ff9b9b;}
+[data-theme="mecha"] .school-card{--school-main:#f5b041;--school-alt:#00e676;--school-ok:#00e676;--school-done:#ffe08a;--school-fail:#ff6262;}
+[data-theme="cyber"] .school-card{--school-main:#22d3ee;--school-alt:#a855f7;--school-ok:#34d399;--school-done:#fbbf24;--school-fail:#f87171;}
+[data-theme="guofeng"] .school-card{--school-main:#a63232;--school-alt:#d4a84b;--school-ok:#2f7f5f;--school-done:#b07a18;--school-fail:#b42318;}
+[data-theme="aurora"] .school-card{--school-main:#7c6cff;--school-alt:#41e6d0;--school-ok:#3ddc97;--school-done:#f5b942;--school-fail:#ff7272;}
+[data-theme="paper"] .school-card{--school-main:#b45309;--school-alt:#1e588f;--school-ok:#2e7d32;--school-done:#a16207;--school-fail:#b91c1c;}
+
+.school-card .sc-step.sc-step-default{color:var(--school-alt)!important;border-color:color-mix(in srgb,var(--school-alt) 45%,var(--line))!important;background:color-mix(in srgb,var(--school-alt) 10%,var(--panel2))!important;}
+.school-card .sc-step.sc-step-default:hover{color:var(--school-alt)!important;border-color:var(--school-alt)!important;background:color-mix(in srgb,var(--school-alt) 18%,var(--panel2))!important;}
+.school-card .sc-step.running{color:var(--school-ok)!important;border-color:var(--school-ok)!important;background:color-mix(in srgb,var(--school-ok) 15%,var(--panel2))!important;box-shadow:0 0 12px color-mix(in srgb,var(--school-ok) 28%,transparent)!important;}
+.school-card .sc-step.done{color:var(--school-done)!important;border-color:color-mix(in srgb,var(--school-done) 65%,var(--line))!important;background:color-mix(in srgb,var(--school-done) 14%,var(--panel2))!important;box-shadow:0 1px 5px color-mix(in srgb,var(--school-done) 18%,transparent)!important;}
+.school-card .sc-step.failed,.school-card .sc-step.sc-failed{color:var(--school-fail)!important;border-color:color-mix(in srgb,var(--school-fail) 70%,var(--line))!important;background:color-mix(in srgb,var(--school-fail) 13%,var(--panel2))!important;}
+.school-card .sc-step.sc-runall{color:var(--on-accent,#fff)!important;background:linear-gradient(135deg,var(--school-main),var(--school-alt))!important;border-color:transparent!important;box-shadow:0 3px 10px color-mix(in srgb,var(--school-main) 30%,transparent)!important;}
+.school-card .sc-step.sc-runall:hover{filter:brightness(1.06);}
+.school-card .sc-tc-st.done{color:var(--school-ok)!important;background:color-mix(in srgb,var(--school-ok) 14%,transparent)!important;}
+.school-card .sc-plan-btn{color:var(--school-main);border-color:color-mix(in srgb,var(--school-main) 42%,var(--line));background:color-mix(in srgb,var(--school-main) 8%,var(--panel2));}
+.school-card .sc-plan-btn:hover{background:color-mix(in srgb,var(--school-main) 16%,var(--panel2));}
+.school-card .sc-plan-btn.sc-plan-apply-t.applied{color:var(--school-ok)!important;border-color:color-mix(in srgb,var(--school-ok) 48%,var(--line))!important;background:color-mix(in srgb,var(--school-ok) 10%,var(--panel2))!important;}
+.school-card .sc-pipe-t b{color:var(--school-main);}
+.school-card .sc-pipe-in{background:linear-gradient(90deg,var(--school-alt),var(--school-main),var(--school-ok));}
+[data-theme="blackboard"] .school-card .sc-step.sc-runall{color:#0f2a20!important;}
+[data-theme="mecha"] .school-card .sc-step.sc-runall{color:#111418!important;}
+[data-theme="cyber"] .school-card .sc-step.sc-runall{color:#080614!important;}
+[data-theme="guofeng"] .school-card .sc-step.sc-runall,[data-theme="paper"] .school-card .sc-step.sc-runall{color:#fff!important;}
+
+@media screen and (max-width:560px){
+  .school-card .school-steps{align-items:stretch;}
+  .school-card .school-steps-main{width:100%;}
+  .school-card .school-steps-main .sc-runall{width:100%;justify-content:center;}
+  .school-card .school-steps-tools{width:100%;justify-content:flex-start;}
+  .school-card .school-steps-tools .sc-plan-btn{flex:1 1 auto;justify-content:center;min-height:38px;}
+}
