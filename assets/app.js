@@ -11167,6 +11167,7 @@ async function genDictMaster(btn){
     state.dictmasterHistory.unshift(result);
     if(state.dictmasterHistory.length > 6) state.dictmasterHistory = state.dictmasterHistory.slice(0, 6);   // 第 7 次最旧被挤出
     state.dictmasterRan = true;
+    collapseGlossaryAfterDictionaryGeneration();
     storyState().canon.dictmasterAt=Date.now(); ssEnsureCanonEntities(); ssCaptureMasterSnapshot(); storyState().versions.dictMaster=Number(storyState().versions.dictMaster||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldCanon={version:storyState().versions.dictMaster,source:'dictmaster',ts:Date.now(),counts:{characters:(o.glossary.characters||[]).length,places:(o.glossary.places||[]).length,propernouns:(o.glossary.propernouns||[]).length,worldRules:(o.glossary._worldRules||[]).length}};
     persist(); render();
     markAIDone('dictmaster');
@@ -11975,7 +11976,7 @@ async function genDictEnrich(btn, opts){
     if(!txt) throw new Error('未返回词典充实内容');
     const parsed = parseDictEnrichText(txt);
     if(!(parsed.characters.length || parsed.walkons.length || parsed.places.length || parsed.propernouns.length)) throw new Error('未识别到有效条目（人物/路人/地名/专名），请重试');
-    const n = mergeDictEnrich(parsed); ssProtectMasterCanon(); storyState().canon.dictEnrichAt=Date.now(); storyState().versions.dictEnrich=Number(storyState().versions.dictEnrich||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldExpansion={version:storyState().versions.dictEnrich,source:'dictEnrich',ts:Date.now(),added:n};
+    const n = mergeDictEnrich(parsed); collapseGlossaryAfterDictionaryGeneration(); ssProtectMasterCanon(); storyState().canon.dictEnrichAt=Date.now(); storyState().versions.dictEnrich=Number(storyState().versions.dictEnrich||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldExpansion={version:storyState().versions.dictEnrich,source:'dictEnrich',ts:Date.now(),added:n};
     state.outline._dictEnrichText = txt;   // 仅存档（导入/导出时仍保留原文兜底），UI 不再直接渲染
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, ts:Date.now() };
@@ -12004,6 +12005,18 @@ function buildDictEnrichSummary(parsed){
     nPlaces: (parsed.places||[]).length,
     nProps:  (parsed.propernouns||[]).length,
   };
+}
+function collapseGlossaryAfterDictionaryGeneration(){
+  // 词典达人/词典充实生成完成后，统一恢复“收起”状态：
+  // 1) 万物词典总卡收起；2) 主要人物/次要配角/路人龙套/地点/专名全部收起；
+  // 3) 副线等其它分类也保持收起，避免生成后页面突然全部铺开。
+  state.gsCollapsed = true;
+  state.gsCatFold = Object.assign({}, state.gsCatFold || {}, {
+    main:true, support:true, walkon:true, place:true, proper:true, sub:true
+  });
+  // 单条词条也恢复折叠，保证再次打开总卡时不会残留上一次的展开状态。
+  state.gsEntryFold = Object.assign({}, state.gsEntryFold || {});
+  persist();
 }
 function dictEnrichBlockHtml(){
   const o = (state.outline) || {};
