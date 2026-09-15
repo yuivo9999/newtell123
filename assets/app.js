@@ -3651,7 +3651,7 @@ const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（治
 第2章 《标题》
 …（连排到全书最后一章）`;
 
-const PRINCIPAL_FOLDED_SYS = `你是一位身兼「校长」与「任课教师」的长篇小说统筹大师。在当前全书篇幅（≤20章）下，三层架构折叠为单层：由你统领全量材料（大纲、全量词典、配方、微拍体系）直接一次性施教，免去层层传达损耗。
+const PRINCIPAL_FOLDED_SYS = `【已废弃】不得启用校长兼任老师模式。无论章节数多少，校长只负责全校统筹，老师必须独立生成机器教案。
 
 【输入格式】(user 消息按【键】分节装载，逐节使用、缺失标「无」)
 【长篇小说】书名；【全书简介】；【优化构想·所选方案】；【全校章节数】；【全书微拍总纲与节奏体系】；【写作风格/配方】；【全量万物词典】(全量共享不切片)；【既有《全书节拍》】。
@@ -3908,6 +3908,12 @@ async function genTeacher(btn, gi){
         if(!txt || !String(txt||'').trim()){ setScRetry(key, attempt); scRefreshBadge(btn,key); throw new Error('老师返回空'); }
         const sc = scState(); delete sc.stale['t'+gi]; sc.teachers[gi] = { gi, ts:Date.now(), raw:String(txt) };
         const cards = commitTeacherChapterCards(String(txt), g, gi);
+        // 硬校验：老师阶段只有在本组每一章都真正落地“当前版本机器教案卡”后才算完成。
+        const ssCheck = storyState();
+        for(let ch=g.first; ch<=g.last; ch++){
+          const c0 = ssCheck.chapters?.[ch-1]?.card;
+          if(!c0 || c0.teacherGi !== gi || !ssTeacherVersionsCurrent(gi)) throw new Error(`老师${gi+1}机器教案卡落地不完整：第${ch}章缺失或版本失效`);
+        }
         persist();
         scMark(key, true); markAIDone(key);
         render();
@@ -4024,14 +4030,23 @@ async function genSchoolAll(btn){
       label:'老师',
       run: async ()=>{
         let allT = true;
+        // 彻底取消“≤20章校长兼任老师”的任何捷径：无论 1-20 章还是 21+ 章，都必须进入独立老师阶段。
         for(let j=0; j<groups.length; j++){
-          if(scDone('t'+j)) continue;
+          const g = groups[j];
+          if(scDone('t'+j) && !scState().stale?.['t'+j]) continue;
           state._schoolRunning = { activeKey:'teacher', teacherIndex:j, stepIndex:3, totalSteps:4, label: groups.length > 1 ? `老师${j+1}备课` : '老师备课' };
           refreshSchoolProgressUi();
           const okT = await genTeacher(null, j);
           if(!okT){ allT = false; break; }
+          // 再次核验机器卡，防止 UI 显示“老师完成”但正文拿不到当前教案。
+          for(let ch=g.first; ch<=g.last; ch++){
+            const card=storyState().chapters?.[ch-1]?.card;
+            if(!card || card.teacherGi!==j || !ssTeacherVersionsCurrent(j)){ allT=false; break; }
+          }
+          if(!allT) break;
           scMark('t'+j, true);
         }
+        if(allT) scMark('teacher', true);
         return allT;
       }
     }
@@ -4088,7 +4103,17 @@ async function genSchoolAll(btn){
         return;
       }
     }
-    toast('学校一键全部完成：词典达人→词典充实→校长→老师全链路就绪，标题已自动定稿！');
+    const finalGroups = schoolStageGroups();
+    const teacherComplete = finalGroups.length>0 && finalGroups.every((g,gi)=>{
+      if(!scDone('t'+gi) || scState().stale?.['t'+gi]) return false;
+      for(let ch=g.first; ch<=g.last; ch++){
+        const card=storyState().chapters?.[ch-1]?.card;
+        if(!card || card.teacherGi!==gi || !ssTeacherVersionsCurrent(gi)) return false;
+      }
+      return true;
+    });
+    if(!teacherComplete || !scDone('teacher')) throw new Error('一键开学未完成独立老师机器教案卡，禁止结束');
+    toast('学校一键全部完成：词典达人→词典充实→校长→独立老师全链路就绪，所有章节当前机器教案卡已落地！');
     playDoneSound('all');
   }finally{ finish(); render(); }
 }
