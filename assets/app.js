@@ -2991,7 +2991,7 @@ function openingStrategyExecutionCard(i=0){
 开篇职责：${job}
 首拍硬目标：首段尽早让读者看见“谁在什么处境中、正在发生什么问题”，并形成一个明确的继续阅读问题。
 首章前800字控制：以事件/人物现场为主，背景说明只允许为理解当前动作所必需的最小信息；禁止先写大段世界观说明、人物履历或空泛抒情。
-首拍验收：开篇方式必须能被读者从正文实际动作/场景中辨认，而不是只在教案里写“按${actual.label}开篇”。`;
+首拍验收：开篇方式必须能被读者从正文实际动作/场景中辨认，而不是只在教案里写“按${actual.label}开篇”。\n作用边界：本任务卡只约束第1章；第2章起不得重复执行本卡。`;
 }
 function principalOpeningTaskExcerpt(){
   const pr=(state.school&&state.school.principal)||{};
@@ -3008,7 +3008,7 @@ function openingStrategyBrief(){
   const rec = openingStrategyDef(recommendedOpeningStrategy());
   const actual = currentOpeningStrategyId()==='auto' ? rec : selected;
   const n = chapterCountVal() || realChapterCount() || 0;
-  return `【开篇引擎】全书${n||'未定'}章；开篇预算约${openingBudget()}章。策略=${actual.label}：${actual.desc}\n执行：第1章必须尽早建立核心人物、类型信号、可见问题与继续阅读的下一问；预算只是允许用于启动故事引擎的章节上限，不代表可以慢热拖延。${n>0&&n<5?'当前篇幅少于5章，首章应直接进入主线，最多用极短铺垫，不安排长背景章。':''}`;
+  return `【开篇引擎·仅首章生效】全书${n||'未定'}章；开篇预算约${openingBudget()}章。策略=${actual.label}：${actual.desc}\n权限边界：本策略只决定第1章如何开笔；第2章起不得继续套用“开篇策略”，必须以各章自己的教案、上一章物理接力与动态状态为唯一开笔依据。\n执行：第1章必须尽早建立核心人物、类型信号、可见问题与继续阅读的下一问；预算只是允许用于启动故事引擎的章节上限，不代表可以慢热拖延。${n>0&&n<5?'当前篇幅少于5章，首章应直接进入主线，最多用极短铺垫，不安排长背景章。':''}`;
 }
 function openingStrategyHtml(){
   if(!isLong()) return '';
@@ -3194,46 +3194,55 @@ function mergedBeatName(full, s, e){
 const SCHOOL_GROUP_MIN = 6;    // 判定"过短"的组章数下限
 const SCHOOL_GROUP_MAX = 20;   // 每师上限
 function schoolStageGroups(){
-  // 学校角色分工的唯一真相：
-  // 1) 校长永远是独立的“全校统筹”角色，不参与任何老师分组；
-  // 2) 老师数量只由章节总数决定：每位老师最多20章，尽量均衡；
-  // 3) 5/15章=1位老师，25/35章=2位老师，40章=2位老师，41章起再增加老师；
-  // 4) 不再让“全书节拍阶段”反向决定老师人数，避免小章节数被拆成多个角色，
-  //    也避免出现校长/老师职责折叠。
   const o = state.outline || {};
   let N = (Array.isArray(o.chapters) ? o.chapters.length : 0);
   if(!N){ const c = Math.floor(Number(chapterCountVal())||0); if(c>=1&&c<=200) N = c; }
   if(!N) return [];
-
-  const teacherCount = Math.max(1, Math.ceil(N / SCHOOL_GROUP_MAX));
-  const base = Math.floor(N / teacherCount);
-  const rem = N % teacherCount;
-  const groups = [];
-  let cur = 1;
-
-  // 阶段只用于给老师标识其剧情段，不再参与“切人”决策。
-  let plan = [];
-  try{ plan = bookStagePlan(N) || []; }catch(e){ plan = []; }
-  const stageAt = (chapterNo)=>{
-    const st = plan.find(x=>{
-      const start = plan.slice(0, plan.indexOf(x)).reduce((a,b)=>a + (Math.floor(b.n)||0), 0) + 1;
-      const end = start + (Math.floor(x.n)||0) - 1;
-      return chapterNo >= start && chapterNo <= end;
-    });
-    return st && st.name ? st.name : '';
-  };
-
-  for(let i=0;i<teacherCount;i++){
-    const count = base + (i < rem ? 1 : 0);
-    const first = cur;
-    const last = cur + count - 1;
-    cur = last + 1;
-    const firstStage = stageAt(first);
-    const lastStage = stageAt(last);
-    const stage = firstStage && lastStage && firstStage !== lastStage
-      ? `${firstStage}→${lastStage}`
-      : (firstStage || lastStage || `第${i+1}组`);
-    groups.push({ stage, first, last });
+  let groups = [];
+  let plan = null; try{ plan = bookStagePlan(N); }catch(e){ plan = null; }
+  if(plan && plan.length){
+    let cur = 1;
+    const CN = '一二三四五六七八九十';
+    for(const st of plan){
+      const n = Math.max(0, Math.floor(st.n)||0); if(!n) continue;
+      const k = (n<=SCHOOL_GROUP_MAX) ? 1 : Math.ceil(n/SCHOOL_GROUP_MAX);
+      const base = Math.floor(n/k), rem = n%k;
+      for(let i=0;i<k;i++){
+        const c = base + (i<rem?1:0); if(c<=0) continue;
+        const nm = k>1 ? `${st.name||''}·${CN[i]||(i+1)}` : (st.name||'');
+        groups.push({ stage: nm, first: cur, last: cur+c-1 });
+        cur += c;
+      }
+    }
+  } else {
+    const k0 = Math.max(1, Math.ceil(N/SCHOOL_GROUP_MAX));
+    let k = k0; while(k < N && Math.ceil(N/k) > SCHOOL_GROUP_MAX) k++;
+    const base = Math.floor(N/k), rem = N%k;
+    let cur = 1;
+    for(let i=0;i<k;i++){
+      const c = base + (i<rem?1:0); if(c<=0) continue;
+      groups.push({ stage:`第${i+1}组`, first:cur, last:cur+c-1 });
+      cur += c;
+    }
+    return groups;
+  }
+  const len = g => g.last - g.first + 1;
+  const join = (a,b)=> a===b ? a : `${a}→${b}`;
+  let guard = 0;
+  while(guard++ < groups.length * 6){
+    let idx = -1;
+    for(let i=0;i<groups.length;i++){ if(len(groups[i]) < SCHOOL_GROUP_MIN){ idx = i; break; } }
+    if(idx < 0) break;
+    const L = len(groups[idx]);
+    const lOk = idx>0   && L + len(groups[idx-1]) <= SCHOOL_GROUP_MAX;
+    const rOk = idx<groups.length-1 && L + len(groups[idx+1]) <= SCHOOL_GROUP_MAX;
+    if(lOk && rOk){
+      const lsz = len(groups[idx-1]), rsz = len(groups[idx+1]);
+      if(rsz < lsz){ groups[idx] = { stage:join(groups[idx].stage, groups[idx+1].stage), first:groups[idx].first, last:groups[idx+1].last }; groups.splice(idx+1,1); }
+      else { groups[idx-1] = { stage:join(groups[idx-1].stage, groups[idx].stage), first:groups[idx-1].first, last:groups[idx].last }; groups.splice(idx,1); }
+    } else if(lOk){ groups[idx-1] = { stage:join(groups[idx-1].stage, groups[idx].stage), first:groups[idx-1].first, last:groups[idx].last }; groups.splice(idx,1); }
+    else if(rOk){ groups[idx] = { stage:join(groups[idx].stage, groups[idx+1].stage), first:groups[idx].first, last:groups[idx+1].last }; groups.splice(idx+1,1); }
+    else { break; }
   }
   return groups;
 }
@@ -3278,14 +3287,12 @@ function scHealState(){
   if(!sc || typeof sc !== 'object') return;
   sc.finished = sc.finished || {};
   sc.stale = sc.stale || {};
-  if(sc.principal && sc.principal.raw && String(sc.principal.raw).trim() &&
-     sc.principal.roleId === SCHOOL_ROLE_CONTRACT.principal.id && !sc.stale.principal){
+  if(sc.principal && sc.principal.raw && String(sc.principal.raw).trim() && !sc.stale.principal){
     sc.finished.principal = true;
   }
   if(Array.isArray(sc.teachers)){
     sc.teachers.forEach((t, i)=>{
-      if(t && t.raw && String(t.raw).trim() &&
-         t.roleId === SCHOOL_ROLE_CONTRACT.teacher.id && !sc.stale['t'+i]){
+      if(t && t.raw && String(t.raw).trim() && !sc.stale['t'+i]){
         sc.finished['t'+i] = true;
       }
     });
@@ -3602,53 +3609,7 @@ function scGroupTitles(g){
   return out;
 }
 
-const SCHOOL_ROLE_CONTRACT = Object.freeze({
-  principal: {
-    id: 'school_principal_v2',
-    name: '校长',
-    scope: '全校统筹',
-    forbiddenIdentity: ['老师', '任课教师', '教师', '学生', '正文作家'],
-    requiredIdentity: ['校长', '全校最高统领', '总舵手']
-  },
-  teacher: {
-    id: 'school_teacher_v2',
-    name: '老师',
-    scope: '分组教案',
-    forbiddenIdentity: ['校长', '校长兼老师', '身兼校长', '统筹全校的校长'],
-    requiredIdentity: ['老师', '任课教师']
-  }
-});
-
-function schoolRoleGuardText(role){
-  const c = SCHOOL_ROLE_CONTRACT[role];
-  if(!c) return '';
-  return `【学校角色锁｜${c.id}】
-你的唯一身份：${c.name}。
-职责边界：${c.scope}。
-硬性禁止：不得把自己描述为或执行为另一角色；不得出现“${c.forbiddenIdentity.join(' / ')}”中的角色兼任/身份折叠。
-${role==='principal'
-  ? '校长只负责全校守则、组级框架、章节标题总表和第一章开篇任务卡；不得代替任课老师逐章写完整教案。'
-  : '老师只负责校长分配到的章节教案；不得重新裁决全校规则、不得自称校长、不得代替校长生成全校管理成果。'}
-本次调用的角色ID必须保持不变，不得因为章节数量变化而切换角色。`;
-}
-
-function schoolRoleOutputValid(role, txt){
-  const text = String(txt || '').trim();
-  if(!text) return false;
-  if(role === 'principal'){
-    // 允许校长输入中提到“老师”，但拒绝明显的身份折叠。
-    return !/(我(?:是|现在是|同时是).{0,8}(?:老师|任课教师|正文作家)|身兼.{0,8}(?:老师|任课教师)|校长兼老师)/.test(text);
-  }
-  if(role === 'teacher'){
-    // 老师可以引用“校长”作为上游角色，但不能自称/兼任校长。
-    return !/(我(?:是|现在是|同时是).{0,8}校长|身兼.{0,8}校长|校长兼老师|兼任校长)/.test(text);
-  }
-  return true;
-}
-
-const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（治学总舵手）。
-${schoolRoleGuardText('principal')}
-你接收到关于本部小说的全部完整资源（大纲、全量词典、写作配方、以及全书微拍总纲），一次性产出全校统筹与管理指令，供下属各「老师」逐一备课，再由正文作家严格照章执行。
+const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（治学总舵手）。你接收到关于本部小说的全部完整资源（大纲、全量词典、写作配方、以及全书微拍总纲），一次性产出全校统筹与管理指令，供下属各「老师」逐一备课，再由正文作家严格照章执行。
 
 【输入格式】(user 消息按【键】分节装载，逐节使用、缺失标「无」)
 【长篇小说】书名；【全书简介】；【优化构想·所选方案】；【全校章节数】；【全书微拍总纲与节奏体系】；【写作风格/配方】；【全量万物词典·共享不切片】；【既有《全书节拍》·阶段优先分组】及《全书节拍》节选。
@@ -3697,15 +3658,68 @@ ${schoolRoleGuardText('principal')}
 第2章 《标题》
 …（连排到全书最后一章）`;
 
-const PRINCIPAL_FOLDED_SYS = `${schoolRoleGuardText('principal')}
-此常量仅保留兼容旧快照/旧代码引用；当前“一键开学”严禁使用折叠角色模式。
-任何章节数量（包括5、15、25、35章）都必须保持“校长→老师”的独立角色链路。`;
+const PRINCIPAL_FOLDED_SYS = `你是一位身兼「校长」与「任课教师」的长篇小说统筹大师。在当前全书篇幅（≤20章）下，三层架构折叠为单层：由你统领全量材料（大纲、全量词典、配方、微拍体系）直接一次性施教，免去层层传达损耗。
+
+【输入格式】(user 消息按【键】分节装载，逐节使用、缺失标「无」)
+【长篇小说】书名；【全书简介】；【优化构想·所选方案】；【全校章节数】；【全书微拍总纲与节奏体系】；【写作风格/配方】；【全量万物词典】(全量共享不切片)；【既有《全书节拍》】。
+
+【任务·一次性出齐三大成果】
+① 全校写作守则：
+   · 配方锚点：逐条浓缩写作配方要点，保留原汁原味。
+   · 风格融合总纲：用户已选写作风格是表达层唯一权威；优化构想只能作为候选辅助，不得覆盖用户风格。必须解决多风格之间的主次、兼容方式与冲突裁决。
+   · 风格施工规则：把融合后的风格转译为叙事、对白、节奏、场景、情绪的可执行规则，避免把选择题留给正文 AI。
+   · 风格验收标准：给出逐章可检查的正向指标与禁用项。
+   · 可执行纪律：微拍节奏指令与章间过桥律（尾留钩子首接余波，平滑对缝，严禁瞬移硬跳；时间不倒流，术语定稿不改）。
+   · 因果闭环总纲：逐章审查重大事件的发生资格；任何关键结果都必须有前置状态、人物目标/动机、信息或线索来源、行动路径、能力/资源条件与触发依据。条件不足时必须补铺垫或调整达成方式，严禁为了完成节拍让事件凭空出现。偶然事件可以保留，但必须符合世界规则并具备最低限度的可解释触发。
+   · 权限边界：用户风格决定「怎么写」；逐章教案决定「写什么」；正文 AI 只执行，不重新选风格。
+② 第一章开篇任务卡：把【开篇引擎】转成第1章可直接施工的首拍任务，明确首拍动作/场景、前800字必须建立的认知、禁止事项与继续阅读问题，并让第1章教案第①环节严格执行。
+③ 全书章节标题总表：
+   为全书第1章至最后一章各拟定一题，连贯排布、前后呼应。
+③ 逐章教案（第1章 ~ 最后一章）：
+   直接为每一章备出标准化教案，一章不少！每章严格遵循六栏（冒号紧跟）：
+   - 本章风格施工指令：把已裁决的【风格融合总纲】【风格施工规则】翻译为本章具体执行命令；明确场景/人物/节拍中的风格主次与表达方式，不得重新裁决风格冲突。
+   - 功能与位置：本章在全书结构中的定位与必须完成的核心事件。
+   - 剧情时间落点：具体时间范围与起止时点（时/日/旬/月/季/年，非机械编号；跨章时间不回退，时长随剧情，不机械排满一天）。**统一优先输出“起点=…；终点=…”作为机器可读锚点，再附一句自然语言解释；正文生成器以该起止状态为真相，不把时间标签当文学段落模板。**
+   - 本章推进骨架：按所选【章节微拍】节奏，逐拍写清场景地点、在场人物、具体冲突与事件动作（建议5-8环节，密而留白，不套字数）。
+   - 情绪走向与突出点：情绪弧度与章内高光张力点（示例锚点一两句话点到为止，禁代写成品段）。
+   - 连续性：承上（接上一章末尾动作/定格）、启下（章末留钩子给下一章）。首章承上按【开篇引擎】执行。
+   - 本章出场名单：本章必须出场人物（仅限词典与剧情核心角色）。
+
+【输出契约·严格遵守】
+- 严格输出纯文本 Markdown，禁止 JSON、禁止三个反引号代码块包裹、禁止引语和客套。
+- 格式严格如下（段名顶格）：
+# 全校写作守则
+## 配方锚点
+## 风格融合总纲
+## 风格施工规则
+## 风格验收标准
+## 因果闭环总纲
+## 可执行纪律
+# 第一章开篇任务卡
+策略：……
+首拍动作/场景：……
+前800字必须建立：……
+禁止事项：……
+继续阅读问题：……
+# 全书章节标题总表
+第1章 《标题》
+第2章 《标题》
+…（连排到最后一章）
+# 逐章教案
+第1章 《标题》
+- 本章风格施工指令：……
+- 功能与位置：……
+- 剧情时间落点：……
+- 本章推进骨架：……
+- 情绪走向与突出点：……
+- 连续性：承上=……；启下=……
+- 本章出场名单：……
+第2章 《标题》
+……（逐章齐全，连排到最后一章）`;
 
 function buildPrincipalUser(groups){
   const o = state.outline || {};
   const lines = [];
-  lines.push(schoolRoleGuardText('principal'));
-  lines.push(`【学校角色分配】校长=1个独立角色；老师=${groups.length}个独立角色。每位老师只负责其分配章节，校长不得代替任何老师写逐章教案。`);
   lines.push(`【长篇小说】${o.title||'（未定书名）'}`);
   if(o.logline) lines.push(`【全书简介】${o.logline}`);
   let cand = null; try{ cand = selectedPolishCandidate && selectedPolishCandidate(); }catch(e){}
@@ -3750,7 +3764,6 @@ async function genPrincipal(btn, opts){
       try{
         const txt = await callAIGuarded('principal', sys, buildPrincipalUser(groups), {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
         if(!txt || !String(txt||'').trim()){ setScRetry('principal', attempt); scRefreshBadge(btn,'principal'); throw new Error('校长返回空'); }
-        if(!schoolRoleOutputValid('principal', txt)){ setScRetry('principal', attempt); scRefreshBadge(btn,'principal'); throw new Error('校长角色越界：返回内容出现角色兼任'); }
         const sc = scState();
         const titles = parsePrincipalTitles(txt);
         if(titles && titles.length){
@@ -3779,9 +3792,7 @@ async function genPrincipal(btn, opts){
   }
 }
 
-const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师），负责对校长分给你的一整组章节
-${schoolRoleGuardText('teacher')}
-，一次性备好组内每一章的「本章写作框架（教案）」，供下面的「学生（正文 AI）」照此写正文。
+const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师），负责对校长分给你的一整组章节，一次性备好组内每一章的「本章写作框架（教案）」，供下面的「学生（正文 AI）」照此写正文。
 
 【教学观·必须贯穿始终】
 你是老师，给的是"怎么教"的写作指令，不是"代写答案"。你立好本章的框架骨架——它告诉学生"这一章从哪里写到哪里、期间要走完哪些环节、每环节的落点是什么"，把框架缝隙铺得密一点、好带学生走完一整章；但你要给学生留出充分的创作空间，绝不要替学生把正文写出来，也不要给一整段成品范文让他照抄。示例只允许"点到为止"：一句话的情绪基调、一个代表性动作或氛围点，作示范方向即可，严禁成段示范散文、严禁把某段正文替你写掉。框架是用来"引学生写长、写完整"，不是"紧箍咒"——禁止强制字数配比或逐句规定把学生框死。
@@ -3832,8 +3843,6 @@ function buildTeacherUser(g, gi){
   const pr = (state.school && state.school.principal) || {};
   const o = state.outline || {};
   const lines = [];
-  lines.push(schoolRoleGuardText('teacher'));
-  lines.push(`【本次任课教师实例】老师${gi+1}；负责第${g.first}-${g.last}章。你不是校长，不承担全校统筹职责；即使输入材料中出现“校长”，也只能将其视为上游已完成的成果。`);
   lines.push(storyStateCanonBlock());
   lines.push(`【全校写作守则】\n${(pr.raw && extractSection(pr.raw,'全校写作守则','各组组级框架')) || '（校长未产出守则）'}`);
   lines.push(`【校长已裁决的风格融合总纲】\n${principalStyleExecutionExcerpt()}`);
@@ -3844,8 +3853,11 @@ function buildTeacherUser(g, gi){
   lines.push('【全量词典（共享不切片）】\n' + scGlossaryBrief(7000));
   lines.push(`【本组《全书节拍》节选】\n${scGroupBeats(g, 8000)}`);
   lines.push(`【前序正文状态（若存在）】\n${g.first>1 ? (storyStateChapterBlock(g.first-1) || '（暂无结算状态）') : '（首组，无前序正文）'}`);
-  const _opening = openingStrategyBrief(); if(_opening) lines.push(_opening);
-  if(g && g.first===1){ const _openingTask = principalOpeningTaskExcerpt() || openingStrategyExecutionCard(0); if(_openingTask) lines.push(_openingTask); }
+  // 开篇策略只对首组（包含第1章）生效；后续老师不得把首章策略当成本组策略。
+  if(g && g.first===1){
+    const _opening = openingStrategyBrief(); if(_opening) lines.push(_opening);
+    const _openingTask = principalOpeningTaskExcerpt() || openingStrategyExecutionCard(0); if(_openingTask) lines.push(_openingTask);
+  }
   lines.push(prevGroupTailState(gi, g));
   if(isLong()) lines.push(`【长篇记忆层·老师备课参考】\n${longMemoryBrief(g.first-1) || '（尚无已落地正文状态；以校长交接棒和本组教案输入为准。）'}\n执行要求：记忆层只用于保持状态、因果与伏笔连续，不得擅自新增剧情；本组每章重大事件仍须给出前置条件→触发/线索→人物行动→结果。`);
   lines.push('\n请对本组每一章产出一份「本章写作框架」，并在文末附上【本阶段向下一阶段移交的 3 大关键悬念与阶段高潮成果】。');
@@ -3901,8 +3913,7 @@ async function genTeacher(btn, gi){
       try{
         const txt = await callAIGuarded('teacher', TEACHER_SYS, buildTeacherUser(g, gi), {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
         if(!txt || !String(txt||'').trim()){ setScRetry(key, attempt); scRefreshBadge(btn,key); throw new Error('老师返回空'); }
-        if(!schoolRoleOutputValid('teacher', txt)){ setScRetry(key, attempt); scRefreshBadge(btn,key); throw new Error(`老师${gi+1}角色越界：返回内容出现校长兼任身份`); }
-        const sc = scState(); delete sc.stale['t'+gi]; sc.teachers[gi] = { roleId:SCHOOL_ROLE_CONTRACT.teacher.id, gi, ts:Date.now(), raw:String(txt) };
+        const sc = scState(); delete sc.stale['t'+gi]; sc.teachers[gi] = { gi, ts:Date.now(), raw:String(txt) };
         const cards = commitTeacherChapterCards(String(txt), g, gi);
         persist();
         scMark(key, true); markAIDone(key);
@@ -4011,25 +4022,6 @@ function refreshSchoolProgressUi(){
 async function genSchoolAll(btn){
   if(genBusy()){ toast('已有生成任务进行中，请稍候'); return; }
   const groups = schoolStageGroups(); if(!groups.length){ toast('请先填写章节数，才能一键开学'); return; }
-
-  // 一键开学硬性角色合同：校长与老师必须是两个独立 AI 角色。
-  // 章节数只决定“老师”数量，不得把校长折叠成老师，也不得把老师提升为校长。
-  const chapterTotal = (state.outline && Array.isArray(state.outline.chapters))
-    ? state.outline.chapters.length : Math.floor(Number(chapterCountVal())||0);
-  const expectedTeacherCount = Math.max(1, Math.ceil(chapterTotal / SCHOOL_GROUP_MAX));
-  if(expectedTeacherCount !== groups.length){
-    toast('学校分组校验失败：老师人数与章节数不一致，请重新设定章节数');
-    return;
-  }
-  if(chapterTotal >= 1 && chapterTotal <= 20 && groups.length !== 1){
-    toast('学校角色校验失败：1-20章必须由1位独立老师负责，校长不得兼职老师');
-    return;
-  }
-  if(!SCHOOL_ROLE_CONTRACT.principal.id || !SCHOOL_ROLE_CONTRACT.teacher.id ||
-     SCHOOL_ROLE_CONTRACT.principal.id === SCHOOL_ROLE_CONTRACT.teacher.id){
-    toast('学校角色合同异常：校长与老师角色ID不能相同');
-    return;
-  }
   const steps = [
     { key:'dictMaster', label:'词典达人', run:()=> genDictMaster(null) },
     { key:'dictEnrich', label:'词典充实', run:()=> genDictEnrich(null,{force:true}) },
@@ -11167,7 +11159,6 @@ async function genDictMaster(btn){
     state.dictmasterHistory.unshift(result);
     if(state.dictmasterHistory.length > 6) state.dictmasterHistory = state.dictmasterHistory.slice(0, 6);   // 第 7 次最旧被挤出
     state.dictmasterRan = true;
-    collapseGlossaryAfterDictionaryGeneration();
     storyState().canon.dictmasterAt=Date.now(); ssEnsureCanonEntities(); ssCaptureMasterSnapshot(); storyState().versions.dictMaster=Number(storyState().versions.dictMaster||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldCanon={version:storyState().versions.dictMaster,source:'dictmaster',ts:Date.now(),counts:{characters:(o.glossary.characters||[]).length,places:(o.glossary.places||[]).length,propernouns:(o.glossary.propernouns||[]).length,worldRules:(o.glossary._worldRules||[]).length}};
     persist(); render();
     markAIDone('dictmaster');
@@ -11976,7 +11967,7 @@ async function genDictEnrich(btn, opts){
     if(!txt) throw new Error('未返回词典充实内容');
     const parsed = parseDictEnrichText(txt);
     if(!(parsed.characters.length || parsed.walkons.length || parsed.places.length || parsed.propernouns.length)) throw new Error('未识别到有效条目（人物/路人/地名/专名），请重试');
-    const n = mergeDictEnrich(parsed); collapseGlossaryAfterDictionaryGeneration(); ssProtectMasterCanon(); storyState().canon.dictEnrichAt=Date.now(); storyState().versions.dictEnrich=Number(storyState().versions.dictEnrich||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldExpansion={version:storyState().versions.dictEnrich,source:'dictEnrich',ts:Date.now(),added:n};
+    const n = mergeDictEnrich(parsed); ssProtectMasterCanon(); storyState().canon.dictEnrichAt=Date.now(); storyState().versions.dictEnrich=Number(storyState().versions.dictEnrich||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldExpansion={version:storyState().versions.dictEnrich,source:'dictEnrich',ts:Date.now(),added:n};
     state.outline._dictEnrichText = txt;   // 仅存档（导入/导出时仍保留原文兜底），UI 不再直接渲染
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, ts:Date.now() };
@@ -12005,18 +11996,6 @@ function buildDictEnrichSummary(parsed){
     nPlaces: (parsed.places||[]).length,
     nProps:  (parsed.propernouns||[]).length,
   };
-}
-function collapseGlossaryAfterDictionaryGeneration(){
-  // 词典达人/词典充实生成完成后，统一恢复“收起”状态：
-  // 1) 万物词典总卡收起；2) 主要人物/次要配角/路人龙套/地点/专名全部收起；
-  // 3) 副线等其它分类也保持收起，避免生成后页面突然全部铺开。
-  state.gsCollapsed = true;
-  state.gsCatFold = Object.assign({}, state.gsCatFold || {}, {
-    main:true, support:true, walkon:true, place:true, proper:true, sub:true
-  });
-  // 单条词条也恢复折叠，保证再次打开总卡时不会残留上一次的展开状态。
-  state.gsEntryFold = Object.assign({}, state.gsEntryFold || {});
-  persist();
 }
 function dictEnrichBlockHtml(){
   const o = (state.outline) || {};
@@ -12427,8 +12406,11 @@ function buildChapterUser(i, opt={}){
   const chap = (state.chapters && state.chapters[i]) || {};
   const curN = i + 1;
   const parts = [];
-  const _opening = openingStrategyBrief(); if(_opening) parts.push(_opening);
-  if(i===0){ const _openingTask = principalOpeningTaskExcerpt() || openingStrategyExecutionCard(0); if(_openingTask) parts.push(_openingTask); }
+  // 开篇策略是首章施工指令，不应污染第2章及之后正文的上下文。
+  if(i===0){
+    const _opening = openingStrategyBrief(); if(_opening) parts.push(_opening);
+    const _openingTask = principalOpeningTaskExcerpt() || openingStrategyExecutionCard(0); if(_openingTask) parts.push(_openingTask);
+  }
   const _card=chapterPlanAuthority(i);
   const _lesson = _card?.raw || teacherChapterPlan(i);
   const _closed = !!_lesson;   // 有本章教案 → 开启三层递进闭环上下文箱
