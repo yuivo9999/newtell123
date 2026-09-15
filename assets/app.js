@@ -7638,6 +7638,35 @@ const POLISH_MULTI_MODE = `你现在进入【多方案构想优化模式】。
 
 “AI 自己重新写出的多个故事”。`;
 
+const GLOSSARY_EXTRACT_SYS_LEGACY = `你是长篇小说设定整理助手。给定【本章正文】与【现有词典】，提取正文中出现但现有词典【未收录】的新人物、新地名、新专名。
+请严格只输出如下 JSON（不要解释、不要 markdown 代码块）：
+{"characters":[{"name":"人名","identity":"身份/职业/社会身份","age":"岁数/年龄","gender":"性别","appearance":"外貌特征","hobby":"爱好","catchphrase":"口头禅","relation":"与该人的血缘/人际关联","trait":"性格要点"}],"places":[{"name":"地名","type":"类型","note":"设定要点"}],"propernouns":[{"name":"专名","note":"含义"}]}
+规则：
+1. 只提取正文中真实出现、且有明确所指（被命名）的实体；纯叙述性泛指不提取。
+2. 必须与现有词典逐名去重：同名条目一律不再输出。
+3. ★【人物必须输出全部 8 个字段：identity / age / gender / appearance / hobby / catchphrase / relation / trait】
+   · 禁止只输出人名、禁止缺字段、禁止省略任何字段；
+   · 从正文中提取该人物的身份、年龄、性别、外貌、爱好、口头禅、关系、性格等信息，正文未明说的字段按上下文合理推断后填写；
+   · 实在无法推断的字段填「未知」，不得留空、不得删除该字段；
+   · catchphrase（口头禅）：正文出现该人物的专属口头禅就写具体内容（如「口头禅'稳了'」），判定其没有就填「无」；
+   · relation 与 identity 务必区分：身份词（捕快/市长/船女）归 identity；带"谁的"的人际关联（XX的妹妹/她的仆人）归 relation；relation 只写一句话关系摘要（≤20字），与他人多组关系的逐条明细由「人物关系表」承载，禁止堆砌多组关系。
+   · ★推断须自洽：填写的 age 与履历/居住年限类设定不得矛盾（如"在此已住30年"却23岁、"18岁却已当官5年"）；子代须小于亲代；转世/穿越/长生/修仙等特殊预设可豁免，但需有对应标注。
+4. 无明显新实体时输出 {"characters":[],"places":[],"propernouns":[]}。`;
+
+const GLOSSARY_EXTRACT_SYS_PRO = `你是一位资深长篇小说「设定审计师」。
+【核心任务】给定本章正文与现有词典，提取正文中出现但现有词典未收录的新人物、新地名、新专名，并做字段自洽审查。
+
+【必须输出的 JSON 结构】
+{"characters":[{"name":"人名","identity":"身份/职业/社会身份","age":"岁数/年龄","gender":"性别","appearance":"外貌特征","hobby":"爱好","catchphrase":"口头禅","relation":"与该人的血缘/人际关联","trait":"性格要点"}],"places":[{"name":"地名","type":"类型","note":"设定要点"}],"propernouns":[{"name":"专名","note":"含义"}]}
+
+【硬性约束】
+1. 只提取正文中真实出现、且有明确所指（被命名）的实体；纯叙述性泛指不提取。
+2. 与现有词典逐名去重：同名条目一律不再输出。
+3. 人物必须输出全部 8 个字段：identity / age / gender / appearance / hobby / catchphrase / relation / trait；禁止缺字段、留空；无法推断的字段填「未知」。catchphrase（口头禅）并非人人都有：正文出现其专属口头禅就写具体内容，判定没有则填「无」。
+4. relation 与 identity 区分：身份词（捕快/市长/船女）归 identity；带"谁的"的人际关联归 relation；relation 只写一句话关系摘要（≤20字），与他人多组关系的逐条明细由「人物关系表」承载，禁止在 relation 里堆砌多组关系。
+5. 字段自洽：age 与履历/居住年限不得矛盾；子代须小于亲代；特殊预设（转世/穿越/长生/修仙）可豁免但需标注。
+6. 无明显新实体时输出 {"characters":[], "places":[], "propernouns":[]}。
+7. 只输出上述 JSON，不要 markdown 代码块、不要解释。`;
 
 const GLOSSARY_EXTRACT_SYS = GLOSSARY_EXTRACT_SYS_PRO;
 
