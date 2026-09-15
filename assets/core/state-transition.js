@@ -1,8 +1,0 @@
-/** v47 observed state transition model. Pure/browser-independent. */
-'use strict';
-export const STATE_TRANSITION_VERSION=1;
-const text=v=>String(v==null?'':v).trim();
-const order={unknown:0,alive:1,injured:2,dead:3};
-export function normalizeStateTransition(input={},defaults={}){const x={...(input||{})};return {version:STATE_TRANSITION_VERSION,id:text(x.id)||`st_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,chapterId:Number(x.chapterId||defaults.chapterId)||null,entity:text(x.entity),field:text(x.field),from:x.from,to:x.to,causeEventId:text(x.causeEventId),evidence:x.evidence||null,authority:x.authority,ts:Number(x.ts)||Date.now()};}
-export function validateStateTransition(input={}){const x=normalizeStateTransition(input),issues=[];if(x.version!==STATE_TRANSITION_VERSION)issues.push({code:'STATE_TRANSITION_VERSION',severity:'fail'});if(!x.entity||!x.field)issues.push({code:'STATE_TRANSITION_TARGET_MISSING',severity:'fail'});if(!x.chapterId)issues.push({code:'STATE_TRANSITION_CHAPTER_MISSING',severity:'fail'});if(x.field==='life'&&text(x.from)&&text(x.to)){const a=order[text(x.from).toLowerCase()],b=order[text(x.to).toLowerCase()];if(a!=null&&b!=null&&b<a)issues.push({code:'STATE_TRANSITION_LIFE_REWIND',severity:'fail'});}return {status:issues.length?'FAIL':'PASS',issues,transition:x};}
-export function projectStateTransitions(previous={},transitions=[]){const next=JSON.parse(JSON.stringify(previous||{}));for(const t of transitions){const x=normalizeStateTransition(t);if(!x.entity||!x.field)continue;next[x.entity]=next[x.entity]||{};next[x.entity][x.field]=x.to;}return next;}
