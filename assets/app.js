@@ -3299,6 +3299,17 @@ function teacherChapterPlan(ci){
 }
 
 const SCHOOL_RETRY_MAX = 16;
+// 老师阶段“完成”必须以“正文实际可读取到当前老师机器教案卡”为准。
+// 旧逻辑把 canon.teacherAt 版本快照当成唯一闸门；只要快照与版本计数出现一次不同步，
+// 即使“读取老师教案”已经能正常读出全部章节，也会被一键开学判定为未完成并停在第4步。
+function ssTeacherCardCurrent(card, gi){
+  if(!card || card.teacherGi!==gi) return false;
+  const v=card.versions||{}; const ss=storyState(); const cur=ss.versions||{};
+  return Number(v.dictMaster||0)===Number(cur.dictMaster||0) &&
+         Number(v.dictEnrich||0)===Number(cur.dictEnrich||0) &&
+         Number(v.principal||0)===Number(cur.principal||0) &&
+         String(card.raw||'').trim().length>0;
+}
 function scTeacherGroupComplete(gi){
   const groups=schoolStageGroups(), g=groups[gi];
   if(!g) return false;
@@ -3306,11 +3317,18 @@ function scTeacherGroupComplete(gi){
   if(!sc || !sc.teachers || !sc.teachers[gi] || !String(sc.teachers[gi].raw||'').trim()) return false;
   if(sc.stale && sc.stale['t'+gi]) return false;
   const ss=storyState();
-  if(!ss.canon || !ss.canon.teacherAt || !ss.canon.teacherAt[gi]) return false;
-  if(!ssTeacherVersionsCurrent(gi)) return false;
   for(let ch=g.first; ch<=g.last; ch++){
     const card=ss.chapters?.[ch-1]?.card;
-    if(!card || card.teacherGi!==gi || !ssTeacherVersionsCurrent(gi)) return false;
+    // 只要章节卡已经真实落地且仍属于当前版本，就视为该老师完成。
+    // canon.teacherAt 只作为元数据，不再成为阻断“一键开学”的第二把锁。
+    if(!ssTeacherCardCurrent(card,gi)) return false;
+  }
+  // 历史数据/异常恢复：如果章节卡已经完整存在，但 teacherAt 元数据丢失，自动补回，
+  // 不要求用户重新调用一次 AI。
+  ss.canon=ss.canon||{}; ss.canon.teacherAt=ss.canon.teacherAt||[];
+  if(!ss.canon.teacherAt[gi]){
+    ss.canon.teacherAt[gi]=ssStamp({teacherVersion:ss.versions.chapterCard||0},{teacherGi:gi});
+    persist();
   }
   return true;
 }
@@ -4084,9 +4102,11 @@ async function genSchoolAll(btn){
           if(!allT) break;
           scMark('t'+j, true);
         }
-        if(allT && scTeacherPipelineComplete()) scMark('teacher', true);
+        // genTeacher 已逐章硬验收；这里不要再用另一套不同的完成条件把已经可读的教案判失败。
+        const teacherReady = allT && groups.every((g,gi)=>scTeacherGroupComplete(gi));
+        if(teacherReady) scMark('teacher', true);
         else scMark('teacher', false);
-        return allT && scTeacherPipelineComplete();
+        return teacherReady;
       }
     }
   ];
@@ -4143,7 +4163,8 @@ async function genSchoolAll(btn){
       }
     }
     const teacherComplete = scTeacherPipelineComplete();
-    if(!teacherComplete || !scTeacherPipelineComplete()) throw new Error('一键开学未完成独立老师机器教案卡，禁止结束');
+    if(!teacherComplete) throw new Error('一键开学未完成独立老师机器教案卡，禁止结束');
+    // 到这里“读取老师教案”与“一键开学”的完成判定使用同一套章节卡事实，不再出现显示完成却被第4步拦截的分叉状态。
     toast('学校一键全部完成：词典达人→词典充实→校长→独立老师全链路就绪，所有章节当前机器教案卡已落地！');
     playDoneSound('all');
   }finally{ finish(); render(); }
