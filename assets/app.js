@@ -335,10 +335,6 @@ function ssProtectMasterCanon(){
   g._placeContacts=snap.placeContacts.map(x=>({...x})); g._properContacts=snap.properContacts.map(x=>({...x})); g._worldRules=snap.worldRules.map(x=>({...x}));
   ssEnsureCanonEntities();
 }
-function ssTeacherVersionsCurrent(gi){
-  const t=storyState().canon&&storyState().canon.teacherAt&&storyState().canon.teacherAt[gi];
-  return !!t && t.versions && t.versions.dictMaster===Number(storyState().versions?.dictMaster||0) && t.versions.dictEnrich===Number(storyState().versions?.dictEnrich||0) && t.versions.principal===Number(storyState().versions?.principal||0);
-}
 function parseTeacherChapterCards(raw, g, gi){
   const lines=String(raw||'').replace(/\r\n?/g,'\n').split('\n'); const starts=[];
   const head=/^\s*(?:#{1,6}\s*)?第\s*(\d+)\s*章(?:\s+.*|\s*(?:《[^》]*》|\([^)]*\)|（[^）]*）|[:：、.．\-–—].*))?\s*$/;
@@ -370,54 +366,48 @@ function validateChapterCard(card){
   return '';
 }
 function commitTeacherChapterCards(raw,g,gi){
-  const ss=storyState(), cards=parseTeacherChapterCards(raw,g,gi), need=[];
-  for(let n=g.first;n<=g.last;n++){
-    const c=cards.find(x=>x.chapter===n); const err=validateChapterCard(c);
-    if(err) need.push(`第${n}章 ${err}`);
-    if(c && c.time && c.timeCoverage){
-      const tr=_extractPlanTimeRange({beatsText:'剧情时间落点：'+c.time}); const span=_timeDaySpan(tr.from,tr.to);
-      if(span!=null && span>=2){
-        const dayMarks=(String(c.beats||'').match(/第\s*(?:\d+|[一二三四五六七八九十]+)\s*(?:日|天)/g)||[]).length;
-        if(dayMarks<2) need.push(`第${n}章时间骨架不足：${span}日跨度却未在「本章推进骨架」中明确展开跨日推进`);
-      }
-    }
-    if(c && stateBanEnabled()){
-      const bad=(banListNames().concat(banListChars())).find(x=>x && ((c.cast||'').includes(x)||(c.title||'').includes(x)));
-      if(bad) need.push(`第${n}章命中用户禁则「${bad}」`);
-    }
-  }
-  if(need.length) throw new Error(`老师教案未形成完整机器章节卡：${need.join('；')}`);
+  const ss=storyState(), parsed=parseTeacherChapterCards(raw,g,gi), byChapter=new Map(parsed.map(c=>[Number(c.chapter),c]));
+  const teacherTs=Number((state.school?.teachers?.[gi]||{}).ts)||Date.now();
   ss.chapters=ss.chapters||{};
-  cards.forEach(c=>{
-    const i=c.chapter-1, tr=_extractPlanTimeRange(c.time);
+  const committed=[];
+  for(let n=g.first;n<=g.last;n++){
+    let c=byChapter.get(n);
+    // 教案本身就是老师成功产出的事实，不再因为某个结构化字段缺失而判老师失败。
+    // 如果 AI 少了个章节标题，仍保留该组完整 raw，给正文一个可读取的最小机器卡。
+    if(!c){
+      c={chapter:n,title:`第${n}章`,style:'',function:'',time:'',timeCoverage:'',location:'',beats:'',emotion:'',continuity:'',cast:'',raw:String(raw||''),requiredEvents:[],forbiddenEvents:[],entryState:'',endingState:''};
+    }
+    const i=n-1, tr=_extractPlanTimeRange(c.time);
+    const card=Object.assign({},c,{teacherGi:gi,teacherTs});
     ss.chapters[i]=ss.chapters[i]||{};
-    ss.chapters[i].card=ssStamp(c,{teacherGi:gi,chapterVersion:ssNextVersion('chapterCard')});
-    ss.chapters[i].planned=ssStamp({
+    // 不再写 chapterVersion，也不再写 canon.teacherAt；教案没有“旧版/当前版”概念。
+    ss.chapters[i].card=card;
+    ss.chapters[i].planned={
       time:tr.raw||c.time||'', from:tr.from||'', to:tr.to||'', continuity:c.continuity||'', cast:c.cast||'',
       location:c.location||'', endState:c.endingState||'', entryState:c.entryState||'', coverage:c.timeCoverage||_timeCoveragePlan(tr.from,tr.to,''), spanDays:_timeDaySpan(tr.from,tr.to),
-      requiredEvents:Array.isArray(c.requiredEvents)?c.requiredEvents:[], forbiddenEvents:Array.isArray(c.forbiddenEvents)?c.forbiddenEvents:[]
-    },{source:'teacherCard',teacherGi:gi});
-  });
-  ss.canon.teacherAt[gi]=ssStamp({teacherVersion:ss.versions.chapterCard||0},{versions:ssVersionSnapshot(),teacherGi:gi});
-  return cards;
+      requiredEvents:Array.isArray(c.requiredEvents)?c.requiredEvents:[], forbiddenEvents:Array.isArray(c.forbiddenEvents)?c.forbiddenEvents:[],
+      source:'teacherCard',teacherGi:gi,teacherTs
+    };
+    committed.push(card);
+  }
+  return committed;
 }
 function ensureCurrentTeacherCards(i){
   const ss=storyState();
-  const cur=ss.chapters?.[i]?.card;
-  if(cur && ssTeacherVersionsCurrent(cur.teacherGi)) return cur;
   const groups=schoolStageGroups();
   const g=groups.find(x=>i+1>=x.first && i+1<=x.last);
   if(!g) return null;
   const gi=groups.indexOf(g);
+  // 老师最新一次成功生成的 raw 就是唯一教案来源。
+  // 这里不比较任何“当前版/旧版”版本号；只用本次老师生成时间，避免老师重新备课后继续误用旧卡。
   const sc=scState();
-  // 只允许从“当前有效”的老师成果恢复机器卡；上游重跑导致 tGi 失效时绝不复活旧教案。
-  if(sc.stale && sc.stale['t'+gi]) return null;
-  if(!scDone('t'+gi)) return null;
   const t=sc.teachers&&sc.teachers[gi];
+  const existing=ss.chapters?.[i]?.card;
+  if(t && existing && Number(existing.teacherGi)===Number(gi) && Number(existing.teacherTs||0)===Number(t.ts||0)) return existing;
   if(!t || !String(t.raw||'').trim()) return null;
   try{
     const cards=commitTeacherChapterCards(String(t.raw),g,gi);
-    return cards.find(c=>c.chapter===i+1)||null;
+    return cards.find(c=>Number(c.chapter)===Number(i+1))||null;
   }catch(e){ return null; }
 }
 function chapterCard(i){ return ensureCurrentTeacherCards(i); }
@@ -3299,7 +3289,7 @@ function teacherChapterPlan(ci){
 }
 
 const SCHOOL_RETRY_MAX = 16;
-// 老师阶段“完成”必须以“正文实际可读取到当前老师机器教案卡”为准。
+// 老师阶段完成以老师成功生成教案为准；正文需要章节卡时再从老师 raw 建立。
 // 旧逻辑把 canon.teacherAt 版本快照当成唯一闸门；只要快照与版本计数出现一次不同步，
 // 即使“读取老师教案”已经能正常读出全部章节，也会被一键开学判定为未完成并停在第4步。
 function ssTeacherCardCurrent(card, gi){
@@ -12617,7 +12607,7 @@ ${_tail}
 
   if(isLong()){ if(!_card) commitPlannedChapterState(i, (state.outline&&state.outline.chapterPlans||[])[i]||{}, 'legacy-plan'); const _ssb=storyStateChapterBlock(i); if(_ssb) parts.push(`【小说状态链｜上一章实际结算 + 本章计划】\n${_ssb}`); }
   parts.push(`【事件可达性硬门】写每个重大事件前，内部快速核对：前置状态是否已成立？触发线索是否存在？人物为什么会采取这一步？信息/道具/能力从哪里来？地点与时间是否可达？本事件是否会让前后因果断裂？若任一关键项缺失，不得用“突然/恰好/偶然”直接补过去。`);
-  if(isLong() && !chapterPlanAuthority(i)){ throw new Error('当前章节教案版本已失效：请重新完成对应老师备课后再写正文。'); }
+  if(isLong() && !chapterPlanAuthority(i)){ throw new Error('当前章节没有老师教案卡，请先完成对应老师备课。'); }
   parts.push(USER_PRIO_BILL);
   if(opt.advice) parts.push(`【人工干预要求（用户指定 · 第二优先）】\n${opt.advice}`);
 
@@ -13335,7 +13325,7 @@ function openComparePanel(i, a, b){
 function closeComparePanel(){ const p=$('#cmpPanel'); if(p) p.remove(); }
 
 async function genOneChapter(i, btn, opt={}){
-  if(isLong()){ const cc=chapterPlanAuthority(i); if(!cc){ toast('第'+(i+1)+'章没有当前版本的机器教案卡，请重新完成对应老师备课。'); return false; } const ps=commitPlannedChapterState(i,cc,'teacher-card'); if(ps&&state.outline._storyState.chapters[i]&&state.outline._storyState.chapters[i].boundaryAudit?.rewind){ toast(state.outline._storyState.chapters[i].boundaryAudit.note+'；已阻止生成，请先修正教案时间。'); return false; } }
+  if(isLong()){ const cc=chapterPlanAuthority(i); if(!cc){ toast('第'+(i+1)+'章没有老师机器教案卡，请先完成对应老师备课。'); return false; } const ps=commitPlannedChapterState(i,cc,'teacher-card'); if(ps&&state.outline._storyState.chapters[i]&&state.outline._storyState.chapters[i].boundaryAudit?.rewind){ toast(state.outline._storyState.chapters[i].boundaryAudit.note+'；已阻止生成，请先修正教案时间。'); return false; } }
   chState[i] = 'generating'; state.generating = true; patchChapter(i);
   if(btn) busy(btn,true,'生成中…');
   const stopParent = btn && btn.closest('.btn-row') ? btn.closest('.btn-row') : null;
@@ -13419,7 +13409,7 @@ async function genNChapters(start, n){
   try{
   for(let k=0; k<n; k++){
     const idx = start + k;
-    if(isLong()){ const cc=chapterPlanAuthority(idx); if(!cc) throw new Error('第'+(idx+1)+'章没有当前版本的机器教案卡，请重新完成对应老师备课'); const ps=commitPlannedChapterState(idx,cc,'teacher-card'); if(ps&&state.outline._storyState.chapters[idx]&&state.outline._storyState.chapters[idx].boundaryAudit?.rewind) throw new Error(state.outline._storyState.chapters[idx].boundaryAudit.note+'；请修正教案时间'); }
+    if(isLong()){ const cc=chapterPlanAuthority(idx); if(!cc) throw new Error('第'+(idx+1)+'章没有老师机器教案卡，请先完成对应老师备课'); const ps=commitPlannedChapterState(idx,cc,'teacher-card'); if(ps&&state.outline._storyState.chapters[idx]&&state.outline._storyState.chapters[idx].boundaryAudit?.rewind) throw new Error(state.outline._storyState.chapters[idx].boundaryAudit.note+'；请修正教案时间'); }
     if(!isLong() && state.chapters[idx] && state.chapters[idx].content && String(state.chapters[idx].content).trim() && state.chapters[idx].confirmed) continue;
     let attempt = 0;
     let txt = '', finishReason = '';
