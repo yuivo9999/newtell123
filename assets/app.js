@@ -89,7 +89,7 @@ const state = {
   timeAnchorsAuto: true,
   teamShape: 'solo',
   bookBeat: 7,
-  openingStrategy: 'auto',
+  openingStrategy: 'none',
   dictmasterHistory: [],
   dictmasterLatest: null,
   dictmasterRan: false,
@@ -923,7 +923,7 @@ function applyProject(p){
   state.totalWords = (p.totalWords && +p.totalWords>0) ? +p.totalWords : null;
   state.chapterCount = (p.chapterCount && +p.chapterCount>0) ? +p.chapterCount : null;
   state.bookBeat = [4,7,12,15].includes(Number(p.bookBeat)) ? Number(p.bookBeat) : (state.bookBeat || BOOK_BEAT_DEFAULT_ID);
-  state.openingStrategy = openingStrategyDef(p.openingStrategy) ? p.openingStrategy : 'auto';
+  state.openingStrategy = openingStrategyDef(p.openingStrategy) ? p.openingStrategy : 'none';
   state.longMemory = (p.longMemory && typeof p.longMemory === 'object') ? p.longMemory : { uiOpen:false, foreshadow:[], lastAuditAt:0 };
   state.idea = p.idea || '';
   state.coverPrompt = p.coverPrompt || '';
@@ -1016,7 +1016,7 @@ function clearState(){
   state.school = null;   // 学校模式：新项目/重置清空（校长/老师产出 + 重试/完成标记）
   state.longMemory = { uiOpen:false, foreshadow:[], lastAuditAt:0 };
   state.teamShape = 'solo';
-  state.openingStrategy = 'auto';
+  state.openingStrategy = 'none';
   state.polishCollapsed = false;
   state._chapterPartial = {};
   state.aiNetwork = { stage:'idle', running:[], completed:[], blockedBy:{} };
@@ -2943,7 +2943,7 @@ function chapterCountHint(){
   return v ? `全书 ${v} 章` : '请填写全书章节数（1-200，必填）';
 }
 const OPENING_STRATEGIES = [
-  {id:'auto', label:'AI 推荐', desc:'按全书章节数与故事体量自动选择，首章优先进入主线。'},
+  {id:'none', label:'不选择开篇策略', desc:'不使用额外的开篇策略，由本章教案、人物现场与故事自然发展决定开篇方式。'},
   {id:'action', label:'事件直入', desc:'从正在发生的关键事件切入，适合短篇幅、强卖点题材。'},
   {id:'crisis', label:'危机开场', desc:'先给危险、冲突或倒计时，再逐步解释原因。'},
   {id:'result', label:'结果先行', desc:'先展示一个异常结果，再回到前因，适合悬疑与反转。'},
@@ -2953,15 +2953,8 @@ const OPENING_STRATEGIES = [
   {id:'future', label:'未来片段', desc:'用预言、未来片段或结局影子制造问题，再回到当下。'}
 ];
 function openingStrategyDef(id){ return OPENING_STRATEGIES.find(x=>x.id===id); }
-function currentOpeningStrategyId(){ return openingStrategyDef(state.openingStrategy) ? state.openingStrategy : 'auto'; }
-function recommendedOpeningStrategy(){
-  const n = chapterCountVal() || 0;
-  if(n <= 3) return 'crisis';
-  if(n <= 8) return 'action';
-  if(n <= 20) return 'normal';
-  if(n <= 50) return 'secret';
-  return 'world';
-}
+function currentOpeningStrategyId(){ return openingStrategyDef(state.openingStrategy) ? state.openingStrategy : 'none'; }
+function recommendedOpeningStrategy(){ return 'none'; }
 function openingBudget(){
   const n = chapterCountVal() || 0;
   if(n <= 3) return 1;
@@ -2973,8 +2966,8 @@ function openingBudget(){
 function openingStrategyExecutionCard(i=0){
   if(!isLong() || i!==0) return '';
   const selected = openingStrategyDef(currentOpeningStrategyId());
-  const rec = openingStrategyDef(recommendedOpeningStrategy());
-  const actual = currentOpeningStrategyId()==='auto' ? rec : selected;
+  if(!selected || selected.id==='none') return '';
+  const actual = selected;
   const jobs = {
     crisis:'第一段直接把读者放进正在发生的危机或倒计时中；随后只补最少必要背景。',
     action:'先给一个可视化动作/事件，再在动作中自然带出主角、目标与冲突。',
@@ -2994,6 +2987,7 @@ function openingStrategyExecutionCard(i=0){
 首拍验收：开篇方式必须能被读者从正文实际动作/场景中辨认，而不是只在教案里写“按${actual.label}开篇”。\n作用边界：本任务卡只约束第1章；第2章起不得重复执行本卡。`;
 }
 function principalOpeningTaskExcerpt(){
+  if(currentOpeningStrategyId()==='none') return '';
   const pr=(state.school&&state.school.principal)||{};
   if(pr.raw){
     const raw=String(pr.raw);
@@ -3005,15 +2999,14 @@ function principalOpeningTaskExcerpt(){
 function openingStrategyBrief(){
   if(!isLong()) return '';
   const selected = openingStrategyDef(currentOpeningStrategyId());
-  const rec = openingStrategyDef(recommendedOpeningStrategy());
-  const actual = currentOpeningStrategyId()==='auto' ? rec : selected;
+  if(!selected || selected.id==='none') return '';
   const n = chapterCountVal() || realChapterCount() || 0;
-  return `【开篇引擎·仅首章生效】全书${n||'未定'}章；开篇预算约${openingBudget()}章。策略=${actual.label}：${actual.desc}\n权限边界：本策略只决定第1章如何开笔；第2章起不得继续套用“开篇策略”，必须以各章自己的教案、上一章物理接力与动态状态为唯一开笔依据。\n执行：第1章必须尽早建立核心人物、类型信号、可见问题与继续阅读的下一问；预算只是允许用于启动故事引擎的章节上限，不代表可以慢热拖延。${n>0&&n<5?'当前篇幅少于5章，首章应直接进入主线，最多用极短铺垫，不安排长背景章。':''}`;
+  return `【开篇策略·仅首章生效】全书${n||'未定'}章。用户主动选择：${selected.label}。${selected.desc}\n权限边界：本策略只决定第1章如何开笔；第2章起不得继续套用“开篇策略”，必须以各章自己的教案、上一章物理接力与动态状态为唯一开笔依据。\n执行：第1章将所选策略融入实际事件、人物现场和本章教案，不得把策略标签本身写进正文。`;
 }
 function openingStrategyHtml(){
   if(!isLong()) return '';
-  const cur=currentOpeningStrategyId(), rec=openingStrategyDef(recommendedOpeningStrategy());
-  return `<div class="tw-panel" style="margin-bottom:10px"><div class="poly-head"><span class="poly-ic">🚪</span><b>开篇策略</b><span class="poly-rule">推荐：${esc(rec.label)} · 预算约${openingBudget()}章</span></div><div class="book-beat-options" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px">${OPENING_STRATEGIES.map(x=>`<label class="book-beat-card ${x.id===cur?'selected':''}" style="border:2px solid ${x.id===cur?'var(--accent,#4a90e2)':'var(--line,#e0e0e0)'};border-radius:8px;padding:10px;cursor:pointer"><input type="radio" name="openingStrategy" value="${x.id}" ${x.id===cur?'checked':''} style="display:none"><b>${esc(x.label)}${x.id===rec.id?' · AI推荐':''}</b><div class="muted" style="font-size:12px;line-height:1.5;margin-top:4px">${esc(x.desc)}</div></label>`).join('')}</div><div class="muted" style="font-size:12px;line-height:1.6;margin-top:8px">开篇预算不是“允许水”的章数，而是允许故事完成启动工作的范围。1–3章尽快入局；4–8章可有短铺垫；9章以上才逐步允许秘密、回忆与世界观承担更多开篇任务。</div></div>`;
+  const cur=currentOpeningStrategyId();
+  return `<div class="tw-panel" style="margin-bottom:10px"><div class="poly-head"><span class="poly-ic">🚪</span><b>开篇策略</b><span class="poly-rule">可选，不选择也可以</span></div><div class="book-beat-options" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px">${OPENING_STRATEGIES.map(x=>`<label class="book-beat-card ${x.id===cur?'selected':''}" style="border:2px solid ${x.id===cur?'var(--accent,#4a90e2)':'var(--line,#e0e0e0)'};border-radius:8px;padding:10px;cursor:pointer"><input type="radio" name="openingStrategy" value="${x.id}" ${x.id===cur?'checked':''} style="display:none"><b>${esc(x.label)}</b><div class="muted" style="font-size:12px;line-height:1.5;margin-top:4px">${esc(x.desc)}</div></label>`).join('')}</div><div class="muted" style="font-size:12px;line-height:1.6;margin-top:8px">选择具体策略后，策略仅作用于第1章；选择“不选择开篇策略”时，不启用任何额外开篇策略，也不会由AI自动推荐或替用户决定。</div></div>`;
 }
 function realChapterCount(){
   const n = (state.outline && Array.isArray(state.outline.chapters)) ? state.outline.chapters.length : 0;
@@ -3866,7 +3859,7 @@ function buildTeacherUser(g, gi){
 
 function prevGroupTailState(gi, g){
   const groups = schoolStageGroups();
-  if(gi <= 0 || !groups[gi-1]) return '【上一组末章·收束状态】\n（本组为全书首组：开篇）——首章按【开篇引擎】选定的策略开篇，无需承接前文。';
+  if(gi <= 0 || !groups[gi-1]) return '【上一组末章·收束状态】\n（本组为全书首组：开篇）——首章按本章教案、人物现场与故事自然发展开篇；若用户选择了开篇策略，则仅按所选策略执行。';
   const prev = (state.school && state.school.teachers && state.school.teachers[gi-1]) || null;
   const prevGroup = groups[gi-1];
   if(!prev || !prev.raw || !prevGroup) return '【上一组末章·收束状态】\n（上一组（老师'+gi+'）尚未备课）：请本组首章按「承上节的钩」自行设计衔接。';
@@ -10674,7 +10667,7 @@ function bindView(){
      r.onchange = ()=>{ state.bookBeat = +r.value; persist(); render(); };
    });
    $$('input[name="openingStrategy"]').forEach(r=>{
-     r.onchange = ()=>{ state.openingStrategy = openingStrategyDef(r.value) ? r.value : 'auto'; persist(); render(); };
+     r.onchange = ()=>{ state.openingStrategy = openingStrategyDef(r.value) ? r.value : 'none'; persist(); render(); };
    });
    bindGlossary();
   bindOrigIdea();
@@ -12471,7 +12464,7 @@ ${_tail}
       parts.push(`【第三层 · 微观层（动态滚入 · 物理事实与动态状态战报包）】\n${microParts.join('\n\n')}`);
     } else {
       parts.push(`【第三层 · 微观层（首章开篇物理基准）】
-本章为全书第 1 章（首章开篇）：无上一章正文。必须优先执行【第一章开篇任务卡】，并让教案骨架第①拍与该卡一致；首段从实际事件/人物现场起笔，迅速建立核心人物、类型信号、可见问题与继续阅读的下一问。禁止用大段背景说明替代开篇策略。`);
+本章为全书第 1 章（首章开篇）：无上一章正文。首段应从实际事件/人物现场或本章教案规定的起点自然起笔，尽早建立核心人物、当前处境与读者可继续追问的问题。若用户选择了具体开篇策略，必须与本章教案融合执行；若选择“不选择开篇策略”，不得自行生成、推荐或强行套用任何开篇策略。`);
     }
 
     const isLast = (i + 1) >= (o.chapters||[]).length;
