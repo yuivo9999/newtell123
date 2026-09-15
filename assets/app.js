@@ -3275,6 +3275,25 @@ function teacherChapterPlan(ci){
 }
 
 const SCHOOL_RETRY_MAX = 16;
+function scTeacherGroupComplete(gi){
+  const groups=schoolStageGroups(), g=groups[gi];
+  if(!g) return false;
+  const sc=state.school;
+  if(!sc || !sc.teachers || !sc.teachers[gi] || !String(sc.teachers[gi].raw||'').trim()) return false;
+  if(sc.stale && sc.stale['t'+gi]) return false;
+  const ss=storyState();
+  if(!ss.canon || !ss.canon.teacherAt || !ss.canon.teacherAt[gi]) return false;
+  if(!ssTeacherVersionsCurrent(gi)) return false;
+  for(let ch=g.first; ch<=g.last; ch++){
+    const card=ss.chapters?.[ch-1]?.card;
+    if(!card || card.teacherGi!==gi || !ssTeacherVersionsCurrent(gi)) return false;
+  }
+  return true;
+}
+function scTeacherPipelineComplete(){
+  const groups=schoolStageGroups();
+  return groups.length>0 && groups.every((g,gi)=>scTeacherGroupComplete(gi));
+}
 function scHealState(){
   const sc = state.school;
   if(!sc || typeof sc !== 'object') return;
@@ -3285,15 +3304,12 @@ function scHealState(){
   }
   if(Array.isArray(sc.teachers)){
     sc.teachers.forEach((t, i)=>{
-      if(t && t.raw && String(t.raw).trim() && !sc.stale['t'+i]){
-        sc.finished['t'+i] = true;
-      }
+      if(scTeacherGroupComplete(i)) sc.finished['t'+i] = true;
+      else delete sc.finished['t'+i];
     });
   }
-  const groups = schoolStageGroups();
-  if(groups.length > 0 && groups.every((g, i) => sc.finished['t'+i])){
-    sc.finished.teacher = true;
-  }
+  if(scTeacherPipelineComplete()) sc.finished.teacher = true;
+  else delete sc.finished.teacher;
 }
 function scState(){
   if(!state.school || typeof state.school !== 'object') state.school = {};
@@ -3352,10 +3368,7 @@ function getSchoolStepStatus(key){
   else if(key === 'dictEnrich') isDone = scDone('dictEnrich');
   else if(key === 'principal') isDone = scDone('principal');
   else if(key === 'teacher'){
-    if(scDone('teacher')) isDone = true;
-    else {
-      isDone = groups.length > 0 && groups.every((g,i)=>scDone('t'+i));
-    }
+    isDone = scTeacherPipelineComplete();
   }
 
   let isRunning = false;
@@ -3619,12 +3632,13 @@ const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（治
    · 权限边界：用户风格决定「怎么写」；老师教案决定「本章写什么」；词典决定事实一致性；正文 AI 不负责重新裁决风格组合。
 ② 各组组级框架——每组一份、逐组齐全。每份固定字段：
    · 起止章与剧情段；每章功能分工（仅到「引入/推进/转折/高潮/收束」标签 + 一句目标）；整组节奏与情绪曲线；跨组承接（承上=承接上一组末章收束后本组从何接续、首组按【开篇引擎】执行；启下=末章给下一组留的钩）；重点调用词典要素。
-③ 第一章开篇任务卡：必须把【开篇引擎】从抽象策略转换成可执行的首章施工卡，至少明确：策略、首拍动作/场景、前800字必须建立的读者认知、禁止事项、继续阅读问题。该卡必须真正约束第1章教案，不得只写“按开篇引擎执行”。
+③ 第一章开篇任务卡：必须把【开篇引擎】从抽象策略转换成可执行的首章施工卡，至少明确：策略、首拍动作/场景、前800字必须建立的读者认知、禁止事项、继续阅读问题。该卡只能是首章施工约束，不得写成第1章完整教案，更不得替老师产出任何逐章教案、推进骨架、情绪曲线、出场名单、正文指令或机器章节卡；这些内容必须由老师阶段独立生成。
 ④ 全书章节标题总表——为全部章节各拟一题，一批拉通给出、前后呼应。
 
 【输出契约·严格遵守】
 - 只输出纯文本 Markdown；禁止 JSON、禁止用三个反引号围栏包裹输出、禁止引语/开场白/结束语/解释。
-- 严格按下述小节与标记组织，段名与章节号逐项齐全、不得省略：
+- 严格按下述小节与标记组织，段名与章节号逐项齐全、不得省略。
+- 校长输出是全校统筹，不得输出任何“逐章教案/机器章节卡”；【各组组级框架】只能到组级管理粒度，不得替代老师逐章备课。
 # 全校写作守则
 ## 配方锚点
 ## 风格融合总纲
@@ -4033,7 +4047,7 @@ async function genSchoolAll(btn){
         // 彻底取消“≤20章校长兼任老师”的任何捷径：无论 1-20 章还是 21+ 章，都必须进入独立老师阶段。
         for(let j=0; j<groups.length; j++){
           const g = groups[j];
-          if(scDone('t'+j) && !scState().stale?.['t'+j]) continue;
+          if(scTeacherGroupComplete(j)) continue;
           state._schoolRunning = { activeKey:'teacher', teacherIndex:j, stepIndex:3, totalSteps:4, label: groups.length > 1 ? `老师${j+1}备课` : '老师备课' };
           refreshSchoolProgressUi();
           const okT = await genTeacher(null, j);
@@ -4046,8 +4060,9 @@ async function genSchoolAll(btn){
           if(!allT) break;
           scMark('t'+j, true);
         }
-        if(allT) scMark('teacher', true);
-        return allT;
+        if(allT && scTeacherPipelineComplete()) scMark('teacher', true);
+        else scMark('teacher', false);
+        return allT && scTeacherPipelineComplete();
       }
     }
   ];
@@ -4103,16 +4118,8 @@ async function genSchoolAll(btn){
         return;
       }
     }
-    const finalGroups = schoolStageGroups();
-    const teacherComplete = finalGroups.length>0 && finalGroups.every((g,gi)=>{
-      if(!scDone('t'+gi) || scState().stale?.['t'+gi]) return false;
-      for(let ch=g.first; ch<=g.last; ch++){
-        const card=storyState().chapters?.[ch-1]?.card;
-        if(!card || card.teacherGi!==gi || !ssTeacherVersionsCurrent(gi)) return false;
-      }
-      return true;
-    });
-    if(!teacherComplete || !scDone('teacher')) throw new Error('一键开学未完成独立老师机器教案卡，禁止结束');
+    const teacherComplete = scTeacherPipelineComplete();
+    if(!teacherComplete || !scTeacherPipelineComplete()) throw new Error('一键开学未完成独立老师机器教案卡，禁止结束');
     toast('学校一键全部完成：词典达人→词典充实→校长→独立老师全链路就绪，所有章节当前机器教案卡已落地！');
     playDoneSound('all');
   }finally{ finish(); render(); }
