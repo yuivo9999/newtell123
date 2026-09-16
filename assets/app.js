@@ -940,6 +940,8 @@ function projectSnapshot(){
     step: currentStep,
     title: (state.outline && state.outline.title) || (state.idea ? state.idea.trim().slice(0,20) : '未命名作品'),
     logline: (state.outline && state.outline.logline) || '',
+    storyBlueprint: (state.outline && state.outline.storyBlueprint) || '',
+    aiBookBeat: (state.outline && state.outline.aiBookBeat) || '',
     _lastCpRaw: state._lastCpRaw || '',
     dictmasterHistory: Array.isArray(state.dictmasterHistory) ? state.dictmasterHistory : [],
     dictmasterLatest: state.dictmasterLatest || null,
@@ -962,6 +964,10 @@ function applyProject(p){
   state.coverPrompt = p.coverPrompt || '';
   state.coverWithTitle = !!p.coverWithTitle;
   state.outline = p.outline || null;
+  if(state.outline){
+    if(!state.outline.storyBlueprint && p.storyBlueprint) state.outline.storyBlueprint = String(p.storyBlueprint);
+    if(!state.outline.aiBookBeat && p.aiBookBeat) state.outline.aiBookBeat = String(p.aiBookBeat);
+  }
   if(state.outline && state.outline.chapterPlansHistory) delete state.outline.chapterPlansHistory;
   state.outlineConfirmed = !!p.outlineConfirmed;
   state.glossAdherence = (typeof p.glossAdherence === 'number') ? p.glossAdherence : 60;
@@ -2727,7 +2733,7 @@ const PROMPTS = {
 
 const SIZE_DEFAULT = { min:3000, max:5000 };
 
-let polishMulti = false;
+let polishMulti = true;
 
 async function polishIdea(btn, force){
   const idea = (state.idea || '').trim();
@@ -2740,10 +2746,10 @@ async function polishIdea(btn, force){
   if(kept && !force){
     if(!confirm(`已有 ${kept} 个保留方案，重新优化将覆盖它们。继续？`)) return;
   }
-  const multi = false;   // 小说构想优化统一为单一最佳蓝本，不再让用户做小说核心蓝本
+  const multi = polishMulti || idea.length < 15;   // 极短强制多方案
   if(!canRunAI('idea')){ toast('优化构想暂不可运行'); return; }
   markAIRunning('idea');
-  if(btn) busy(btn,true,'理解并扩展小说核心蓝本中…');
+  if(btn) busy(btn,true, multi ? '生成多方案构想中…' : '优化构想中…');
   try{
     const txt = await callAIGuarded('idea', { multi }, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')});
     const out = String(txt||'').trim();
@@ -2832,34 +2838,6 @@ function splitPolishMultiText(out){
   }));
 }
 
-function formatNovelCoreText(brief, beats){
-  const b = brief || {};
-  const lines = [
-    `书名：${b.title||''}`,
-    `题材：${b.genre||''}`,
-    `主角：${b.protagonist||''}`,
-    `核心冲突：${b.coreConflict||''}`,
-    `世界观：${b.worldOrRules||'无'}`,
-    `对手/压力：${b.antagonistOrPressure||'无'}`,
-    `动机：${b.motivation||''}`,
-    `故事发动机：${b.storyEngine||''}`,
-    `成长弧：${b.growthArc||''}`,
-    `风格：${b.style||''}`,
-    `读者体验：${b.readerPromise||''}`,
-    `核心词：${Array.isArray(b.coreTerms)?b.coreTerms.join('、'):'无'}`,
-    `小说简介：${b.logline||''}`
-  ];
-  if(Array.isArray(beats) && beats.length){
-    lines.push('全书节拍蓝图：');
-    beats.forEach((x,i)=>{
-      if(!x) return;
-      lines.push(`${i+1}. ${x.stage||'阶段'+(i+1)}：${x.goal||''}｜冲突：${x.conflict||''}｜转折/成果：${x.turningPoint||''}｜移交问题：${x.carryForward||''}`);
-    });
-  }
-  if(Array.isArray(b.inferences) && b.inferences.length) lines.push(`推导说明：${b.inferences.join('；')}`);
-  return lines.join('\n');
-}
-
 function showPolishResult(out, multi){
   const box = $('#polishBox'), cards = $('#polishCards');
   if(!box || !cards) return;
@@ -2906,15 +2884,10 @@ function showPolishResult(out, multi){
     render(); openPolishBox();
     return;
   }
-  let single = null;
-  if(out && typeof out === 'object') single = out;
-  else { try { single = parseJson(String(out||'')); } catch(e) { single = null; } }
-  if(!single || typeof single !== 'object') single = { optimizedIdea: String(out||'').trim() };
+  const single = (out && typeof out === 'object') ? out : { optimizedIdea: String(out||'').trim() };
   snapshotPolishBatch('重新优化前');
-  const brief = (single && single.brief && typeof single.brief==='object') ? single.brief : null;
-  const text = brief ? formatNovelCoreText(brief, single.fullBookBeats||[]) : String(single.optimizedIdea||single.text||'').trim();
-  state.polishOptions = [{ name:'方案1', text, _v45: pickV45(single), novelCore: brief || null, fullBookBeats: Array.isArray(single.fullBookBeats)?single.fullBookBeats:[] }];
-  state.polishAdopted = '方案1';
+  state.polishOptions = [{ name:'方案1', text: String(single.optimizedIdea||single.text||'').trim(), _v45: pickV45(single) }];
+  state.polishAdopted = null;
   persist();
   render(); openPolishBox();
 }
@@ -2985,7 +2958,7 @@ function renderPolishCards(container){
   const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
   if(!opts.length){
     container.style.display = 'block';
-    container.innerHTML = `<p class="muted" style="margin:8px 0 0">👆 点「✨ 优化构想」AI 会先理解你的原始构想，再生成一个最契合的【小说核心蓝本】，包含可直接使用的小说简介、故事发动机、人物成长与全书节拍蓝图；随后「生成大纲」会把这些内容继续搬入书名 / 简介 / 全书节拍。</p>`;
+    container.innerHTML = `<p class="muted" style="margin:8px 0 0">👆 点「✨ 优化构想」从五个方向（商业/反差/情感/悬疑智斗/轻松日常）中按契合度生成 3~5 个候选方案；点某张卡的「✔ 采用此方案」即选中（不覆盖原始构想），再点「生成大纲」搬入书名 / 简介 / 节拍。</p>`;
     return;
   }
   container.style.display = 'block';
@@ -3009,6 +2982,8 @@ function renderPolishCards(container){
       </div>
       ${pTitle?`<div class="pol-cand-title" style="background:${c}">📖 ${esc(pTitle)}</div>`:''}
       <div class="pol-cand-body">${esc(pBody ? pBody : String(o.text||''))}</div>
+      ${String(o.novelSummary||'').trim()?`<div class="pol-cand-body" style="border-top:1px dashed var(--line,#ddd)"><b>📖 小说简介（下游创作材料）</b><br>${esc(String(o.novelSummary).trim())}</div>`:''}
+      ${String(o.fullBookBeat||o.bookBeat||'').trim()?`<div class="pol-cand-body" style="border-top:1px dashed var(--line,#ddd)"><b>🎬 全书故事节拍</b><br>${esc(String(o.fullBookBeat||o.bookBeat).trim())}</div>`:''}
       ${defects.length?`<div class="pol-cand-body" style="opacity:.85"><b>⚠️ 构想缺陷清单：</b><br>${defects.map(d=>'· '+esc(String(d))).join('<br>')}</div>`:''}
       <div class="pol-cand-foot">
         ${hasV45?`<button type="button" class="btn small ghost" data-pol-import="${i}" title="导入结构化设定（导航灯塔/种子人物/种子地点/建议章节数）">📥 导入设定</button>`:''}
@@ -3046,11 +3021,11 @@ function bindPolishIdea(){
   if(chk){
     const sync = ()=>{
       const short = (state.idea||'').trim().length < 15;
-      chk.checked = false;
-      chk.disabled = true;
+      chk.checked = polishMulti || short;
+      chk.disabled = short;
     };
     sync();
-    chk.onchange = ()=>{ polishMulti = false; };
+    chk.onchange = ()=>{ polishMulti = chk.checked; };
     const idea = $('#ideaInput');
     if(idea) idea.oninput = ()=>{ state.idea = idea.value; sync(); syncOrigIdeaCard(); };
   }
@@ -3095,7 +3070,11 @@ function polishHistory(){ return Array.isArray(state.polishHistory) ? state.poli
 function snapshotPolishBatch(label){
   const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
   if(!opts.length) return;
-  const snap = { options: opts.map(o=>({ name:o.name, text:String(o.text||'') })), adopted: state.polishAdopted||null };
+  const snap = { options: opts.map(o=>({
+    name:o.name, text:String(o.text||''), bookTitle:String(o.bookTitle||''),
+    novelSummary:String(o.novelSummary||''), fullBookBeat:String(o.fullBookBeat||o.bookBeat||''),
+    optimizedIdea:String(o.optimizedIdea||''), creativeAdditions:String(o.creativeAdditions||'')
+  })), adopted: state.polishAdopted||null };
   const hist = state.polishHistory = state.polishHistory || [];
   if(hist.length &&
       JSON.stringify(hist[0].options) === JSON.stringify(snap.options) &&
@@ -3108,7 +3087,12 @@ function applyPolishBatch(idx){
   const hist = polishHistory(); const b = hist[idx]; if(!b || !Array.isArray(b.options) || !b.options.length) return;
   if(!confirm(`整批应用「${idx+1}. ${b.label||'优化版本'}」（共 ${b.options.length} 个方案）？将覆盖当前保留的方案。`)) return;
   snapshotPolishBatch('切换前');
-  state.polishOptions = b.options.map(o=>({ name:o.name, text:String(o.text||'') }));
+  state.polishOptions = b.options.map(o=>({
+    ...o, name:o.name, text:String(o.text||o.optimizedIdea||''),
+    bookTitle:String(o.bookTitle||''), novelSummary:String(o.novelSummary||''),
+    fullBookBeat:String(o.fullBookBeat||o.bookBeat||''), optimizedIdea:String(o.optimizedIdea||o.text||''),
+    creativeAdditions:String(o.creativeAdditions||'')
+  }));
   state.polishAdopted = (b.adopted && b.options.some(o=>o.name===b.adopted)) ? b.adopted : null;
   persist(); closePolishBatchPanel(); render();
   const box = $('#polishBox'); if(box){ box.style.display='block'; openPolishBox(); }
@@ -4390,7 +4374,7 @@ function clampMaxTokens(task){
     glossary: 9216,
     json: 4096,         // JSON 类契约输出
     recipe: 8192,
-    polish: 8192,
+    polish: 16384,
     plannerAux: 8192,
     continue: 8192,     // 续写补充段
     summary: 2048,      // 梗概/摘要
@@ -5852,9 +5836,17 @@ function buildPrincipalUser(groups){
   const o = state.outline || {};
   const lines = [];
   lines.push(`【长篇小说】${o.title||'（未定书名）'}`);
-  if(o.logline) lines.push(`【全书简介】${o.logline}`);
+  if(o.logline) lines.push(`【全书简介｜下游创作材料】${o.logline}`);
+  if(o.storyBlueprint) lines.push(`【优化构想·完整小说蓝本（下游创作依据）】\n${String(o.storyBlueprint).slice(0,14000)}`);
+  if(o.aiBookBeat) lines.push(`【优化构想·全书故事节拍（剧情内容层）】\n${String(o.aiBookBeat).slice(0,9000)}`);
   let cand = null; try{ cand = selectedPolishCandidate && selectedPolishCandidate(); }catch(e){}
-  if(cand && cand.name) lines.push(`【优化构想·所选方案】${String(cand.name).trim()}${cand.brief?('\n'+String(cand.brief).trim()):''}`);
+  if(cand && cand.name){
+    const cd = polishCandidateDownstreamText(cand);
+    lines.push(`【优化构想·所选方案】${String(cand.name).trim()}`);
+    if(cd.summary) lines.push(`【所选方案小说简介】\n${cd.summary}`);
+    if(cd.beat) lines.push(`【所选方案全书故事节拍】\n${cd.beat}`);
+    if(cd.blueprint) lines.push(`【所选方案完整小说蓝本】\n${cd.blueprint.slice(0,14000)}`);
+  }
   lines.push(`【全校章节数】${(o.chapters||[]).length || chapterCountVal() || '未知'} 章`);
   lines.push(storyStateCanonBlock());
   const _opening = openingStrategyBrief(); if(_opening) lines.push(_opening);
@@ -6549,6 +6541,8 @@ function buildTeacherUser(g, gi){
   lines.push(`【校长已裁决的风格融合总纲】\n${principalStyleExecutionExcerpt()}`);
   lines.push(`【本组组级框架（组${gi+1}·老师${gi+1}，第${g.first}-${g.last}章）】\n${(pr.raw && extractSection(pr.raw,'各组组级框架','全书章节标题总表')) || (pr.raw || '（校长未产出组级框架）')}`);
   lines.push(`【本组章节标题】\n${scGroupTitles(g).join('\n')}`);
+  if(o.storyBlueprint) lines.push(`【优化构想·完整小说蓝本（供老师理解全书创作意图）】\n${String(o.storyBlueprint).slice(0,12000)}`);
+  if(o.aiBookBeat) lines.push(`【优化构想·全书故事节拍（供老师承接）】\n${String(o.aiBookBeat).slice(0,8000)}`);
   const _bc = currentBeatCfg ? currentBeatCfg() : null;
   if(_bc && _bc.label) lines.push(`【章节微拍（单源真理·内嵌骨架）】名称=${_bc.label}${_bc.desc?('；说明='+_bc.desc):''}${_bc.types?('；拍=('+_bc.types.map(t=>t.label).join('，')+')'):''}\n要求：将此微拍节奏直接融铸在每章教案的「本章推进骨架」中，形成单一执行标准的超级教案。`);
   lines.push('【全量词典（共享不切片）】\n' + scGlossaryBrief(7000));
@@ -7383,12 +7377,16 @@ function bookBeatHtml(){
 function bookBeatBriefHtml(){
   const bb = currentBookBeatCfg();
   const stages = (bb.ai && bb.ai.stages) || [];
+  const aiBeat = String(state.outline?.aiBookBeat || '').trim();
   return `<div class="decision-brief book-beat-brief">
     <span class="db-lock">🔒</span><b>全书拍子已先定</b>
     <span class="db-main">${bb.emoji} ${esc(bb.label)}</span>
     <span class="db-sub">${esc(bb.subtitle)}</span>
     <span class="db-stages">${stages.map(esc).join(' → ')}</span>
-  </div>`;
+  </div>${aiBeat ? `<div class="ai-book-beat-brief" style="margin:8px 0 10px;padding:10px 12px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff)">
+    <div style="font-weight:700;margin-bottom:5px">🧠 优化构想生成的全书故事节拍</div>
+    <div style="white-space:pre-wrap;font-size:12px;line-height:1.75">${esc(aiBeat)}</div>
+  </div>` : ''}`;
 }
 
 const BEAT_OPTIONS = [
@@ -7517,23 +7515,19 @@ function validateIdeaFaithful(j, idea){
   return '';
 }
 function validateIdeaProOutput(j, ctx){
-  if(j === null || j === undefined) return {ok:true};
-  if(typeof j !== 'object') return {ok:false, code:'EMPTY'};
-  // 新版：单一小说核心蓝本 + 全书节拍蓝图。
-  if(j.brief && typeof j.brief==='object'){
-    const b=j.brief;
-    const required=['title','logline','genre','protagonist','coreConflict','storyEngine','style','readerPromise'];
-    const miss=required.filter(k=>!String(b[k]||'').trim());
-    if(miss.length) return {ok:false, code:'SCHEMA', details:`小说核心蓝本缺少：${miss.join('、')}`};
-    if(!Array.isArray(j.fullBookBeats) || j.fullBookBeats.length<6) return {ok:false, code:'SCHEMA', details:'fullBookBeats 至少需要6个宏观节拍'};
-    for(const [i,x] of j.fullBookBeats.entries()){
-      if(!x || !String(x.stage||'').trim() || !String(x.goal||'').trim() || !String(x.turningPoint||'').trim()) return {ok:false, code:'SCHEMA', details:`第${i+1}个全书节拍字段不完整`};
-    }
-    if(!j.navBeacon || typeof j.navBeacon!=='object') return {ok:false, code:'SCHEMA', details:'缺少 navBeacon'};
+  if(j === null || j === undefined) return {ok:true};          // 纯文本无 JSON：放行
+  if(typeof j !== 'object') return {ok:false, code:'EMPTY'};   // 非 null 但非对象（罕见脏数据）仍拒
+  if(j.brief && typeof j.brief === 'object'){
     return {ok:true};
   }
-  // 兼容旧版本历史输出。
-  if(j.options && Array.isArray(j.options) && j.options.length) return {ok:true};
+  if(Array.isArray(j.options) && j.options.length){
+    const bad = j.options.find(o=>!o || typeof o!=='object' || !String(o.optimizedIdea||o.text||'').trim());
+    return bad ? {ok:false, code:'OPTION_EMPTY'} : {ok:true};
+  }
+  // 新版允许单方案直接返回丰富蓝本；字段可选，但必须至少有可供下游创作的正文蓝本/简介/节拍之一。
+  if(String(j.optimizedIdea||j.text||j.novelSummary||j.fullBookBeat||'').trim()){
+    return {ok:true};
+  }
   const err = validatePolishOutput(j);
   return err ? {ok:false, code:'SCHEMA', details:err} : {ok:true};
 }
@@ -7883,550 +7877,121 @@ const REGEN_TITLES_SYS_PRO = `你是一位资深长篇小说「章节标题策�
 const REGEN_TITLES_SYS = REGEN_TITLES_SYS_PRO;
 
 
-const IDEA_POLISH_SYS_PRO = `你是本应用的「Prompt Perfect式小说构想优化器」：既是高级提示词工程师，也是长篇小说开发编辑。
+const IDEA_POLISH_SYS_PRO = `你是本项目的“AI构想优化与小说策划引擎”。你的工作方式参考高质量 Prompt Engineering：先理解用户真正想表达什么，再补齐隐含创作需求、识别约束、建立故事因果，并把一个可能只有一句话的点子，扩展成“真的可以继续写成一部长篇小说”的创作蓝本。
 
-【唯一任务】
-把用户任何长度、任何写法的原始构想，理解成“用户真正想写什么”，再将其整理成一份可以直接进入长篇小说生产链的【小说核心蓝本】。不要机械改写原句，也不要只润色措辞。你必须主动补足故事成为小说所需要的结构信息：故事前提、主角驱动力、核心冲突、世界/规则、对手压力、故事发动机、人物成长方向、长期悬念、情绪承诺、结局方向与可持续扩展空间。
+【第一原则：理解，而不是机械改写】
+1. 先在内部解析用户输入：明确事实、隐含意图、题材、主角、欲望、冲突、读者期待、叙事方向、风格、已知限制。
+2. 用户说得很短，不代表只能输出很短。只要用户意图足够明确，就主动补齐“可写性”所需的合理桥梁。
+3. 用户没有明确的地方可以创造，但必须服务于原始创意；重大新设定必须保持为“方案创意”，不能伪装成用户已经确定的事实。
+4. 不要反复追问用户。能根据上下文合理判断就直接做；确实无法确定时，保留多条可行解释并用多方案呈现。
+5. 不要只做语言润色。必须把“点子”转化为“故事发动机”：主角想要什么、为什么必须行动、谁/什么阻止他、行动造成什么变化、变化怎样产生下一轮问题。
 
-【Prompt Perfect式理解原则】
-1. 先理解意图，再组织答案：识别用户明确事实、隐含目标、题材惯例和可合理推导内容。
-2. 不要要求用户把提示词写专业；即使用户只写一句话、碎片化设定、口语、错别字或混合想法，也要自行整理成可执行蓝本。
-3. 用户没说清楚的地方，可以依据题材和上下文做“最小必要推导”，但必须标记为 inferred/建议，不得冒充用户事实。
-4. 不要为了完整而堆砌无用设定；每个新增元素都必须服务主线、人物、冲突或长期可写性。
-5. 优化结果要让下游AI无需重新猜故事意图。
+【第二原则：目标是可写成小说】
+每个保留方案都必须具有长期可扩展性，至少形成：
+用户原始核心 → 主角欲望 → 核心矛盾 → 持续压力 → 阶段性目标 → 关系变化 → 中段升级 → 关键转折 → 高潮方向 → 结局方向 → 可继续写的尾部余波。
 
-【事实优先级】
-A=用户明确说出的事实，绝不擅改；B=用户明确想要的方向，必须围绕强化；C=从A/B合理推导，可使用但标记为“推导”；D=全新重大设定，默认禁止，除非只是可选建议。
-用户指定书名、人物名、专名、能力、关系、世界规则、结局要求时必须原样保留。
+“可写成一部小说”不等于替后续 AI 写完整章节。你输出的是高密度故事蓝本：足够具体，让词典达人、校长、老师、正文AI都能继续工作；但不要把内容锁死到逐章教案。
 
-【长篇小说核心能力】
-重点建立以下可长期驱动小说的链条：
-“主角现状 → 核心欲望 → 核心阻力 → 主线目标 → 持续故事发动机 → 阶段性升级 → 人物变化 → 悬念/伏笔 → 中后期转折 → 终局方向”。
-尤其要回答：为什么这个故事能写成长篇？每一阶段靠什么产生新问题？主角为什么不能一次解决？读者为什么愿意继续追？
-如果原构想不足以支撑长篇，应通过“最小必要补强”提高可写性，而不是换故事。
+【第三原则：用户事实优先】
+用户明确写出的题材、主角、身份、世界观、核心能力、关系、冲突、时代、风格、固定名称必须保留。不得为了所谓“更商业”而偷换。
+AI可以深化：人物动机、冲突机制、故事动力、长期悬念、关系张力、阶段目标、结局方向、必要的世界规则。
+AI不得无依据地把新人物、新势力、新能力、新世界规则当成既定事实。新创内容应明确写入“方案蓝本/创意补充”，让下游知道哪些是建议而不是用户原话。
 
-【全书节拍蓝图】
-输出8—12个“宏观全书节拍”，每拍只描述故事发展的关键职责和事件方向，不写成逐章大纲。每拍必须包含：阶段、目标、主要冲突、关键转折/成果、下一拍遗留问题。节拍必须形成因果链，并能被下游“生成大纲”直接搬运为小说简介与全书阶段推进依据。
-如果用户已经提供了节拍、章节数或结构，严格继承；不要覆盖用户结构。
+【第四原则：多方案是不同的故事战略，不是换皮】
+默认输出3—5个真正有差异的方案。优先从以下维度产生分叉：
+· 主线推进动力不同；
+· 冲突重心不同；
+· 信息释放方式不同；
+· 人物关系成为动力或世界规则成为动力；
+· 悬疑、成长、情感、冒险、爽感等读者期待不同。
+所有方案共享用户事实底盘；一个方案私有的新创意不得污染其他方案。
 
-【短输入】
-即使用户只有“末世+重生+系统”这类短输入，也要给出可执行的小说核心蓝本，但所有自行补出的内容必须标记为“推导/建议”，不能假装用户已经确定。
+【第五原则：写作风格与故事方向分开】
+用户已经选择的写作风格是最高表达约束。方案方向只能改变故事战略和内容侧重，不得偷偷换文风。
+如果用户没有选择风格，根据题材、输入语气和目标读者推导一个可执行的风格方案。
 
-【风格】
-用户已选写作风格必须原样作为表达层最高基准；没有则从题材和构想推导一个具体、可执行的风格方向。不要用空话，如“文笔优美、节奏紧凑”。
+【第六原则：全书结构必须真正有用】
+如果用户提供章节数和/或全书拍子，必须结合这些约束设计“全书发展节奏”。
+如果没有章节数，也必须给出阶段化的宏观节拍，让故事可以自然扩写成完整小说。
+全书节拍至少说明：阶段目的、主要矛盾、主角状态变化、关键事件类型、阶段回报、进入下一阶段的新问题。
+不得把全书节拍写成“第1章发生A、第2章发生B”的逐章流水账；除非用户本身已经提供逐章信息。
 
-【输出】
-只输出合法JSON，不要markdown，不要解释。严格使用以下结构：
+【第七原则：小说简介必须是给下游AI看的创作材料】
+小说简介不是广告文案，也不是营销分析。必须包含足够的创作信息：主角处境、世界背景、核心冲突、主要行动动力、故事如何展开、长期悬念/成长方向、主要关系张力、结局方向（如果合理）。
+禁止在小说简介里加入“核心卖点、核心词、推荐理由、评分、营销标签、为什么值得选”等分析字段。
+
+【第八原则：避免空话】
+禁止“非常精彩”“很有代入感”“人物立体”“节奏紧凑”等无信息句。
+每句话尽量提供人物、因果、状态、选择、阻力、变化或后果。
+
+【第九原则：输出契约】
+只输出JSON，不要Markdown代码块，不要解释。
+多方案固定结构：
 {
-  "brief": {
-    "title":"可直接使用的书名；用户指定则原样保留",
-    "logline":"150-260字左右、可直接作为小说简介的核心简介，包含主角处境、核心目标、主要阻力、故事钩子与长期追读问题",
-    "genre":"题材/类型",
-    "protagonist":"主角及最重要的身份、欲望/驱动力",
-    "worldOrRules":"世界观与最关键规则；只写对故事有用的内容",
-    "coreConflict":"主线核心冲突",
-    "antagonistOrPressure":"主要对手/系统性压力；无则说明主要压力来源",
-    "storyEngine":"让故事可以持续推进的核心发动机",
-    "motivation":"主角为什么非做不可",
-    "growthArc":"主角从开局到终局的核心变化方向",
-    "readerPromise":"读者持续阅读能获得什么体验/期待",
-    "style":"具体可执行的写作风格",
-    "coreTerms":["必须长期一致的专名/核心概念"],
-    "inferences":["AI根据题材与上下文做出的最小必要推导；没有则[]"],
-    "expansionHooks":["可继续扩展成长篇的剧情钩子/人物关系/悬念；3-8项"]
-  },
-  "fullBookBeats":[
-    {"stage":"阶段名","goal":"本阶段目标","conflict":"主要冲突","turningPoint":"关键转折或成果","carryForward":"交给下一阶段的新问题/悬念"}
-  ],
-  "navBeacon":{"genre":"","protagonist":"","coreConflict":"","tone":""},
-  "seedCharacters":[{"name":"","identity":"","age":"","gender":"","appearance":"","hobby":"","relation":"","trait":"","catchphrase":""}],
-  "seedPlaces":[{"name":"","type":"","note":""}],
-  "defects":["原始构想中真正影响长篇可写性的缺口；没有则写[]"]
+  "options":[
+    {
+      "name":"方案名称",
+      "bookTitle":"可直接使用的书名",
+      "novelSummary":"给下游AI使用的小说简介/故事蓝本摘要，不写营销分析",
+      "fullBookBeat":"完整的宏观全书节拍与阶段推进说明，可按当前章节数映射阶段；不是逐章教案",
+      "optimizedIdea":"完整故事创作蓝本，允许较长，包含主角、世界、冲突、人物关系、故事发动机、长期发展、高潮与结局方向、必要创意补充",
+      "creativeAdditions":"仅列AI为了让故事可写而新增的关键创意；没有则写无",
+      "navBeacon":{"genre":"","protagonist":"","coreConflict":"","tone":""},
+      "defects":[],
+      "seedCharacters":[],
+      "seedPlaces":[]
+    }
+  ]
 }
+单方案也使用options数组，便于前端统一处理。
 
-【质量门槛】
-- brief.logline 必须是真正可用的小说简介，而不是字段堆砌。
-- storyEngine 必须说明故事如何持续产生新目标/新阻力。
-- fullBookBeats 必须是因果递进，不得只是“开头/发展/高潮/结局”四个空标签。
-- seedCharacters/seedPlaces 只收录对长期故事有价值且有依据的种子；不够确定就少给。
-- inferences 与用户事实严格区分。
-- 禁止输出逐章安排、具体第几章发生什么、老师教案或正文。
-- 禁止输出多个候选方案。只给一个最契合用户原始意图的优化结果。
-`
+【第十原则：内容长度】
+不要机械限字。短输入可以扩展得更充分；复杂输入可以更长。每个方案应达到“策划团队拿到后可以继续做完整小说”的信息密度。默认每个方案约800—1800字；如果故事复杂，可继续增加，但禁止灌水。
+
+【第十一原则：结构建议】
+optimizedIdea 建议内部覆盖：
+1. 故事定位与核心设定；
+2. 主角与关键人物；
+3. 世界与规则（只写真正影响剧情的）；
+4. 核心矛盾与持续发动机；
+5. 人物关系与变化；
+6. 故事阶段与升级逻辑；
+7. 关键悬念、转折、高潮方向；
+8. 结局方向与余波；
+9. AI创意补充（若有）。
+可以使用自然的中文小标题，但不要输出核心卖点、核心词、推荐理由。
+
+【第十二原则：下游权限】
+你负责“把用户的点子变成可长期发展的小说蓝本”。
+词典达人负责正式世界设定；校长负责全书战略与章节组织；老师负责逐章施工；正文AI负责文学表达。
+因此你可以把故事想清楚，但不要把逐章教案、逐章台词、正文成稿提前塞进optimizedIdea。
+
+【最终自检】
+□ 是否真正理解了用户输入，而不是机械改写？
+□ 是否保留用户明确事实？
+□ 是否补足了小说长期可写性？
+□ 每个方案是否有清晰的故事发动机和因果链？
+□ 方案之间是否真的有战略差异？
+□ AI新增内容是否与用户事实区分？
+□ 是否有完整的宏观全书节拍？
+□ novelSummary 是否适合作为下游AI创作材料？
+□ 是否没有核心卖点、核心词、推荐理由等营销分析？
+□ 是否没有越权写逐章教案或正文？
+□ 是否只输出JSON？`;
+
 const IDEA_POLISH_SYS = IDEA_POLISH_SYS_PRO;
 
 const POLISH_MULTI_MODE = `
-
-【本次输出模式：多方案受控分叉】
-
-你现在不是要把同一个故事随意重写成五个不同故事，而是要基于上面的【IDEA_POLISH_SYS_PRO】母规则，对同一份用户构想进行「受控方案分叉」。
-
-━━━━━━━━━━━━━━━━━━
-一、最高原则：母规则优先
-━━━━━━━━━━━━━━━━━━
-
-本模式只是【IDEA_POLISH_SYS_PRO】的多方案输出层，不得覆盖、削弱或改变上面的任何核心规则。
-
-因此：
-
-1. 用户明确提供的事实、设定、人物关系、主角基础、题材定位、写作方向必须在所有方案中保持一致。
-2. 用户明确要求保留的内容，所有方案都必须保留。
-3. 不得因为五个方向不同，就擅自修改用户已经确定的核心世界观、人物身份、故事时代、核心能力、核心关系或核心事实。
-4. AI 可以进行合理创意优化，但新增内容必须属于「方案化建议」，不得伪装成用户已经确定的设定。
-5. 五个方案之间允许改变的是：
-   · 核心卖点
-   · 冲突重心
-   · 故事推进方式
-   · 读者期待
-   · 情绪曲线
-   · 信息释放方式
-   · 人物关系的强调程度
-   · 商业阅读重心
-   而不是无理由更换底层世界观。
-
-一句话原则：
-
-【同一份故事基础，不同的最佳发展路径。】
-
-━━━━━━━━━━━━━━━━━━
-二、五个方向不是五种文风，而是五种故事战略
-━━━━━━━━━━━━━━━━━━
-
-必须把五个方向做出真正的结构性区别，不允许只更换几个形容词。
-
-【方向一：稳健商业向】
-
-核心目标：
-让故事具备最稳定、最容易持续追读的商业网文结构。
-
-重点强化：
-· 清晰的主线目标
-· 稳定递进的冲突
-· 可感知的阶段性成果
-· 持续不断的爽点/期待点
-· 合理的升级与反馈
-· 较低的阅读理解门槛
-· 长期追读动力
-
-这个方向应优先考虑：
-【读者为什么愿意继续看下一章、下一卷？】
-
-不要为了追求所谓高级感而故意增加复杂度。
-
-卖点关键词：
-【稳、爽、顺、持续追读】
-
-━━━━━━━━━━━━━━━━━━
-【方向二：高概念反差向】
-━━━━━━━━━━━━━━━━━━
-
-核心目标：
-找到一个足够鲜明、能够一句话讲清楚并形成强记忆点的核心概念。
-
-重点强化：
-· 身份反差
-· 能力反差
-· 世界观反差
-· 常识反转
-· 预期与现实之间的错位
-· 一个强概念对全书的持续驱动
-
-这个方向必须回答：
-【如果只能用一句话向读者介绍这本书，最让人想点进去的那个“钩子”是什么？】
-
-注意：
-高概念不等于无限增加设定。
-
-优先寻找用户已有设定中最值得放大的反差，而不是为了制造反差凭空改变世界。
-
-卖点关键词：
-【新奇、反差、记忆点、强概念】
-
-━━━━━━━━━━━━━━━━━━
-【方向三：情感人物向】
-━━━━━━━━━━━━━━━━━━
-
-核心目标：
-让人物关系、情绪变化和人物成长成为故事持续推进的重要动力。
-
-重点强化：
-· 主角的人物欲望
-· 人物之间的情感关系
-· 羁绊与冲突
-· 信任与背叛
-· 选择与牺牲
-· 人物成长
-· 关系变化带来的剧情推进
-
-这个方向不能只是“多写感情戏”。
-
-必须让：
-【人物关系的变化 → 产生新的选择 → 造成新的事件 → 推动故事继续发展。】
-
-如果用户原构想本身不适合强情感路线，不要为了凑方向而硬写。
-
-卖点关键词：
-【人物、关系、情绪、成长】
-
-━━━━━━━━━━━━━━━━━━
-【方向四：悬疑智斗向】
-━━━━━━━━━━━━━━━━━━
-
-核心目标：
-通过信息差、因果链、谜题、推理和策略博弈制造持续阅读驱动力。
-
-重点强化：
-· 信息差
-· 未解问题
-· 因果链
-· 线索
-· 误导
-· 反转
-· 推理
-· 博弈
-· 主角破局
-
-这个方向必须保证：
-【读者不知道答案，但回头看时答案又是合理的。】
-
-不得为了制造悬疑而故意隐瞒已经确定且必须公开的信息，也不得制造无法自洽的谜题。
-
-悬疑的重点不是“故弄玄虚”，而是：
-【让读者不断产生问题，并持续想知道答案。】
-
-卖点关键词：
-【信息差、逻辑、谜题、博弈、反转】
-
-━━━━━━━━━━━━━━━━━━
-【方向五：轻松日常 / 沙雕向】
-━━━━━━━━━━━━━━━━━━
-
-核心目标：
-降低阅读压力，通过轻松、反差、幽默和人物互动制造持续阅读愉悦感。
-
-重点强化：
-· 轻松日常
-· 人物反差
-· 吐槽
-· 冷幽默
-· 沙雕互动
-· 可爱感
-· 解压感
-· 短场景爽点
-· 容易传播的记忆点
-
-但必须注意：
-
-轻松不等于低幼。
-沙雕不等于人物降智。
-搞笑不能破坏已经确定的人物性格、世界规则和核心逻辑。
-
-如果用户原本风格偏冷峻、严肃、硬核，则应寻找：
-【在原风格基础上的幽默】
-
-而不是强行改成完全相反的文风。
-
-卖点关键词：
-【轻松、反差、幽默、解压】
-
-━━━━━━━━━━━━━━━━━━
-三、五个方案必须建立在同一个“事实底盘”上
-━━━━━━━━━━━━━━━━━━
-
-生成多个方案时，先在内部锁定一份共同的【基础事实底盘】。
-
-这个底盘包括：
-
-· 用户明确提供的故事事实
-· 用户明确指定的人物
-· 用户明确指定的世界观
-· 用户明确指定的主角基础
-· 用户明确指定的题材
-· 用户明确要求保留的设定
-· 已经确认的核心方向
-
-五个方案都必须从同一个底盘出发。
-
-禁止出现：
-
-方案 A 使用世界观 A，
-方案 B 偷换成世界观 B，
-方案 C 又重新发明主角身份。
-
-除非用户明确允许方案之间改变这些内容，否则不得这样做。
-
-允许发生的是：
-【同一个底盘 → 五种不同的故事价值最大化方式。】
-
-━━━━━━━━━━━━━━━━━━
-四、方案之间必须产生“战略差异”
-━━━━━━━━━━━━━━━━━━
-
-输出前必须自行检查五个方案是否真的不同。
-
-至少要在以下维度中产生明显差异：
-
-1. 核心卖点
-2. 冲突重心
-3. 故事推进动力
-4. 读者最期待的内容
-5. 情绪曲线
-6. 信息释放方式
-7. 人物/世界观/事件三者的侧重点
-
-例如：
-
-稳健商业向：
-读者最期待【主角下一步怎么赢】。
-
-高概念反差向：
-读者最期待【这个设定到底还能怎么玩】。
-
-情感人物向：
-读者最期待【这些人物关系最终会走向哪里】。
-
-悬疑智斗向：
-读者最期待【真相到底是什么、主角怎么破局】。
-
-轻松日常向：
-读者最期待【下一次人物互动又会发生什么有趣的事】。
-
-如果五个方案最终都在回答同一个问题，只是换了表达方式，则说明分叉失败，应重新拉开差异。
-
-━━━━━━━━━━━━━━━━━━
-五、方案之间禁止互相污染
-━━━━━━━━━━━━━━━━━━
-
-每个方案都是独立分支。
-
-某一个方案中新创设的：
-
-· 人物
-· 组织
-· 地点
-· 核心设定
-· 金手指
-· 重大反转
-· 核心冲突
-
-不得自动进入其他方案。
-
-除非该内容本来就是用户已经明确提供的共同基础事实。
-
-原则：
-【共享用户事实，不共享方案私有创意。】
-
-━━━━━━━━━━━━━━━━━━
-六、不得越权替校长和老师完成后续工作
-━━━━━━━━━━━━━━━━━━
-
-优化构想 AI 的任务是：
-【提出最值得发展的故事方案。】
-
-不是：
-【直接完成整本书的战略规划。】
-
-因此：
-
-可以提出：
-· 故事总体方向
-· 核心冲突
-· 核心卖点
-· 大致结构逻辑
-· 故事发展可能性
-· 人物关系的重点
-· 长期追读动力
-
-但不要在本模式中提前替：
-
-【校长】
-制定完整全书卷章规划、每章功能、阶段任务和详细战略执行表。
-
-【老师】
-制定具体章节施工方案、事件链、场景安排、章节结尾状态和逐章执行计划。
-
-本模式只需要让下游角色拿到一个：
-【值得继续开发、方向清晰、逻辑自洽、卖点明确的故事方案。】
-
-━━━━━━━━━━━━━━━━━━
-七、风格字段必须继承用户主风格
-━━━━━━━━━━━━━━━━━━
-
-无论采用哪一种方向：
-
-所有方案的【风格】字段都必须严格继承用户已经确定的主写作风格。
-
-方向只能进行兼容性补充，不得直接推翻主风格。
-
-例如：
-
-主风格：
-【冷峻硬汉 + 侦探白描】
-
-可以补充：
-· 稳健商业向 → 紧凑、凌厉的线索推进
-· 高概念向 → 冷峻风格下的强烈反差
-· 情感向 → 克制、深沉的人物情绪
-· 悬疑向 → 冷静、精准的信息释放
-· 轻松向 → 冷面幽默、黑色反差
-
-但不能因为进入轻松向，就突然变成：
-【浮夸甜宠、无厘头轻小说】
-
-除非用户自己明确要求改变风格。
-
-━━━━━━━━━━━━━━━━━━
-八、方案数量不是机械固定为五个
-━━━━━━━━━━━━━━━━━━
-
-五个方向是候选池，不代表必须强行输出五版。
-
-应根据用户的题材和构想判断：
-
-· 明显契合的方向 → 输出
-· 勉强能做但明显不适合 → 可以跳过
-· 完全不适配 → 不要为了凑数量硬写
-
-通常输出 3～5 个真正有价值的方案。
-
-如果某个方向明显不适合本书，应宁缺毋滥。
-
-如果用户原构想存在一个比五个固定方向都明显更适合的特殊方向，并且该方向能够显著提升作品价值，可以额外增加一个【自定义方向】。
-
-但自定义方向必须说明：
-【为什么它比固定方向更适合本书。】
-
-━━━━━━━━━━━━━━━━━━
-九、每个方案必须可直接进入下一阶段
-━━━━━━━━━━━━━━━━━━
-
-每个方案都必须达到“下游可执行”的最低标准。
-
-至少需要让后续角色明确：
-
-· 这版故事最核心的卖点是什么
-· 主角为什么值得继续看
-· 故事主要靠什么推动
-· 核心冲突是什么
-· 大致发展方向是什么
-· 读者为什么会继续追读
-
-不要输出只有概念、没有故事动力的“漂亮设定”。
-
-━━━━━━━━━━━━━━━━━━
-十、推荐理由必须体现真实取舍
-━━━━━━━━━━━━━━━━━━
-
-每个方案末尾必须加入：
-【推荐理由：……】
-
-推荐理由不能只是：
-“这个方案很精彩。”
-“这个方案很有潜力。”
-
-必须说明：
-
-· 它最适合什么类型的读者
-· 它最大的优势是什么
-· 它牺牲了什么
-· 它最大的风险是什么
-· 为什么值得选择它
-
-例如：
-【推荐理由：商业稳定性最高，适合希望长期追读的读者；牺牲了一部分高概念实验性，但换来了更稳定的爽点和升级反馈。】
-
-如果方向存在明显风险，必须如实说明。
-
-━━━━━━━━━━━━━━━━━━
-十一、统一输出结构
-━━━━━━━━━━━━━━━━━━
-
-每个方案必须使用以下结构：
-
-━━ 方案N：方案名 ━━
-
-书名：……
-
-题材：……
-
-主角：……
-
-核心冲突：……
-
-结构：……
-
-团队：……（只有确实涉及团队/群像时输出）
-
-风格：……
-
-目标：……
-
-核心词：……
-
-推荐理由：……
-
-其中：
-
-【书名】
-必须针对当前方案重新设计。
-不同方案的书名不得重复。
-
-【核心冲突】
-必须体现这一方案真正的主要矛盾。
-
-【结构】
-只写宏观故事发展逻辑，不展开成校长级全书规划或老师级章节施工。
-
-【核心词】
-用于概括该方案真正的卖点和核心气质，不要堆砌无意义形容词。
-
-━━━━━━━━━━━━━━━━━━
-十二、最终质量检查
-━━━━━━━━━━━━━━━━━━
-
-在输出前，必须在内部完成以下检查：
-
-【A. 事实一致性】
-所有方案是否都继承用户明确事实？
-是否偷偷修改核心设定？
-
-【B. 创意归属】
-AI新增内容是否只是方案建议？
-是否把 AI 新创设定伪装成用户原设定？
-
-【C. 方向差异】
-不同方案是否真的改变了故事战略？
-还是只是换了几个形容词？
-
-【D. 风格一致】
-是否全部继承用户主风格？
-是否出现方向与主风格严重冲突？
-
-【E. 下游可执行】
-词典达人是否能够据此继续整理设定？
-校长是否能够据此继续制定全书战略？
-老师是否能够继续进行章节施工？
-是否提前越权替他们完成工作？
-
-【F. 方案隔离】
-一个方案的新创意是否污染了其他方案？
-
-【G. 商业价值】
-每个保留的方案是否都有明确的读者期待和持续追读动力？
-
-如果任一方案只是“换皮”，必须重新设计其核心分叉。
-
-━━━━━━━━━━━━━━━━━━
-最终原则：
-
-【五个方案不是五次随意发挥，而是同一故事底盘上的五条高质量发展路线。】
-
-【优化构想 AI 负责寻找“最值得写的故事方向”；词典达人负责把世界和设定定稳；校长负责把故事组织成全书战略；老师负责把战略拆成章节施工；正文 AI 负责把施工方案写成小说。】
-
-不要让多方案模式破坏这条职责链。
-不要为了制造差异而破坏用户原始构想。
-要让每一个输出方案都真正具有“为什么值得写”的理由。
+【多方案执行层】
+本次必须按用户输入的真实需求进行受控分叉。先理解，再扩展；先锁定共同事实底盘，再产生不同故事发展路线。
+默认保留3—5个高质量方案；明显不适配的方向不要硬凑。
+所有方案必须提供 bookTitle、novelSummary、fullBookBeat、optimizedIdea、creativeAdditions、navBeacon、defects、seedCharacters、seedPlaces。
+
+【重要】fullBookBeat 是“全书故事节拍/阶段推进蓝本”，不是营销节拍，也不是逐章教案；novelSummary 是给后续AI看的创作材料。二者都不得包含“核心卖点、核心词、推荐理由”。
+【重要】如果用户输入包含多个想法、人物、设定或要求，必须先整合它们之间的关系，再输出真正能写成小说的方案，而不是只改写原句。
+【重要】如果输入很短，允许主动补齐合理的主角动机、阻力、阶段目标、关系张力、长期悬念和结局方向，但这些新增内容必须放在创意补充/方案蓝本中，不得伪装成用户已经确认的事实。
 `;
+
 
 
 const GLOSSARY_EXTRACT_SYS_LEGACY = `你是长篇小说设定整理助手。给定【本章正文】与【现有词典】，提取正文中出现但现有词典【未收录】的新人物、新地名、新专名。
@@ -10388,11 +9953,11 @@ function viewStory(){
           <div class="card-head-bar">
             <div class="ch-left">
               <span class="ch-badge ch-badge-idea">💡</span>
-              <h3 class="ch-title">用户构想与智能优化</h3>
+              <h3 class="ch-title">用户构想与五向优化</h3>
               <span class="ch-subtag ch-subtag-idea">${(state.polishOptions&&state.polishOptions.length)?'✨ 构想已优化':'待优化'}</span>
             </div>
             <div class="ch-right">
-              <label class="pol-multi" title="生成一个最契合的小说核心蓝本"><input type="checkbox" id="chkPolishMulti" checked> 单一最佳蓝本</label>
+              <label class="pol-multi" title="生成多方向构想供比选"><input type="checkbox" id="chkPolishMulti" checked> 多方案</label>
             </div>
           </div>
           <div class="idea-row">
@@ -10402,7 +9967,7 @@ function viewStory(){
             <button id="btnPolishIdea" class="btn ghost ${polishIdle()?'first':''}">✨ 优化构想</button>
           </div>
           <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}">
-            <div class="pol-head"><b>✨ 小说核心蓝本</b>
+            <div class="pol-head"><b>✨ 方案比选</b>
               <span class="pol-tools">
                 <button id="btnPolishDiscard" class="btn small ghost">✕ 收起</button>
               </span>
@@ -10542,13 +10107,13 @@ ${longNovelMemoryRepoHtml()}
       ${ safeCard(()=>writeStyleCard()) }
     </section>
 <section class="flow-sec" data-flow="2">
-      <div class="flow-sec-head"><span class="fs-no">2</span><span class="fs-name">故事构想与优化</span><span class="fs-note">先保留原始灵感，再由 AI 理解、提炼并扩展为可直接写成长篇小说的核心蓝本</span></div>
+      <div class="flow-sec-head"><span class="fs-no">2</span><span class="fs-name">故事构想与优化</span><span class="fs-note">先保留原始灵感，再由 AI 提供可选优化方案</span></div>
       ${bookBeatBriefHtml()}
       <div class="card card-theme-idea">
         <div class="card-head-bar">
           <div class="ch-left">
             <span class="ch-badge ch-badge-idea">✨</span>
-            <h3 class="ch-title">AI小说核心蓝本</h3>
+            <h3 class="ch-title">候选方案比选</h3>
             <span class="ch-subtag ch-subtag-idea">${(state.polishOptions&&state.polishOptions.length)?`${state.polishOptions.length} 个方案可选`:'多向优化'}</span>
           </div>
           <div class="ch-right">
@@ -10725,7 +10290,6 @@ function beatStructureCardHtml(){
     <div id="${foldId}" class="bs-body">
       <div class="bs-fw"><span class="bs-fw-chip">${esc(bb.label)}</span><span class="bs-fw-seq">${fwSeq}</span></div>
       <div class="bs-beams">${beambody}</div>
-      ${Array.isArray(o.fullBookBeats) && o.fullBookBeats.length ? `<div class="bs-ai-blueprint" style="margin-top:10px;padding:10px;border-top:1px solid var(--line,#e0e0e0)"><b>🧠 AI全书节拍蓝图</b>${o.fullBookBeats.map((b,i)=>`<div style="margin-top:6px;font-size:12px;line-height:1.6"><b>${i+1}. ${esc(b.stage||'阶段'+(i+1))}</b>：${esc(b.goal||'')} ${b.conflict?`｜冲突：${esc(b.conflict)}`:''} ${b.turningPoint?`｜转折：${esc(b.turningPoint)}`:''} ${b.carryForward?`｜后续问题：${esc(b.carryForward)}`:''}</div>`).join('')}</div>` : ''}
       ${mergeNote ? `<p class="muted" style="margin:4px 0 0;font-size:11px;color:var(--accent)">${mergeNote}</p>` : ''}
     </div>
   </div>`;
@@ -14250,49 +13814,32 @@ function renderLoglineHtml(txt){
     return `<div class="so-line so-plain">${esc(ln)}</div>`;
   }).join('');
 }
+function polishCandidateDownstreamText(cand){
+  const c = cand || {};
+  const summary = String(c.novelSummary || c.storySummary || '').trim();
+  const beat = c.fullBookBeat || c.bookBeat || c.fullNovelBeat || '';
+  const blueprint = String(c.optimizedIdea || c.text || '').trim();
+  const clean = (v)=>String(v||'').replace(/(?:^|\n)\s*(?:核心卖点|核心词|推荐理由|卖点|关键词|营销分析)\s*[:：][^\n]*/g,'').trim();
+  return { summary: clean(summary), beat: clean(typeof beat==='string' ? beat : JSON.stringify(beat)), blueprint: clean(blueprint) };
+}
 function buildOutlineFromPolishCandidate(cand){
   const txt = String((cand && cand.text) || '').trim();
+  const d = polishCandidateDownstreamText(cand);
   const o = state.outline || {};
-  const core = (cand && cand.novelCore && typeof cand.novelCore==='object') ? cand.novelCore : {};
-  const beats = Array.isArray(cand && cand.fullBookBeats) ? cand.fullBookBeats.filter(Boolean) : [];
   const curTitle = (o && o.title) || '';
-  const title = String(core.title||'').trim() || extractCandidateBookName(txt) || curTitle || '';
-  const logline = String(core.logline||'').trim() || stripStructureFromIntro(txt) || (o && o.logline) || '';
+  const title = String(cand?.bookTitle || '').trim() || extractCandidateBookName(txt) || curTitle || '';
   const prevGloss = (o && o.glossary && sourceHasGlossary(o.glossary)) ? o.glossary : null;
-  const count = Math.max(1, Math.floor(Number(chapterCountVal())||0));
-  const stagePlan = bookStagePlan(count);
-  const chapterSummaries = [];
-  if(beats.length){
-    // 将宏观节拍按章节数映射，保持因果顺序；不凭空创造章节事件。
-    for(let i=0;i<count;i++){
-      const si = Math.min(beats.length-1, Math.floor(i*beats.length/count));
-      const b = beats[si] || {};
-      const stage = stagePlan[i] ? stagePlan[i].name : (b.stage||'全书推进');
-      chapterSummaries.push({
-        title: `第${toCnNum(i+1)}章 · ${String(b.stage||stage).slice(0,18)}`,
-        summary: `阶段「${stage}」：${b.goal||''} ${b.conflict?`主要冲突：${b.conflict} `:''}${b.turningPoint?`关键成果/转折：${b.turningPoint}`:''}`.trim()
-      });
-    }
-  }
-  const nav = {
-    genre: String(core.genre||'').trim(),
-    protagonist: String(core.protagonist||'').trim(),
-    coreConflict: String(core.coreConflict||'').trim(),
-    tone: String(core.style||'').trim()
-  };
   const build = {
     title,
-    logline,
+    // 这里不再把整张优化卡直接当简介，而是只搬运面向下游创作的小说简介。
+    logline: d.summary || stripStructureFromIntro(txt) || (o && o.logline) || '',
+    // 供词典达人/校长/老师继续创作的完整故事蓝本；营销分析不进入此字段。
+    storyBlueprint: d.blueprint,
+    // 优化构想生成的全书宏观节拍，作为当前预设节拍的“剧情内容层”。
+    aiBookBeat: d.beat,
+    polishSourceName: String(cand?.name || '').trim(),
     userIdea: String(state.idea || '').trim(),
-    tone: String(core.style||'').trim(),
-    navBeacon: nav,
-    novelCore: core,
-    fullBookBeats: beats,
-    expansionHooks: Array.isArray(core.expansionHooks)?core.expansionHooks:[],
-    inferences: Array.isArray(core.inferences)?core.inferences:[],
-    chapters: chapterSummaries,
-    fullBookBeatSource: 'idea-polish',
-    beatBlueprint: beats.map((b,i)=>({index:i+1,stage:b.stage||'',goal:b.goal||'',conflict:b.conflict||'',turningPoint:b.turningPoint||'',carryForward:b.carryForward||''}))
+    tone: (o && o.tone) || ''
   };
   if(prevGloss) build.glossary = prevGloss;
   else build.glossary = { characters:[], places:[], propernouns:[], subplots:[] };
@@ -18272,7 +17819,7 @@ function updateCfgBadge(){
 
 const TM_GROUPS = [
   { title:'🧠 前置 · 构想（项目起点）', keys:[
-    ['idea','故事构想 / 优化构想','生成与优化故事点子、多方向小说核心蓝本']
+    ['idea','故事构想 / 优化构想','生成与优化故事点子、多方向方案比选']
   ]},
   { title:'🏛️ 学校统筹与设定架构（核心大脑，建议主力模型）', keys:[
     ['principal','👑 校长总控','长篇小说治学总舵手：统领全量材料，产出全校守则、组级框架与章节标题'],
