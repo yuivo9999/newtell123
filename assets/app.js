@@ -4432,7 +4432,7 @@ function chapterMaxTokens(){
 }
 function clampMaxTokens(task){
   const limits = {
-    chapter: 10000,     // 正文单次输出提高：给“按教案展开成完整正文”留足空间，避免详细教案被压成短章
+    chapter: 12000,     // 正文单次输出提高：为“完整初稿 + 深描增厚稿”留足空间，避免长章被输出上限截断
     principal: 16384,   // 校长统筹总控
     teacher: 16384,     // 老师分批教案
     dictmaster: 16384,  // 万物词典生成
@@ -8739,16 +8739,23 @@ function sizeChapterInjection(){
   const b = chapterLenBounds();
   const lo = (b && +b.lo > 0) ? +b.lo : 3000;
   const hi = (b && +b.hi > 0) ? +b.hi : 3600;
+  const deepLo = Math.round(lo * 2.05);
+  const deepHi = Math.round(hi * 2.25);
   const total = n ? `全书共 ${n} 章；` : '';
-  return `${total}本章建议篇幅约 ${lo.toLocaleString()}—${hi.toLocaleString()} 字，字数仅作为体量参考，不是剧情任务，也不是必须补足的硬门槛。
-【篇幅原则｜剧情完成优先】
-· 先完成老师教案规定的全部核心事件、因果推进与章末状态，再自然收束。
-· 如果故事已经完整抵达章末状态，不得为了达到某个数字继续写，不得新增事件、重复场景、重复对白、制造新冲突或提前进入下一章。
-· 如果正文在自然写完后低于建议区间，也不要机械补字数；只有当已有事件本身明显写得过快、影响阅读理解时，才可在事件内部自然增加必要的动作、对白、反应、环境与过渡。
-· 如果自然写作超过建议区间，只要仍在本章教案范围内且尚未抵达章末状态，可以继续完成必要剧情；不要为了“达到上限”提前截断核心事件。
-· 禁止把“约X字”理解为每个节拍必须完成的配额；节拍长短由事件复杂度与自然叙事决定。
-· 禁止使用空泛心理解释、重复信息、同义改写、无意义环境描写或循环对白填充篇幅。
-· 长度服务于故事，不反过来驱动故事。`;
+  return `${total}本章原建议篇幅约 ${lo.toLocaleString()}—${hi.toLocaleString()} 字；正文成稿的目标体量约 ${deepLo.toLocaleString()}—${deepHi.toLocaleString()} 字（约为原建议体量的 2.05—2.25 倍）。这里的“2倍以上”是体量目标，不允许靠废话、重复或新增主线事件完成。
+【篇幅原则｜先完整，再深描】
+· 第一优先：完成老师教案规定的全部核心事件、因果推进、人物选择与章末状态。
+· 第二优先：在已经发生的事件内部把“发生过程”写完整，而不是只写“结果”。对重要场景主动展开：人物进入/观察 → 触发 → 动作与反应 → 对话往返 → 信息变化 → 选择/后果 → 场景余波，并让这些环节彼此因果相连。
+· 第三优先：增加真正有叙事功能的细节，包括动作链、对白攻防、潜台词、人物观察、感官变化、空间关系、微小阻碍、心理反应、情绪递进和自然过渡；每一段新增文字都应让读者更清楚地“看见/听见/感到”事件，而不是换一种说法重复它。
+· 不要把一个事件简单压成一句“他做了X”，再用形容词拉长；应把关键动作拆成有先后、有因果、有反馈的现场过程。
+· 对关键对白，不要只写一问一答；允许出现有目的的试探、打断、回避、反问、误解、停顿、动作反应与潜台词，只要符合人物和教案。
+· 对关键场景，不要只给静态环境清单；让环境参与人物行动、限制、观察或情绪变化。环境描写必须与当前动作/感受绑定。
+· 对人物心理，不要连续解释“他很紧张/她很难过”；优先通过身体反应、视线、动作、语气、停顿、错误选择和内心判断呈现。
+· 如果某个节拍本身简单，就保持简洁；体量主要来自重要事件的充分呈现，而不是平均给每个节拍塞同样多的字。
+· 严禁为了达到 2 倍体量新增重大事件、核心人物、关键道具、世界规则、关键秘密、核心关系或下一章剧情；不得重复已经发生的场景/对白，不得循环描写。
+· 达到约 2.05—2.25 倍且最后一个必要事件已经完成时自然收束；如果必要剧情仍未完成，可以继续完成本章，但不得为了数字提前截断。
+· 如果初稿明显短于上述目标，不是“补字数”，而是执行一次“深描增厚”：只在已有事件内部补齐动作链、对白往返、人物反应、感官/空间、心理判断、因果过渡和情绪余波，并保持原剧情事实不变。
+· 长度服务于叙事质量；“增加内容密度”比“增加句子数量”更重要。`;
 }
 
 function bindSizeHint(){
@@ -15833,6 +15840,35 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
         ? `${user}\n\n【正文AI上下文理解包｜先理解后写，仅作事实核对】\n${comprehension}\n【理解包使用纪律】它只能帮助你准确理解材料，不得凌驾于原始教案与上一章真实原文；如果理解包与原文冲突，以原始材料为准。现在直接输出本章小说正文。`
         : `${user}\n\n【正文AI阅读顺序】请先完整阅读老师教案与上一章末尾原文，内部完成事实核对后再写正文；不要输出理解过程。`;
       txt = unwrapAIResult(await callDeepSeek(longChapterSys(styleOverride), writerUser, {maxTokens: mt, onStream: _onStream, temperature: dynamicChapterParams(i).temperature, topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'}));
+      // v2.1：正文采用“两阶段成篇”。第一阶段先保证剧情完整；第二阶段只在已有事件内部做深描增厚，目标约为原建议体量的 2.05—2.25 倍。
+      // 这样增加的是动作链、对白攻防、人物反应、感官/空间、心理判断和因果过渡，而不是凭空加剧情或同义改写。
+      if(isLong()){
+        const draftLen = countWords(String(txt||'')).cjk;
+        const _lb2 = chapterLenBounds();
+        const targetLo2 = Math.round((_lb2.lo||3000) * 2.05);
+        const targetHi2 = Math.round((_lb2.hi||3600) * 2.25);
+        if(draftLen < targetLo2){
+          onPhase('正文深描增厚：保留剧情，补足现场…');
+          const expandSys = `${longChapterSys(styleOverride)}
+
+【正文第二阶段｜深描增厚协议】
+你刚刚已经完成了本章完整初稿。现在不要重新设计剧情，也不要另起炉灶。请把这份初稿加工成更有阅读沉浸感的完整长篇正文。
+目标体量：约 ${targetLo2.toLocaleString()}—${targetHi2.toLocaleString()} 字；当前初稿约 ${draftLen.toLocaleString()} 字。
+【只允许增加的内容】已有事件中的动作链、对白往返与潜台词、人物即时反应、感官与空间关系、必要的心理判断、因果过渡、情绪递进、场景余波。
+【绝对禁止】新增主线事件/重大冲突/核心人物/关键设定；重复同一事件；换词重述同一信息；空泛抒情；无功能环境描写；为了长度提前进入下一章。
+【质量判定】每一段新增文字都必须至少承担“让动作更可见、让对白更有来回、让人物选择更有原因、让空间更具体、让情绪变化有触发、让因果更清楚”中的一项。若某处已经充分展开，就不要硬加。
+【输出】只输出加工后的完整小说正文，不要解释加工过程，不要标注“扩写/第二阶段/深描”。`;
+          const expandUser = `【本章完整初稿】
+${String(txt||'').trim()}
+
+【加工指令】在不改变初稿已成立事实、人物关系、事件顺序和章末状态的前提下，进行深描增厚。优先扩充最关键的场景和人物互动，直到自然接近目标体量；若继续增加会变成重复或破坏节奏，则以质量优先。`;
+          const expanded = await callDeepSeek(expandSys, expandUser, {maxTokens: Math.max(mt, 12000), onStream: _onStream, temperature: Math.min(0.92, dynamicChapterParams(i).temperature), topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'});
+          const expandedText = unwrapAIResult(expanded);
+          if(String(expandedText||'').trim().length > String(txt||'').trim().length * 1.35){
+            txt = expandedText;
+          }
+        }
+      }
       delete state._chapterPartial[i];
       persist();
     }catch(e){
