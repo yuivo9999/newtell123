@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '1.0.342';
+const APP_VERSION = '1.0.343';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -2369,9 +2369,9 @@ L5 · 正文AI的文学表达
 【十七、篇幅】
 ━━━━━━━━━━━━━━━━━━
 
-必须服从系统提供的本章篇幅契约。
+篇幅只作为体量参考，必须服从故事完整性与章末停止条件。
 
-字数不是新增剧情的理由。
+字数不是新增剧情的理由，也不是继续写作的硬性任务。
 
 如果已经完成老师规定的最后一个核心事件并达到章末状态：
 
@@ -2399,7 +2399,7 @@ L5 · 正文AI的文学表达
 - 重复已经发生的事件；
 - 擅自制造新的高潮。
 
-【剧情完成并且章末状态成立后，停止。】
+【剧情完成并且章末状态成立后，立即停止；不要为达到字数继续写。】
 
 ━━━━━━━━━━━━━━━━━━
 【十八、本章边界】
@@ -3637,7 +3637,10 @@ C. 合理推断：可以用于解释为什么某种写法更适合，但不能�
 D. AI新增设定：原则上禁止。除非属于纯粹的「写作方法」示范，否则不得作为小说Canon写入配方。
 
 【核心任务】
-根据②优化构想所选方案（尤其是书名、九要素、风格、题材、氛围、主角气质等已经明确的信息），以及用户额外提出的风格要求，设计 2~6 个真正有区分度、可直接落地的组合配方。
+先完整阅读并理解当前输入，再进行配方设计。你必须把用户的原文当成需要分析的“需求文本”，而不是只抓几个关键词。
+先在内部完成：①提取明确事实与明确写作要求；②识别主题、意图、语气、表达目标；③判断已有词库哪些能力真正覆盖；④找出真实缺口；⑤形成多个彼此不同的写法方向；最后才输出配方。
+
+通常输出 2~5 个真正有区分度、可直接落地的组合配方；但“数量”不是硬指标。如果输入内容不足以支持这么多独立方向，可以少于 2 个，禁止用同义词改名、无意义换序或重复词条来凑数。
 
 配方不是漂亮的形容词堆砌，而是一组可以交给正文AI执行的「写法组合」。
 每一个配方都必须让人看得出：
@@ -3730,9 +3733,10 @@ scenario 说明这套配方最适合怎样的表达场景、章节阶段或阅�
 不得为了举例而虚构当前小说没有确定的剧情事件、人物或世界设定。
 
 【组合原则】
-一个组合配方通常选择 2~5 个现有词条，并在确有缺口时增加 gap。
-不要为了凑数量堆叠互相冲突或高度重复的词条。
+一个组合配方通常选择 2~5 个真正互补的现有词条，并在确有缺口时增加 gap。
+不要为了凑数量堆叠互相冲突或高度重复的词条；也不要为了让候选看起来“丰富”而强行覆盖所有维度。
 组合应该形成互补关系：语言 + 节奏 + 情绪 + 叙事 + 台词等维度可以协同，但不必每套都覆盖所有维度。
+【数量停止条件】如果新增一个候选只能复述前面候选的写法，就停止生成；如果现有词库已经覆盖某个需求，不得再用 gap 重复包装它。
 
 【短构想/信息不足时】
 如果输入很短，只能依据已经明确的信息设计「表达方法」，不要擅自补全世界观和剧情。
@@ -3817,10 +3821,55 @@ function aiRecipeSpecNote(s){
   const head = n.split('\n')[0].trim();
   return (multi ? (head ? head + '（多行配方·详见词库）' : '（多行配方·详见词库）') : n).slice(0,60);
 }
-function aiRecipePrompt(userDesc){
+function aiRecipePrompt(userDesc, analysis){
   const lib = writeStyleLib();
-  const spec = lib.map(s=> `- ${s.id}：${s.name}（${s.cat||'custom'}）｜${aiRecipeSpecNote(s)}`).join('\n');
-  return { system: AI_RECIPE_SYS_PRO + '\n\n【现有词库 id/name/cat】：\n' + spec, user: aiRecipeUser(userDesc) };
+  // 旧版只给每个词条一行、且 note 截断到 60 字，模型很容易“看见名字、没看见真正写法”。
+  // 现在把可执行字段完整提供给分析/配方层，先理解再组合。
+  const spec = lib.map(s=>{
+    const tips = Array.isArray(s.tips) ? s.tips : [];
+    const avoid = Array.isArray(s.avoid) ? s.avoid : [];
+    const check = Array.isArray(s.check) ? s.check : [];
+    const demo = String(s.demo||'').trim();
+    return `- id=${s.id}｜name=${s.name}｜cat=${s.cat||'custom'}\n  note=${String(s.note||'').trim()}\n  tips=${tips.join('；')}\n  avoid=${avoid.join('；')}\n  check=${check.join('；')}\n  demo=${demo}`;
+  }).join('\n');
+  const analysisBlock = analysis ? `\n\n【输入理解分析｜上一层已经完成语义拆解，只作为本轮配方生成的工作记忆】\n${JSON.stringify(analysis)}` : '';
+  return { system: AI_RECIPE_SYS_PRO + analysisBlock + '\n\n【现有词库完整可执行资料】：\n' + spec, user: aiRecipeUser(userDesc) };
+}
+
+/* Prompt Perfect 式两阶段：先理解用户输入，再设计配方。
+ * 这一层不生成成品配方，也不创造小说事实；它只把原文压缩成“事实/需求/写法缺口/候选方向”的结构化工作记忆。
+ */
+const AI_RECIPE_ANALYSIS_SYS = `你是“写作配方AI”的输入理解与需求分析器。你的工作不是写配方，而是先把用户输入真正读懂，形成供下一层配方设计使用的结构化分析。
+
+【最高原则】
+1. 只从用户输入和已提供的小说方案中提取事实与表达需求，不得脑补小说事实。
+2. 必须区分：explicitFacts（明确事实）、styleRequests（明确风格要求）、inferredNeeds（合理推断的写作需求）、unknowns（尚未提供的信息）。
+3. 对用户文字做语义聚类：主题、意图、已有素材、关键词、语气、叙事/表达倾向、想解决的问题。
+4. 找出“已经被词库覆盖”的写作能力，以及“可能缺失但需要进一步核对词库”的写作能力。这里只描述能力，不直接制造新词条。
+5. 提出多个真正不同的写法方向，但不得为了凑数量硬拆同义方案；如果输入只支持少数方向，就只返回少数方向。
+6. 不改变用户方向，不新增人物、剧情、世界观、能力、地点、秘密或事件。
+
+【输出】严格 JSON 对象，不要 markdown：
+{
+  "inputSummary":"对用户输入的准确理解",
+  "explicitFacts":[],
+  "styleRequests":[],
+  "inferredNeeds":[],
+  "keywords":[],
+  "coveredCapabilities":[],
+  "candidateDirections":[{"name":"方向名","core":"核心写法差异","bestFor":"适用表达场景"}],
+  "possibleGaps":[{"capability":"缺失的写作能力","reason":"为什么可能缺","priority":"high|medium|low"}],
+  "unknowns":[]
+}`;
+async function aiRecipeAnalyze(userDesc){
+  const base = aiRecipeUser(userDesc);
+  const lib = writeStyleLib();
+  const compactLib = lib.map(s=>({id:s.id,name:s.name,cat:s.cat||'custom',note:String(s.note||'').trim(),tips:Array.isArray(s.tips)?s.tips:[]}));
+  const user = `${base}\n\n【现有词库用于覆盖核对】\n${JSON.stringify(compactLib)}\n\n请先完成输入理解，不要生成最终配方。`;
+  const raw = unwrapAIResult(await callDeepSeek(AI_RECIPE_ANALYSIS_SYS,user,{maxTokens:2200,temperature:0.2,topP:0.2,signal:_abortCtl?.signal,taskKey:'recipe'}));
+  const j = parseJson(raw);
+  if(!j || typeof j!=='object' || Array.isArray(j)) throw new Error('写作配方AI的输入理解阶段返回无效结果');
+  return j;
 }
 function aiRecipeCard(){
   const lib = writeStyleLib();
@@ -3917,15 +3966,30 @@ function prepRecipeList(list){
 function recipeScBadge(c){
   return (c && c._gapOk === false) ? `<span class="ai-recipe-sc bad" title="建议的新词条缺少 note/tips/avoid/check/demo 中的维度，入典前请补全">⚠ 词条缺维</span>` : '';
 }
+function dedupeRecipeList(list){
+  if(!Array.isArray(list)) return list;
+  const seen = new Set(), out=[];
+  list.forEach(c=>{
+    if(!c || typeof c!=='object') return;
+    const tags = Array.isArray(c.tags)?c.tags.map(String).sort():[];
+    const gaps = Array.isArray(c.gap)?c.gap.map(g=>String(g&&g.id||g&&g.name||'')).sort():[];
+    const key = JSON.stringify([tags,gaps,String(c.core||c.desc||'').replace(/\s+/g,'').slice(0,240)]);
+    if(!seen.has(key)){ seen.add(key); out.push(c); }
+  });
+  return out;
+}
 async function aiRecipeProduce(system, user){
-  const opt = { maxTokens: clampMaxTokens('recipe'), temperature:(getCfg().aiRecipeTemp==null?0.9:getCfg().aiRecipeTemp), topP:0.5 };
-  const FIX = `\n\n【上一轮修正：gap 按需给全、不机械硬造】缺口与否由你自主判断：现有词库能完全覆盖时 gap 应为 null（0 条，不要为凑数而硬造）；确有多条真实缺口时才写 gap，并把它们一次给全（不要只给 1 个、不要合并）；gap 非空时每个新词条必须五维齐全——note（一句话定位）、tips（≥2 条）、avoid（≥1 条）、check（≥1 条）、demo（示例句）。请为非 null 的 gap 给全、给对上述字段。`;
-  const FIX_JSON = `\n\n【上一轮修正：JSON 解析失败】上一轮输出无法被解析为合法 JSON 数组。请严格只输出一个 JSON 数组（不要 markdown 代码块、不要解释、不要任何额外文字）。`;
+  const cfg=getCfg();
+  const opt = { maxTokens: clampMaxTokens('recipe'), temperature:(cfg.aiRecipeTemp==null?0.55:Math.min(0.75,Math.max(0.25,Number(cfg.aiRecipeTemp)||0.55))), topP:0.45 };
+  const FIX = `\n\n【上一轮质量修正】重新检查输入理解：删除仅靠换形容词、换名称、换顺序形成的重复候选；只保留有实际执行差异的方向。gap 必须来自真实且重要的写作方法缺口；现有词库能覆盖就 gap=null。`;
+  const FIX_JSON = `\n\n【上一轮格式修正】上一轮输出无法解析。只输出合法 JSON 数组，不要 markdown、解释或额外文字。`;
   let list = null, lastJsonOk = false;
   for(let attempt=1; attempt<=2; attempt++){
     const sys = attempt>1 ? String(system) + (lastJsonOk ? FIX : FIX_JSON) : system;
     const raw = unwrapAIResult(await callDeepSeek(sys, user, Object.assign({}, opt, {taskKey:'recipe'})));
-    const cands = prepRecipeList(parseAiJsonList(raw));
+    let cands = parseAiJsonList(raw);
+    cands = dedupeRecipeList(cands);
+    cands = prepRecipeList(cands);
     lastJsonOk = Array.isArray(cands) && cands.length > 0;
     if(lastJsonOk){ list = cands; break; }
   }
@@ -3941,8 +4005,10 @@ async function aiRecipeGen(){
   const out = $('[data-ai-recipe-out]'); if(out) out.innerHTML = `<p class="muted" style="margin:8px 0 0">⏳ AI 正在${hasLine?'依据所选方案':'根据你的描述'}设计候选配方与词条缺口……</p>`;
   const gen = $('[data-ai-recipe-gen]'); if(gen){ gen.disabled = true; gen.textContent = '生成中…'; }
   try{
-    const {system, user} = aiRecipePrompt(desc);
-    const list = await aiRecipeProduce(system, user);   // D2/C①：生成即校验新词条五维齐全，不合格自动重试
+    // 两阶段链路：理解输入 → 依据理解结果设计配方，避免模型只抓关键词后机械套词库。
+    const analysis = await aiRecipeAnalyze(desc);
+    const {system, user} = aiRecipePrompt(desc, analysis);
+    const list = await aiRecipeProduce(system, user);
     aiRp = { list, hi: 0 };
     addAiHist({ id: aiHistEntryId(), ts: Date.now(), src:'desc', desc: desc || '依据所选方案', list: JSON.parse(JSON.stringify(list)), applied:[] });
   }catch(e){
@@ -8604,20 +8670,20 @@ function chapterLenBounds(){
 function sizeChapterInjection(){
   const n = realChapterCount();
   const b = chapterLenBounds();
-  const floor = (b && +b.floor > 0) ? b.floor : 2700;
+  const lo = (b && +b.lo > 0) ? +b.lo : 3000;
   const hi = (b && +b.hi > 0) ? +b.hi : 3600;
-  const cap = Math.max(hi, Math.round(hi * 1.15));
   const total = n ? `全书共 ${n} 章；` : '';
-  return `${total}本章正文目标 ${b.lo.toLocaleString()}—${b.hi.toLocaleString()} 字，硬下限 ${floor.toLocaleString()} 字（一次写完、当场达标，禁止靠事后补字数）。
-【字数铁律 · 首写即达标】
-· 本章必须一次写足到 ≥ ${floor.toLocaleString()} 字才算完成；这是硬性交付标准，禁止写成梗概式短场景、禁止一笔带过、禁止提前收尾。若老师机器教案本身已经达到约 800—1000 字以上，正文必须把教案中的既有事件、场景和过程充分文学化展开，不能只做一遍概括；正文应明显长于教案，通常至少达到教案有效文字量的约 2 倍，随后再以本章目标字数为最终准绳。
-· 开写前先按节拍表里每一拍标注的「（约X字）」明确各段分量：**每一拍都要被展开到接近其标注的约X字篇幅**（例如「冲突推进（约800字）」就须写出约800字的正文，而不是150字一带而过），逐拍累加即达本章目标；写正文时把它们自然衔接成一篇连续正文、不拆成独立小节，由上拍剧情引到下拍；某拍在节拍表里素材偏少时，允许在该拍内通过场景铺陈、动作拆解、多轮对话、人物可观察反应与环境氛围的合理扩写来凑足该拍字数；严禁把多个节拍事件挤进一句话带过；每段事件一律用五感细节（视觉/听觉/触觉/嗅觉/味觉）、连贯动作、人物对话、可观察反应与环境氛围写实写足；不得为了扩写而堆叠直白心理解释。
-· 剧情完整的前提下优先增厚铺垫、交锋与收官，禁止把多个节拍事件挤进一句话带过，也不得堆砌标点/空行凑数。
-· 一边写一边对照：节拍表里每一段事件是否都已写到、是否写足应有的分量；不足必须继续扩写到位，而不是就此了事。
-· 同时设硬顶：成文超过 ${hi.toLocaleString()} 字（上限 ${cap.toLocaleString()} 字）即判超长，达到目标区间就应立即收束本章，禁止无限铺陈、禁止为了"更多字数"再追加内容。
-· 长度以正文落库为准，末尾不输出任何 LEN/字数标记。
-【厚写展开法 · 防照抄应付（v1.0.270）】禁止把节拍 event 的字面内容"一转述就完事"：正文的实际篇幅必须明显大于节拍事件的字面内容。要写厚，就主动给每段事件叠加这些展开维度（按情节需要选，不必每拍全用）——(a) 前置铺垫：事件发生前，主角进入现场、环境气氛、人物状态的变化；(b) 动作拆解：把"一个动作"写成连续的小步骤与肢体/表情细节；(c) 对话往返回合：同一冲突用一来一回的多轮对话推进，而非一句带过；(d) 感官与环境：光线、声音、气味、触感的具象描写；(e) 延宕与收束：冲突落地后的人物反应、情绪余波与场面收尾。只有把事件展开到"看得见、感得到、有过程"，才算完成本拍，才算达标。`;
+  return `${total}本章建议篇幅约 ${lo.toLocaleString()}—${hi.toLocaleString()} 字，字数仅作为体量参考，不是剧情任务，也不是必须补足的硬门槛。
+【篇幅原则｜剧情完成优先】
+· 先完成老师教案规定的全部核心事件、因果推进与章末状态，再自然收束。
+· 如果故事已经完整抵达章末状态，不得为了达到某个数字继续写，不得新增事件、重复场景、重复对白、制造新冲突或提前进入下一章。
+· 如果正文在自然写完后低于建议区间，也不要机械补字数；只有当已有事件本身明显写得过快、影响阅读理解时，才可在事件内部自然增加必要的动作、对白、反应、环境与过渡。
+· 如果自然写作超过建议区间，只要仍在本章教案范围内且尚未抵达章末状态，可以继续完成必要剧情；不要为了“达到上限”提前截断核心事件。
+· 禁止把“约X字”理解为每个节拍必须完成的配额；节拍长短由事件复杂度与自然叙事决定。
+· 禁止使用空泛心理解释、重复信息、同义改写、无意义环境描写或循环对白填充篇幅。
+· 长度服务于故事，不反过来驱动故事。`;
 }
+
 function bindSizeHint(){
   const el = $('#sizeHint'); if(!el) return;
   el.textContent = sizeHintText();
@@ -8636,7 +8702,17 @@ function chapterSysBase(){
     .split('setup / rise / climax / hook').join(keys)
     .split('四个事件').join(cnt + ' 段节拍事件');
   const closedGate = `【正文作家·多层执行链（闭卷创作规范）】
-你是长篇小说的「正文作家（学生）」，只专注文学笔力、对白交锋与生动场面铺展。你的输入不是互相竞争的几份提示词，而是一条有权限层级的创作链：
+你是长篇小说的「正文作家（学生）」，只专注文学笔力、对白交锋与生动场面铺展。你的输入不是互相竞争的几份提示词，而是一条有权限层级的创作链。
+【正文AI内部工作顺序｜必须先理解，再动笔】
+1. 先完整阅读并整合“上下文理解包”。
+2. 再逐项核对老师本章教案与上一章末尾真实原文：区分“已发生事实”与“本章计划”。
+3. 再确定第一段的真实承接点、人物当前状态、信息边界与事件因果。
+4. 再按老师教案的事件顺序写成连续小说，不输出分析、计划、节拍标签或后台术语。
+5. 写作过程中只进行文学表达与必要的中间动作补足，不重新设计剧情。
+6. 一旦本章最后一个必要事件完成且章末状态成立，立即停止；不要为了字数继续。
+
+你的目标不是“写够多少字”，而是“把已经确定的故事写完整、写自然、写得像真正发生过”。
+
 · L1【世界事实层】：词典达人 + 词典充实已经批准的世界、人物、地点、专名、规则；这是“世界是什么”，不得私自改写。
 · L2【学校规划层】：校长的全书方向/阶段结构 + 老师本章教案；这是“本章写什么”。老师可以在世界允许范围内设计中间过程，正文必须完成其核心任务。
 · L3【动态状态层】：上一章正文结算状态、物理接力、时间合同；这是“故事现在实际在哪里”。它优先决定开笔的真实状态，不能为了迎合教案而篡改上一章已经写成的事实。
@@ -8648,7 +8724,7 @@ function chapterSysBase(){
 · 【场景过场路人与临时龙套点缀权】：正文作家可根据具体场景的叙事与氛围需要，自然点缀店小二、摊贩、茶客、更夫、传令兵、前台侍者等过场闲人。
   - 授权纪律：允许现场自然拟定称谓或名字，写一两句动作或对话即止，只作环境气氛烘托；
   - 边界红线：此类路人龙套只在当前场景出现一次，绝不推动主线，后续剧情不会再次登场，亦不计入词典，点到即收；严禁喧宾夺主或抢占主角/教案核心人物戏份。
-· 【成篇写法与达标收束】：按教案推进骨架顺序自然流淌推进，相邻环节自然过渡融合，字数达到篇幅契约即自然收束，严禁逐拍写标签或写散装提纲。
+· 【成篇写法与自然收束】：按教案推进骨架顺序自然流淌推进，相邻环节自然过渡融合；剧情完整并抵达章末状态后自然收束，不按数字机械收尾，严禁逐拍写标签或写散装提纲。
 `;
   return closedGate + base;
 }
@@ -15665,40 +15741,10 @@ function splitChapterOutput(txt){
   return { content: stripSegmentMarkers(txt), strip: '' };
 }
 async function expandShortChapter(i, content, floor, signal){
-  let out = String(content||'').trim();
-  const card = chapterPlanAuthority(i);
-  if(!card) return out;
-  const target = Math.max(200, Math.round(Number(floor)||0));
-  for(let round=0; round<2 && countWords(out).total < target; round++){
-    const cur = countWords(out).total;
-    const remain = Math.max(300, target-cur);
-    const tail = out.slice(-1800);
-    const user = `【本章老师机器教案（唯一剧情依据）】
-${String(card.raw||card).slice(0,12000)}
-
-【当前已写正文】
-${out.slice(0,50000)}
-
-【当前正文尾部】
-${tail}
-
-【扩写任务】
-当前正文只有约 ${cur} 字，本章硬下限为 ${target} 字，仍缺约 ${remain} 字。你不是另起炉灶，也不是新增主线；请在现有正文基础上“补厚已经发生的内容”：优先把老师教案中已经写明但正文写得过快的场景、动作过程、对白往返、人物可观察反应、环境与感官细节、因果过渡、事件余波展开完整，并把相邻事件自然连成连续段落。若正文已经走到原定结尾，就回填前面已经发生的场景来补足，而不是凭空开启下一章或新增重大事件。
-严禁重复已有句子、严禁概括式复述教案、严禁写成分析/提纲；直接输出“需要追加到正文末尾的小说正文”，从当前尾部无缝接续。追加约 ${Math.max(remain,500)}—${Math.max(remain+500,900)} 字，达到本章硬下限附近即可自然收束。`;
-    try{
-      const res = await callDeepSeek(longChapterSys(), user, {maxTokens: clampMaxTokens('continue'), temperature: Math.min(0.9, dynamicChapterParams(i).temperature), topP: 0.95, signal: signal || _abortCtl?.signal, taskKey:'chapter'});
-      let add = String(res.text||'').trim();
-      if(!add) break;
-      const lcp = longestCommonPrefix(tail, add);
-      if(lcp.length > 20) add = add.slice(lcp.length).trim();
-      add = stripSegmentMarkers(add).replace(/<!--\s*LEN:[\s\S]*?-->/g,'').trim();
-      if(!add) break;
-      out += '\n\n' + add;
-      out = enforceChapterBoundary(i, out);
-      if(out && /本阶段向下一阶段移交/.test(out.slice(-400))) break;
-    }catch(e){ break; }
-  }
-  return out.trim();
+  // v1.0.343：取消“低于硬下限就自动补字数”的二次写作。
+  // 字数不足不再触发机械扩写；正文以剧情完整、承接自然、章末状态成立为停止条件。
+  // 保留函数名是为了兼容旧调用与旧存档，但现在只返回原文。
+  return String(content||'').trim();
 }
 
 async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride, signal){
@@ -15715,7 +15761,11 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
     let partial = (state._chapterPartial && state._chapterPartial[i]) || '';
     const _onStream = (delta)=>{ partial += delta; state._chapterPartial[i] = partial; if(onStream) onStream(delta); };
     try{
-      txt = unwrapAIResult(await callDeepSeek(longChapterSys(styleOverride), user, {maxTokens: mt, onStream: _onStream, temperature: dynamicChapterParams(i).temperature, topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'}));
+      const comprehension = await buildChapterComprehension(i, signal);
+      const writerUser = comprehension
+        ? `${user}\n\n【正文AI上下文理解包｜先理解后写，仅作事实核对】\n${comprehension}\n【理解包使用纪律】它只能帮助你准确理解材料，不得凌驾于原始教案与上一章真实原文；如果理解包与原文冲突，以原始材料为准。现在直接输出本章小说正文。`
+        : `${user}\n\n【正文AI阅读顺序】请先完整阅读老师教案与上一章末尾原文，内部完成事实核对后再写正文；不要输出理解过程。`;
+      txt = unwrapAIResult(await callDeepSeek(longChapterSys(styleOverride), writerUser, {maxTokens: mt, onStream: _onStream, temperature: dynamicChapterParams(i).temperature, topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'}));
       delete state._chapterPartial[i];
       persist();
     }catch(e){
@@ -15729,14 +15779,8 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
   const _cs = splitChapterCastout(content);
   content = _cs.body;
   content = enforceChapterBoundary(i, content);
-  // 老师教案已经写得详细时，正文不得把它压缩成 1000 多字的“剧情摘要”。
-  // 首写不足硬下限时，自动在既有事件内部补厚：不新增主线，只扩写场景、动作、对白、反应与过渡。
-  const _minFloor = (chapterLenBounds() || {floor:2700}).floor;
-  if(countWords(content).total < _minFloor){
-    const before = content;
-    content = await expandShortChapter(i, content, _minFloor, signal);
-    if(content !== before && onStream) onStream('\n\n[正文已按老师教案自动补厚至硬下限附近]');
-  }
+  // v1.0.343：正文生成阶段不再因字数不足触发自动补写。
+  // 停止条件由剧情完成与章末状态决定，避免模型把“字数”误解为必须继续写。
   if(state.chapters && state.chapters[i]){ state.chapters[i].castOut = _cs.castOut; }
   const _o = state.outline;
   if(_o && Array.isArray(_o.chapters) && _o.chapters[i]){ _o.chapters[i].castOut = _cs.castOut; }
@@ -15871,6 +15915,63 @@ function principalCausalityExcerpt(){
   return '（校长尚未产出新版因果闭环层；正文仍必须执行事件可达性硬规则：重大事件不得凭空发生，必须有前置条件、触发依据、人物行动路径与结果来源。）';
 }
 
+/* ===================== v1.0.343 正文AI上下文理解层 =====================
+ * 先理解，再写作：把老师教案与上一章真实结尾压缩成“事实型理解包”。
+ * 该步骤只做阅读理解/冲突识别/承接提取，不创作剧情，不生成正文。
+ */
+const CHAPTER_COMPREHENSION_SYS = `你是长篇小说正文AI的“上下文理解器”，不是作者。
+你的任务只有一个：在正文AI动笔之前，完整阅读并准确理解【老师本章教案】与【上一章末尾原文】，整理出一份给正文作家使用的“事实理解包”。
+
+严格规则：
+1. 老师教案决定本章要发生什么、发生顺序、人物调度、时间、地点、情绪方向和章末状态；不要重新设计剧情。
+2. 上一章末尾原文是本章开笔的真实物理起点；必须识别最后真实动作、地点、人物、正在进行的对话、身体状态、重要物品/线索、即时情绪与未完成问题。
+3. 两者若存在时间/空间跨度，明确指出需要自然过桥的位置；不要发明新的剧情理由。
+4. 区分“教案要求”和“上一章已经发生的事实”，不得把计划写成既成事实，也不得把上一章事实改成符合教案的样子。
+5. 识别本章必须兑现的核心事件、关键因果、必须保持的人物/信息连续性、明确禁项、章末停止点。
+6. 允许指出信息缺口，但只提出“最小必要补足”的方向，不创造新的核心人物、道具、组织、秘密、冲突或剧情。
+7. 不评价文风好坏，不写正文，不写故事续篇，不扩写，不凑字数。
+8. 不要为了“完整”硬凑条目；没有内容就写“无”。
+9. 输出简洁、准确、面向正文作家执行；只输出一个 JSON 对象，不要 markdown，不要解释。
+
+JSON结构：
+{
+  "openingReality":"本章第一段必须承接的真实物理/人物状态",
+  "previousEndingFacts":[],
+  "teacherCoreEvents":[],
+  "eventOrder":[],
+  "causalLinks":[],
+  "characterContinuity":[],
+  "timeSpaceBridge":"",
+  "informationBoundary":[],
+  "forbiddenChanges":[],
+  "endingStopPoint":"",
+  "safeLiteraryFreedom":[],
+  "missingInfo":""
+}`;
+
+function buildChapterComprehensionUser(i){
+  const o=state.outline||{};
+  const card=chapterPlanAuthority(i);
+  const lesson=String(card?.raw || teacherChapterPlan(i) || '').trim();
+  const prev= i>0 ? String(state.chapters?.[i-1]?.content||'').trim() : '';
+  const prevTail=prev ? chapterTailExcerpt(i, 6500) : '';
+  const ss=storyState();
+  const prevObs= i>0 ? (ss.chapters?.[i-1]?.observed||null) : null;
+  const planned=ss.chapters?.[i]?.planned||null;
+  return `【本章教案｜完整原始内容】\n${lesson.slice(0,16000) || '（无）'}\n\n【上一章末尾｜真实原文】\n${prevTail || '（首章，无上一章）'}\n\n【上一章机器结算｜仅作辅助，不可覆盖原文】\n${JSON.stringify(prevObs||{},null,2)}\n\n【本章计划状态｜仅作辅助】\n${JSON.stringify(planned||{},null,2)}\n\n【任务】请先读完上述材料，再输出事实型理解包。只提取与本章正文写作直接相关的信息，不要替正文AI写任何句子。`;
+}
+
+async function buildChapterComprehension(i, signal){
+  try{
+    const user=buildChapterComprehensionUser(i);
+    const raw=unwrapAIResult(await callDeepSeek(CHAPTER_COMPREHENSION_SYS,user,{maxTokens:5200,temperature:0.1,topP:0.2,signal:signal||_abortCtl?.signal,taskKey:'chapter'}));
+    const j=parseJson(raw)||{};
+    return JSON.stringify(j,null,2);
+  }catch(e){
+    return '';
+  }
+}
+
 function buildChapterUser(i, opt={}){
   const o = state.outline || {};
   const chap = (state.chapters && state.chapters[i]) || {};
@@ -15921,7 +16022,7 @@ ${_lesson}
 
     const microParts = [];
     if(i > 0){
-      const _tail = chapterTailExcerpt(i, 480);
+      const _tail = chapterTailExcerpt(i, 6500);
       if(_tail){
         microParts.push(`◆ 上一章末尾 · 物理接力（本章开笔物理现实起点）
 这是上一章正文最末真实自然断点文字。本章第一段必须与它"伤口对缝"：
@@ -15959,6 +16060,10 @@ ${_tail}
     boundary += `\n【阶段移交硬禁】任何“本阶段向下一阶段移交”“阶段高潮成果”“后续阶段悬念”等后台信息只可用于理解连续性，绝不属于本章正文剧情。`;
     parts.push(boundary);
 
+    // 先理解后写：把教案与上一章末尾的关键事实交给正文AI的上下文理解层。
+    // 这是“理解”，不是第二份剧情计划；正文AI最终仍以原始材料为权威并自行完成正文。
+    // 注意：此处不能在 buildChapterUser 中 await，因此实际理解包在 writeOneChapterContent 中异步追加。
+
   } else {
     parts.push(`【小说简介】书名：${o.title||''}\n${o.logline||''}`);
     const plan = (Array.isArray(o.chapterPlans) && o.chapterPlans[i]) || null;
@@ -15994,12 +16099,12 @@ ${_tail}
   const _lb = chapterLenBounds() || {floor:2700, lo:3000, hi:3600};
   const _lo = (_lb.lo>0?Math.round(+_lb.lo):3000), _hi = (_lb.hi>0?Math.round(+_lb.hi):3600);
   const _cap = Math.max(_hi, Math.round(_hi*1.15));
-  parts.push(`【篇幅契约 · 覆盖各段事件、整体连续成篇、达标即收束】全章正文字数必须 ≥ ${_lb.floor.toLocaleString()} 字（目标 ${_lo.toLocaleString()}—${_hi.toLocaleString()} 字，硬顶 ${_cap.toLocaleString()} 字，超过即判超长）。
+  parts.push(`【篇幅参考 · 只服务于体量，不驱动剧情】本章建议正文约 ${_lo.toLocaleString()}—${_hi.toLocaleString()} 字；没有“必须补足”的硬字数门槛，剧情完整与章末状态优先。
 【成篇写法】
 1. 骨架里每一段事件都必须写到、不得遗漏，但它们不是互不相干的独立小节，而是本章内按因果连续推进的故事小节：写正文时由上个环节的剧情自然引到下个环节，相邻环节之间必须有自然的衔接与过渡（剧情因果驱动、情绪递进、动作延续，或时间/空间切换的过渡句），只要叙事连续，相邻环节允许融合在同一场景内连续推进，不必每拍单起一段。禁止硬跳切、禁止把某段事件单独拎出来自写自满。
-2. 以目标约 ${_lo.toLocaleString()} 字为全章落点，让情节从本章开笔承接点持续推进到【章末状态】；正文直接以小说段落呈现，不写任何节拍小标、不做逐拍分段的拼装痕迹。
-3. 【停止优先于长度】字数不是继续创造剧情的理由。只要最后一个节拍已完成且【章末状态】成立，即使未达到理想字数，也必须先结束本章；需要补足篇幅时只能回填已经发生的事件内部细节，不能开启新事件。
-4. 达标即自然收束：一旦全章达到 ${_hi.toLocaleString()} 字左右（上限 ${_cap.toLocaleString()} 字），若章末状态已成立，应立即交付；禁止为了"再多写点"继续追加内容。`);
+2. 以故事完整性为全章落点，让情节从本章开笔承接点持续推进到【章末状态】；${_lo.toLocaleString()}—${_hi.toLocaleString()} 字仅作体量参考。正文直接以小说段落呈现，不写任何节拍小标、不做逐拍分段的拼装痕迹。
+3. 【停止优先于长度】只要最后一个必要事件已完成且【章末状态】成立，立即结束本章，即使未达到建议字数也不得继续。只有当已有事件本身明显写得过快、影响理解时，才允许在这些已发生事件内部自然补足必要表现。
+4. 自然收束：达到建议体量后，如果章末状态成立就交付；如果核心事件尚未完成，继续完成必要剧情，不因数字机械截断。无论长短，都禁止为了“再多写点”追加无关内容。`);
 
   _dictRedlineOver = false;
   const _b = budgetChapterContext(parts, 24000);
