@@ -4978,6 +4978,91 @@ function scGroupTitles(g){
   return out;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Principal AI · Prompt-Perfect-style Context Intelligence
+ *
+ * 目标：不是简单把更多文字塞进 prompt，而是先建立“来源账本”，再让模型
+ * 对每一份来源进行语义理解、冲突/权限识别和可执行结论提炼，最后由校长
+ * 基于完整理解结果统一决策。这样来源不会因为 UI 摘要函数的 slice() 被静默
+ * 丢掉，也不会把不同权限层级的材料混在一起。
+ * ─────────────────────────────────────────────────────────────────────────── */
+function _ppText(v){
+  if(v == null) return '';
+  if(typeof v === 'string') return v.trim();
+  try{ return JSON.stringify(v, null, 2); }catch(e){ return String(v); }
+}
+function _ppAddSource(list, id, label, content, priority, authority){
+  const text = _ppText(content);
+  if(!text) return;
+  list.push({id, label, content:text, priority:priority||'normal', authority:authority||'context'});
+}
+function principalSourceBlocks(groups){
+  const o = state.outline || {};
+  const out = [];
+  _ppAddSource(out,'original_idea','用户原始构想',state.idea,'highest','user');
+  _ppAddSource(out,'nav_beacon','导航灯塔 / 用户锚点',o.navBeacon,'highest','user');
+  _ppAddSource(out,'outline_core','现有全书大纲核心资料',{title:o.title,logline:o.logline,tone:o.tone,chapters:o.chapters},'highest','outline');
+  _ppAddSource(out,'story_blueprint','优化构想·完整小说蓝本',o.storyBlueprint,'high','polish');
+  _ppAddSource(out,'book_beat','优化构想·全书故事节拍',o.aiBookBeat,'high','polish');
+  let cand=null; try{ cand=selectedPolishCandidate && selectedPolishCandidate(); }catch(e){}
+  if(cand){
+    _ppAddSource(out,'polish_selected','优化构想·当前选中方案',cand,'high','user_selected');
+    try{
+      const cd=polishCandidateDownstreamText(cand);
+      _ppAddSource(out,'polish_selected_summary','所选方案·小说简介',cd&&cd.summary,'high','user_selected');
+      _ppAddSource(out,'polish_selected_beat','所选方案·全书故事节拍',cd&&cd.beat,'high','user_selected');
+      _ppAddSource(out,'polish_selected_blueprint','所选方案·完整小说蓝本',cd&&cd.blueprint,'high','user_selected');
+    }catch(e){}
+  }
+  _ppAddSource(out,'chapter_plans','既有《全书节拍》/章节规划',o.chapterPlans,'high','planning');
+  _ppAddSource(out,'global_timeline','全书时间线 / 时间锚点',{
+    timeline:o.globalTimeline || o.timeline || null,
+    factCard:o._factCard ? {timeline:o._factCard.timeline,timeAnchors:o._factCard.timeAnchors,timeAudit:o._factCard.timeAudit} : null
+  },'high','planning');
+  _ppAddSource(out,'microbeat','当前全书微拍总纲与节奏体系',(()=>{ try{return currentBeatCfg&&currentBeatCfg();}catch(e){return null;} })(),'high','system_config');
+  _ppAddSource(out,'writing_style','写作风格与表达配方',{chapterStyle:state.chapterStyle,styleBrief:scStyleBrief()},'high','user_selected');
+  _ppAddSource(out,'glossary','全量万物词典（完整对象，不再按字符截断）',o.glossary,'highest','canon');
+  _ppAddSource(out,'story_state','正文状态 / 事实账 / 权限链',o._storyState,'high','observed_state');
+  _ppAddSource(out,'chapters_written','已写正文（用于连续性与状态理解）',
+    (state.chapters||[]).map((c,i)=>({chapter:i+1,title:c&&c.title||'',content:c&&c.content||'',confirmed:!!(c&&c.confirmed)})),
+    'high','observed_state');
+  _ppAddSource(out,'school_groups','校长即将管理的老师分组',groups,'high','planning');
+  return out;
+}
+function principalSourceLedger(blocks){
+  return blocks.map((b,i)=>`【来源${i+1}｜${b.id}｜${b.label}｜权限=${b.authority}｜优先级=${b.priority}】\n${b.content}`).join('\n\n');
+}
+function principalContextChunks(text, maxChars){
+  const cap=maxChars||28000, s=String(text||'');
+  if(!s) return [];
+  const chunks=[]; let start=0;
+  while(start<s.length){
+    let end=Math.min(s.length,start+cap);
+    if(end<s.length){
+      const cut=Math.max(s.lastIndexOf('\n\n',end),s.lastIndexOf('\n',end));
+      if(cut>start+cap*0.65) end=cut;
+    }
+    chunks.push(s.slice(start,end)); start=end;
+  }
+  return chunks;
+}
+const PRINCIPAL_CONTEXT_SYS = `你是“校长AI”的上下文理解器，不负责直接规划全书。\n你的任务是像专业 Prompt Engineering 工具一样，把注入的来源内容全部读懂，再形成可供校长决策的“语义理解层”。\n\n硬规则：\n1. 不得凭空增加来源中没有的事实。\n2. 必须区分用户选择、世界事实/词典、既有规划、正文已观测事实、风格要求和系统配置。\n3. 发现冲突时，不要自行裁决；记录“冲突点 + 涉及来源 + 权限关系”。\n4. 不要因为内容很长而只关注最后一段；每个来源都要覆盖。\n5. 提炼与校长职责直接相关的：核心意图、不可违背约束、关键事实、人物/关系、阶段任务、节奏要求、时间约束、因果约束、连续性状态、风格规则、待决策事项。\n6. 输出应高度压缩但信息密度高，保留足以让后续校长做出准确决策的细节。\n7. 明确标记“来源证据”，方便最终校长回溯。\n\n输出格式：\n# 来源理解\n## 核心意图\n## 不可违背约束\n## 已成立事实\n## 结构与节奏\n## 人物与关系\n## 时间与连续性\n## 风格与表达\n## 来源冲突/不确定项\n## 校长需要处理的决策点`;
+async function buildPrincipalContextUnderstanding(blocks, signal){
+  const ledger=principalSourceLedger(blocks);
+  const chunks=principalContextChunks(ledger,28000);
+  const results=[];
+  for(let i=0;i<chunks.length;i++){
+    const user=`【来源总账第 ${i+1}/${chunks.length} 段】\n${chunks[i]}\n\n请完整理解本段涉及的所有来源，并输出结构化“来源理解”。如果一个来源跨越多个段落，请结合本段出现的上下文，不要臆造缺失部分。`;
+    const res=await callDeepSeek(PRINCIPAL_CONTEXT_SYS,user,{temperature:0.15,topP:0.2,maxTokens:8192,signal,taskKey:'principal'});
+    results.push(`【上下文理解块 ${i+1}/${chunks.length}】\n${unwrapAIResult(res)}`);
+  }
+  return {ledger,understanding:results.join('\n\n')};
+}
+function principalFinalContext(baseUser, understanding, blocks){
+  const manifest=(blocks||[]).map((b,i)=>`来源${i+1}：${b.id}｜${b.label}｜权限=${b.authority}｜优先级=${b.priority}｜原文字符数=${String(b.content||'').length}`).join('\n');
+  return `${baseUser}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【Prompt-Perfect式上下文理解层｜模型已先阅读全部来源】\n以下不是新的事实来源，而是对上方来源总账逐段阅读后的语义理解结果。\n校长必须回到来源总账核对关键事实；理解层不得凌驾于原始来源权限之上。\n\n${understanding}\n\n【来源清单（原文均已在前置理解阶段逐段读取）】\n${manifest}\n\n【最终决策要求】\n- 先综合全部来源，再开始规划；不要只依据某一个来源。\n- 用户明确选择/要求、词典已成立事实、正文已观测事实不得被下游规划擅自改写。\n- 当来源冲突时，按既有权限链处理并在规划中保持边界，不要偷偷“修正”原始事实。\n- 每一项重要规划结论都应能追溯到一个或多个来源。\n- 只输出原校长系统规定的最终 Markdown 契约。`;
+}
+
 const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（全校总舵手）。
 
 你的唯一核心职责，是把用户已经确定的作品方向、世界事实、写作风格和全书资源，组织成一套能够稳定传递给「老师 → 正文AI」执行的全书级规划。
@@ -5902,17 +5987,6 @@ function buildPrincipalUser(groups){
   const o = state.outline || {};
   const lines = [];
   lines.push(`【长篇小说】${o.title||'（未定书名）'}`);
-  if(o.logline) lines.push(`【全书简介｜下游创作材料】${o.logline}`);
-  if(o.storyBlueprint) lines.push(`【优化构想·完整小说蓝本（下游创作依据）】\n${String(o.storyBlueprint).slice(0,14000)}`);
-  if(o.aiBookBeat) lines.push(`【优化构想·全书故事节拍（剧情内容层）】\n${String(o.aiBookBeat).slice(0,9000)}`);
-  let cand = null; try{ cand = selectedPolishCandidate && selectedPolishCandidate(); }catch(e){}
-  if(cand && cand.name){
-    const cd = polishCandidateDownstreamText(cand);
-    lines.push(`【优化构想·所选方案】${String(cand.name).trim()}`);
-    if(cd.summary) lines.push(`【所选方案小说简介】\n${cd.summary}`);
-    if(cd.beat) lines.push(`【所选方案全书故事节拍】\n${cd.beat}`);
-    if(cd.blueprint) lines.push(`【所选方案完整小说蓝本】\n${cd.blueprint.slice(0,14000)}`);
-  }
   lines.push(`【全校章节数】${(o.chapters||[]).length || chapterCountVal() || '未知'} 章`);
   lines.push(storyStateCanonBlock());
   const _opening = openingStrategyBrief(); if(_opening) lines.push(_opening);
@@ -5920,24 +5994,14 @@ function buildPrincipalUser(groups){
   const bc = currentBeatCfg ? currentBeatCfg() : null;
   if(bc && bc.label){
     const beatDetail = (bc.types||[]).map((t, idx) => `  ${idx+1}. 【${t.label}】(type=${t.key})：${t.note || ''} ${t.aiDirective ? `[执行指令: ${t.aiDirective}]` : ''}`).join('\n');
-    lines.push(`【全书微拍总纲与节奏体系（校长全量统领并下达管理指令）】
-微拍型号：${bc.label} (${bc.emoji || ''})
-节拍说明：${bc.desc || ''}
-逐拍节奏结构定义：
-${beatDetail}
-校长统帅与管理要求：
-1. 校长作为全校最高统领，全量掌握此微拍节奏总纲，并将其升华为「全校写作守则 · 可执行纪律」；
-2. 在全校守则中明确要求下属任课老师在备课时，将本微拍节奏分解落实至各章的「本章推进骨架」与「情绪走向与突出点」；
-3. 确保全校宏观规划与单章微观节奏形成统一闭环。`);
+    lines.push(`【全书微拍总纲与节奏体系】\n微拍型号：${bc.label} (${bc.emoji || ''})\n节拍说明：${bc.desc || ''}\n逐拍节奏结构定义：\n${beatDetail}`);
   }
-  lines.push('【写作风格/配方】\n' + scStyleBrief());
-  lines.push('【全量万物词典·共享不切片】\n' + scGlossaryBrief(7000));
-  lines.push('【既有《全书节拍》· 阶段优先分组】');
-  groups.forEach((g,i)=>{ lines.push(`组${i+1}·老师${i+1}（第${g.first}-${g.last}章${g.stage?('·'+g.stage):''}）`); });
-  lines.push('\n【各组对应的《全书节拍》节选】\n' + scAllGroupsBeats(groups, 10000));
-  lines.push('\n请按输出契约产出【全校写作守则】【各组组级框架】【全书章节标题总表】三段（逐组齐全），只给纯文本 Markdown。');
+  lines.push('【写作风格/配方摘要】\n' + scStyleBrief());
+  lines.push('【各组对应范围】\n' + groups.map((g,i)=>`组${i+1}·老师${i+1}（第${g.first}-${g.last}章${g.stage?('·'+g.stage):''}）`).join('\n'));
+  lines.push('【原始来源完整性声明】\n校长上下文理解器将在最终决策前逐段阅读“来源总账”中的全部来源内容；不得以摘要函数、字符截断或单一来源代替完整理解。');
   return lines.join('\n\n');
 }
+
 async function genPrincipal(btn, opts){
   if(!isLong()){ toast('仅长篇小说模式支持校长统筹'); return false; }
   const groups = schoolStageGroups(); if(!groups.length){ toast('请先填写章节数，才能分组'); return false; }
@@ -5951,7 +6015,10 @@ async function genPrincipal(btn, opts){
     const temp = (spec && spec.principalTemp != null) ? spec.principalTemp : 0.4;
     for(let attempt=1; attempt<=SCHOOL_RETRY_MAX; attempt++){
       try{
-        const txt = await callAIGuarded('principal', sys, buildPrincipalUser(groups), {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
+        const sourceBlocks = principalSourceBlocks(groups);
+        const ctxPack = await buildPrincipalContextUnderstanding(sourceBlocks, _abortCtl?.signal);
+        const principalUser = principalFinalContext(buildPrincipalUser(groups), ctxPack.understanding, sourceBlocks);
+        const txt = await callAIGuarded('principal', sys, principalUser, {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
         if(!txt || !String(txt||'').trim()){ setScRetry('principal', attempt); scRefreshBadge(btn,'principal'); throw new Error('校长返回空'); }
         const sc = scState();
         const titles = parsePrincipalTitles(txt);
