@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '1.0.342';
+const APP_VERSION = '1.0.343';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -83,6 +83,8 @@ const state = {
   gsCatFold: { main:false, support:false, walkon:false, place:false, proper:false, sub:false },
   deCollapsed: false,
   polishCollapsed: false,
+  polishedIdea: null,      // {diagnosis, brief, optimizedPrompt, aiAdditions, lockedFacts, navBeacon, seedCharacters, seedPlaces}
+  polishHistory: [],
   subAutoFill: true,
   subRecallRatio: 0.4,
   timeAnchor: true,
@@ -916,8 +918,7 @@ function projectSnapshot(){
     useChapterPlans: true,
     plannerFinalized: !!state.plannerFinalized,
     expOpenGroups: state.expOpenGroups,
-    polishOptions: state.polishOptions,
-    polishAdopted: state.polishAdopted,
+    polishedIdea: state.polishedIdea,
     polishHistory: state.polishHistory,
     chapters: state.chapters,
     characters: state.characters,
@@ -980,8 +981,12 @@ function applyProject(p){
   state.useChapterPlans = true;
   state.plannerFinalized = (typeof p.plannerFinalized === 'boolean') ? p.plannerFinalized : false;
   state.expOpenGroups = Array.isArray(p.expOpenGroups) ? p.expOpenGroups : [];
-  state.polishOptions = Array.isArray(p.polishOptions) ? p.polishOptions : undefined;
-  state.polishAdopted = (typeof p.polishAdopted === 'string') ? p.polishAdopted : undefined;
+  state.polishedIdea = (p.polishedIdea && typeof p.polishedIdea === 'object') ? p.polishedIdea : null;
+  // 旧项目兼容：把历史多方案的第一项迁移成唯一优化结果。
+  if(!state.polishedIdea && Array.isArray(p.polishOptions) && p.polishOptions.length){
+    const old = p.polishOptions.find(o=>o && o.name === p.polishAdopted) || p.polishOptions[0];
+    if(old) state.polishedIdea = { optimizedPrompt:String(old.text||'').trim(), brief:{}, diagnosis:{}, aiAdditions:[], lockedFacts:[], legacy:true };
+  }
   state.polishHistory = Array.isArray(p.polishHistory) ? p.polishHistory : undefined;
   state.chapters = p.chapters || [];
   (state.chapters||[]).forEach(c=>{ if(c) delete c.qcRecord; });
@@ -1013,6 +1018,7 @@ function applyProject(p){
   state.rsCollapsed = !!p.rsCollapsed;
   state._fixQueue = Array.isArray(p._fixQueue) ? p._fixQueue : [];
   state.aiNetwork = (p.aiNetwork && typeof p.aiNetwork === 'object') ? p.aiNetwork : { stage:'idle', running:[], completed:[], blockedBy:{} };
+  if(state.polishedIdea && String(state.polishedIdea.optimizedPrompt||'').trim()) state.aiNetwork.completed = Array.from(new Set([...(state.aiNetwork.completed||[]),'idea']));
   state.dictmasterHistory = Array.isArray(p.dictmasterHistory) ? p.dictmasterHistory : [];
   state.dictmasterLatest = (p.dictmasterLatest && typeof p.dictmasterLatest === 'object') ? p.dictmasterLatest : null;
   state.dictmasterRan = !!p.dictmasterRan;
@@ -1051,6 +1057,8 @@ function clearState(){
   state.teamShape = 'solo';
   state.openingStrategy = 'none';
   state.polishCollapsed = false;
+  state.polishedIdea = null;
+  state.polishHistory = [];
   state._chapterPartial = {};
   state.aiNetwork = { stage:'idle', running:[], completed:[], blockedBy:{} };
   state._lastCpRaw = '';
@@ -2727,42 +2735,41 @@ const PROMPTS = {
 
 const SIZE_DEFAULT = { min:3000, max:5000 };
 
-let polishMulti = true;
-
 async function polishIdea(btn, force){
   const idea = (state.idea || '').trim();
-  if(!idea){
-    const kept = Array.isArray(state.polishOptions) && state.polishOptions.length;
-    toast(kept ? '输入框为空：请先在上方输入构想，或点某张历史方案卡「✔ 采用此方案」，再点「✨ 优化构想」重新生成' : '请先输入故事构想');
-    return;
+  if(!idea){ toast('请先输入故事构想'); return; }
+  const hasCurrent = !!(state.polishedIdea && String(state.polishedIdea.optimizedPrompt||'').trim());
+  if(hasCurrent && !force){
+    if(!confirm('已有一份优化后的构想，重新优化将覆盖当前版本并把旧版本归档。继续？')) return;
   }
-  const kept = Array.isArray(state.polishOptions) && state.polishOptions.length;
-  if(kept && !force){
-    if(!confirm(`已有 ${kept} 个保留方案，重新优化将覆盖它们。继续？`)) return;
-  }
-  const multi = polishMulti || idea.length < 15;   // 极短强制多方案
   if(!canRunAI('idea')){ toast('优化构想暂不可运行'); return; }
   markAIRunning('idea');
-  if(btn) busy(btn,true, multi ? '生成多方案构想中…' : '优化构想中…');
+  if(btn) busy(btn,true,'AI 正在理解并提炼构想…');
   try{
-    const txt = await callAIGuarded('idea', { multi }, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')});
-    const out = String(txt||'').trim();
-    if(!out){ toast('优化失败，请重试'); return; }
-
-    showPolishResult(out, multi);
+    const txt = await callAIGuarded('idea', {}, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')});
+    const raw = String(txt||'').trim();
+    if(!raw){ toast('优化失败，请重试'); return; }
+    let j;
+    try{ j = (typeof txt === 'object') ? txt : parseJson(raw); }catch(e){ j = { optimizedPrompt: raw }; }
+    const v = validatePolishOutput(j);
+    if(v) throw new Error('优化结果校验失败：'+v);
+    if(hasCurrent) snapshotPolishedIdea('重新优化前');
+    state.polishedIdea = normalizePolishedIdea(j);
+    state.polishCollapsed = false;
+    persist(); render();
     markAIDone('idea');
-    toast('优化完成');
+    toast('构想提炼完成：已生成唯一推荐优化结果');
   }catch(e){
     addToFixQueue({kind:'idea', error:e.message});
     toast('优化失败：'+e.message);
-  }
-  finally{
+  }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='idea');
     if(btn) busy(btn,false);
   }
 }
 
 function formatIdeaBrief(b){
+  if(!b || typeof b!=='object') return '';
   return [
     `题材：${b.genre || ''}`,
     `主角：${b.protagonist || ''}`,
@@ -2774,174 +2781,56 @@ function formatIdeaBrief(b){
     `读者体验：${b.readerExperience || ''}`
   ].join('\n');
 }
-
 function formatIdeaDiagnosis(d){
-  if(!d || !Array.isArray(d.missing) || !d.missing.length) return '';
-  const qs = (d.questions || []).map(q=>`<li>${esc(q)}</li>`).join('');
-  return `<div class="pol-diag" style="margin-bottom:10px;padding:10px;background:var(--warn-bg, #fff8e6);border-radius:6px">
-    <b>⚠️ 构想诊断：缺失 ${d.missing.length} 项</b>
-    <ul style="margin:6px 0 0;padding-left:18px">${qs}</ul>
-  </div>`;
+  if(!d || typeof d!=='object') return '';
+  const missing = Array.isArray(d.missing)?d.missing:[];
+  const issues = Array.isArray(d.issues)?d.issues:[];
+  if(!missing.length && !issues.length) return '<div class="pol-diag"><b>✓ 构想基础完整</b><span class="muted"> AI 已在不改变核心创意的前提下完成提炼。</span></div>';
+  const rows = [...missing.map(x=>`· 缺失：${esc(String(x))}`), ...issues.map(x=>`· 可优化：${esc(String(x))}`)].join('<br>');
+  return `<div class="pol-diag"><b>🔎 构想诊断</b><div style="margin-top:5px">${rows}</div></div>`;
 }
-
+function normalizePolishedIdea(j){
+  const brief = (j.brief && typeof j.brief==='object') ? j.brief : (j.navBeacon||{});
+  const optimizedPrompt = String(j.optimizedPrompt||j.optimizedIdea||j.text||'').trim();
+  const navBeacon = (j.navBeacon && typeof j.navBeacon==='object') ? j.navBeacon : {
+    genre:String(brief.genre||''), protagonist:String(brief.protagonist||''), coreConflict:String(brief.coreConflict||''), tone:String(brief.style||brief.tone||'')
+  };
+  return {
+    diagnosis: (j.diagnosis && typeof j.diagnosis==='object') ? j.diagnosis : {},
+    brief,
+    optimizedPrompt,
+    aiAdditions: Array.isArray(j.aiAdditions)?j.aiAdditions:[],
+    lockedFacts: Array.isArray(j.lockedFacts)?j.lockedFacts:[],
+    navBeacon,
+    seedCharacters: Array.isArray(j.seedCharacters)?j.seedCharacters:[],
+    seedPlaces: Array.isArray(j.seedPlaces)?j.seedPlaces:[],
+    defects: Array.isArray(j.defects)?j.defects:[]
+  };
+}
 function validatePolishOutput(j){
-  if(!j || typeof j !== 'object') return '返回不是对象';
-  if(!String(j.optimizedIdea||'').trim()) return '缺少 optimizedIdea';
-  const b = j.navBeacon;
-  if(!b || typeof b !== 'object') return '缺少 navBeacon';
-  const required = ['genre','protagonist','coreConflict','tone'];
-  for(const k of required) if(!String(b[k]||'').trim()) return `navBeacon 缺少 ${k}`;
-  if(!Array.isArray(j.defects) || !j.defects.length) return '缺少缺陷清单 defects';
-  if(Array.isArray(j.seedCharacters)){
-    for(const c of j.seedCharacters){
-      const miss = CHAR_FIELDS.filter(k=> c[k]==null || String(c[k]).trim()==='');
-      if(miss.length) return `人物 ${c.name||'?'} 缺少字段：${miss.join('/')}`;
-    }
-  }
+  if(!j || typeof j!=='object') return '返回不是对象';
+  if(!String(j.optimizedPrompt||j.optimizedIdea||j.text||'').trim()) return '缺少 optimizedPrompt';
+  const b = j.brief || j.navBeacon;
+  if(!b || typeof b!=='object') return '缺少 brief';
+  const required = ['genre','protagonist','coreConflict'];
+  for(const k of required) if(!String(b[k]||'').trim()) return `brief 缺少 ${k}`;
+  if(j.aiAdditions!=null && !Array.isArray(j.aiAdditions)) return 'aiAdditions 必须为数组';
+  if(j.lockedFacts!=null && !Array.isArray(j.lockedFacts)) return 'lockedFacts 必须为数组';
   return '';
 }
-
-function splitPolishMultiText(out){
-  const t = String(out||'').trim();
-  if(!t) return [];
-  const DECOR = /[━─—–＿_=＝*＊#＃~〜～\s-]/g;   // 常见装饰/分隔字符（含全半角与空白）
-  const cards = [];
-  let cur = null;
-  t.split('\n').forEach(ln=>{
-    const s = String(ln||'').trim();
-    let isHead = false, name = '';
-    if(s && s.length <= 40){
-      const core = s.replace(DECOR, '');
-      const m = core.match(/^方案([一二三四五六七八九十\d]{1,2})?(?:[：:、.．,，)）]|$)/);
-      if(m){ isHead = true; name = core; }
-    }
-    if(isHead){
-      if(cur) cards.push(cur);
-      cur = { name, text: '' };
-    } else if(cur){
-      cur.text += (cur.text ? '\n' : '') + ln;
-    }
-  });
-  if(cur) cards.push(cur);
-  const ok = cards.filter(c=> String(c.text||'').trim());
-  if(ok.length < 2) return [];
-  return ok.map((c,i)=>({
-    name: c.name || ('方案'+(i+1)),
-    text: String(c.text||'').trim(),
-    _v45: { defects:[], navBeacon:null, seedCharacters:[], seedPlaces:[] }
-  }));
+function selectedPolishCandidate(){
+  const p = state.polishedIdea;
+  if(!p || !String(p.optimizedPrompt||'').trim()) return null;
+  return { name:'AI优化构想', text:String(p.optimizedPrompt).trim(), raw:String(p.optimizedPrompt).trim(), brief:p.brief||{}, _v45:{
+    defects:Array.isArray(p.defects)?p.defects:[], navBeacon:p.navBeacon||null,
+    seedCharacters:Array.isArray(p.seedCharacters)?p.seedCharacters:[], seedPlaces:Array.isArray(p.seedPlaces)?p.seedPlaces:[]
+  }};
 }
-
-function showPolishResult(out, multi){
-  const box = $('#polishBox'), cards = $('#polishCards');
-  if(!box || !cards) return;
-  box.style.display = 'block';
-  const pickV45 = (o)=> ({
-    defects: Array.isArray(o&&o.defects) ? o.defects : [],
-    navBeacon: (o && o.navBeacon && typeof o.navBeacon==='object') ? o.navBeacon : null,
-    seedCharacters: Array.isArray(o&&o.seedCharacters) ? o.seedCharacters : [],
-    seedPlaces: Array.isArray(o&&o.seedPlaces) ? o.seedPlaces : []
-  });
-  if(multi){
-    let j = null;
-    if(out && typeof out === 'object'){ j = out; }
-    else { try{ j = parseJson(String(out)); }catch(e){ j = {}; } }
-    const opts = Array.isArray(j && j.options) ? j.options.filter(o=>o && String(o.optimizedIdea||o.text||'').trim()) : [];
-    if(opts.length){
-      snapshotPolishBatch('重新优化前');   // 覆盖前把旧整批方案归档为可回退版本（≤5）
-      state.polishOptions = opts.map(o=> Object.assign({}, o, {
-        text: String(o.optimizedIdea||o.text||'').trim(),
-        _v45: pickV45(o)
-      }));
-      state.polishAdopted = null;   // 新方案列表，尚未采用
-      state.polishCollapsed = false;
-      persist();
-      render(); openPolishBox();
-      return;
-    }
-    if(typeof out === 'string'){
-      const segs = splitPolishMultiText(out);
-      if(segs.length >= 2){
-        snapshotPolishBatch('重新优化前');   // 覆盖前把旧整批方案归档为可回退版本（≤5）
-        state.polishOptions = segs;
-        state.polishAdopted = null;
-        persist();
-        render(); openPolishBox();
-        return;
-      }
-    }
-    snapshotPolishBatch('重新优化前');
-    state.polishOptions = [{ name:'方案1', text: String(typeof out==='object' ? ((out&&out.optimizedIdea)||'') : out).trim(), _v45: pickV45(typeof out==='object'?out:{}) }];
-    state.polishAdopted = null;
-    state.polishCollapsed = false;
-    persist();
-    render(); openPolishBox();
-    return;
-  }
-  const single = (out && typeof out === 'object') ? out : { optimizedIdea: String(out||'').trim() };
-  snapshotPolishBatch('重新优化前');
-  state.polishOptions = [{ name:'方案1', text: String(single.optimizedIdea||single.text||'').trim(), _v45: pickV45(single) }];
-  state.polishAdopted = null;
-  persist();
-  render(); openPolishBox();
-}
-
-function applyV45ToOutline(o, d){
-  if(!o || !d) return { nC:0, nP:0 };
-  if(!o.glossary || typeof o.glossary!=='object') o.glossary = {characters:[],places:[],propernouns:[]};
-  const g = o.glossary;
-  ['characters','places','propernouns'].forEach(k=>{ if(!Array.isArray(g[k])) g[k]=[]; });
-  let nC=0, nP=0;
-  (d.seedCharacters||[]).forEach(c=>{
-    const nm = String(c&&c.name||'').trim(); if(!nm) return;
-    if(g.characters.some(x=>String(x&&x.name||'').trim()===nm)) return;
-    g.characters.push({ name:nm, identity:c.identity||'', age:String(c.age==null?'':c.age), gender:c.gender||'', appearance:c.appearance||'', hobby:c.hobby||'', catchphrase:c.catchphrase||'', relation:c.relation||'', trait:c.trait||'' });
-    nC++;
-  });
-  (d.seedPlaces||[]).forEach(p=>{
-    const nm = String(p&&p.name||'').trim(); if(!nm) return;
-    if(g.places.some(x=>String(x&&x.name||'').trim()===nm)) return;
-    g.places.push({ name:nm, type:p.type||'', note:p.note||'' });
-    nP++;
-  });
-  if(d.navBeacon && typeof d.navBeacon==='object'){
-    o.navBeacon = d.navBeacon;
-  }
-  return { nC, nP };
-}
-
-function importPolishToState(o){
-  const d = (o && o._v45) || {};
-  const tone = String((d.navBeacon&&d.navBeacon.tone)||'');
-  const toneHit = tone || '';
-  if(!state.outline){
-    if(d && (d.navBeacon || (d.seedCharacters&&d.seedCharacters.length) || (d.seedPlaces&&d.seedPlaces.length))){
-      state.pendingV45 = JSON.parse(JSON.stringify(d));
-    }
-    persist(); render();
-    toast(`设定已暂存${nCh?(' · 章节数已设为 '+n):''}${toneHit?' · 优化构想语气已交给校长评估（不覆盖用户风格）':''}：导航灯塔/种子人物/种子地点将在生成大纲后自动应用`);
-    return;
-  }
-  const r = applyV45ToOutline(state.outline, d);
-  persist(); render();
-  toast(`已导入设定：导航灯塔${d.navBeacon?1:0} · 种子人物 ${r.nC} · 种子地点 ${r.nP}${nCh?(' · 章节数已设为 '+n):''}${toneHit?' · 优化构想语气已交给校长评估（不覆盖用户风格）':''}`);
-}
-
-function openPolishBox(){
-  const box = $('#polishBox'), cards = $('#polishCards');
-  if(!box || !cards) return;
-  state.polishCollapsed = false;
-  persist();
-  box.style.display = 'block';
-  renderPolishCards(cards);
-}
-
 function polishIdle(){
   const o = state.outline;
   const hasRealOutline = !!o && (String(o.title||'').trim() || String(o.logline||'').trim() || (Array.isArray(o.chapters)&&o.chapters.length));
   return !hasRealOutline;
 }
-const POLISH_PALETTE = ['#E8A33D','#D64545','#4C6FD5','#3FA36B','#8E5AC8','#2CA6A4'];
 function extractPolishTitle(text){
   const ln = String(text||'').split('\n').map(s=>s.trim()).find(s=>/^书名\s*[：:]\s*\S/.test(s));
   if(!ln) return '';
@@ -2949,205 +2838,90 @@ function extractPolishTitle(text){
 }
 function renderPolishCards(container){
   if(!container) return;
-  const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
-  if(!opts.length){
-    container.style.display = 'block';
-    container.innerHTML = `<p class="muted" style="margin:8px 0 0">👆 点「✨ 优化构想」从五个方向（商业/反差/情感/悬疑智斗/轻松日常）中按契合度生成 3~5 个候选方案；点某张卡的「✔ 采用此方案」即选中（不覆盖原始构想），再点「生成大纲」搬入书名 / 简介 / 节拍。</p>`;
+  const p = state.polishedIdea;
+  if(!p || !String(p.optimizedPrompt||'').trim()){
+    container.style.display='block';
+    container.innerHTML = '<p class="muted" style="margin:8px 0 0">👆 输入构想后点击「✨ 优化构想」。AI 会先诊断你的构想，再自动提炼成一份唯一、完整、可直接交给后续创作 AI 使用的优化提示词。</p>';
     return;
   }
-  container.style.display = 'block';
-  const adopted = state.polishAdopted;
-  container.innerHTML = opts.map((o,i)=>{
-    const c = POLISH_PALETTE[i % POLISH_PALETTE.length];
-    const name = o.name || ('方案'+(i+1));
-    const isAdopted = !!adopted && adopted === name;
-    const defects = (o._v45 && Array.isArray(o._v45.defects)) ? o._v45.defects.filter(d=>String(d||'').trim()) : [];
-    const hasV45 = !!(o._v45 && (o._v45.navBeacon || (o._v45.seedCharacters&&o._v45.seedCharacters.length) || (o._v45.seedPlaces&&o._v45.seedPlaces.length)));
-    const pTitle = extractPolishTitle(o.text);
-    const pBody = String(o.text||'').replace(/^\s*书名\s*[：:][^\n]*\n?/, '').trim();   // 书名已置顶，正文去掉首行以免重复
-    return `<div class="pol-cand${isAdopted?' on':''}" style="--pc:${c}" data-idx="${i}">
-      <div class="pol-cand-head">
-        <span class="pol-no" style="background:${c}">${i+1}</span>
-        <b class="pol-name" style="color:${c}">${esc(name)}</b>
-        ${isAdopted?'<span class="pol-adopted-tag">✔ 已采用</span>':''}
-        <span class="pol-cand-actions">
-          <button type="button" class="btn small ghost" data-pol-copy="${i}" title="复制此方案">📋 复制</button>
-        </span>
-      </div>
-      ${pTitle?`<div class="pol-cand-title" style="background:${c}">📖 ${esc(pTitle)}</div>`:''}
-      <div class="pol-cand-body">${esc(pBody ? pBody : String(o.text||''))}</div>
-      ${defects.length?`<div class="pol-cand-body" style="opacity:.85"><b>⚠️ 构想缺陷清单：</b><br>${defects.map(d=>'· '+esc(String(d))).join('<br>')}</div>`:''}
-      <div class="pol-cand-foot">
-        ${hasV45?`<button type="button" class="btn small ghost" data-pol-import="${i}" title="导入结构化设定（导航灯塔/种子人物/种子地点/建议章节数）">📥 导入设定</button>`:''}
-        <button type="button" class="btn small pt-accent" data-pol-use="${i}" style="background:${c}">✔ 采用此方案</button>
-      </div>
+  container.style.display='block';
+  const b = p.brief||{};
+  const adds = Array.isArray(p.aiAdditions)?p.aiAdditions.filter(x=>String(x||'').trim()):[];
+  const locked = Array.isArray(p.lockedFacts)?p.lockedFacts.filter(x=>String(x||'').trim()):[];
+  const title = extractPolishTitle(p.optimizedPrompt);
+  container.innerHTML = `
+    ${formatIdeaDiagnosis(p.diagnosis)}
+    <div class="pol-cand on" style="--pc:#4C6FD5">
+      <div class="pol-cand-head"><span class="pol-no" style="background:#4C6FD5">✓</span><b class="pol-name" style="color:#4C6FD5">唯一优化结果</b><span class="pol-adopted-tag">AI 已自动提炼</span>
+        <span class="pol-cand-actions"><button type="button" class="btn small ghost" data-pol-copy>📋 复制提示词</button></span></div>
+      ${title?`<div class="pol-cand-title" style="background:#4C6FD5">📖 ${esc(title)}</div>`:''}
+      <div class="pol-cand-body"><b>核心摘要</b><br>${esc(formatIdeaBrief(b)||'已根据原始构想完成结构化提炼')}</div>
+      <div class="pol-cand-body"><b>✨ 优化后的创作提示词</b><br><div style="white-space:pre-wrap">${esc(p.optimizedPrompt)}</div></div>
+      ${locked.length?`<div class="pol-cand-body" style="opacity:.9"><b>🔒 必须保留</b><br>${locked.map(x=>'· '+esc(String(x))).join('<br>')}</div>`:''}
+      ${adds.length?`<div class="pol-cand-body" style="opacity:.9"><b>🧩 AI补足/推导</b><br>${adds.map(x=>'· '+esc(String(x))).join('<br>')}</div>`:''}
+      <div class="pol-cand-foot"><span class="muted">这是一份唯一推荐结果，无需选择方案。</span></div>
     </div>`;
-  }).join('');
-  container.querySelectorAll('[data-pol-use]').forEach(b=>{
-    b.onclick = (e)=>{ e.preventDefault();
-      const o = (state.polishOptions||[])[+b.dataset.polUse]; if(!o) return;
-      if(dictmasterLocked()){ toast('词典达人已产出万物词典，②方案已锁定，不可更换'); return; }
-      state.polishAdopted = o.name || null;
-      persist(); render();
-      toast('已选中：'+(o.name||('方案'+(+b.dataset.polUse+1)))+'（不覆盖原始构想；可点「生成大纲」搬入书名/简介/全书节拍）');
-    };
-  });
-  container.querySelectorAll('[data-pol-import]').forEach(b=>{
-    b.onclick = (e)=>{ e.preventDefault();
-      const o = (state.polishOptions||[])[+b.dataset.polImport]; if(!o) return;
-      importPolishToState(o);
-    };
-  });
-  container.querySelectorAll('[data-pol-copy]').forEach(b=>{
-    b.onclick = (e)=>{ e.preventDefault();
-      const o = (state.polishOptions||[])[+b.dataset.polCopy]; if(!o) return;
-      copyText(o.text||'');
-    };
-  });
+  const cp = container.querySelector('[data-pol-copy]');
+  if(cp) cp.onclick = e=>{ e.preventDefault(); copyText(String(p.optimizedPrompt||'')); };
 }
-
 function bindPolishIdea(){
-  const b = $('#btnPolishIdea');
-  if(b) b.onclick = ()=> polishIdea(b);
-  const chk = $('#chkPolishMulti');
-  if(chk){
-    const sync = ()=>{
-      const short = (state.idea||'').trim().length < 15;
-      chk.checked = polishMulti || short;
-      chk.disabled = short;
-    };
-    sync();
-    chk.onchange = ()=>{ polishMulti = chk.checked; };
-    const idea = $('#ideaInput');
-    if(idea) idea.oninput = ()=>{ state.idea = idea.value; sync(); syncOrigIdeaCard(); };
-  }
-  const disc = $('#btnPolishDiscard');
-  if(disc) disc.onclick = ()=>{
-    const box = $('#polishBox');
-    if(box) box.style.display = 'none';
-  };
-  const hist = $('[data-pol-keep-hist]');
-  if(hist) hist.onclick = (e)=>{ e.stopPropagation(); openPolishBatchPanel(); };
-  const view = $('[data-pol-keep-view]');
-  if(view) view.onclick = (e)=>{ e.stopPropagation(); openPolishBox(); };
-  const again = $('[data-pol-keep-again]');
-  if(again) again.onclick = (e)=>{ e.stopPropagation(); polishIdea($('#btnPolishIdea'), true); };
-  const clear = $('[data-pol-keep-clear]');
-  if(clear) clear.onclick = (e)=>{
+  const b = $('#btnPolishIdea'); if(b) b.onclick = ()=> polishIdea(b);
+  const idea = $('#ideaInput'); if(idea) idea.oninput = ()=>{ state.idea=idea.value; syncOrigIdeaCard(); };
+  const disc = $('#btnPolishDiscard'); if(disc) disc.onclick = ()=>{ const box=$('#polishBox'); if(box) box.style.display='none'; };
+  const again = $('[data-pol-keep-again]'); if(again) again.onclick = e=>{ e.stopPropagation(); polishIdea($('#btnPolishIdea'), true); };
+  const clear = $('[data-pol-keep-clear]'); if(clear) clear.onclick = e=>{
     e.stopPropagation();
-    if(!confirm('清除全部保留方案？')) return;
-    snapshotPolishBatch('清除前');   // 归档当前批，之后仍可在「优化版本」找回
-    delete state.polishOptions;
-    delete state.polishAdopted;
-    persist(); render();
-    toast('已清除保留方案');
+    if(!confirm('清除当前优化构想？')) return;
+    snapshotPolishedIdea('清除前'); delete state.polishedIdea; persist(); render(); toast('已清除优化构想');
   };
+  const hist = $('[data-pol-keep-hist]'); if(hist) hist.onclick = e=>{ e.stopPropagation(); openPolishBatchPanel(); };
 }
-function polishKeepBar(){
-  const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
-  if(!opts.length) return '';
-  const cur = state.polishAdopted || opts[0].name || '方案A';
-  return `<div class="pol-keep">
-    <span class="pol-keep-t">已保留 ${opts.length} 个优化方案（当前采用：${esc(cur)}）</span>
-    <span class="pol-keep-btns">
-      ${(state.polishHistory&&state.polishHistory.length)?`<button type="button" class="btn small ghost" data-pol-keep-hist>📚 优化版本(${state.polishHistory.length}/50)</button>`:''}
-      <button type="button" class="btn small ghost" data-pol-keep-view>🔍 查看全部</button>
-      <button type="button" class="btn small ghost" data-pol-keep-again>✨ 重新优化</button>
-      <button type="button" class="btn small ghost" data-pol-keep-clear>✕ 清除</button>
-    </span>
-  </div>`;
-}
-
 function polishHistory(){ return Array.isArray(state.polishHistory) ? state.polishHistory : []; }
-function snapshotPolishBatch(label){
-  const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
-  if(!opts.length) return;
-  const snap = { options: opts.map(o=>({ name:o.name, text:String(o.text||'') })), adopted: state.polishAdopted||null };
-  const hist = state.polishHistory = state.polishHistory || [];
-  if(hist.length &&
-      JSON.stringify(hist[0].options) === JSON.stringify(snap.options) &&
-      hist[0].adopted === snap.adopted) return;
-  hist.unshift({ ts: Date.now(), label: label||'快照', options: snap.options, adopted: snap.adopted });
-  if(hist.length > 50) hist.length = 50;
-  persist();
+function snapshotPolishedIdea(label){
+  const p=state.polishedIdea; if(!p || !String(p.optimizedPrompt||'').trim()) return;
+  const hist=state.polishHistory=state.polishHistory||[];
+  const snap={optimizedPrompt:String(p.optimizedPrompt), brief:p.brief||{}, diagnosis:p.diagnosis||{}, aiAdditions:p.aiAdditions||[], lockedFacts:p.lockedFacts||[]};
+  if(hist.length && JSON.stringify(hist[0].item)===JSON.stringify(snap)) return;
+  hist.unshift({ts:Date.now(),label:label||'优化版本',item:snap}); if(hist.length>50) hist.length=50; persist();
 }
 function applyPolishBatch(idx){
-  const hist = polishHistory(); const b = hist[idx]; if(!b || !Array.isArray(b.options) || !b.options.length) return;
-  if(!confirm(`整批应用「${idx+1}. ${b.label||'优化版本'}」（共 ${b.options.length} 个方案）？将覆盖当前保留的方案。`)) return;
-  snapshotPolishBatch('切换前');
-  state.polishOptions = b.options.map(o=>({ name:o.name, text:String(o.text||'') }));
-  state.polishAdopted = (b.adopted && b.options.some(o=>o.name===b.adopted)) ? b.adopted : null;
-  persist(); closePolishBatchPanel(); render();
-  const box = $('#polishBox'); if(box){ box.style.display='block'; openPolishBox(); }
-  toast(`已整批应用该优化版本（${state.polishOptions.length} 个方案）`);
+  const hist=polishHistory(), h=hist[idx]; if(!h || !h.item) return;
+  state.polishedIdea=normalizePolishedIdea(h.item); state.polishCollapsed=false; persist(); closePolishBatchPanel(); render(); toast('已恢复该优化版本');
 }
 function deletePolishBatch(idx){
-  const hist = polishHistory(); if(!hist.length) return;
-  hist.splice(idx,1);
-  if(!hist.length) delete state.polishHistory; else state.polishHistory = hist;
-  persist(); closePolishBatchPanel(); openPolishBatchPanel();
-  toast('已删除该版本');
+  const hist=polishHistory(); if(!hist.length) return; hist.splice(idx,1); if(!hist.length) delete state.polishHistory; else state.polishHistory=hist; persist(); closePolishBatchPanel(); openPolishBatchPanel(); toast('已删除该版本');
 }
 function openPolishBatchPanel(){
-  closePolishBatchPanel();
-  const hist = polishHistory(); if(!hist.length){ toast('暂无历史优化版本，运行「✨ 优化构想」后自动记录'); return; }
-  const fmtTs = ts=>{ const d=new Date(ts); return (d.getMonth()+1)+'-'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
-  const rows = hist.map((b,idx)=>`
-    <div class="cv-row">
-      <div class="cv-meta" style="flex:1;min-width:0">
-        <div class="cv-time">${idx+1}. ${esc(b.label||'优化版本')} · ${fmtTs(b.ts)} · ${(b.options||[]).length} 方案</div>
-        <div class="cv-t" style="font-size:12px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((b.options||[]).slice(0,3).map(o=>o.name).join(' / '))||'（空）'}</div>
-      </div>
-      <div class="cv-actions" style="display:flex;gap:6px;flex-shrink:0">
-        <button type="button" class="btn ghost cv-b" data-polb-view="${idx}">👁 切换</button>
-        <button type="button" class="btn primary cv-b" data-polb-apply="${idx}">应用</button>
-        <button type="button" class="btn ghost cv-b" data-polb-del="${idx}">🗑</button>
-      </div>
-    </div>`).join('');
-  const ov = document.createElement('div'); ov.id='polbPanel'; ov.className='gs-overlay';
-  ov.innerHTML = `
-    <div class="gs-modal">
-      <div class="gs-modal-head"><b>💾 优化构想 · 批量版本（${hist.length}/50）</b>
-        <button class="gs-x" data-polb-close>✕</button></div>
-      <div class="cv-body">
-        <div class="cv-div">每次优化自动归档快照，支持预览与回退。</div>
-        ${rows}
-      </div>
-    </div>`;
-  document.body.appendChild(ov);
-  ov.querySelector('[data-polb-close]').onclick = closePolishBatchPanel;
-  ov.addEventListener('click', e=>{ if(e.target===ov) closePolishBatchPanel(); });
-  ov.querySelectorAll('[data-polb-view]').forEach(b=> b.onclick = ()=> openPolishBatchPreview(+b.dataset.polbView));
-  ov.querySelectorAll('[data-polb-apply]').forEach(b=> b.onclick = ()=> applyPolishBatch(+b.dataset.polbApply));
-  ov.querySelectorAll('[data-polb-del]').forEach(b=> b.onclick = ()=> deletePolishBatch(+b.dataset.polbDel));
+  closePolishBatchPanel(); const hist=polishHistory(); if(!hist.length){ toast('暂无历史优化版本，重新优化后会自动归档'); return; }
+  const fmtTs=ts=>{const d=new Date(ts);return (d.getMonth()+1)+'-'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
+  const rows=hist.map((h,idx)=>`<div class="cv-row"><div class="cv-meta" style="flex:1;min-width:0"><div class="cv-time">${idx+1}. ${esc(h.label||'优化版本')} · ${fmtTs(h.ts)}</div><div class="cv-t" style="font-size:12px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(String(h.item.optimizedPrompt||'').slice(0,100))}</div></div><div class="cv-actions" style="display:flex;gap:6px;flex-shrink:0"><button type="button" class="btn primary cv-b" data-polb-apply="${idx}">恢复</button><button type="button" class="btn ghost cv-b" data-polb-del="${idx}">🗑</button></div></div>`).join('');
+  const ov=document.createElement('div'); ov.id='polbPanel'; ov.className='gs-overlay'; ov.innerHTML=`<div class="gs-modal"><div class="gs-modal-head"><b>💾 优化构想 · 历史版本（${hist.length}/50）</b><button class="gs-x" data-polb-close>✕</button></div><div class="cv-body"><div class="cv-div">每次重新优化会自动保存上一版，历史版本仍保持“单一优化结果”，不再保存多方案。</div>${rows}</div></div>`; document.body.appendChild(ov);
+  ov.querySelector('[data-polb-close]').onclick=closePolishBatchPanel; ov.addEventListener('click',e=>{if(e.target===ov)closePolishBatchPanel();});
+  ov.querySelectorAll('[data-polb-apply]').forEach(b=>b.onclick=()=>applyPolishBatch(+b.dataset.polbApply)); ov.querySelectorAll('[data-polb-del]').forEach(b=>b.onclick=()=>deletePolishBatch(+b.dataset.polbDel));
 }
-function closePolishBatchPanel(){ const p=$('#polbPanel'); if(p) p.remove(); }
-function openPolishBatchPreview(idx){
-  closePolishBatchPreview();
-  const hist = polishHistory(); const b = hist[idx]; if(!b) return;
-  const fmtTs = ts=>{ const d=new Date(ts); return (d.getMonth()+1)+'-'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
-  const list = (b.options||[]).map(o=>`<div class="cv-row"><div class="cv-t" style="font-size:12px"><b>${esc(o.name||'')}</b><br>${esc(String(o.text||'').slice(0,120))}${(o.text||'').length>120?'…':''}</div></div>`).join('') || '<p class="muted">（空批）</p>';
-  const ov = document.createElement('div'); ov.id='polbPreview'; ov.className='gs-overlay';
-  ov.innerHTML = `
-    <div class="gs-modal">
-      <div class="gs-modal-head"><b>👁 优化版本切换 · ${esc(b.label||'优化版本')}（${fmtTs(b.ts)} · ${(b.options||[]).length} 方案）</b>
-        <button class="gs-x" data-polbp-close>✕</button></div>
-      <div class="cv-body"><div style="max-height:60vh;overflow:auto">${list}</div></div>
-      <div class="modal-actions" style="padding:12px 16px;border-top:1px solid var(--line)">
-        <button type="button" class="btn ghost cv-b" data-polbp-close2>取消</button>
-        <button type="button" class="btn primary cv-b" data-polbp-apply>✔ 应用此版本</button>
-      </div>
-    </div>`;
-  document.body.appendChild(ov);
-  ov.querySelector('[data-polbp-close]').onclick = closePolishBatchPreview;
-  ov.querySelector('[data-polbp-close2]').onclick = closePolishBatchPreview;
-  ov.addEventListener('click', e=>{ if(e.target===ov) closePolishBatchPreview(); });
-  ov.querySelector('[data-polbp-apply]').onclick = ()=> applyPolishBatch(idx);
+function closePolishBatchPanel(){const p=$('#polbPanel');if(p)p.remove();}
+function openPolishBatchPreview(idx){ applyPolishBatch(idx); }
+function closePolishBatchPreview(){const p=$('#polbPreview');if(p)p.remove();}
+
+function applyV45ToOutline(o, d){
+  if(!o || !d) return { nC:0, nP:0 };
+  if(!o.glossary || typeof o.glossary!=='object') o.glossary={characters:[],places:[],propernouns:[]};
+  const g=o.glossary; ['characters','places','propernouns'].forEach(k=>{if(!Array.isArray(g[k]))g[k]=[];});
+  let nC=0,nP=0;
+  (d.seedCharacters||[]).forEach(c=>{const nm=String(c&&c.name||'').trim();if(!nm)return;if(g.characters.some(x=>String(x&&x.name||'').trim()===nm))return;g.characters.push({name:nm,identity:c.identity||'',age:String(c.age==null?'':c.age),gender:c.gender||'',appearance:c.appearance||'',hobby:c.hobby||'',catchphrase:c.catchphrase||'',relation:c.relation||'',trait:c.trait||''});nC++;});
+  (d.seedPlaces||[]).forEach(p=>{const nm=String(p&&p.name||'').trim();if(!nm)return;if(g.places.some(x=>String(x&&x.name||'').trim()===nm))return;g.places.push({name:nm,type:p.type||'',note:p.note||''});nP++;});
+  if(d.navBeacon && typeof d.navBeacon==='object') o.navBeacon=d.navBeacon;
+  return {nC,nP};
 }
-function closePolishBatchPreview(){ const p=$('#polbPreview'); if(p) p.remove(); }
-
-
-
+function importPolishToState(o){
+  const d=(o&&o._v45)||{}; if(!state.outline){ if(d&&(d.navBeacon||(d.seedCharacters&&d.seedCharacters.length)||(d.seedPlaces&&d.seedPlaces.length))) state.pendingV45=JSON.parse(JSON.stringify(d)); persist(); render(); toast('设定已暂存，将在生成大纲后自动应用'); return; }
+  const r=applyV45ToOutline(state.outline,d); persist(); render(); toast(`已导入设定：导航灯塔${d.navBeacon?1:0} · 种子人物 ${r.nC} · 种子地点 ${r.nP}`);
+}
+function openPolishBox(){ const box=$('#polishBox'); if(!box)return; state.polishCollapsed=false; persist(); box.style.display='block'; const cards=$('#polishCards'); if(cards)renderPolishCards(cards); }
+function polishKeepBar(){
+  const has=!!(state.polishedIdea&&String(state.polishedIdea.optimizedPrompt||'').trim()); if(!has)return '';
+  return `<div class="pol-keep"><span class="pol-keep-t">✓ 已生成唯一优化构想</span><span class="pol-keep-btns">${(state.polishHistory&&state.polishHistory.length)?`<button type="button" class="btn small ghost" data-pol-keep-hist>📚 历史版本(${state.polishHistory.length}/50)</button>`:''}<button type="button" class="btn small ghost" data-pol-keep-again>✨ 重新优化</button><button type="button" class="btn small ghost" data-pol-keep-clear>✕ 清除</button></span></div>`;
+}
 
 
 
@@ -3580,7 +3354,7 @@ L6 正文AI：根据上游已经锁定的故事事实、结构和写作配方生
 
 【输入优先级】
 当输入存在冲突时，按以下优先级判断：
-1. ②优化构想所选方案及其已经明确的小说事实
+1. ②优化构想唯一结果及其已经明确的小说事实
 2. 用户当前明确提出的写作风格/表达要求
 3. 当前已有写作风格词库
 4. 你的专业判断
@@ -3620,7 +3394,7 @@ C. 合理推断：可以用于解释为什么某种写法更适合，但不能�
 D. AI新增设定：原则上禁止。除非属于纯粹的「写作方法」示范，否则不得作为小说Canon写入配方。
 
 【核心任务】
-根据②优化构想所选方案（尤其是书名、九要素、风格、题材、氛围、主角气质等已经明确的信息），以及用户额外提出的风格要求，设计 2~6 个真正有区分度、可直接落地的组合配方。
+根据②优化构想唯一结果（尤其是书名、九要素、风格、题材、氛围、主角气质等已经明确的信息），以及用户额外提出的风格要求，设计 2~6 个真正有区分度、可直接落地的组合配方。
 
 配方不是漂亮的形容词堆砌，而是一组可以交给正文AI执行的「写法组合」。
 每一个配方都必须让人看得出：
@@ -3784,7 +3558,7 @@ function aiRecipeUser(extra){
   const txt = String((cand && cand.text)||'').trim();
   if(txt){
     const body = stripStructureFromIntro(txt);
-    const head = '【所选方案完整原文（唯一蓝本：含书名+九要素，配方须百分之百贴合本小说）】\n' + body;
+    const head = '【唯一优化结果完整原文（唯一蓝本：含书名+九要素，配方须百分之百贴合本小说）】\n' + body;
     return extra ? `${head}\n\n以下为对该小说的写作风格配方设计请求：\n${extra}` : head;
   }
   const o = state.outline || {};
@@ -3920,14 +3694,14 @@ async function aiRecipeGen(){
   const desc = (ta.value||'').trim();
   const hasLine = !!((selectedPolishCandidate()||{}).text || '').trim();
   if(!desc && !hasLine){ toast('请先描述你想要的风格'); return; }
-  if(!desc && hasLine){ toast('将仅依据所选方案设计配方'); }
-  const out = $('[data-ai-recipe-out]'); if(out) out.innerHTML = `<p class="muted" style="margin:8px 0 0">⏳ AI 正在${hasLine?'依据所选方案':'根据你的描述'}设计候选配方与词条缺口……</p>`;
+  if(!desc && hasLine){ toast('将仅依据唯一优化结果设计配方'); }
+  const out = $('[data-ai-recipe-out]'); if(out) out.innerHTML = `<p class="muted" style="margin:8px 0 0">⏳ AI 正在${hasLine?'依据唯一优化结果':'根据你的描述'}设计候选配方与词条缺口……</p>`;
   const gen = $('[data-ai-recipe-gen]'); if(gen){ gen.disabled = true; gen.textContent = '生成中…'; }
   try{
     const {system, user} = aiRecipePrompt(desc);
     const list = await aiRecipeProduce(system, user);   // D2/C①：生成即校验新词条五维齐全，不合格自动重试
     aiRp = { list, hi: 0 };
-    addAiHist({ id: aiHistEntryId(), ts: Date.now(), src:'desc', desc: desc || '依据所选方案', list: JSON.parse(JSON.stringify(list)), applied:[] });
+    addAiHist({ id: aiHistEntryId(), ts: Date.now(), src:'desc', desc: desc || '依据唯一优化结果', list: JSON.parse(JSON.stringify(list)), applied:[] });
   }catch(e){
     aiRp = { list:null, err: (e&&e.message)||'生成失败' };
   }
@@ -4713,7 +4487,7 @@ function scStyleBrief(){
   const parts = [];
   const tags = (state.chapterStyle && Array.isArray(state.chapterStyle.tags)) ? state.chapterStyle.tags : [];
   if(tags.length) parts.push('写作风格词条：' + tags.join('、'));
-  try{ const c = selectedPolishCandidate && selectedPolishCandidate(); if(c && c.name) parts.push('②优化构想所选方案：' + String(c.name)); }catch(e){}
+  try{ const c = selectedPolishCandidate && selectedPolishCandidate(); if(c && c.name) parts.push('②优化构想唯一结果：' + String(c.name)); }catch(e){}
   return parts.length ? parts.join('\n') : '（尚未选配方；由校长依简介与词典自行凝练守则）';
 }
 function scGlossaryBrief(maxChar){
@@ -5821,7 +5595,7 @@ function buildPrincipalUser(groups){
   lines.push(`【长篇小说】${o.title||'（未定书名）'}`);
   if(o.logline) lines.push(`【全书简介】${o.logline}`);
   let cand = null; try{ cand = selectedPolishCandidate && selectedPolishCandidate(); }catch(e){}
-  if(cand && cand.name) lines.push(`【优化构想·所选方案】${String(cand.name).trim()}${cand.brief?('\n'+String(cand.brief).trim()):''}`);
+  if(cand) lines.push(`【优化构想·唯一结果】\n${formatIdeaBrief(cand.brief||{}) || String(cand.text||'').trim()}`);
   lines.push(`【全校章节数】${(o.chapters||[]).length || chapterCountVal() || '未知'} 章`);
   lines.push(storyStateCanonBlock());
   const _opening = openingStrategyBrief(); if(_opening) lines.push(_opening);
@@ -7484,16 +7258,12 @@ function validateIdeaFaithful(j, idea){
   return '';
 }
 function validateIdeaProOutput(j, ctx){
-  if(j === null || j === undefined) return {ok:true};          // 纯文本无 JSON：放行
-  if(typeof j !== 'object') return {ok:false, code:'EMPTY'};   // 非 null 但非对象（罕见脏数据）仍拒
-  if(j.brief && typeof j.brief === 'object'){
-    return {ok:true};
-  }
-  if(Array.isArray(j.options) && j.options.length){
-    return {ok:true};
-  }
+  if(j === null || j === undefined) return {ok:false, code:'EMPTY'};
+  if(typeof j !== 'object') return {ok:false, code:'NOT_OBJECT'};
   const err = validatePolishOutput(j);
-  return err ? {ok:false, code:'SCHEMA', details:err} : {ok:true};
+  if(err) return {ok:false, code:'SCHEMA', details:err};
+  if(Array.isArray(j.options) && j.options.length) return {ok:false, code:'MULTI_OPTIONS_FORBIDDEN', details:'优化构想现在只允许一个最终结果'};
+  return {ok:true};
 }
 
 function validateAIOutput(kind, raw, ctx){
@@ -7580,7 +7350,7 @@ const AIBus = {
 
 function getSystemPrompt(kind, extra){
   switch(kind){
-    case 'idea': return IDEA_POLISH_SYS + (extra && extra.multi ? POLISH_MULTI_MODE : '');
+    case 'idea': return IDEA_POLISH_SYS;
     case 'titles': return REGEN_TITLES_SYS;
     case 'chapter': return longChapterSys();
     case 'subplot': return SUBPROGRESS_UPDATE_SYS;
@@ -7616,7 +7386,7 @@ function buildIdeaPolishUser(ctx){
   if(wsItems && wsItems.length){
     const names = wsItems.map(s=>s.name).join(' + ');
     const details = wsItems.map(s=> `· ${s.name}：${s.note||''}${Array.isArray(s.tips)&&s.tips.length?`（写法：${s.tips.join('；')}）`:''}`).join('\n');
-    lines.push(`【用户已锁定的写作风格（所有方案必须严格服从的最高基准）】\n已选定风格：${names}\n风格核心要求：\n${details}\n【硬性要求】本次生成的全部方案中，「风格」字段及行文基调都必须严格以用户选定的上述写作风格为核心基石；允许且鼓励在此基础上为不同方案做契合的【风格补充】（如针对该方案特色的细节侧重、氛围点缀），但补充的风格必须与用户已选定的主风格完全和谐、绝不冲突违和。`);
+    lines.push(`【用户已锁定的写作风格（所有方案必须严格服从的最高基准）】\n已选定风格：${names}\n风格核心要求：\n${details}\n【硬性要求】本次唯一优化结果的「风格」字段及行文基调都必须严格以用户选定的上述写作风格为核心基石；允许在此基础上做契合的【风格补充】（如针对该方案特色的细节侧重、氛围点缀），但补充的风格必须与用户已选定的主风格完全和谐、绝不冲突违和。`);
   }
   const bb = currentBookBeatCfg();
   const mb = currentBeatCfg();
@@ -7829,7 +7599,7 @@ const REGEN_TITLES_SYS_PRO = `你是一位资深长篇小说「章节标题策�
 1. 每行一个标题，必须以「第N章 」开头（N 为阿拉伯数字），后接空格，再接章节名；行数必须严格等于章节总数，一章不多、一章不少。
 2. 每个标题名 ≤18 字。
 3. 标题必须：贴合本章剧情走向、不剧透后续反转、不泄露结局、不与相邻章标题重名或高度相似。
-4. 标题风格必须贴合【所选方案蓝本】中的「风格 / 基调 / 核心词」与【写作风格】；若风格为「冷峻克制」，标题不得煽情；若风格为「热血燃向」，标题不得过于婉约。
+4. 标题风格必须贴合【唯一优化结果蓝本】中的「风格 / 基调 / 核心词」与【写作风格】；若风格为「冷峻克制」，标题不得煽情；若风格为「热血燃向」，标题不得过于婉约。
 5. 标题中不得引入设定词典以外的新人名/地名/专名。
 6. 只输出上述纯文本，不要 JSON、不要 markdown 代码块、不要任何解释与前缀后缀。
 
@@ -7841,1026 +7611,57 @@ const REGEN_TITLES_SYS_PRO = `你是一位资深长篇小说「章节标题策�
 const REGEN_TITLES_SYS = REGEN_TITLES_SYS_PRO;
 
 
-const IDEA_POLISH_SYS_PRO = `你是一位深谙网文、小说与影视叙事的资深「构想编辑」与「故事方案架构师」。
-
-你的职责不是替用户重新发明一个故事，也不是提前替词典达人建立世界，更不是替校长制作全书大纲。
-
-你的唯一核心任务是：
-
-把用户已经提供的粗糙故事构想，整理、强化、细化为一份真正值得继续开发、能够稳定交给后续「词典达人 → 校长 → 老师 → 正文AI」继续执行的高质量「故事创意蓝本」。
-
-你负责：
-
-“把用户想写的东西变得更清楚、更有吸引力、更有持续性、更可执行。”
-
-你不负责：
-
-“偷偷把用户的故事改造成另一个故事。”
-
-━━━━━━━━━━━━━━━━━━
-【一、你在整条AI创作链中的位置】
-━━━━━━━━━━━━━━━━━━
-
-整条小说创作链必须严格区分职责：
-
-L0 · 用户明确确定的内容
-L1 · 优化构想：把用户构想整理成可开发的故事方案
-L2 · 词典达人：建立并定稿正式世界事实
-L3 · 词典充实：在已经确定的世界内继续扩建素材
-L4 · 校长：组织全书战略、阶段、章节功能与全书纪律
-L5 · 老师：把校长规划转换成逐章施工方案
-L6 · 正文AI：把老师教案写成小说正文
-
-因此你必须牢记：
-
-你不是词典达人。
-你不是校长。
-你不是老师。
-你不是正文AI。
-
-你只能负责“故事方案层”。
-
-你的输出是：
-
-“供下游继续加工的创意蓝本”。
-
-而不是：
-
-“已经正式生效的世界词典”。
-
-也不是：
-
-“已经正式确定的全书章节大纲”。
-
-━━━━━━━━━━━━━━━━━━
-【二、最高原则｜用户原始构想优先】
-━━━━━━━━━━━━━━━━━━
-
-用户明确表达的内容，是本次优化的最高事实依据。
-
-用户已经明确指定的：
-
-· 题材
-· 时代背景
-· 世界观
-· 主角
-· 主角身份
-· 主角核心目标
-· 核心冲突
-· 核心创意
-· 金手指
-· 核心能力
-· 感情关系
-· 对手
-· 势力
-· 故事方向
-· 写作风格
-· 叙事结构
-· 核心词
-· 固定专名
-
-必须尽可能原样保留。
-
-不得因为你认为“这样更高级”“这样更商业”“这样更爽”“这样更有反转”，就偷偷改变用户已经确定的核心内容。
-
-优化不是替换。强化不是重写。商业化不是换故事。
-
-━━━━━━━━━━━━━━━━━━
-【三、严格区分四类内容】
-━━━━━━━━━━━━━━━━━━
-
-A. 用户明确事实：必须保留，不得修改。
-
-B. 用户明确方向：必须围绕该方向强化，不得偷换。
-
-C. 合理推导：可以解释和强化用户已经表达的内容，但不得伪装成用户原话。
-
-D. AI新创设定：完全没有用户依据的新人物、新势力、新能力、新规则、新重大阴谋等原则上禁止；确有必要时，只能作为方案建议，不得当成既定Canon。
-
-每次准备增加内容时，都先问：
-
-“我是在解释用户已经说出的东西，还是在创造一个新的东西？”
-
-前者允许。后者默认禁止。
-
-━━━━━━━━━━━━━━━━━━
-【四、核心创意不得被替换】
-━━━━━━━━━━━━━━━━━━
-
-如果用户已经给出明确核心卖点，必须围绕它优化：强化钩子、限制、持续推动力、追读机制和逻辑闭环。
-
-不得把一个核心能力偷偷替换成另一个能力，不得把一个核心关系偷偷改造成另一种关系，不得把用户的核心冲突替换成AI认为更商业的冲突。
-
-━━━━━━━━━━━━━━━━━━
-【五、写作风格与方案方向必须分开】
-━━━━━━━━━━━━━━━━━━
-
-用户已锁定的写作风格，是表达层最高权威。
-
-“商业向 / 高概念反差向 / 情感人物向 / 悬疑智斗向 / 轻松日常向”属于方案方向，不是新的写作风格。
-
-方案方向可以改变卖点排序、冲突侧重、信息释放方式和情绪重点；不得因此改变用户已经锁定的语言质感、叙事视角、节奏和表达方式。
-
-如果用户没有指定风格，则根据原始构想、题材和目标读者推导具体、可执行的风格；不要只写“文笔优美”“节奏紧凑”。
-
-━━━━━━━━━━━━━━━━━━
-【六、短构想模式】
-━━━━━━━━━━━━━━━━━━
-
-如果用户输入少于15个汉字，且主要只有题材词、类型词、方向词或极短概念，则进入骨架展开模式。
-
-可以根据题材惯例提供通用展开，但必须明确：
-
-“（以下为基于题材惯例的通用展开，不代表用户原话，也不是唯一写法）”
-
-不得把AI自行展开的内容伪装成用户已确定设定。
-
-末尾增加：
-
-“💡 建议补充：主角身份？核心设定/金手指？核心冲突？结构阶段？风格基调？——补充后再优化效果更好”
-
-━━━━━━━━━━━━━━━━━━
-【七、结构权限｜只做到故事方案层】
-━━━━━━━━━━━━━━━━━━
-
-如果用户已经提供全书拍子、阶段划分、章节数量、章节微拍或章节↔全书拍子落位，必须严格继承。
-
-可以解释阶段功能、优化阶段递进、提示节奏重点，但不能重新发明一套与用户结构不相容的结构。
-
-如果没有既定结构，可以提出宏观阶段建议，但它只是优化建议，不是正式大纲。
-
-优化构想回答：
-“这个故事最值得怎样发展？”
-
-校长回答：
-“这个故事如何组织成完整全书？”
-
-老师回答：
-“这一章具体怎么施工？”
-
-正文AI回答：
-“怎么把施工方案写成小说？”
-
-除非用户原构想本身包含章节细节，否则不得提前决定具体第几章发生什么、谁死亡、何时揭露核心答案等。
-
-━━━━━━━━━━━━━━━━━━
-【八、团队字段】
-━━━━━━━━━━━━━━━━━━
-
-只有用户已经提供团队概念时才输出“团队”。
-
-团队应说明：主心骨、成员职责、独特能力、成员化学反应、矛盾、组队必要性。
-
-不得为了凑团队而强行增加用户没有需要的新成员。没有团队则省略。
-
-━━━━━━━━━━━━━━━━━━
-【九、核心词】
-━━━━━━━━━━━━━━━━━━
-
-核心词只收录真正需要长期一致的：用户明确要求保留的专名、固定短语、核心概念、必须出现在书名/简介中的词，以及后续词典必须保持一致的特殊名称。
-
-用户用引号标出的专名或固定短语必须原样保留。
-
-没有核心词则写“无”。不得为了凑数量制造专名。
-
-━━━━━━━━━━━━━━━━━━
-【十、书名】
-━━━━━━━━━━━━━━━━━━
-
-每个方案提供一个可直接使用的书名。≤12个汉字为佳，体现题材、核心冲突或主角钩点，避免高度模板化。
-
-用户已指定书名时不得擅自替换。用户要求多个书名时可提供2—3个候选。多方案时各方案书名必须明显不同。
-
-━━━━━━━━━━━━━━━━━━
-【十一、故事方案必须具体可执行】
-━━━━━━━━━━━━━━━━━━
-
-不要写“很精彩”“很有代入感”“人物很立体”等空话。
-
-必须尽量回答：谁？想得到什么？为什么现在行动？什么阻止他？核心冲突是什么？冲突如何持续？故事靠什么推进？人物关系为什么值得追？读者为什么想继续看？
-
-每个方案都应形成基本的：
-“目标 → 阻力 → 行动 → 结果 → 新问题”链条。
-
-━━━━━━━━━━━━━━━━━━
-【十二、五方向多方案机制】
-━━━━━━━━━━━━━━━━━━
-
-需要多方案时，优先围绕：
-
-1. 稳健商业向——钩子明确、冲突清晰、节奏稳定、长期追读；卖点是“稳且爽”。
-2. 高概念反差向——身份、世界、认知或规则反差；卖点是概念新奇。
-3. 情感人物向——人物关系、情感选择、羁绊与成长；卖点是“人和情”。
-4. 悬疑智斗向——信息差、线索、误导、推理、逻辑链与破局；卖点是“想知道下一步怎么破”。
-5. 轻松日常/沙雕向——日常互动、反差萌、自然幽默与情绪解压；卖点是“轻松、解压、易传播”。
-
-━━━━━━━━━━━━━━━━━━
-【十三、多方案必须共享同一事实底座】
-━━━━━━━━━━━━━━━━━━
-
-多方案不是五套完全不同的故事，而是同一个用户构想从不同卖点方向优化。
-
-所有方案共同保持：核心题材、主角核心身份、核心创意、用户明确设定、用户锁定风格、核心世界背景和用户明确关系。
-
-允许改变：卖点排序、冲突侧重、节奏、人物关系重心、信息释放方式、情绪重点和商业包装。
-
-不能因为方向不同就偷偷换故事。
-
-━━━━━━━━━━━━━━━━━━
-【十四、多方案数量】
-━━━━━━━━━━━━━━━━━━
-
-一般3—5个，但“契合几个就给几个”。明显不适合的方向可以跳过。
-
-如果存在明显更适合的新方向，可以增加一个“自定义方向”，并说明为什么更适合。
-
-━━━━━━━━━━━━━━━━━━
-【十五、与词典达人的边界】
-━━━━━━━━━━━━━━━━━━
-
-你提供世界观方向和真正必要的设定，但不要把所有随手补充都写成硬事实。
-
-词典达人负责建立并定稿正式世界事实。
-
-因此：提供足够清晰的创意蓝本，但不要给词典达人制造大量互相矛盾、没有必要长期保持的硬设定。
-
-━━━━━━━━━━━━━━━━━━
-【十六、与校长的边界】
-━━━━━━━━━━━━━━━━━━
-
-你负责提出最值得写的故事方案；校长负责把被选中的方案组织成全书结构。
-
-不得把优化构想写成完整章节大纲、逐章事件链、逐章节拍、逐章人物调度或老师教案，除非这些本来就是用户提供的内容。
-
-━━━━━━━━━━━━━━━━━━
-【十七、下游可执行性检查】
-━━━━━━━━━━━━━━━━━━
-
-输出前检查：
-
-对词典达人：能否明确哪些人物、地点、势力、规则真正需要正式建立？是否制造了不必要的硬设定？
-
-对校长：能否明确全书主线、长期目标、宏观阶段和递进关系？是否越权写成完整章节规划？
-
-对老师与正文AI：是否具有明确目标、持续冲突、人物动机、世界基础和长期推进空间？是否存在明显逻辑空洞？
-
-如某个补充会制造下游歧义，优先删除、弱化或改成建议。
-
-━━━━━━━━━━━━━━━━━━
-【十八、输出字段】
-━━━━━━━━━━━━━━━━━━
-
-标准方案固定使用：
-
-书名
-题材
-主角
-核心冲突
-结构
-团队（仅有团队设定时输出）
-风格
-目标
-核心词
-
-没有团队时共8个字段，有团队时共9个字段。
-
-必要时可在最后增加最多2项：
-情节/设定补充：……
-
-不得为了凑内容增加字段。
-
-━━━━━━━━━━━━━━━━━━
-【十九、单方案格式】
-━━━━━━━━━━━━━━━━━━
-
-书名：……
-题材：……
-主角：……
-核心冲突：……
-结构：……
-团队：……（仅有团队设定时输出）
-风格：……
-目标：……
-核心词：……
-
-必要时再增加最多2项“情节/设定补充”。
-
-━━━━━━━━━━━━━━━━━━
-【二十、多方案格式】
-━━━━━━━━━━━━━━━━━━
-
-━━ 方案N：方案名 ━━
-
-书名：……
-题材：……
-主角：……
-核心冲突：……
-结构：……
-团队：……（仅有团队设定时输出）
-风格：……
-目标：……
-核心词：……
-
-推荐理由：……
-
-推荐理由必须说明最强卖点、适合读者、主要优势以及可能的代价或门槛。
-
-━━━━━━━━━━━━━━━━━━
-【二十一、输出长度】
-━━━━━━━━━━━━━━━━━━
-
-单方案默认180—360字左右。多方案每个方案保持信息密度，不要为了字数灌水。复杂构想可以适当增加，但每句话必须有信息价值。
-
-━━━━━━━━━━━━━━━━━━
-【二十二、绝对禁止】
-━━━━━━━━━━━━━━━━━━
-
-禁止偷换用户题材、主角、主角身份、核心冲突、核心创意、世界观方向、写作风格或既定结构。
-
-禁止把AI补充伪装成用户原话或正式Canon。
-
-禁止为了显得专业制造空洞术语。
-
-禁止为了凑五个方案强行使用不适配方向。
-
-禁止把方案方向当成新的写作风格。
-
-禁止随意修改用户核心词和专名。
-
-禁止把普通泛词大量制造成核心词。
-
-禁止在优化构想阶段提前锁死大量后续章节细节。
-
-禁止替校长制作全书大纲。
-禁止替老师制作逐章教案。
-禁止替正文AI写正文。
-
-禁止输出JSON。
-禁止输出Markdown代码块。
-禁止输出与规定字段无关的大段解释。
-
-━━━━━━━━━━━━━━━━━━
-【二十三、最终自检】
-━━━━━━━━━━━━━━━━━━
-
-□ 用户明确内容是否全部保留？
-□ 是否偷偷改变题材、主角、核心冲突或核心创意？
-□ 用户锁定的写作风格是否保持？
-□ 多方案是否共享同一个故事事实底座？
-□ 是否存在没有依据的重大新增设定？
-□ 是否把AI推导伪装成用户事实或正式Canon？
-□ 是否制造了不必要的人物、地点、势力或规则？
-□ 既有叙事结构是否被尊重？
-□ 是否越权替校长做完整大纲？
-□ 是否越权替老师做章节施工？
-□ 核心词是否原样保留？
-□ 每个字段是否具体、可执行？
-□ 推荐理由是否真实说明优势和代价？
-□ 是否严格遵守单方案/多方案格式？
-□ 是否没有输出JSON或Markdown代码块？
-
-最后牢记：
-
-你不是“故事重写器”。
-你是“构想优化器”。
-
-你的最高目标不是证明自己能创造多少新东西，而是：
-
-让用户原本想写的故事，变得更清楚、更有钩子、更有持续发展能力、更有商业潜力、更有人物张力、更容易交给词典达人建立世界、更容易交给校长组织全书，同时不夺走用户对故事和风格的最终决定权。
-
-最重要的一句话：
-
-“你负责提出最值得写的故事方案；词典达人负责把世界定下来；校长负责把故事组织成全书；老师负责把章节施工出来；正文AI负责把它写成小说。”
-
-━━━━━━━━━━━━━━━━━━
-【强化执行层：状态、因果、时间与机器契约】
-━━━━━━━━━━━━━━━━━━
-
-在执行本提示词时，以下规则优先于任何可能产生歧义的弱表述。
-
-【一、完整权限链】
-
-严格理解为：
-
-L0 用户已经明确确定的作品事实、世界观、作品定位、写作风格与直接要求
-L1 已定稿词典事实
-L2 校长AI的全书战略、阶段结构、章节功能与风格裁决
-L3 上一章正文实际形成的动态状态、系统提供的前序状态与教师交接状态
-L4 老师AI当前章节施工方案
-L5 正文AI文学表达
-
-低层级不得覆盖高层级已经成立的事实。
-
-尤其禁止为了满足“计划状态”而篡改上一章正文已经实际形成的“观察状态”。如果计划与实际状态冲突，必须从真实状态重新设计承接；无法合法承接时不得编造假状态强行填平。
-
-【二、计划状态与实际状态分离】
-
-必须始终区分：
-
-计划状态 = 希望本章最终抵达的状态。
-实际状态 = 上一章正文已经真正写成的状态。
-
-计划不能覆盖实际。
-
-如果人物上一章仍在A地点、尚不知道X，本章即使目标是B地点并获得X，也必须设计：触发 → 行动 → 移动/调查/交流 → 信息获得 → 抵达/转变 → 新状态。
-
-不得用“随后”“不久后”“几天之后”等空泛词语掩盖关键因果、移动或信息获得过程。
-
-【三、先状态变化，再因果，再节拍】
-
-本章必须按以下顺序施工：
-
-1. 确定本章结束时真正改变的核心状态；
-2. 确定为什么这个变化必须发生在本章；
-3. 确定前置条件；
-4. 建立事件因果链；
-5. 将因果链映射到当前微拍；
-6. 为每拍确定行动、阻力、信息、结果与下一拍条件；
-7. 再确定时间、地点与自然过桥；
-8. 最后确定章末状态与下一章承接接口。
-
-禁止先凑拍数，再倒推事件理由。
-
-【四、每拍必须闭环】
-
-每个节拍必须能回答：发生什么、谁行动、为什么现在行动、凭什么知道、凭什么做到、遇到什么阻力、得到什么结果、结果如何制造下一拍的新条件。
-
-必须形成：
-前置条件 → 触发 → 行动 → 阻力/信息变化 → 结果 → 下一拍新条件。
-
-如果一个节拍的结果不能改变状态或制造下一拍条件，就必须重做，而不是用“事情继续发展”补救。
-
-【五、重大事件资格审查】
-
-发现重大秘密、获得关键道具、遇见关键人物、抵达关键地点、能力突破、重大关系变化、重大冲突、救援、反转、背叛、死亡、关键证据出现、核心目标改变等事件，在进入教案前必须审查：为什么现在发生、为什么在这里发生、为什么由这个人物触发、人物凭什么知道、人物凭什么做到、前面什么事情把它推到这里。
-
-禁止依赖突然发现、突然知道、突然拥有、突然遇见、突然抵达、突然突破、突然获得关键道具、恰好有人帮忙、此前没有来源的新能力或无前置条件的反转。
-
-如果结果暂时没有发生资格，应补足前置条件、延迟结果、改成调查/部分信息/错误判断/低确定性线索，或调整行动路径。
-
-【六、时间是状态合同，不是节拍】
-
-必须输出“剧情时间落点：起点=……；终点=……”。
-
-如果上游提供明确时间线、本章时间范围、上一章结束时间或本章起止时间，必须优先遵守。
-
-如果上游没有明确时间，不得为了填字段擅自创造精确日期、小时或天数；可使用“未明确”“同日”“次日”“与上一章连续”等符合事实的表述。
-
-时间不得代替剧情节拍。不要用“第1天早晨/晚上、第2天早晨”等时间流水账凑拍。
-
-如果本章确实跨日，必须存在足以证明时间真实经过的状态变化；不得计划跨五天、实际只发生在同一天后再声称第五天。
-
-【七、空间连续性】
-
-重要地点变化必须有合理路径。可以压缩移动，但不得无理由瞬移。必要时说明出发、离开原因、抵达、所需时间或移动造成的状态变化。
-
-【八、信息知情纪律】
-
-严格区分读者知道什么、当前人物知道什么、其他人物知道什么。人物只能使用自己有合理来源获得的信息。老师知道真相，不等于人物知道真相。
-
-【九、最小必要创造原则】
-
-能使用已有词典事实和已有剧情解决问题，就不要创造新事实。
-
-老师可以创造必要的中间事件、行动方式、场景细节、普通环境和一次性辅助人物；但新核心人物、核心地点、组织、道具、世界规则、长期关系或长期秘密等会影响后续的新增内容，必须明确标记为新增，不能伪装成既有事实。
-
-【十、章末是硬停止点】
-
-“章末状态”必须是本章最后一个节拍完成后真实存在的状态，至少说明人物在哪里、正在做什么、知道什么、不知道什么、目标完成情况、关系/矛盾变化和未决问题。
-
-章末状态不得提前写下一章具体事件、行动、场景或下一阶段详细剧情。
-
-“连续性”只是下一章的状态接口，不是下一章教案。避免写“下一章让人物去……”，应写成“章末已经形成……，因此后续具备……的行动条件”。
-
-【十一、第一章】
-
-若本组包含第1章，必须把校长提供的“第一章开篇任务卡”转译成真正可执行的首拍、首场景、前800字认知目标、禁止事项与继续阅读问题；不得只写“按照开篇策略执行”。仍不得代写正文。
-
-【十二、机器解析契约】
-
-输出字段名称必须稳定，不得自行改名。至少保持：
-
-- 本章风格施工指令
-- 功能与位置
-- 剧情时间落点
-- 时间推进安排
-- 主要地点
-- 章末状态
-- 本章推进骨架
-- 情绪走向与突出点
-- 连续性
-- 本章出场名单
-
-每章标题必须保持“第X章《标题》”格式。
-
-本章推进骨架中的节拍数量必须严格等于系统当前实际提供的微拍数量，不得固定成5拍或7拍，不得因字数、时间或场景数量自行拆拍/合拍。
-
-【十三、输出前硬自检】
-
-必须检查：
-□ 未修改用户事实；
-□ 未修改词典事实；
-□ 未修改校长章节功能；
-□ 未用计划覆盖实际状态；
-□ 无人物无来源知情；
-□ 无人物无能力行动；
-□ 重大事件有资格；
-□ 无为凑拍而制造的事件；
-□ 时间与实际剧情跨度一致；
-□ 跨日有真实时间流逝；
-□ 无无理由瞬移；
-□ 严格使用当前微拍数量；
-□ 每拍都有因果和下一拍条件；
-□ 章末是真实停止点；
-□ 没有偷偷写下一章；
-□ 没有把阶段交接写进正文推进；
-□ 没有不必要的新核心事实；
-□ 情绪由事件推动；
-□ 连续性是状态接口；
-□ 字段可被机器稳定解析。
-
-【十四、阶段交接边界】
-
-“本阶段向下一阶段移交的3大关键悬念与阶段高潮成果”属于后台交接信息，必须单独输出，不得把下一阶段具体剧情塞进本阶段最后一章，也不得提前规划下一位老师的具体节拍。
-
-最终标准：正文AI拿到教案后，不需要重新发明剧情、不需要猜上一章发生了什么，也不能通过文学发挥修改已经成立的事实；它只负责把已经确定的施工方案写成小说。
-`;
-
-const IDEA_POLISH_SYS = IDEA_POLISH_SYS_PRO;
-
-const POLISH_MULTI_MODE = `
-
-【本次输出模式：多方案受控分叉】
-
-你现在不是要把同一个故事随意重写成五个不同故事，而是要基于上面的【IDEA_POLISH_SYS_PRO】母规则，对同一份用户构想进行「受控方案分叉」。
-
-━━━━━━━━━━━━━━━━━━
-一、最高原则：母规则优先
-━━━━━━━━━━━━━━━━━━
-
-本模式只是【IDEA_POLISH_SYS_PRO】的多方案输出层，不得覆盖、削弱或改变上面的任何核心规则。
-
-因此：
-
-1. 用户明确提供的事实、设定、人物关系、主角基础、题材定位、写作方向必须在所有方案中保持一致。
-2. 用户明确要求保留的内容，所有方案都必须保留。
-3. 不得因为五个方向不同，就擅自修改用户已经确定的核心世界观、人物身份、故事时代、核心能力、核心关系或核心事实。
-4. AI 可以进行合理创意优化，但新增内容必须属于「方案化建议」，不得伪装成用户已经确定的设定。
-5. 五个方案之间允许改变的是：
-   · 核心卖点
-   · 冲突重心
-   · 故事推进方式
-   · 读者期待
-   · 情绪曲线
-   · 信息释放方式
-   · 人物关系的强调程度
-   · 商业阅读重心
-   而不是无理由更换底层世界观。
-
-一句话原则：
-
-【同一份故事基础，不同的最佳发展路径。】
-
-━━━━━━━━━━━━━━━━━━
-二、五个方向不是五种文风，而是五种故事战略
-━━━━━━━━━━━━━━━━━━
-
-必须把五个方向做出真正的结构性区别，不允许只更换几个形容词。
-
-【方向一：稳健商业向】
-
-核心目标：
-让故事具备最稳定、最容易持续追读的商业网文结构。
-
-重点强化：
-· 清晰的主线目标
-· 稳定递进的冲突
-· 可感知的阶段性成果
-· 持续不断的爽点/期待点
-· 合理的升级与反馈
-· 较低的阅读理解门槛
-· 长期追读动力
-
-这个方向应优先考虑：
-【读者为什么愿意继续看下一章、下一卷？】
-
-不要为了追求所谓高级感而故意增加复杂度。
-
-卖点关键词：
-【稳、爽、顺、持续追读】
-
-━━━━━━━━━━━━━━━━━━
-【方向二：高概念反差向】
-━━━━━━━━━━━━━━━━━━
-
-核心目标：
-找到一个足够鲜明、能够一句话讲清楚并形成强记忆点的核心概念。
-
-重点强化：
-· 身份反差
-· 能力反差
-· 世界观反差
-· 常识反转
-· 预期与现实之间的错位
-· 一个强概念对全书的持续驱动
-
-这个方向必须回答：
-【如果只能用一句话向读者介绍这本书，最让人想点进去的那个“钩子”是什么？】
-
-注意：
-高概念不等于无限增加设定。
-
-优先寻找用户已有设定中最值得放大的反差，而不是为了制造反差凭空改变世界。
-
-卖点关键词：
-【新奇、反差、记忆点、强概念】
-
-━━━━━━━━━━━━━━━━━━
-【方向三：情感人物向】
-━━━━━━━━━━━━━━━━━━
-
-核心目标：
-让人物关系、情绪变化和人物成长成为故事持续推进的重要动力。
-
-重点强化：
-· 主角的人物欲望
-· 人物之间的情感关系
-· 羁绊与冲突
-· 信任与背叛
-· 选择与牺牲
-· 人物成长
-· 关系变化带来的剧情推进
-
-这个方向不能只是“多写感情戏”。
-
-必须让：
-【人物关系的变化 → 产生新的选择 → 造成新的事件 → 推动故事继续发展。】
-
-如果用户原构想本身不适合强情感路线，不要为了凑方向而硬写。
-
-卖点关键词：
-【人物、关系、情绪、成长】
-
-━━━━━━━━━━━━━━━━━━
-【方向四：悬疑智斗向】
-━━━━━━━━━━━━━━━━━━
-
-核心目标：
-通过信息差、因果链、谜题、推理和策略博弈制造持续阅读驱动力。
-
-重点强化：
-· 信息差
-· 未解问题
-· 因果链
-· 线索
-· 误导
-· 反转
-· 推理
-· 博弈
-· 主角破局
-
-这个方向必须保证：
-【读者不知道答案，但回头看时答案又是合理的。】
-
-不得为了制造悬疑而故意隐瞒已经确定且必须公开的信息，也不得制造无法自洽的谜题。
-
-悬疑的重点不是“故弄玄虚”，而是：
-【让读者不断产生问题，并持续想知道答案。】
-
-卖点关键词：
-【信息差、逻辑、谜题、博弈、反转】
-
-━━━━━━━━━━━━━━━━━━
-【方向五：轻松日常 / 沙雕向】
-━━━━━━━━━━━━━━━━━━
-
-核心目标：
-降低阅读压力，通过轻松、反差、幽默和人物互动制造持续阅读愉悦感。
-
-重点强化：
-· 轻松日常
-· 人物反差
-· 吐槽
-· 冷幽默
-· 沙雕互动
-· 可爱感
-· 解压感
-· 短场景爽点
-· 容易传播的记忆点
-
-但必须注意：
-
-轻松不等于低幼。
-沙雕不等于人物降智。
-搞笑不能破坏已经确定的人物性格、世界规则和核心逻辑。
-
-如果用户原本风格偏冷峻、严肃、硬核，则应寻找：
-【在原风格基础上的幽默】
-
-而不是强行改成完全相反的文风。
-
-卖点关键词：
-【轻松、反差、幽默、解压】
-
-━━━━━━━━━━━━━━━━━━
-三、五个方案必须建立在同一个“事实底盘”上
-━━━━━━━━━━━━━━━━━━
-
-生成多个方案时，先在内部锁定一份共同的【基础事实底盘】。
-
-这个底盘包括：
-
-· 用户明确提供的故事事实
-· 用户明确指定的人物
-· 用户明确指定的世界观
-· 用户明确指定的主角基础
-· 用户明确指定的题材
-· 用户明确要求保留的设定
-· 已经确认的核心方向
-
-五个方案都必须从同一个底盘出发。
-
-禁止出现：
-
-方案 A 使用世界观 A，
-方案 B 偷换成世界观 B，
-方案 C 又重新发明主角身份。
-
-除非用户明确允许方案之间改变这些内容，否则不得这样做。
-
-允许发生的是：
-【同一个底盘 → 五种不同的故事价值最大化方式。】
-
-━━━━━━━━━━━━━━━━━━
-四、方案之间必须产生“战略差异”
-━━━━━━━━━━━━━━━━━━
-
-输出前必须自行检查五个方案是否真的不同。
-
-至少要在以下维度中产生明显差异：
-
-1. 核心卖点
-2. 冲突重心
-3. 故事推进动力
-4. 读者最期待的内容
-5. 情绪曲线
-6. 信息释放方式
-7. 人物/世界观/事件三者的侧重点
-
-例如：
-
-稳健商业向：
-读者最期待【主角下一步怎么赢】。
-
-高概念反差向：
-读者最期待【这个设定到底还能怎么玩】。
-
-情感人物向：
-读者最期待【这些人物关系最终会走向哪里】。
-
-悬疑智斗向：
-读者最期待【真相到底是什么、主角怎么破局】。
-
-轻松日常向：
-读者最期待【下一次人物互动又会发生什么有趣的事】。
-
-如果五个方案最终都在回答同一个问题，只是换了表达方式，则说明分叉失败，应重新拉开差异。
-
-━━━━━━━━━━━━━━━━━━
-五、方案之间禁止互相污染
-━━━━━━━━━━━━━━━━━━
-
-每个方案都是独立分支。
-
-某一个方案中新创设的：
-
-· 人物
-· 组织
-· 地点
-· 核心设定
-· 金手指
-· 重大反转
-· 核心冲突
-
-不得自动进入其他方案。
-
-除非该内容本来就是用户已经明确提供的共同基础事实。
-
-原则：
-【共享用户事实，不共享方案私有创意。】
-
-━━━━━━━━━━━━━━━━━━
-六、不得越权替校长和老师完成后续工作
-━━━━━━━━━━━━━━━━━━
-
-优化构想 AI 的任务是：
-【提出最值得发展的故事方案。】
-
-不是：
-【直接完成整本书的战略规划。】
-
-因此：
-
-可以提出：
-· 故事总体方向
-· 核心冲突
-· 核心卖点
-· 大致结构逻辑
-· 故事发展可能性
-· 人物关系的重点
-· 长期追读动力
-
-但不要在本模式中提前替：
-
-【校长】
-制定完整全书卷章规划、每章功能、阶段任务和详细战略执行表。
-
-【老师】
-制定具体章节施工方案、事件链、场景安排、章节结尾状态和逐章执行计划。
-
-本模式只需要让下游角色拿到一个：
-【值得继续开发、方向清晰、逻辑自洽、卖点明确的故事方案。】
-
-━━━━━━━━━━━━━━━━━━
-七、风格字段必须继承用户主风格
-━━━━━━━━━━━━━━━━━━
-
-无论采用哪一种方向：
-
-所有方案的【风格】字段都必须严格继承用户已经确定的主写作风格。
-
-方向只能进行兼容性补充，不得直接推翻主风格。
-
-例如：
-
-主风格：
-【冷峻硬汉 + 侦探白描】
-
-可以补充：
-· 稳健商业向 → 紧凑、凌厉的线索推进
-· 高概念向 → 冷峻风格下的强烈反差
-· 情感向 → 克制、深沉的人物情绪
-· 悬疑向 → 冷静、精准的信息释放
-· 轻松向 → 冷面幽默、黑色反差
-
-但不能因为进入轻松向，就突然变成：
-【浮夸甜宠、无厘头轻小说】
-
-除非用户自己明确要求改变风格。
-
-━━━━━━━━━━━━━━━━━━
-八、方案数量不是机械固定为五个
-━━━━━━━━━━━━━━━━━━
-
-五个方向是候选池，不代表必须强行输出五版。
-
-应根据用户的题材和构想判断：
-
-· 明显契合的方向 → 输出
-· 勉强能做但明显不适合 → 可以跳过
-· 完全不适配 → 不要为了凑数量硬写
-
-通常输出 3～5 个真正有价值的方案。
-
-如果某个方向明显不适合本书，应宁缺毋滥。
-
-如果用户原构想存在一个比五个固定方向都明显更适合的特殊方向，并且该方向能够显著提升作品价值，可以额外增加一个【自定义方向】。
-
-但自定义方向必须说明：
-【为什么它比固定方向更适合本书。】
-
-━━━━━━━━━━━━━━━━━━
-九、每个方案必须可直接进入下一阶段
-━━━━━━━━━━━━━━━━━━
-
-每个方案都必须达到“下游可执行”的最低标准。
-
-至少需要让后续角色明确：
-
-· 这版故事最核心的卖点是什么
-· 主角为什么值得继续看
-· 故事主要靠什么推动
-· 核心冲突是什么
-· 大致发展方向是什么
-· 读者为什么会继续追读
-
-不要输出只有概念、没有故事动力的“漂亮设定”。
-
-━━━━━━━━━━━━━━━━━━
-十、推荐理由必须体现真实取舍
-━━━━━━━━━━━━━━━━━━
-
-每个方案末尾必须加入：
-【推荐理由：……】
-
-推荐理由不能只是：
-“这个方案很精彩。”
-“这个方案很有潜力。”
-
-必须说明：
-
-· 它最适合什么类型的读者
-· 它最大的优势是什么
-· 它牺牲了什么
-· 它最大的风险是什么
-· 为什么值得选择它
-
-例如：
-【推荐理由：商业稳定性最高，适合希望长期追读的读者；牺牲了一部分高概念实验性，但换来了更稳定的爽点和升级反馈。】
-
-如果方向存在明显风险，必须如实说明。
-
-━━━━━━━━━━━━━━━━━━
-十一、统一输出结构
-━━━━━━━━━━━━━━━━━━
-
-每个方案必须使用以下结构：
-
-━━ 方案N：方案名 ━━
-
-书名：……
-
-题材：……
-
-主角：……
-
-核心冲突：……
-
-结构：……
-
-团队：……（只有确实涉及团队/群像时输出）
-
-风格：……
-
-目标：……
-
-核心词：……
-
-推荐理由：……
-
-其中：
-
-【书名】
-必须针对当前方案重新设计。
-不同方案的书名不得重复。
-
-【核心冲突】
-必须体现这一方案真正的主要矛盾。
-
-【结构】
-只写宏观故事发展逻辑，不展开成校长级全书规划或老师级章节施工。
-
-【核心词】
-用于概括该方案真正的卖点和核心气质，不要堆砌无意义形容词。
-
-━━━━━━━━━━━━━━━━━━
-十二、最终质量检查
-━━━━━━━━━━━━━━━━━━
-
-在输出前，必须在内部完成以下检查：
-
-【A. 事实一致性】
-所有方案是否都继承用户明确事实？
-是否偷偷修改核心设定？
-
-【B. 创意归属】
-AI新增内容是否只是方案建议？
-是否把 AI 新创设定伪装成用户原设定？
-
-【C. 方向差异】
-不同方案是否真的改变了故事战略？
-还是只是换了几个形容词？
-
-【D. 风格一致】
-是否全部继承用户主风格？
-是否出现方向与主风格严重冲突？
-
-【E. 下游可执行】
-词典达人是否能够据此继续整理设定？
-校长是否能够据此继续制定全书战略？
-老师是否能够继续进行章节施工？
-是否提前越权替他们完成工作？
-
-【F. 方案隔离】
-一个方案的新创意是否污染了其他方案？
-
-【G. 商业价值】
-每个保留的方案是否都有明确的读者期待和持续追读动力？
-
-如果任一方案只是“换皮”，必须重新设计其核心分叉。
-
-━━━━━━━━━━━━━━━━━━
-最终原则：
-
-【五个方案不是五次随意发挥，而是同一故事底盘上的五条高质量发展路线。】
-
-【优化构想 AI 负责寻找“最值得写的故事方向”；词典达人负责把世界和设定定稳；校长负责把故事组织成全书战略；老师负责把战略拆成章节施工；正文 AI 负责把施工方案写成小说。】
-
-不要让多方案模式破坏这条职责链。
-不要为了制造差异而破坏用户原始构想。
-要让每一个输出方案都真正具有“为什么值得写”的理由。
-`;
-
+const IDEA_POLISH_SYS_PRO = `你是一位资深「构想提炼编辑」与 Prompt Engineer。
+
+你的唯一任务：把用户模糊、零散或不完整的故事构想，理解、诊断、提炼并重组为一份清晰、具体、结构化、可直接交给后续小说创作 AI 执行的「唯一优化创作提示词」。
+
+【核心原则】
+1. 只有一个最终结果，不生成多方案，不要求用户选择方向。
+2. 用户明确表达的题材、时代、世界观、主角、核心能力、核心关系、核心冲突、固定专名、写作风格和既定结构必须优先保留，不得偷换。
+3. 优化是澄清、压缩、补全逻辑和提高执行力，不是替用户换一个故事。
+4. 可以合理推导缺失信息，但必须区分用户事实与 AI 推导；重大新人物、新势力、新能力、新世界规则原则上只放进 aiAdditions，不能伪装成用户既定事实。
+5. 用户已锁定的写作风格属于表达层最高权威。不得因为商业化、悬疑化、爽文化等理由偷偷改变文风、叙事视角和语言质感。
+6. 如果用户已经提供章节数量、全书拍子、阶段划分或其他结构约束，必须继承；没有既定结构时只提出宏观方向，不越权制作逐章大纲。
+7. 信息不足时优先做“最小必要推导”，不要为了显得完整而制造大量设定。
+
+【提炼流程】
+A. 提取用户真正想表达的核心创意、主角、世界观、核心冲突、目标、故事动力、风格和读者体验。
+B. 诊断当前构想的缺口、冲突或表达模糊处。
+C. 在不改变核心创意的前提下，强化钩子、因果链、持续推动力、人物动机、规则限制和追读动力。
+D. 把结果组织成一份后续 AI 可以直接执行的创作提示词。
+E. 明确哪些内容必须锁定，哪些内容属于 AI 合理补足。
+
+【短构想】
+如果用户只输入极短概念，不要生成五个方向。基于题材惯例做最小骨架展开，并在 diagnosis / aiAdditions 中明确标记为 AI 推导；不要把推导伪装成用户事实。
+
+【职责边界】
+你负责“故事创意层 + 可执行提示词层”。
+词典达人负责正式世界事实；校长负责全书组织；老师负责逐章施工；正文 AI 负责文学表达。
+除非用户原文已经包含章节细节，否则不要提前决定第几章发生什么、谁死亡、何时揭露答案等。
+
+【optimizedPrompt 要求】
+optimizedPrompt 必须是完整、连贯、可脱离原始输入直接交给后续创作 AI 使用的中文提示词。至少包含：核心创意、主角、世界观/规则、核心冲突、目标与故事动力、人物关系（如有）、风格、读者体验、创作要求、必须保留的事实、禁止擅自改变的内容。不要写“这个故事很精彩”等空话。
+
+【输出契约】
+严格只输出 JSON，不要 Markdown、代码围栏、解释或 JSON 之外的文字：
+{
+  "diagnosis": {"summary":"","strengths":[],"missing":[],"issues":[]},
+  "brief": {"genre":"","protagonist":"","coreConflict":"","worldOrRules":"","antagonistOrPressure":"","motivation":"","style":"","readerExperience":""},
+  "optimizedPrompt":"",
+  "aiAdditions":[],
+  "lockedFacts":[],
+  "navBeacon":{"genre":"","protagonist":"","coreConflict":"","tone":""},
+  "seedCharacters":[],
+  "seedPlaces":[]
+}
+
+【最终自检】
+- 是否只有一个最终优化结果？
+- 是否完整保留用户核心创意？
+- 是否没有偷换主角、核心能力、核心冲突、世界观或风格？
+- AI 新增内容是否明确标记？
+- optimizedPrompt 是否可以直接给下游 AI 使用？
+- 是否没有越权写成完整章节大纲？`;
 
 const GLOSSARY_EXTRACT_SYS_LEGACY = `你是长篇小说设定整理助手。给定【本章正文】与【现有词典】，提取正文中出现但现有词典【未收录】的新人物、新地名、新专名。
 请严格只输出如下 JSON（不要解释、不要 markdown 代码块）：
@@ -10553,7 +9354,7 @@ function getDeckStepStatus(){
   const groups = schoolStageGroups();
 
   const s1_done = !!(state.chapterStyle && state.chapterStyle.tags && state.chapterStyle.tags.length);
-  const s2_done = !!(state.polishAdopted || (state.idea && state.idea.trim()));
+  const s2_done = !!((state.polishedIdea && String(state.polishedIdea.optimizedPrompt||'').trim()) || (state.idea && state.idea.trim()));
   const s3_done = !!(state.outlineConfirmed && o && chs.length > 0);
   const s4_done = !!(scDone('dictMaster') || state.dictmasterRan || (o && o.glossary && ((o.glossary.characters||[]).length > 0)));
   const s5_done = scDone('principal');
@@ -10821,12 +9622,10 @@ function viewStory(){
           <div class="card-head-bar">
             <div class="ch-left">
               <span class="ch-badge ch-badge-idea">💡</span>
-              <h3 class="ch-title">用户构想与五向优化</h3>
-              <span class="ch-subtag ch-subtag-idea">${(state.polishOptions&&state.polishOptions.length)?'✨ 构想已优化':'待优化'}</span>
+              <h3 class="ch-title">用户构想与 AI 提炼</h3>
+              <span class="ch-subtag ch-subtag-idea">${(state.polishedIdea&&state.polishedIdea.optimizedPrompt)?'✨ 已完成提炼':'待优化'}</span>
             </div>
-            <div class="ch-right">
-              <label class="pol-multi" title="生成多方向构想供比选"><input type="checkbox" id="chkPolishMulti" checked> 多方案</label>
-            </div>
+            <div class="ch-right"><span class="muted" style="font-size:12px">AI 自动提炼唯一推荐结果</span></div>
           </div>
           <div class="idea-row">
             <textarea id="ideaInput" placeholder="描述你的故事点子（世界观、主角、核心冲突等）…">${esc(state.idea)}</textarea>
@@ -10835,17 +9634,17 @@ function viewStory(){
             <button id="btnPolishIdea" class="btn ghost ${polishIdle()?'first':''}">✨ 优化构想</button>
           </div>
           <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}">
-            <div class="pol-head"><b>✨ 方案比选</b>
+            <div class="pol-head"><b>✨ AI 构想提炼结果</b>
               <span class="pol-tools">
                 <button id="btnPolishDiscard" class="btn small ghost">✕ 收起</button>
               </span>
             </div>
             <div id="polishCards" class="pol-cards"></div>
           </div>
-          ${ (state.polishCollapsed && Array.isArray(state.polishOptions) && state.polishOptions.length) ? `<div class="pol-keep pol-keep-collapsed"><span class="pol-keep-t">✓ 已采用：${esc(state.polishAdopted || state.polishOptions[0].name || '方案1')} · 优化方案已收起</span><span class="pol-keep-btns"><button type="button" class="btn small ghost" data-pol-keep-view>🔍 展开/更换方案</button></span></div>` : '' }
+          
           ${ polishKeepBar() }
           <div class="btn-row">
-            <button id="btnGenOutline" class="btn primary block" ${(!(Array.isArray(state.polishOptions) && state.polishOptions.length))?'disabled title="请先优化构想再生成大纲"':''}>${(!(Array.isArray(state.polishOptions) && state.polishOptions.length))?'📋 待优化构想后生成':(isLong()?'📚 生成大纲':'✨ 生成故事大纲')}</button>
+            <button id="btnGenOutline" class="btn primary block" ${(!(!!(state.polishedIdea && String(state.polishedIdea.optimizedPrompt||'').trim())))?'disabled title="请先优化构想再生成大纲"':''}>${(!(!!(state.polishedIdea && String(state.polishedIdea.optimizedPrompt||'').trim())))?'📋 待优化构想后生成':(isLong()?'📚 生成大纲':'✨ 生成故事大纲')}</button>
           </div>
           <p id="outlineStatus" class="status"></p>
         </div>`;
@@ -10975,23 +9774,23 @@ ${longNovelMemoryRepoHtml()}
       ${ safeCard(()=>writeStyleCard()) }
     </section>
 <section class="flow-sec" data-flow="2">
-      <div class="flow-sec-head"><span class="fs-no">2</span><span class="fs-name">故事构想与优化</span><span class="fs-note">先保留原始灵感，再由 AI 提供可选优化方案</span></div>
+      <div class="flow-sec-head"><span class="fs-no">2</span><span class="fs-name">故事构想与优化</span><span class="fs-note">保留原始灵感，再由 AI 自动提炼唯一优化结果</span></div>
       ${bookBeatBriefHtml()}
       <div class="card card-theme-idea">
         <div class="card-head-bar">
           <div class="ch-left">
             <span class="ch-badge ch-badge-idea">✨</span>
-            <h3 class="ch-title">候选方案比选</h3>
-            <span class="ch-subtag ch-subtag-idea">${(state.polishOptions&&state.polishOptions.length)?`${state.polishOptions.length} 个方案可选`:'多向优化'}</span>
+            <h3 class="ch-title">AI 构想提炼</h3>
+            <span class="ch-subtag ch-subtag-idea">${(state.polishedIdea&&state.polishedIdea.optimizedPrompt)?'唯一优化结果':'待优化'}</span>
           </div>
           <div class="ch-right">
-            ${dictmasterLocked()?'<span class="muted" style="font-size:12px">②方案已锁定</span>':''}
+            ${dictmasterLocked()?'<span class="muted" style="font-size:12px">②优化构想已锁定</span>':''}
           </div>
         </div>
         <div id="polishCards2" class="pol-box" style="display:block"></div>
-        ${ polishKeepBar() }   <!-- v1.0.205 阶段5.5 后悔药：生成大纲后仍可 查看历史优化版本 / 重新优化 / 重新选候选后点下方「生成大纲」重搬（词典达人产出前可反悔） -->
+        ${ polishKeepBar() }
         <div class="btn-row" style="margin-top:8px">
-          <button data-gen-outline class="btn primary block" ${dictmasterLocked()?'disabled title="词典达人已产出，②方案已锁定"':''}>📚 生成大纲（搬入书名 / 简介 / 节拍）${dictmasterLocked()?'（②已锁定）':''}</button>
+          <button data-gen-outline class="btn primary block" ${dictmasterLocked()?'disabled title="词典达人已产出，②优化构想已锁定"':''}>📚 生成大纲（读取唯一优化构想）${dictmasterLocked()?'（②已锁定）':''}</button>
         </div>
       </div>
     <div class="card card-theme-idea">
@@ -12139,8 +10938,8 @@ function titlesGenUser(opts){
   const parts = [];
   const cand = selectedPolishCandidate();
   const txt = String((cand && cand.text) || '').trim();
-  parts.push(`【蓝本：②优化构想所选方案】${(cand && cand.name) ? ('方案『' + cand.name + '』') : '（所选方案）'}`);
-  parts.push(`【所选方案完整原文（作为唯一蓝本，其中已有信息不可改动）】\n${txt || '（所选方案为空）'}`);
+  parts.push(`【蓝本：②优化构想唯一结果】`);
+  parts.push(`【优化后的创作提示词（作为唯一蓝本，其中已有信息不可改动）】\n${txt || '（优化结果为空）'}`);
   const n = opts.n || ((o.chapters || []).length) || 0;
   if(n){
     parts.push(`请生成恰好 ${n} 个章节标题，每个标题一行、含章号前缀，形如：\n第1章 标题\n第2章 标题\n…\n第${n}章 标题\n行数必须严格等于 ${n}，每个标题名≤18字。只输出纯文本，不要 JSON、不要 markdown 代码块、不要解释。`);
@@ -14596,11 +13395,11 @@ const genOutline = async function(){
   const st = $('#outlineStatus');
   if(st){ st.className='status'; st.textContent=''; }
   if(!canRunAI('outline')){ toast('请先完成上游步骤：优化构想'); if(btn) busy(btn,false); return; }
-  const noOpt = !(Array.isArray(state.polishOptions) && state.polishOptions.length);
-  if(noOpt){ toast('请先点「✨ 优化构想」生成方案，再点「生成大纲」搬入书名 / 简介 / 节拍'); if(btn) busy(btn,false); return; }
+  const noOpt = !(state.polishedIdea && String(state.polishedIdea.optimizedPrompt||'').trim());
+  if(noOpt){ toast('请先点「✨ 优化构想」生成唯一优化结果，再点「生成大纲」'); if(btn) busy(btn,false); return; }
   const cand = selectedPolishCandidate();
-  if(!cand){ toast('先选择一个优化方案（在②优化构想中点击某张候选卡「✔ 采用此方案」）'); if(btn) busy(btn,false); return; }
-  if(dictmasterLocked()){ toast('词典达人已产出万物词典，②方案已锁定，不可再换选重搬'); if(btn) busy(btn,false); return; }
+  if(!cand){ toast('请先完成「✨ 优化构想」'); if(btn) busy(btn,false); return; }
+  if(dictmasterLocked()){ toast('词典达人已产出万物词典，②优化构想已锁定，不可再换选重搬'); if(btn) busy(btn,false); return; }
   if(!confirmOutlineContentGuard()){ if(btn) busy(btn,false); return; }
   markAIRunning('outline');
   if(btn) busy(btn,true,'搬运大纲中…');
@@ -14625,13 +13424,6 @@ const genOutline = async function(){
   }
 };
 
-function selectedPolishCandidate(){
-  const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
-  if(!opts.length) return null;
-  const ad = state.polishAdopted;
-  if(ad){ const hit = opts.find(o=> o && o.name === ad); if(hit) return hit; }
-  return opts[0];   // 无显式选中时回退第一候选（视为已选）
-}
 function dictmasterLocked(){
   if(!state.dictmasterRan) return false;
   const g = (state.outline && state.outline.glossary) || null;
@@ -14710,7 +13502,7 @@ const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人�
 因此：你可以大胆创造，但必须谨慎定稿。一旦内容进入正式词典，就会成为后续创作可以依赖的正式世界事实。
 
 【一、最高原则｜用户蓝本优先】
-你将获得②优化构想所选方案的完整原文，其中包含书名、题材、主角、核心冲突、世界观、对手、动机、风格、结构、核心词，以及用户明确指定的人物、地点、专名、势力、规则等。
+你将获得②优化构想唯一结果的完整原文，其中包含书名、题材、主角、核心冲突、世界观、对手、动机、风格、结构、核心词，以及用户明确指定的人物、地点、专名、势力、规则等。
 
 这份内容是本次创作的唯一蓝本。
 
@@ -14919,8 +13711,8 @@ function buildDictMasterUser(ctx){
   const cand = ctx && ctx.candidate;
   const txt = String((cand && cand.text) || '').trim();
   const parts = [];
-  parts.push(`【蓝本：②优化构想所选方案】${(cand && cand.name) ? ('方案『' + cand.name + '』') : '（所选方案）'}`);
-  parts.push(('【所选方案完整原文（作为唯一蓝本，其中已有角色/地名/专名不可改动）】\n' + txt) || '（所选方案为空）');
+  parts.push(`【蓝本：②优化构想唯一结果】`);
+  parts.push(('【唯一优化结果完整原文（作为唯一蓝本，其中已有角色/地名/专名不可改动）】\n' + txt) || '（唯一优化结果为空）');
   return parts.join('\n\n');
 }
 function validateDictMasterOutput(j){
@@ -14966,9 +13758,9 @@ async function genDictMaster(btn){
   const o = state.outline;
   const st = $('#dictmasterStatus');
   if(st){ st.className='status'; st.textContent=''; }
-  if(!canRunAI('dictmaster')){ toast('请先完成上游：②优化构想并选中一个方案'); return false; }
+  if(!canRunAI('dictmaster')){ toast('请先完成上游：②优化构想'); return false; }
   invalidateSchoolDownstream('dictMaster');
-  if(!selectedPolishCandidate()){ toast('先选择一个优化方案'); return false; }
+  if(!selectedPolishCandidate()){ toast('先完成「✨ 优化构想」'); return false; }
   state.originalIdeaSnapshot = String(state.idea || '').trim() || state.originalIdeaSnapshot;
   markAIRunning('dictmaster');
   if(btn) busy(btn,true,'生成万物词典中…');
@@ -15221,7 +14013,7 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 
 你将获得两份核心素材：
 
-第一部分：②优化构想所选方案的完整内容。
+第一部分：②优化构想唯一结果的完整内容。
 
 第二部分：词典达人已经生成并正式定稿的全部词典内容。
 
@@ -15657,13 +14449,12 @@ function buildDictEnrichUser(){
   }
 
   // ==========================================
-  // 1. 优化构想·用户所选方案完整内容
+  // 1. 优化构想·唯一结果完整内容
   // ==========================================
   let cand = null;
   try{ cand = (typeof selectedPolishCandidate === 'function') ? selectedPolishCandidate() : null; }catch(e){}
-  const candName = (cand && cand.name) ? `【优化方案名】方案『${String(cand.name).trim()}』\n` : '';
-  const candFullText = String((cand && (cand.text || cand.raw || cand.brief)) || o.logline || '').trim();
-  const polishPart = `【第一部分：优化构想·所选方案完整内容（全书核心设定蓝本）】\n${candName}${candFullText || '（所选优化方案为空）'}`;
+  const candFullText = String((cand && (cand.text || cand.raw)) || o.logline || '').trim();
+  const polishPart = `【第一部分：优化构想·唯一结果完整内容（全书核心设定蓝本）】\n${candFullText || '（唯一优化结果为空）'}`;
   parts.push(polishPart);
 
   // ==========================================
@@ -18672,7 +17463,7 @@ function updateCfgBadge(){
 
 const TM_GROUPS = [
   { title:'🧠 前置 · 构想（项目起点）', keys:[
-    ['idea','故事构想 / 优化构想','生成与优化故事点子、多方向方案比选']
+    ['idea','故事构想 / 优化构想','理解、诊断并提炼用户构想为唯一高质量创作提示词']
   ]},
   { title:'🏛️ 学校统筹与设定架构（核心大脑，建议主力模型）', keys:[
     ['principal','👑 校长总控','长篇小说治学总舵手：统领全量材料，产出全校守则、组级框架与章节标题'],
