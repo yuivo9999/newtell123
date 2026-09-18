@@ -1,6 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.343';
+const APP_VERSION = '1.0.344';
+// Version line: app12.js — chapter-ending system upgrade. Original app1.js remains untouched.
+const APP_FILE_VERSION = 'app12.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -239,7 +241,8 @@ function normalizeOutline(o){
   if(o._beatsHist) delete o._beatsHist;
   // v3：正式区分“已定稿世界”“章节计划”“正文观测”。AI可以创造，但下游不得越权改写。
   o._storyState = o._storyState || { schema:2, canon:{dictmasterAt:0,dictEnrichAt:0,principalAt:0,teacherAt:{},masterSnapshot:null}, chapters:{}, current:{chapter:-1,time:'',location:'',characters:{},endingState:'',openThreads:[]}, versions:{dictMaster:0,dictEnrich:0,principal:0,chapterCard:0}, pipelineVersion:0 };
-  o._storyState.schema=2; o._storyState.versions=o._storyState.versions||{dictMaster:0,dictEnrich:0,principal:0,chapterCard:0}; o._storyState.canon=o._storyState.canon||{dictmasterAt:0,dictEnrichAt:0,principalAt:0,teacherAt:{},masterSnapshot:null}; o._storyState.canon.teacherAt=o._storyState.canon.teacherAt||{};
+  o._storyState.schema=2; o._storyState.versions=o._storyState.versions||{dictMaster:0,dictEnrich:0,principal:0,chapterCard:0};
+  o._principalChapterTasks = o._principalChapterTasks || {}; o._storyState.canon=o._storyState.canon||{dictmasterAt:0,dictEnrichAt:0,principalAt:0,teacherAt:{},masterSnapshot:null}; o._storyState.canon.teacherAt=o._storyState.canon.teacherAt||{};
   o._storyState.canon = o._storyState.canon || {dictmasterAt:0,dictEnrichAt:0,principalAt:0,teacherAt:{}};
   o._storyState.chapters = o._storyState.chapters || {};
   o._storyState.current = o._storyState.current || {chapter:-1,time:'',location:'',characters:{},endingState:'',openThreads:[]};
@@ -1613,7 +1616,16 @@ function guardSwitchStep(){
 
 
 
+const CHAPTER_ENDING_WRITER_RULES = `【章节结尾专用规则】
+本章结尾不是固定模板。先完成本章最后一个必要事件，再根据章级结尾决策卡自然停止。
+允许：正常完成、余韵、关系变化、决定、行动启动、信息揭示、悬念、冲突未决、反转、留白、后果、喜剧包袱、场景切断、直言评述等。
+表现形式可为动作、对白、信息、环境、心理、物件、场景切断、沉默、事件结果等。
+严禁把“明天会发生什么、期待未来、夕阳、新的一天、惊喜、一切才刚刚开始”等当作默认补丁。
+没有钩子完全合法。若章级决策卡要求无钩子，必须在最后有效事件完成处停止；若要求钩子，钩子必须来自已成立事实，不得创造关键新事实。
+`;
 const LONG_CHAPTER_SYS_PRO = `你是一位资深长篇小说「正文作家」。
+
+${CHAPTER_ENDING_WRITER_RULES}
 
 你的唯一职责，是把上游已经确定的故事事实、章节教案、人物状态、时间地点和剧情推进，写成真正能够阅读的小说正文。
 
@@ -5063,6 +5075,85 @@ function principalFinalContext(baseUser, understanding, blocks){
   return `${baseUser}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【Prompt-Perfect式上下文理解层｜模型已先阅读全部来源】\n以下不是新的事实来源，而是对上方来源总账逐段阅读后的语义理解结果。\n校长必须回到来源总账核对关键事实；理解层不得凌驾于原始来源权限之上。\n\n${understanding}\n\n【来源清单（原文均已在前置理解阶段逐段读取）】\n${manifest}\n\n【最终决策要求】\n- 先综合全部来源，再开始规划；不要只依据某一个来源。\n- 用户明确选择/要求、词典已成立事实、正文已观测事实不得被下游规划擅自改写。\n- 当来源冲突时，按既有权限链处理并在规划中保持边界，不要偷偷“修正”原始事实。\n- 每一项重要规划结论都应能追溯到一个或多个来源。\n- 只输出原校长系统规定的最终 Markdown 契约。`;
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Chapter Ending System v1
+// 叙事功能 × 表现形式 × 强度 × 钩子需求；不是随机池。
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const CHAPTER_ENDING_FUNCTIONS = [
+  {key:'completion', label:'正常完成式', desc:'本章任务/事件完成后自然停止，不额外制造钩子。'},
+  {key:'afterglow', label:'情绪余韵式', desc:'事件完成后留下情绪、关系或意义的余波。'},
+  {key:'relationship_change', label:'关系变化式', desc:'人物关系发生可感知变化，以关系落点结束。'},
+  {key:'decision', label:'决定式', desc:'人物完成关键选择，以决定本身作为停止点。'},
+  {key:'action_launch', label:'行动启动式', desc:'新的行动已经开始，章末停在行动启动点。'},
+  {key:'revelation', label:'信息揭示式', desc:'关键事实/信息在章末成立，改变读者理解。'},
+  {key:'suspense', label:'悬念式', desc:'留下明确、已建立依据的问题或危险，不要求每章使用。'},
+  {key:'unresolved_conflict', label:'冲突未决式', desc:'冲突暂未解决，停在真实对峙或僵持点。'},
+  {key:'reversal', label:'反转式', desc:'最后信息/事实重新解释前文，但不得凭空新增关键事实。'},
+  {key:'open', label:'留白式', desc:'有意不解释或不总结，让读者停留在最后一个有效事件。'},
+  {key:'consequence', label:'后果式', desc:'重大行动后的直接后果成为本章最后落点。'},
+  {key:'comic_button', label:'喜剧包袱/反讽式', desc:'以已建立的笑点、反讽或错位作为落点。'},
+  {key:'scene_cut', label:'场景切断式', desc:'在自然场景断点结束，不额外解释。'},
+  {key:'explicit_commentary', label:'直言评述式', desc:'以简洁、符合文风的作者/叙事评述正常收束。'}
+];
+const CHAPTER_ENDING_FORMS = [
+  {key:'action',label:'动作'}, {key:'dialogue',label:'对白'}, {key:'information',label:'信息'},
+  {key:'environment',label:'环境'}, {key:'psychology',label:'心理'}, {key:'object',label:'物件'},
+  {key:'scene_cut',label:'场景切断'}, {key:'silence',label:'沉默'}, {key:'event_result',label:'事件结果'},
+  {key:'consequence',label:'直接后果'}
+];
+const CHAPTER_ENDING_BANNED_TEMPLATES = [
+  '不知道明天会发生什么','期待着明天','期待未来','新的惊喜','夕阳西下','新的一天又将开始',
+  '一切才刚刚开始','未来等待着他们','明天一切都会不同','不知道接下来会有什么惊喜'
+];
+function chapterEndingFunctionText(){ return CHAPTER_ENDING_FUNCTIONS.map(x=>`${x.key}=${x.label}：${x.desc}`).join('\n'); }
+function chapterEndingFormText(){ return CHAPTER_ENDING_FORMS.map(x=>`${x.key}=${x.label}`).join('、'); }
+function extractChapterEndingDecision(i){
+  const card=principalChapterTask(i);
+  if(!card) return null;
+  const get=(names)=>{ for(const n of names){ const re=new RegExp(`(?:^|\\n)\\s*[-*]?\\s*${escapeRegExp(n)}\\s*[：:]\\s*([^\\n]+)`,'i'); const m=card.match(re); if(m) return m[1].trim(); } return ''; };
+  return {
+    function:get(['主要结尾功能','结尾主要功能','本章结尾功能']),
+    secondary:get(['次级结尾功能','结尾次级功能']),
+    intensity:get(['结尾强度','章末强度']),
+    hook:get(['是否需要下一章钩子','是否需要钩子','钩子需求']),
+    forms:get(['允许的表现形式','结尾表现形式','允许结尾形式']),
+    preferred:get(['推荐表现形式','结尾表现形式建议']),
+    forbidden:get(['结尾禁止','禁止结尾','禁止的结尾形式']),
+    reason:get(['结尾选择理由','结尾策略理由']),
+    lastEvent:get(['最后有效事件','最后有效剧情节点','章末最后有效事件'])
+  };
+}
+function chapterEndingDecisionBlock(i){
+  const d=extractChapterEndingDecision(i);
+  if(!d || (!d.function&&!d.secondary&&!d.intensity&&!d.hook&&!d.forms)) return '';
+  return `【本章结尾决策卡｜校长章级授权】\n- 主要结尾功能：${d.function||'未指定；由本章最后有效事件自然决定'}\n- 次级结尾功能：${d.secondary||'无'}\n- 结尾强度：${d.intensity||'0-4未指定；不得擅自提高'}\n- 下一章钩子：${d.hook||'未指定；不得默认制造'}\n- 允许表现形式：${d.forms||'以自然表现为准'}\n- 推荐表现形式：${d.preferred||'无'}\n- 禁止：${d.forbidden||'万能未来期待、明天、夕阳、惊喜、机械升华不得作为默认补丁'}\n- 选择理由：${d.reason||'必须服从本章实际剧情与题材'}\n- 最后有效事件：${d.lastEvent||'以本章最后一个必要事件为自然停止点'}\n执行原则：结尾是叙事功能，不是固定句式；先完成最后一个有效事件，再决定是否还有必要继续一段。`;
+}
+function recentChapterEndingHistory(i, count=8){
+  const out=[];
+  const start=Math.max(0,i-count);
+  for(let k=start;k<i;k++){
+    const c=(state.chapters||[])[k]; if(!c||!String(c.content||'').trim()) continue;
+    const tail=String(c.content).trim().slice(-900);
+    let form='';
+    if(/[“”"].{1,80}[。！？!?]$/.test(tail)) form='对白/语言';
+    else if(/(夕阳|黄昏|夜色|月光|晨光|天色|风|雨|阳光)/.test(tail)) form='环境';
+    else if(/(没有说话|沉默|无言|没有回答|不再开口)/.test(tail)) form='沉默';
+    else if(/(决定|答应|拒绝|转身|推开|走进|离开|拿起|放下|关上|打开)/.test(tail)) form='动作/决定';
+    else form='事件/叙述';
+    const hits=CHAPTER_ENDING_BANNED_TEMPLATES.filter(x=>tail.includes(x));
+    out.push({chapter:k+1,form,templateRisk:hits.length?'high':'low',tail:tail.slice(-180)});
+  }
+  return out;
+}
+function chapterEndingAuditText(i){
+  const h=recentChapterEndingHistory(i,8);
+  if(!h.length) return '【结尾多样性审计】暂无前章样本；仍禁止万能结尾模板。';
+  return `【结尾多样性审计｜最近${h.length}章】\n${h.map(x=>`第${x.chapter}章：表现=${x.form}｜模板风险=${x.templateRisk}｜末尾片段=${x.tail.replace(/\s+/g,' ').slice(0,140)}`).join('\n')}\n规则：不得机械重复同一“功能+表现+语言模式”；同类结尾若剧情合理可继续使用，但必须避免模板化复刻。`;
+}
+function endingTemplateGuardText(){
+  return `【章节结尾反模板硬门】\n- 结尾必须尽量从本章最后一个有效事件自然停止，不得为了“像结尾”额外生成一段万能收尾。\n- “明天/未来/期待/惊喜/夕阳/新的一天/一切才刚刚开始”等句式不是默认结尾。\n- 没有悬念完全合法；正常完成式、直言评述式、动作式、对白式、留白式均可。\n- 不得随机抽取结尾类型；必须根据本章核心变化、题材、场景、情绪与章级结尾决策卡选择。\n- 若章级卡要求无钩子，正文不得擅自制造下一章悬念。\n- 若章级卡要求悬念，悬念必须来自已经成立的事实、人物、线索或当前事件后果，不得临时创造关键事实。`;
+}
+
 const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（全校总舵手）。
 
 你的唯一核心职责，是把用户已经确定的作品方向、世界事实、写作风格和全书资源，组织成一套能够稳定传递给「老师 → 正文AI」执行的全书级规划。
@@ -5103,8 +5194,8 @@ const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（全
 
 L0 · 用户确定的作品事实、世界观、作品定位、写作风格与明确要求
 L1 · 全量万物词典中已经确认的世界事实
-L2 · 校长全书规划
-L3 · 老师本章教案
+L2 · 校长全书规划 + 本章章级导演/授权任务卡
+L3 · 老师在授权边界内形成的本章教案
 L4 · 正文AI文学表达
 
 其中：
@@ -5140,7 +5231,8 @@ L0 是最高优先级。
 11. 第一章开篇任务卡
 12. 各组组级框架
 13. 全书章节标题
-14. 全书级风险审计
+14. 每章章级导演/授权任务卡
+15. 全书级风险审计
 
 你不得负责：
 
@@ -5157,11 +5249,13 @@ L0 是最高优先级。
 
 校长的输出必须停留在：
 
-「战略约束 + 章节功能 + 组级结构 + 必要接口」
+「战略约束 + 章节功能 + 章级授权任务卡 + 组级结构 + 必要接口」
 
 而不是：
 
 「逐章施工图」。
+
+章级任务卡必须规定“必须实现什么、允许调用什么、哪些信息开放、哪些事情禁止发生”，但不得规定老师逐拍如何施工。
 
 ━━━━━━━━━━━━━━━━━━
 【三、校长与老师的正确分工】
@@ -5237,7 +5331,7 @@ L0 是最高优先级。
 “第一阶段通过X问题迫使人物从A状态进入B状态；阶段高潮使人物失去/获得X，并因此不得不进入下一阶段。”
 
 ━━━━━━━━━━━━━━━━━━
-【五、章节功能：校长只定义“为什么存在”】
+【五、章节功能与章级授权：校长定义“为什么存在 + 本章允许沿哪条轨道走”】
 ━━━━━━━━━━━━━━━━━━
 
 每章必须拥有清晰的全书级功能。
@@ -5256,6 +5350,10 @@ L0 是最高优先级。
 
 章节功能 ≠ 本章具体事件。
 
+同时，章级授权 ≠ 本章完整教案。
+
+校长可以进一步规定：本章必须从什么状态进入什么状态、必须推进哪些核心变化、可以调用哪些已经成立的人物/地点/线索、哪些信息暂不开放、哪些创造属于越权。
+
 例如：
 
 “第12章：推进”
@@ -5273,10 +5371,10 @@ L0 是最高优先级。
 因此：
 
 校长定义：
-“这一章必须让什么发生变化。”
+“这一章必须让什么发生变化，以及为了实现这个变化，哪些事实/人物/线索可以被授权调用，哪些不能。”
 
 老师定义：
-“通过什么事件让这个变化发生。”
+“在授权边界内，通过什么事件让这个变化发生。”
 
 正文定义：
 “怎样把这些事件写成小说。”
@@ -5310,6 +5408,61 @@ L0 是最高优先级。
 这种无法执行的空泛目标。
 
 ━━━━━━━━━━━━━━━━━━
+【七、章级导演/授权任务卡】
+━━━━━━━━━━━━━━━━━━
+
+每一章都必须先生成一张“章级导演/授权任务卡”，再交给老师施工。
+
+任务卡不是教案，不写完整事件列表、不写逐拍动作、不写对白。
+任务卡必须回答：
+
+- 本章战略目标：章末全书状态必须发生什么变化；
+- 起始状态：本章开始时人物、地点、时间、已知信息与未决问题；
+- 终止状态：本章结束后必须成立的状态；
+- 必须推进：本章不可省略的核心变化/剧情结果；
+- 必须继承：上一章交接来的真实状态、悬念、人物状态；
+- 允许人物：本章可以调用的正式人物；
+- 允许地点：本章可以调用的已成立地点；
+- 允许道具/资源：本章可以调用的既有资源；
+- 允许线索：本章可以使用或推进的已成立线索；
+- 信息边界：本章人物知道什么、不知道什么，哪些未来信息不得提前开放；
+- 禁止事项：不得新增或改变的核心人物、关系、秘密、地点、道具、线索及因果；
+- 因果边界：重大事件必须满足哪些前置条件；
+- 老师创造空间：允许老师自行设计的中间事件、节拍、调查路径和文学化施工范围；
+- 待确认项：任何需要新增核心人物/关键情报/新世界事实的需求，只能作为待确认项提出，不得直接成立。
+
+【章级授权硬规则】
+1. 任务卡中的“允许人物/地点/道具/线索”是本章核心剧情资源白名单；名单外若要承担关键剧情功能，必须先进入待确认项。
+2. 普通路人、老人、摊贩、店小二等只能作为一次性环境人物存在；不得凭空获得核心情报，不得改变主线。
+3. 任何人物掌握核心人物住址、秘密、关系、身份、主线线索等信息，必须有可追溯的信息来源链。
+4. 校长不得为了让任务卡完整而虚构词典不存在的核心人物或关键事实；无法授权的内容写入“待确认项”。
+5. 老师不得把待确认项直接升级为既成事实。
+
+━━━━━━━━━━━━━━━━━━
+【七A、章节结尾系统：结尾功能不是固定模板】
+每章必须有章末结尾决策，但校长只决定“结尾功能/强度/钩子需求/允许形式/禁止项”，不写最后一段正文。
+可用结尾功能包括：正常完成式、情绪余韵式、关系变化式、决定式、行动启动式、信息揭示式、悬念式、冲突未决式、反转式、留白式、后果式、喜剧包袱/反讽式、场景切断式、直言评述式。
+可用表现形式包括：动作、对白、信息、环境、心理、物件、场景切断、沉默、事件结果、直接后果。
+校长必须结合本章题材、章节功能、最后有效事件、情绪温度与下一章接口来选择，而不是随机选择。
+每张章级任务卡新增字段：
+- 主要结尾功能
+- 次级结尾功能
+- 结尾强度（0-4）
+- 是否需要下一章钩子
+- 允许的表现形式
+- 推荐表现形式
+- 结尾禁止
+- 结尾选择理由
+- 最后有效事件/自然停止点
+并遵守：没有悬念、没有未来期待、没有“明天”的正常收束完全合法。除非剧情确有依据，不得把“明日约定、夕阳、期待未来、新的惊喜”等当作默认收尾。
+最近章节结尾应进行多样性检查，但不能机械禁止同类结尾；检查“功能+表现形式+语言模式”的复刻风险。
+
+━━━━━━━━━━━━━━━━━━
+【七B、校长章级结尾决策边界】
+━━━━━━━━━━━━━━━━━━
+校长决定“为什么在这里停、停时读者应处于什么叙事状态”；老师决定“最后一个有效事件怎样完成”；正文决定“怎样写得自然”。
+如果本章核心变化已经完成且没有下一步必要动作，优先允许正常停止。禁止为了制造连续感而追加无依据的新期待。
+
 【七、全书微拍与节奏体系】
 ━━━━━━━━━━━━━━━━━━
 
@@ -5822,7 +5975,29 @@ L0 是最高优先级。
 
 如果不存在第1章，则不要虚构。
 
-③ 各组组级框架
+③ 各章章级导演/授权任务卡
+
+必须覆盖全部章节。每章使用独立小节：
+
+## 第X章章级导演/授权任务卡
+- 战略目标：……
+- 起始状态：……
+- 终止状态：……
+- 必须推进：……
+- 必须继承：……
+- 允许人物：……
+- 允许地点：……
+- 允许道具/资源：……
+- 允许线索：……
+- 信息边界：……
+- 禁止事项：……
+- 因果边界：……
+- 老师创造空间：……
+- 待确认项：……
+
+要求：只能做章级授权，不得写成完整教案。
+
+④ 各组组级框架
 
 每组必须完整输出：
 
@@ -5920,6 +6095,26 @@ L0 是最高优先级。
 禁止事项：……
 继续阅读问题：……
 
+# 各章章级导演/授权任务卡
+
+## 第1章章级导演/授权任务卡
+- 战略目标：……
+- 起始状态：……
+- 终止状态：……
+- 必须推进：……
+- 必须继承：……
+- 允许人物：……
+- 允许地点：……
+- 允许道具/资源：……
+- 允许线索：……
+- 信息边界：……
+- 禁止事项：……
+- 因果边界：……
+- 老师创造空间：……
+- 待确认项：……
+
+……
+
 # 各组组级框架
 
 ## 组1 · 老师1
@@ -5962,6 +6157,9 @@ L0 是最高优先级。
 □ 因果原则是否明确？
 □ 核心事实是否严格尊重词典？
 □ 第一章任务卡是否足够具体但没有越权成为教案？
+□ 是否为每一章生成章级导演/授权任务卡？
+□ 每章授权是否包含人物/地点/线索/信息边界与禁止事项？
+□ 是否禁止把未授权核心人物或关键情报直接写成事实？
 □ 是否明确要求章节在自己的边界停止？
 □ 是否避免提前设计下一章具体剧情？
 □ 标题是否完整覆盖所有章节？
@@ -6027,7 +6225,8 @@ async function genPrincipal(btn, opts){
         }
         storyState().canon.principalAt=Date.now(); storyState().versions.principal=Number(storyState().versions.principal||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1;
         delete sc.stale.principal;
-        sc.principal = { ts:Date.now(), folded:false, groups: groups.map((g,gi)=>({ gi, stage:g.stage, first:g.first, last:g.last })), raw:String(txt), titles }; storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={version:storyState().versions.principal,source:'principal',ts:Date.now(),groups:sc.principal.groups,titles};
+        sc.principal = { ts:Date.now(), folded:false, groups: groups.map((g,gi)=>({ gi, stage:g.stage, first:g.first, last:g.last })), raw:String(txt), titles, chapterTasks: principalChapterTaskCards(String(txt)) }; storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={version:storyState().versions.principal,source:'principal',ts:Date.now(),groups:sc.principal.groups,titles,chapterTasks:sc.principal.chapterTasks};
+        state.outline._principalChapterTasks = sc.principal.chapterTasks || {};
         scMark('principal', true);
         markAIDone('principal');
         render();
@@ -6051,7 +6250,9 @@ async function genPrincipal(btn, opts){
 const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师）。
 
 你的职责是：
-根据校长已经确定的全书规划，为自己负责的一整组章节逐章备课，生成可以直接交给「正文作家」执行的本章写作教案。
+根据校长已经确定的全书规划以及自己负责章节的“章级导演/授权任务卡”，为自己负责的一整组章节逐章备课，生成可以直接交给「正文作家」执行的本章写作教案。
+
+老师不是全书共同编剧。你只拥有当前组及必要前后接口所需的信息；你不得因为知道全书意图就自行补写未来剧情或建立新的世界事实。
 
 你不是正文作家。
 你不能代写正文。
@@ -6067,7 +6268,7 @@ const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师）。
 必须遵守：
 
 L0 · 用户确定的世界事实、写作风格
-L1 · 校长的全书规划、阶段结构、章节功能、风格裁决
+L1 · 校长的全书规划、阶段结构、章节功能、章级导演/授权任务卡与风格裁决
 L2 · 老师自己的本章教案
 L3 · 正文作家的文学表达
 
@@ -6089,6 +6290,37 @@ L3 · 正文作家的文学表达
 - 推翻已经成立的世界事实；
 - 替正文作家写成品小说；
 - 为了节拍漂亮而制造没有因果依据的事件。
+
+━━━━━━━━━━━━━━━━━━
+【一A、老师的知识与创造权限收口】
+━━━━━━━━━━━━━━━━━━
+
+1. 你只接收：当前负责章节组的组级框架、当前每章章级导演/授权任务卡、必要的上一组末状态、当前组已生成正文状态，以及为执行当前组明确需要的词典资料。
+2. 不默认读取完整 storyBlueprint、全书未来故事节拍、其他组老师完整教案或与当前组无关的未来秘密。
+3. 章级任务卡中的“允许人物/地点/道具/线索”是当前章核心剧情资源白名单。
+4. 名单外普通路人可临时出现，但只能承担环境或非关键功能；一旦承担关键情报、关键线索或主线转折功能，就不再是普通路人。
+5. 新核心人物、关键人物关系、核心秘密、关键地点、关键道具、主线线索不得由老师直接确认为事实。只能写入“待确认项”，等待词典/校长授权。
+6. 任何人物获得关键情报，都必须说明“为什么知道、从谁那里知道、该信息何时成立、可靠性如何”。没有来源链就不能把该情报写成事实。
+7. 不得利用自己对全书终局或未来剧情的推断，提前创造现在不存在的人物、关系、秘密或线索。
+8. 你拥有很大的“中间施工创造权”：可以设计调查路径、普通事件、节拍衔接、动作、场景组织和非关键过场，但这些创造不能突破章级授权边界。
+9. 如果授权不足以完成本章目标，不得硬补；优先输出待确认项或选择另一条已有依据的施工路径。
+
+━━━━━━━━━━━━━━━━━━
+【一B、章节结尾施工权限】
+校长章级结尾决策卡是上位约束。老师不得自行把“留钩子”当作每章必选。
+老师必须先判断本章最后一个必要事件是什么，再在校长允许的结尾功能/表现形式中选择最自然的施工方式。
+老师可设计：最后一个动作、对白、信息落点、关系变化、决定、直接后果、场景切断、留白等；但不得额外生成“明天会怎样/期待未来/夕阳/新系统惊喜”等万能结尾。
+如果校长明确要求“无钩子/正常完成式”，老师必须允许本章安静结束。
+如果发现最近章节已经连续使用相似的功能+表现+语言模式，应主动换一种自然形式，但不得为了“多样”破坏剧情。
+老师教案的章末字段应至少包含：
+- 结尾功能（采用校长授权）
+- 结尾强度
+- 是否留钩子
+- 最后有效事件
+- 具体收尾动作/信息/对白功能
+- 表现形式
+- 禁止追加项
+- 与前几章结尾的重复风险
 
 ━━━━━━━━━━━━━━━━━━
 【二、教学观】
@@ -6654,6 +6886,18 @@ L3 · 正文作家的文学表达
 - 连续性：……
 - 本章出场名单：……
 
+每章都必须额外输出【章末结尾施工】并填写：
+结尾功能：……
+结尾强度：0-4
+是否留钩子：是/否
+最后有效事件：……
+具体收尾方式：……
+表现形式：……
+禁止追加：……
+重复风险：……
+
+只有在剧情确实需要时才使用前瞻/承诺；禁止把“明天/夕阳/期待未来”当作默认收尾。
+
 逐章输出直到本组最后一章。
 
 最后输出：
@@ -6665,6 +6909,59 @@ L3 · 正文作家的文学表达
 3. 【阶段高潮结算与关键道具/情报】：……`;
      
      
+function principalChapterTaskCards(raw){
+  const text=String(raw||'').replace(/\r\n?/g,'\n');
+  const re=/^\s*(?:#{1,6}\s*)?(?:第\s*(\d+)\s*章)\s*章级导演\/授权任务卡\s*$/gm;
+  const starts=[]; let m;
+  while((m=re.exec(text))) starts.push({chapter:+m[1],line:m.index});
+  const cards={};
+  for(let z=0;z<starts.length;z++){
+    const a=starts[z], b=z+1<starts.length?starts[z+1].line:text.length;
+    const block=text.slice(a.line,b).trim();
+    cards[a.chapter]=block;
+  }
+  return cards;
+}
+function principalChapterTask(i){
+  const raw=state.school?.principal?.raw || scState()?.principal?.raw || '';
+  const cards=principalChapterTaskCards(raw);
+  return String(cards[i+1]||'').trim();
+}
+function buildTeacherAuthorizationPack(g, gi){
+  const parts=[];
+  const p=state.school?.principal || scState()?.principal || {};
+  const raw=String(p.raw||'');
+  const cards=principalChapterTaskCards(raw);
+  parts.push(`【本组章级导演/授权任务卡｜老师只能在这些边界内施工】`);
+  for(let n=g.first;n<=g.last;n++){
+    const card=String(cards[n]||'').trim();
+    parts.push(card || `【第${n}章章级授权缺失】\n禁止把缺失内容自行补成校长事实；请先重新生成校长章级任务卡。`);
+  }
+  parts.push(`【授权解释】\n- “必须推进”与“终止状态”是本章目标约束。\n- “允许人物/地点/道具/线索”是核心剧情白名单。\n- “信息边界”规定当前章人物可以知道什么。\n- “待确认项”不得被老师直接升级为事实。\n- 老师可以自由设计白名单资源之间的中间事件和节拍，但不得突破以上边界。`);
+  return parts.join('\n\n');
+}
+function teacherScopedGlossary(g, gi, maxChar){
+  const o=state.outline||{}, gl=o.glossary||{};
+  const names=new Set();
+  for(let n=g.first;n<=g.last;n++){
+    const card=principalChapterTask(n-1);
+    const fields=card.match(/-\s*(?:允许人物|允许地点|允许道具\/资源|允许线索)\s*[：:]\s*([^\n]+)/g)||[];
+    fields.forEach(line=>line.replace(/^.*?[：:]\s*/,'').split(/[、，,；;]/).forEach(x=>{x=x.trim().replace(/^[-*•]\s*/,''); if(x && !/^(无|暂无|无特别限制)$/.test(x)) names.add(x.replace(/^《|》$/g,''));}));
+  }
+  const out=[];
+  const chars=(gl.characters||[]).filter(c=>{const nm=String(c?.name||'').trim();return nm && [...names].some(x=>nm===x||nm.includes(x)||x.includes(nm));});
+  const places=(gl.places||[]).filter(c=>{const nm=String(c?.name||'').trim();return nm && [...names].some(x=>nm===x||nm.includes(x)||x.includes(nm));});
+  const props=(gl.propernouns||[]).filter(c=>{const nm=String(c?.name||'').trim();return nm && [...names].some(x=>nm===x||nm.includes(x)||x.includes(nm));});
+  if(chars.length) out.push('人物：'+chars.map(c=>fmtCharFullFields(c).join('，')).join('\n· '));
+  if(places.length) out.push('地点：'+places.map(c=>`${c.name}${c.note?`：${c.note}`:''}`).join('、'));
+  if(props.length) out.push('专名/道具：'+props.map(c=>`${c.name}${c.note?`：${c.note}`:''}`).join('、'));
+  const rules=(gl._worldRules||[]).map(fmtWR).filter(Boolean);
+  if(rules.length) out.push('世界观规则（执行必守）：\n'+rules.slice(0,20).map(x=>'- '+x).join('\n'));
+  let text=out.join('\n\n');
+  if(text.length>(maxChar||9000)) text=text.slice(0,maxChar||9000)+'…（按授权范围截断）';
+  return text||'（本组章级授权未指定额外词典资源；核心剧情不得自行扩大人物/地点/线索范围。）';
+}
+
 function buildTeacherUser(g, gi){
   const pr = (state.school && state.school.principal) || {};
   const o = state.outline || {};
@@ -6674,12 +6971,11 @@ function buildTeacherUser(g, gi){
   lines.push(`【校长已裁决的风格融合总纲】\n${principalStyleExecutionExcerpt()}`);
   lines.push(`【本组组级框架（组${gi+1}·老师${gi+1}，第${g.first}-${g.last}章）】\n${(pr.raw && extractSection(pr.raw,'各组组级框架','全书章节标题总表')) || (pr.raw || '（校长未产出组级框架）')}`);
   lines.push(`【本组章节标题】\n${scGroupTitles(g).join('\n')}`);
-  if(o.storyBlueprint) lines.push(`【优化构想·完整小说蓝本（供老师理解全书创作意图）】\n${String(o.storyBlueprint).slice(0,12000)}`);
-  if(o.aiBookBeat) lines.push(`【优化构想·全书故事节拍（供老师承接）】\n${String(o.aiBookBeat).slice(0,8000)}`);
+  const auth = buildTeacherAuthorizationPack(g, gi);
+  if(auth) lines.push(auth);
   const _bc = currentBeatCfg ? currentBeatCfg() : null;
   if(_bc && _bc.label) lines.push(`【章节微拍（单源真理·内嵌骨架）】名称=${_bc.label}${_bc.desc?('；说明='+_bc.desc):''}${_bc.types?('；拍=('+_bc.types.map(t=>t.label).join('，')+')'):''}\n要求：将此微拍节奏直接融铸在每章教案的「本章推进骨架」中，形成单一执行标准的超级教案。`);
-  lines.push('【全量词典（共享不切片）】\n' + scGlossaryBrief(7000));
-  lines.push(`【本组《全书节拍》节选】\n${scGroupBeats(g, 8000)}`);
+  lines.push('【当前组执行词典（只供本组施工，不代表可任意调用全部核心剧情资源）】\n' + teacherScopedGlossary(g, gi, 9000));
   lines.push(`【前序正文状态（若存在）】\n${g.first>1 ? (storyStateChapterBlock(g.first-1) || '（暂无结算状态）') : '（首组，无前序正文）'}`);
   // 开篇策略只对首组（包含第1章）生效；后续老师不得把首章策略当成本组策略。
   if(g && g.first===1){
@@ -6730,7 +7026,9 @@ async function genTeacher(btn, gi){
   const groups = schoolStageGroups(); const g = groups[gi];
   if(!g){ toast('未找到该分组'); return false; }
   if(!scDone('dictEnrich')){ toast('老师备课需要先接收完整词典，请先完成“词典充实”'); return false; }
-  if(!scDone('principal')){ toast('请先生成校长（分组/守则/组级框架）'); return false; }
+  if(!scDone('principal')){ toast('请先生成校长（分组/守则/章级授权任务卡/组级框架）'); return false; }
+  const _authPack = buildTeacherAuthorizationPack(g, gi);
+  if(!_authPack || /章级授权缺失/.test(_authPack)){ toast('当前组缺少校长章级授权任务卡，请先重新生成校长'); return false; }
   const key = 't'+gi;
   scState();
   markAIRunning(key); if(btn) busy(btn, true, '备课中…'); if(btn && btn.parentNode) showStopBtn(btn.parentNode);
@@ -6748,7 +7046,7 @@ async function genTeacher(btn, gi){
         markAIDone(key, false);
         scMark(key, true);
         render();
-        toast(`老师${gi+1}备课完成：第 ${g.first}-${g.last} 章共 ${g.last-g.first+1} 份教案已就绪`);
+        toast(`老师${gi+1}备课完成：第 ${g.first}-${g.last} 章已按校长章级授权施工`);
         playDoneSound('single');
         return true;
       }catch(e){
@@ -7528,12 +7826,12 @@ const BEAT_OPTIONS = [
       { key:'rise',   label:'冲突推进', uiHint:'推进主线，制造一处具体阻力或新信息，让情节往前动。', note:'引入一个具体的阻力或新信息，推动本章目标向前进展', aiDirective:'必须引入具体的阻力或新信息推动目标进展，事件要具体可感；禁止原地重复、禁止只剩对话而无动作推进。' },
       { key:'turn',   label:'意外转折', uiHint:'先让人以为会怎样，再给出变化，超出读者预判。', note:'先建立预期，再呈现计划之外的变化，使发展超出读者预判', aiDirective:'必须先立预期再呈现计划外的变化；禁止无铺垫的随意反转、禁止反转后与主线脱节。' },
       { key:'climax', label:'阶段高潮', uiHint:'收拢整段的积累，给出一次明确的成果或回报。', note:'收拢本章积累，达成一次明确的成果或回报', aiDirective:'必须收拢前面积累并交付一项明确的成果/回报/认知；禁止在无积累时凭空给奖励、禁止重复已用过的回报类型。' },
-      { key:'hook',   label:'收束+悬念', uiHint:'把这一拍收好，在结尾留一个新信息或钩子给下一章。', note:'收束本章，并以一处伏笔或新信息为下一章留下接口', aiDirective:'必须收束本拍阶段情绪，并在章末留出新信息/新目标/关系变化作为续读钩子；禁止以总结句或无关陈述收尾。' }
+      { key:'hook',   label:'收束/章末节点', uiHint:'完成本章应完成的收束；是否留钩子由章级结尾决策卡决定，不得默认制造悬念。', note:'完成本章结算并自然停止；可有钩子，也可无钩子', aiDirective:'必须完成本章应有的结算并自然停下；不得把“留钩子”当作默认要求。是否制造悬念、反转或前瞻，严格服从章级结尾决策卡；禁止套用明天/未来/夕阳等万能收尾。' }
   ]},
   { id:3,  label:'微三拍', emoji:'🚀', desc:'三段快速爽：开头一小节，中段一口气猛推进，结尾收尾+留钩，一章一个明确节点', types:[
       { key:'setup',  label:'开局铺垫', uiHint:'一两句话交代主角处境和本章要处理的问题，快速入题。', note:'交代主角当前处境与本章要处理的问题', aiDirective:'必须简洁交代主角当前处境与本章要解决的问题并迅速进入；禁止用长篇心理或环境描写拖慢节奏。' },
       { key:'climax', label:'核心进展', uiHint:'给出本章最要紧的进展或成果，回应开头的期待。', note:'给出本章的关键进展或成果，回应开头建立的期待', aiDirective:'必须给出本章关键进展并回应前文期待、占篇幅最大；禁止无进展的注水对白或冗余环节。' },
-      { key:'hook',   label:'收束+悬念', uiHint:'收好本章成果，在衔接处留个新信息点当引子。', note:'收束本章成果，在衔接处留下新的信息点以引出下一章', aiDirective:'必须收束本章成果，并在章末留下一个新信息点引出下一章；禁止以强行悬念或重复信息收尾。' }
+      { key:'hook',   label:'收束/章末节点', uiHint:'收好本章成果；是否留新信息由本章剧情和结尾决策决定。', note:'收束本章成果，可正常停止，也可按授权留下自然接口', aiDirective:'必须收束本章成果并自然停止；不得强制增加新信息。只有章级结尾决策卡明确要求时，才可留下悬念或下一章接口；禁止强行悬念和重复信息。' }
   ]},
   { id:7,  label:'微七拍', emoji:'🍵', desc:'七段慢慢升温、主打细腻走心：靠人物互动和情绪一点点拉近，不追快进度，结尾留暖意', types:[
       { key:'daily',     label:'日常铺垫', uiHint:'先立时间、地点、气温等感官氛围，让读者进得来。', note:'以时节/气温/光线等感官细节立境，交代时间地点与主角当下去向', aiDirective:'必须用具体的气候、光线、气味等感官细节把日常铺开并立境；禁止在本拍制造冲突或信息倾倒。' },
@@ -7542,7 +7840,7 @@ const BEAT_OPTIONS = [
       { key:'heart',     label:'谈心推进', uiHint:'借一件共同的琐事把两人推近，走到情感破冰的一刻。', note:'借外在事件（雨/食事/修葺等）促成靠近，推动一次真心交流', aiDirective:'必须用一个具体外在契机把两人推近并推进一段走心对话；禁止用说教或空谈代替具体情节。' },
       { key:'warm',      label:'温馨高点', uiHint:'全段唯一的小高点，力度极轻：只写身体本能，不靠告白。', note:'本段唯一高点但力度极轻：以手温/指尖/汤暖等生理细节呈现暖意', aiDirective:'必须以极轻的生理细节（心跳漏拍、耳朵发烫、低头搅汤、嘴角微弯）呈现暖意；禁止直接表白、禁止大动作煽情。' },
       { key:'glow',      label:'余味收束', uiHint:'情绪缓缓回落，镜头拉远到周遭的声音、气味与光。', note:'情绪回落，镜头拉远收进环境的声音/气味/光线，余味悠长', aiDirective:'必须让上一拍的情绪自然回落、以环境感官细节收束；禁止突然跳入新冲突。' },
-      { key:'promise',   label:'明日约定', uiHint:'用一句"明天/改日"的约定或期许收章，留一个弱悬念与盼头。', note:'以一句约定/期许收章，留弱悬念与明日的延续感', aiDirective:'必须以约定/期许/承诺收章并留弱悬念与延续感；禁止封闭式总结、禁止开放式烂尾。' }
+      { key:'promise',   label:'前瞻/承诺（可选）', uiHint:'只有剧情自然需要时，才以约定、决定或前瞻形成下一步方向。', note:'可用约定/决定/前瞻收章，但绝非每章必用', aiDirective:'仅当章级结尾决策卡允许且剧情自然需要时使用；不得机械出现“明天/未来/期待/惊喜”。正常完成式收束同样完全合法。' }
   ]},
   { id:2,  label:'双拍结构', emoji:'🔍', desc:'前头一大段慢慢铺陈（看似平淡、其实全是伏笔），最后一小段集中揭晓真相/抛出惊吓，专治悬疑惊悚推理', types:[
       { key:'hold',   label:'长段铺垫', uiHint:'前面一大段都用来铺线索、攒信息，把气氛一点点垫起来。', note:'用较长篇幅铺设线索、逐步积累信息，营造渐进的氛围', aiDirective:'必须用长篇幅连续铺设线索、逐步积累信息、营造渐进氛围；禁止情绪化辞藻堆砌、禁止段落间信息断裂。' },
@@ -15887,6 +16185,14 @@ ${String(txt||'').trim()}
   if(state.chapters && state.chapters[i]){ state.chapters[i].castOut = _cs.castOut; }
   const _o = state.outline;
   if(_o && Array.isArray(_o.chapters) && _o.chapters[i]){ _o.chapters[i].castOut = _cs.castOut; }
+  // 章末反模板软审计：不做机械替换，避免破坏文学表达；仅在明显以万能句式收尾且校长未授权时回退到上一处自然段。
+  const _ed=extractChapterEndingDecision(i); const _rawTail=String(content||'').trim();
+  const _risk=CHAPTER_ENDING_BANNED_TEMPLATES.some(x=>_rawTail.slice(-420).includes(x));
+  const _explicitPromise=_ed && /promise|前瞻|承诺|悬念|suspense/i.test(String(_ed.function||'')+' '+String(_ed.hook||''));
+  if(_risk && !_explicitPromise){
+    const paras=_rawTail.split(/\n\s*\n/).filter(x=>x.trim());
+    if(paras.length>1){ paras.pop(); content=paras.join('\n\n').trim(); }
+  }
   return enforceChapterBoundary(i, content);
 }
 function splitChapterCastout(prose){
@@ -15903,7 +16209,7 @@ function splitChapterCastout(prose){
   }
   return { body: bodyLines.join('\n').replace(/\s+$/, '').trim(), castOut };
 }
-const USER_PRIO_BILL = '\n\n【优先级契约（按维度裁决，禁止把不同维度混成一个选择题）】\n1. 表达层最高权威：用户已选写作风格。它决定怎么写（叙事、对白、语言质感、节奏表现、情绪表达、幽默/悬疑/治愈等表现机制），不得被优化构想或正文模型重新改写。\n2. 剧情层最高权威：本章老师教案。它决定写什么（事件、顺序、转折、出场、时间、承接与收束）；写作风格不得删改教案事件。\n3. 全书一致性权威：万物词典 + 上一章已落地事实 + 校长/老师已裁决的连续性规则。\n4. 人工干预只能在不破坏以上三层的前提下补充；若人工干预与用户风格冲突，保留用户风格；若与老师教案冲突，不得擅改教案核心事件。\n5. 优化构想只是创意建议：仅当校长已判断其与用户风格兼容时才执行；不得在正文阶段自行把优化构想升级成新的风格权威。\n设定词典中有台词/有戏份/反复出现的重要人地专名一致性为不可逾越红线；仅作氛围的临时路人/小地名/小专名（见正文【临时闲人】段）不属红线，可现场点缀、不入词典；上一章全文（如有）为承接类事实的最高权威，任何要求不得使其另起炉灶。';
+const USER_PRIO_BILL = '\n\n【优先级契约（按维度裁决，禁止把不同维度混成一个选择题）】\n1. 表达层最高权威：用户已选写作风格。它决定怎么写（叙事、对白、语言质感、节奏表现、情绪表达、幽默/悬疑/治愈等表现机制），不得被优化构想或正文模型重新改写。\n2. 剧情层最高权威：本章老师教案，但“章末结尾功能/强度/钩子/禁止项”以校长章级结尾决策卡为上位约束；老师必须在授权范围内施工收尾。\n3. 全书一致性权威：万物词典 + 上一章已落地事实 + 校长/老师已裁决的连续性规则。\n4. 人工干预只能在不破坏以上三层的前提下补充；若人工干预与用户风格冲突，保留用户风格；若与老师教案冲突，不得擅改教案核心事件。\n5. 优化构想只是创意建议：仅当校长已判断其与用户风格兼容时才执行；不得在正文阶段自行把优化构想升级成新的风格权威。\n设定词典中有台词/有戏份/反复出现的重要人地专名一致性为不可逾越红线；仅作氛围的临时路人/小地名/小专名（见正文【临时闲人】段）不属红线，可现场点缀、不入词典；上一章全文（如有）为承接类事实的最高权威，任何要求不得使其另起炉灶。';
 let _dictRedlineOver = false;
 function budgetChapterContext(parts, maxChars){
   const total = () => parts.join('\n\n').length;
@@ -16114,7 +16420,7 @@ ${pCausal}
     }
 
     parts.push(`【第二层 · 中观层（静态指导 · 单源真理超级教案）】
-说明：这是任课老师为你备下的本章唯一创作航海图（已深度内嵌章节微拍节奏、时间落点与严谨出场名单）。本章剧情推进、骨架环节、情绪弧度、出场人物 100% 以本教案为单一真理（Single Source of Truth），严格按指引逐拍写透写足，严禁自行越权脑补或擅改主线。
+说明：这是任课老师为你备下的本章唯一创作航海图（已深度内嵌章节微拍节奏、时间落点与严谨出场名单）。本章的剧情目标与事实边界以校长章级导演/授权任务卡为上位约束；老师教案负责在该边界内提供施工骨架。二者不是竞争的两份方案：校长卡管“能不能这样发生”，老师教案管“怎样发生”。，严格按指引逐拍写透写足，严禁自行越权脑补或擅改主线。
 ——— 本章超级教案开始 ———
 ${_lesson}
 ——— 本章超级教案结束 ———`);
@@ -16195,7 +16501,14 @@ ${_tail}
 
   if(isLong()){ if(!_card) commitPlannedChapterState(i, (state.outline&&state.outline.chapterPlans||[])[i]||{}, 'legacy-plan'); const _ssb=storyStateChapterBlock(i); if(_ssb) parts.push(`【小说状态链｜上一章实际结算 + 本章计划】\n${_ssb}`); }
   parts.push(`【事件可达性硬门】写每个重大事件前，内部快速核对：前置状态是否已成立？触发线索是否存在？人物为什么会采取这一步？信息/道具/能力从哪里来？地点与时间是否可达？本事件是否会让前后因果断裂？若任一关键项缺失，不得用“突然/恰好/偶然”直接补过去。`);
+  const _authText = principalChapterTask(i); if(_authText) parts.push(`【章级事实授权硬门】校长任务卡优先于老师教案。名单外人物若承担关键剧情功能、任何人物若获得未授权核心情报、或新事实改变主线，均不得直接写入正文；只能使用已有授权资源、走另一条有依据的路径，或保留为待确认项。`);
+  const _endDecision = chapterEndingDecisionBlock(i); if(_endDecision) parts.push(_endDecision);
+  parts.push(chapterEndingAuditText(i));
+  parts.push(endingTemplateGuardText());
   if(isLong() && !chapterPlanAuthority(i)){ throw new Error('当前章节没有老师教案卡，请先完成对应老师备课。'); }
+  const _endingCardText = chapterEndingDecisionBlock(i); if(_endingCardText) parts.push(_endingCardText);
+  parts.push(chapterEndingAuditText(i));
+  parts.push(endingTemplateGuardText());
   parts.push(USER_PRIO_BILL);
   if(opt.advice) parts.push(`【人工干预要求（用户指定 · 第二优先）】\n${opt.advice}`);
 
