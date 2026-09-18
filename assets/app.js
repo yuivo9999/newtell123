@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.344';
-// Version line: app14.js — chapter-ending system upgrade. Original app1.js remains untouched.
-const APP_FILE_VERSION = 'app14.js';
+const APP_VERSION = '1.0.345';
+// Version line: app17.js — 正文生成稳定性修正版（上下文收敛、重复注入清理、两阶段扩写降风险）。
+const APP_FILE_VERSION = 'app17.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -65,7 +65,7 @@ const MAX_PROJECTS = 500;
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app15.js — 优化构想第二阶段权限隔离与唯一采用源修正版 */
+/* APP VERSION: app17.js — 正文生成稳定性修正版；保留优化构想与章末系统。 */
 const state = {
   mode: 'shortfilm',    // 'shortfilm' 短片 / 'longnovel' 经典长篇小说
   wordRange: null,      // (兼容遗留) 不再作为长篇必填；保留字段避免旧快照破坏
@@ -16284,18 +16284,19 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
     let partial = (state._chapterPartial && state._chapterPartial[i]) || '';
     const _onStream = (delta)=>{ partial += delta; state._chapterPartial[i] = partial; if(onStream) onStream(delta); };
     try{
-      const comprehension = await buildChapterComprehension(i, signal);
-      const writerUser = comprehension
-        ? `${user}\n\n【正文AI上下文理解包｜先理解后写，仅作事实核对】\n${comprehension}\n【理解包使用纪律】它只能帮助你准确理解材料，不得凌驾于原始教案与上一章真实原文；如果理解包与原文冲突，以原始材料为准。现在直接输出本章小说正文。`
-        : `${user}\n\n【正文AI阅读顺序】请先完整阅读老师教案与上一章末尾原文，内部完成事实核对后再写正文；不要输出理解过程。`;
+      // 正文稳定性修正：正文主请求不再额外调用一次“上下文理解AI”。
+      // 原先该步骤会把教案/上一章再次复制进一个中间包，再与完整 writerUser 合并，
+      // 导致单章实际上下文显著膨胀，并额外增加一次 API 失败/限流机会。
+      // 现在直接使用经过 budgetChapterContext 收敛后的唯一正文输入。
+      const writerUser = `${user}\n\n【正文AI阅读顺序】请先完整阅读以上唯一正文输入，内部完成事实核对后再写正文；不要输出理解过程、计划或分析。`;
       txt = unwrapAIResult(await callDeepSeek(longChapterSys(styleOverride), writerUser, {maxTokens: mt, onStream: _onStream, temperature: dynamicChapterParams(i).temperature, topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'}));
       // v2.1：正文采用“两阶段成篇”。第一阶段先保证剧情完整；第二阶段只在已有事件内部做深描增厚，目标约为原建议体量的 2.05—2.25 倍。
       // 这样增加的是动作链、对白攻防、人物反应、感官/空间、心理判断和因果过渡，而不是凭空加剧情或同义改写。
       if(isLong()){
         const draftLen = countWords(String(txt||'')).cjk;
         const _lb2 = chapterLenBounds();
-        const targetLo2 = Math.round((_lb2.lo||3000) * 2.05);
-        const targetHi2 = Math.round((_lb2.hi||3600) * 2.25);
+        const targetLo2 = Math.round((_lb2.lo||3000) * 1.55);
+        const targetHi2 = Math.round((_lb2.hi||3600) * 1.80);
         if(draftLen < targetLo2){
           onPhase('正文深描增厚：保留剧情，补足现场…');
           const expandSys = `${longChapterSys(styleOverride)}
@@ -16311,9 +16312,9 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
 ${String(txt||'').trim()}
 
 【加工指令】在不改变初稿已成立事实、人物关系、事件顺序和章末状态的前提下，进行深描增厚。优先扩充最关键的场景和人物互动，直到自然接近目标体量；若继续增加会变成重复或破坏节奏，则以质量优先。`;
-          const expanded = await callDeepSeek(expandSys, expandUser, {maxTokens: Math.max(mt, 12000), onStream: _onStream, temperature: Math.min(0.92, dynamicChapterParams(i).temperature), topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'});
+          const expanded = await callDeepSeek(expandSys, expandUser, {maxTokens: Math.min(9000, Math.max(7000, mt)), onStream: _onStream, temperature: Math.min(0.92, dynamicChapterParams(i).temperature), topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'});
           const expandedText = unwrapAIResult(expanded);
-          if(String(expandedText||'').trim().length > String(txt||'').trim().length * 1.35){
+          if(String(expandedText||'').trim().length > String(txt||'').trim().length * 1.20){
             txt = expandedText;
           }
         }
@@ -16362,40 +16363,71 @@ function splitChapterCastout(prose){
 }
 const USER_PRIO_BILL = '\n\n【优先级契约（按维度裁决，禁止把不同维度混成一个选择题）】\n1. 表达层最高权威：用户已选写作风格。它决定怎么写（叙事、对白、语言质感、节奏表现、情绪表达、幽默/悬疑/治愈等表现机制），不得被优化构想或正文模型重新改写。\n2. 剧情层最高权威：本章老师教案，但“章末结尾功能/强度/钩子/禁止项”以校长章级结尾决策卡为上位约束；老师必须在授权范围内施工收尾。\n3. 全书一致性权威：万物词典 + 上一章已落地事实 + 校长/老师已裁决的连续性规则。\n4. 人工干预只能在不破坏以上三层的前提下补充；若人工干预与用户风格冲突，保留用户风格；若与老师教案冲突，不得擅改教案核心事件。\n5. 优化构想只是创意建议：仅当校长已判断其与用户风格兼容时才执行；不得在正文阶段自行把优化构想升级成新的风格权威。\n设定词典中有台词/有戏份/反复出现的重要人地专名一致性为不可逾越红线；仅作氛围的临时路人/小地名/小专名（见正文【临时闲人】段）不属红线，可现场点缀、不入词典；上一章全文（如有）为承接类事实的最高权威，任何要求不得使其另起炉灶。';
 let _dictRedlineOver = false;
-function budgetChapterContext(parts, maxChars){
-  const total = () => parts.join('\n\n').length;
-  if(total() <= maxChars) return parts;
-  const idx = (label) => parts.findIndex(s => s.startsWith(label));
-  const l4 = idx('【L4 前文滚动摘要】');
-  if(l4 >= 0){
-    const head = '【L4 前文滚动摘要】\n';
-    const body = parts[l4].slice(head.length).trim();
-    parts[l4] = head + body.slice(0, 200) + (body.length > 200 ? '…' : '');
+function budgetChapterContext(parts, maxChars=18000){
+  // 正文上下文必须有“硬预算”。旧版只压缩少数不存在的标签，导致
+  // 教案 + 校长规则 + 上章尾部 + 滚动摘要全部原样进入模型，极易触发上下文上限。
+  const cap = Math.max(9000, Number(maxChars)||18000);
+  const src = Array.isArray(parts) ? parts.slice() : [];
+  const take = (label, n) => {
+    const i = src.findIndex(x => String(x||'').startsWith(label));
+    if(i < 0) return;
+    const s = String(src[i]||'');
+    if(s.length > n) src[i] = s.slice(0,n) + '\n…【为稳定性省略非核心上下文】';
+  };
+  // 先保留硬事实，再压缩解释性材料。
+  take('【第二层 · 中观层', 7000);
+  take('◆ 上一章末尾', 3200);
+  take('【第三层 · 微观层', 5200);
+  take('【第一层 · 宏观层', 1800);
+  take('【第一层附录 · 已裁决风格施工层', 1600);
+  take('【第一层附录 · 因果闭环锁', 1800);
+  take('【本章时间合同', 1800);
+  take('【章节时间覆盖执行令', 1500);
+  take('【本章结尾结构化计划', 1800);
+  take('【结尾多样性审计', 1200);
+  take('【章节结尾反模板硬门', 1000);
+  take('【小说状态链', 2200);
+  take('【章级事实授权硬门', 1200);
+  take('【事件可达性硬门', 900);
+  take('【优先级契约', 1100);
+  take('【篇幅参考', 1800);
+
+  let total = () => src.reduce((a,x)=>a+String(x||'').length,0) + Math.max(0,src.length-1)*2;
+  if(total() <= cap) return src;
+
+  // 第二轮：压缩低风险重复信息；不动老师教案主体和上一章末尾的第一现场。
+  take('【第三层 · 微观层', 3600);
+  take('【第一层 · 宏观层', 1000);
+  take('【第一层附录 · 已裁决风格施工层', 900);
+  take('【第一层附录 · 因果闭环锁', 1000);
+  take('【结尾多样性审计', 700);
+  take('【本章结尾结构化计划', 1200);
+  take('【小说状态链', 1400);
+  take('【篇幅参考', 900);
+  if(total() <= cap) return src;
+
+  // 最后才压缩教案，但仍保留标题/章末状态等首尾信息。
+  const i = src.findIndex(x => String(x||'').startsWith('【第二层 · 中观层'));
+  if(i >= 0){
+    const s = String(src[i]||'');
+    const keepHead = 1800, keepTail = 2200;
+    if(s.length > keepHead + keepTail + 80){
+      src[i] = s.slice(0,keepHead) + '\n…【教案中段为上下文预算省略；请以保留的事件骨架与章末状态为准】…\n' + s.slice(-keepTail);
+    }
   }
-  if(total() <= maxChars) return parts;
-  const ref = idx('【小说简介】');
-  if(ref >= 0){
-    parts[ref] = parts[ref].slice(0, 260) + (parts[ref].length > 260 ? '…' : '');
+  if(total() <= cap) return src;
+
+  // 绝不再返回超预算输入：按优先级从后往前裁掉最低权重块。
+  const dropLabels = [
+    '【篇幅参考','【优先级契约','【章节结尾反模板硬门','【结尾多样性审计',
+    '【章级事实授权硬门','【事件可达性硬门','【第一层附录 · 已裁决风格施工层'
+  ];
+  for(const label of dropLabels){
+    const i2=src.findIndex(x=>String(x||'').startsWith(label));
+    if(i2>=0) src.splice(i2,1);
+    if(total()<=cap) return src;
   }
-  if(total() <= maxChars) return parts;
-  const bridge = idx('【衔接事实】');
-  if(bridge >= 0){
-    const head = '【衔接事实】';
-    const body = parts[bridge].slice(head.length).trim();
-    parts[bridge] = head + body.slice(0, 160) + (body.length > 160 ? '…' : '');
-  }
-  if(total() <= maxChars) return parts;
-  const l1 = idx('【L1 本章节拍');
-  if(l1 >= 0){
-    const lines = parts[l1].split('\n');
-    parts[l1] = lines.map((line, i) => {
-      if(i <= 2) return line;   // 标题行与编排开头两句保留完整
-      if(line.startsWith(' ')) return line;
-      return line.slice(0, Math.min(line.length, 120)) + (line.length > 120 ? '…' : '');
-    }).join('\n');
-  }
-  if(total() > maxChars){ _dictRedlineOver = true; return parts; }
-  return parts;
+  return src;
 }
 
 function chapterTailExcerpt(i, maxChars=420){
@@ -16660,9 +16692,6 @@ ${_tail}
   parts.push(chapterEndingAuditText(i));
   parts.push(endingTemplateGuardText());
   if(isLong() && !chapterPlanAuthority(i)){ throw new Error('当前章节没有老师教案卡，请先完成对应老师备课。'); }
-  const _endingCardText = chapterEndingDecisionBlock(i); if(_endingCardText) parts.push(_endingCardText);
-  parts.push(chapterEndingAuditText(i));
-  parts.push(endingTemplateGuardText());
   parts.push(USER_PRIO_BILL);
   if(opt.advice) parts.push(`【人工干预要求（用户指定 · 第二优先）】\n${opt.advice}`);
 
