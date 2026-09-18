@@ -1,8 +1,8 @@
 'use strict';
 
 const APP_VERSION = '1.0.344';
-// Version line: app12.js — chapter-ending system upgrade. Original app1.js remains untouched.
-const APP_FILE_VERSION = 'app12.js';
+// Version line: app14.js — chapter-ending system upgrade. Original app1.js remains untouched.
+const APP_FILE_VERSION = 'app14.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -65,6 +65,7 @@ const MAX_PROJECTS = 500;
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
+/* APP VERSION: app15.js — 优化构想第二阶段权限隔离与唯一采用源修正版 */
 const state = {
   mode: 'shortfilm',    // 'shortfilm' 短片 / 'longnovel' 经典长篇小说
   wordRange: null,      // (兼容遗留) 不再作为长篇必填；保留字段避免旧快照破坏
@@ -72,6 +73,17 @@ const state = {
   totalWords: null,     // (兼容遗留) 同上
   chapterCount: null,   // 全书章节数量（整数 1-200，生成大纲前唯一必填数字；null=未设）
   idea: '',
+  polishMode: 'single',
+  polishStatus: 'empty',
+  polishSelectedId: null,
+  polishDiagnosis: null,
+  polishStrategies: [],
+  polishCanonical: null,
+  polishRevision: 0,
+  // 优化构想产生的新增实体/设定只能作为待确认建议，绝不直接进入正式词典。
+  polishPendingSuggestions: null,
+  // 校长一次性统筹出的逐章章末策略；后续老师/正文只读取，不重新启动校长。
+  chapterEndingPlans: {},
   coverPrompt: '',      // 整部小说封面提示词（场景页生成 / 长篇模式用）
   coverWithTitle: false,// 封面提示词是否包含「汉字书名」（false=纯画面无文字）
   outline: null,        // {title, logline, chapters:[{title,summary}]}
@@ -921,7 +933,15 @@ function projectSnapshot(){
     expOpenGroups: state.expOpenGroups,
     polishOptions: state.polishOptions,
     polishAdopted: state.polishAdopted,
+    polishMode: state.polishMode,
+    polishStatus: state.polishStatus,
+    polishSelectedId: state.polishSelectedId,
+    polishDiagnosis: state.polishDiagnosis,
+    polishStrategies: state.polishStrategies,
+    polishCanonical: state.polishCanonical,
+    polishRevision: state.polishRevision,
     polishHistory: state.polishHistory,
+    chapterEndingPlans: state.chapterEndingPlans,
     chapters: state.chapters,
     characters: state.characters,
     ctAdviceHist: Array.isArray(state.ctAdviceHist) ? state.ctAdviceHist : [],
@@ -991,7 +1011,16 @@ function applyProject(p){
   state.expOpenGroups = Array.isArray(p.expOpenGroups) ? p.expOpenGroups : [];
   state.polishOptions = Array.isArray(p.polishOptions) ? p.polishOptions : undefined;
   state.polishAdopted = (typeof p.polishAdopted === 'string') ? p.polishAdopted : undefined;
+  state.polishMode = p.polishMode === 'multi' ? 'multi' : 'single';
+  state.polishSelectedId = (typeof p.polishSelectedId === 'string') ? p.polishSelectedId : null;
+  state.polishDiagnosis = (p.polishDiagnosis && typeof p.polishDiagnosis === 'object') ? p.polishDiagnosis : null;
+  state.polishStrategies = Array.isArray(p.polishStrategies) ? p.polishStrategies : [];
+  state.polishCanonical = (p.polishCanonical && typeof p.polishCanonical === 'object') ? p.polishCanonical : null;
+  state.polishPendingSuggestions = (p.polishPendingSuggestions && typeof p.polishPendingSuggestions === 'object') ? p.polishPendingSuggestions : null;
+  state.polishRevision = Number.isFinite(+p.polishRevision) ? +p.polishRevision : 0;
+  state.polishStatus = ['empty','generating','ready_single','waiting_selection','adopted'].includes(p.polishStatus) ? p.polishStatus : ((state.polishAdopted && state.polishOptions?.length) ? 'adopted' : (state.polishOptions?.length>1?'waiting_selection':state.polishOptions?.length?'ready_single':'empty'));
   state.polishHistory = Array.isArray(p.polishHistory) ? p.polishHistory : undefined;
+  state.chapterEndingPlans = (p.chapterEndingPlans && typeof p.chapterEndingPlans === 'object') ? p.chapterEndingPlans : {};
   state.chapters = p.chapters || [];
   (state.chapters||[]).forEach(c=>{ if(c) delete c.qcRecord; });
   if(state.outline) delete state.outline.titleQC;
@@ -2758,7 +2787,14 @@ async function polishIdea(btn, force){
   if(kept && !force){
     if(!confirm(`已有 ${kept} 个保留方案，重新优化将覆盖它们。继续？`)) return;
   }
-  const multi = polishMulti || idea.length < 15;   // 极短强制多方案
+  const multi = polishMulti === true; // 只由“多方案”开关决定，不再因输入长度强制多方案
+  state.polishMode = multi ? 'multi' : 'single';
+  state.polishStatus = 'generating';
+  state.polishSelectedId = null;
+  state.polishAdopted = null;
+  state.polishCanonical = null;
+  state.polishDiagnosis = null;
+  state.polishStrategies = [];
   if(!canRunAI('idea')){ toast('优化构想暂不可运行'); return; }
   markAIRunning('idea');
   if(btn) busy(btn,true, multi ? '生成多方案构想中…' : '优化构想中…');
@@ -2810,6 +2846,8 @@ function validatePolishOutput(j){
   const required = ['genre','protagonist','coreConflict','tone'];
   for(const k of required) if(!String(b[k]||'').trim()) return `navBeacon 缺少 ${k}`;
   if(!Array.isArray(j.defects) || !j.defects.length) return '缺少缺陷清单 defects';
+  if(!Array.isArray(j.optimizationStrategies)) return '缺少优化策略 optimizationStrategies';
+  if(j.diagnosis && typeof j.diagnosis !== 'object') return 'diagnosis 必须为对象';
   if(Array.isArray(j.seedCharacters)){
     for(const c of j.seedCharacters){
       const miss = CHAR_FIELDS.filter(k=> c[k]==null || String(c[k]).trim()==='');
@@ -2850,6 +2888,57 @@ function splitPolishMultiText(out){
   }));
 }
 
+function adoptedPolishCanonical(){
+  const c=state.polishCanonical;
+  if(!c || c.machineTrace?.status!=='adopted') return null;
+  return c;
+}
+function adoptedPolishHumanView(){
+  const c=adoptedPolishCanonical();
+  return c ? (c.humanView || c.creationBlueprint || {}) : null;
+}
+function buildPolishCanonical(cand, revision){
+  const c = cand || {};
+  const v = c._v45 || {};
+  const human = {
+    bookTitle: String(c.bookTitle||'').trim(),
+    novelSummary: String(c.novelSummary||c.storySummary||'').trim(),
+    optimizedIdea: String(c.optimizedIdea||c.text||'').trim(),
+    fullBookBeat: String(c.fullBookBeat||c.bookBeat||'').trim(),
+    navBeacon: (c.navBeacon && typeof c.navBeacon==='object') ? JSON.parse(JSON.stringify(c.navBeacon)) : (v.navBeacon||null),
+    creativeAdditions: String(c.creativeAdditions||'').trim()
+  };
+  return {
+    sourceType:'optimization_concept',
+    sourceVersion:'phase2',
+    revision:Number(revision||0),
+    candidateId:String(c._id||''),
+    candidateName:String(c.name||''),
+    adoptedAt:Date.now(),
+    humanView:human,
+    creationBlueprint:{
+      optimizedIdea:human.optimizedIdea,
+      fullBookBeat:human.fullBookBeat,
+      novelSummary:human.novelSummary,
+      navBeacon:human.navBeacon,
+      creativeAdditions:human.creativeAdditions
+    },
+    machineTrace:{
+      diagnosis:c.diagnosis||v.diagnosis||null,
+      optimizationStrategies:Array.isArray(c.optimizationStrategies)?JSON.parse(JSON.stringify(c.optimizationStrategies)):[],
+      defects:Array.isArray(c.defects)?JSON.parse(JSON.stringify(c.defects)):[],
+      aiSuggestions:Array.isArray(c.aiSuggestions)?JSON.parse(JSON.stringify(c.aiSuggestions)):
+        ((Array.isArray(c.seedCharacters)||Array.isArray(c.seedPlaces)) ? {characters:c.seedCharacters||[],places:c.seedPlaces||[]} : []),
+      status:'adopted'
+    }
+  };
+}
+function syncPolishMetaFromCandidate(c){
+  const v=(c&&c._v45)||{};
+  state.polishDiagnosis = (c&&c.diagnosis) || v.diagnosis || null;
+  state.polishStrategies = Array.isArray(c&&c.optimizationStrategies) ? JSON.parse(JSON.stringify(c.optimizationStrategies)) : [];
+}
+
 function showPolishResult(out, multi){
   const box = $('#polishBox'), cards = $('#polishCards');
   if(!box || !cards) return;
@@ -2858,7 +2947,9 @@ function showPolishResult(out, multi){
     defects: Array.isArray(o&&o.defects) ? o.defects : [],
     navBeacon: (o && o.navBeacon && typeof o.navBeacon==='object') ? o.navBeacon : null,
     seedCharacters: Array.isArray(o&&o.seedCharacters) ? o.seedCharacters : [],
-    seedPlaces: Array.isArray(o&&o.seedPlaces) ? o.seedPlaces : []
+    seedPlaces: Array.isArray(o&&o.seedPlaces) ? o.seedPlaces : [],
+    diagnosis: (o&&o.diagnosis&&typeof o.diagnosis==='object') ? o.diagnosis : null,
+    optimizationStrategies: Array.isArray(o&&o.optimizationStrategies) ? o.optimizationStrategies : []
   });
   if(multi){
     let j = null;
@@ -2867,11 +2958,14 @@ function showPolishResult(out, multi){
     const opts = Array.isArray(j && j.options) ? j.options.filter(o=>o && String(o.optimizedIdea||o.text||'').trim()) : [];
     if(opts.length){
       snapshotPolishBatch('重新优化前');   // 覆盖前把旧整批方案归档为可回退版本（≤5）
-      state.polishOptions = opts.map(o=> Object.assign({}, o, {
+      state.polishOptions = opts.map((o,i)=> Object.assign({}, o, {
+        _id:String(o._id || ('polish-'+Date.now()+'-'+i)),
         text: String(o.optimizedIdea||o.text||'').trim(),
         _v45: pickV45(o)
       }));
-      state.polishAdopted = null;   // 新方案列表，尚未采用
+      state.polishAdopted = null;
+      state.polishSelectedId = null;
+      state.polishStatus = 'waiting_selection';
       state.polishCollapsed = false;
       persist();
       render(); openPolishBox();
@@ -2881,68 +2975,63 @@ function showPolishResult(out, multi){
       const segs = splitPolishMultiText(out);
       if(segs.length >= 2){
         snapshotPolishBatch('重新优化前');   // 覆盖前把旧整批方案归档为可回退版本（≤5）
-        state.polishOptions = segs;
+        state.polishOptions = segs.map((o,i)=>({...o,_id:String(o._id||('polish-'+Date.now()+'-'+i))}));
         state.polishAdopted = null;
+        state.polishSelectedId = null;
+        state.polishStatus = 'waiting_selection';
         persist();
         render(); openPolishBox();
         return;
       }
     }
-    snapshotPolishBatch('重新优化前');
-    state.polishOptions = [{ name:'方案1', text: String(typeof out==='object' ? ((out&&out.optimizedIdea)||'') : out).trim(), _v45: pickV45(typeof out==='object'?out:{}) }];
+    toast('多方案解析失败：没有生成可供选择的独立候选，本次不自动采用任何方案，请重试');
+    state.polishStatus = 'empty';
+    state.polishOptions = [];
     state.polishAdopted = null;
-    state.polishCollapsed = false;
-    persist();
-    render(); openPolishBox();
+    state.polishSelectedId = null;
+    persist(); render();
     return;
   }
   const single = (out && typeof out === 'object') ? out : { optimizedIdea: String(out||'').trim() };
   snapshotPolishBatch('重新优化前');
-  state.polishOptions = [{ name:'方案1', text: String(single.optimizedIdea||single.text||'').trim(), _v45: pickV45(single) }];
-  state.polishAdopted = null;
+  state.polishOptions = [{ _id:'polish-'+Date.now()+'-0', name:'方案1', ...single, text: String(single.optimizedIdea||single.text||'').trim(), _v45: pickV45(single) }];
+  state.polishAdopted = '方案1';
+  state.polishSelectedId = state.polishOptions[0]._id;
+  state.polishStatus = 'adopted';
+  state.polishRevision = Number(state.polishRevision||0) + 1;
+  syncPolishMetaFromCandidate(state.polishOptions[0]);
+  state.polishCanonical = buildPolishCanonical(state.polishOptions[0], state.polishRevision);
   persist();
   render(); openPolishBox();
 }
 
 function applyV45ToOutline(o, d){
-  if(!o || !d) return { nC:0, nP:0 };
-  if(!o.glossary || typeof o.glossary!=='object') o.glossary = {characters:[],places:[],propernouns:[]};
-  const g = o.glossary;
-  ['characters','places','propernouns'].forEach(k=>{ if(!Array.isArray(g[k])) g[k]=[]; });
-  let nC=0, nP=0;
-  (d.seedCharacters||[]).forEach(c=>{
-    const nm = String(c&&c.name||'').trim(); if(!nm) return;
-    if(g.characters.some(x=>String(x&&x.name||'').trim()===nm)) return;
-    g.characters.push({ name:nm, identity:c.identity||'', age:String(c.age==null?'':c.age), gender:c.gender||'', appearance:c.appearance||'', hobby:c.hobby||'', catchphrase:c.catchphrase||'', relation:c.relation||'', trait:c.trait||'' });
-    nC++;
-  });
-  (d.seedPlaces||[]).forEach(p=>{
-    const nm = String(p&&p.name||'').trim(); if(!nm) return;
-    if(g.places.some(x=>String(x&&x.name||'').trim()===nm)) return;
-    g.places.push({ name:nm, type:p.type||'', note:p.note||'' });
-    nP++;
-  });
-  if(d.navBeacon && typeof d.navBeacon==='object'){
-    o.navBeacon = d.navBeacon;
-  }
-  return { nC, nP };
+  // 【权限隔离】优化构想阶段不得写入正式 glossary。
+  // 兼容旧调用点：只把建议保存到“待确认建议”容器，不改变任何正式词典事实。
+  if(!d || typeof d!=='object') return { nC:0, nP:0 };
+  const suggestions = {
+    navBeacon: (d.navBeacon && typeof d.navBeacon==='object') ? JSON.parse(JSON.stringify(d.navBeacon)) : null,
+    characters: Array.isArray(d.seedCharacters) ? JSON.parse(JSON.stringify(d.seedCharacters)) : [],
+    places: Array.isArray(d.seedPlaces) ? JSON.parse(JSON.stringify(d.seedPlaces)) : [],
+    source: 'optimization_concept',
+    status: 'pending_confirmation',
+    createdAt: Date.now()
+  };
+  state.polishPendingSuggestions = suggestions;
+  return { nC:suggestions.characters.length, nP:suggestions.places.length };
 }
 
 function importPolishToState(o){
   const d = (o && o._v45) || {};
   const tone = String((d.navBeacon&&d.navBeacon.tone)||'');
   const toneHit = tone || '';
-  if(!state.outline){
-    if(d && (d.navBeacon || (d.seedCharacters&&d.seedCharacters.length) || (d.seedPlaces&&d.seedPlaces.length))){
-      state.pendingV45 = JSON.parse(JSON.stringify(d));
-    }
-    persist(); render();
-    toast(`设定已暂存${nCh?(' · 章节数已设为 '+n):''}${toneHit?' · 优化构想语气已交给校长评估（不覆盖用户风格）':''}：导航灯塔/种子人物/种子地点将在生成大纲后自动应用`);
-    return;
+  const hasSuggestions = !!(d.navBeacon || (Array.isArray(d.seedCharacters)&&d.seedCharacters.length) || (Array.isArray(d.seedPlaces)&&d.seedPlaces.length));
+  // 优化构想只能暂存“待确认建议”；正式词典第一次建立仍由词典达人负责。
+  if(hasSuggestions){
+    applyV45ToOutline(null, d);
   }
-  const r = applyV45ToOutline(state.outline, d);
   persist(); render();
-  toast(`已导入设定：导航灯塔${d.navBeacon?1:0} · 种子人物 ${r.nC} · 种子地点 ${r.nP}${nCh?(' · 章节数已设为 '+n):''}${toneHit?' · 优化构想语气已交给校长评估（不覆盖用户风格）':''}`);
+  toast(`已暂存为优化构想待确认创意：导航灯塔${d.navBeacon?1:0} · 种子人物 ${d.seedCharacters?.length||0} · 种子地点 ${d.seedPlaces?.length||0}。不会写入正式词典，后续由词典达人重新判断。${toneHit?' 优化构想语气仅作建议，不覆盖用户写作风格。':''}`);
 }
 
 function openPolishBox(){
@@ -3008,6 +3097,11 @@ function renderPolishCards(container){
       const o = (state.polishOptions||[])[+b.dataset.polUse]; if(!o) return;
       if(dictmasterLocked()){ toast('词典达人已产出万物词典，②方案已锁定，不可更换'); return; }
       state.polishAdopted = o.name || null;
+      state.polishSelectedId = o._id || null;
+      state.polishStatus = 'adopted';
+      state.polishRevision = Number(state.polishRevision||0) + 1;
+      syncPolishMetaFromCandidate(o);
+      state.polishCanonical = buildPolishCanonical(o, state.polishRevision);
       persist(); render();
       toast('已选中：'+(o.name||('方案'+(+b.dataset.polUse+1)))+'（不覆盖原始构想；可点「生成大纲」搬入书名/简介/全书节拍）');
     };
@@ -3032,12 +3126,11 @@ function bindPolishIdea(){
   const chk = $('#chkPolishMulti');
   if(chk){
     const sync = ()=>{
-      const short = (state.idea||'').trim().length < 15;
-      chk.checked = polishMulti || short;
-      chk.disabled = short;
+      chk.checked = polishMulti === true;
+      chk.disabled = false;
     };
     sync();
-    chk.onchange = ()=>{ polishMulti = chk.checked; };
+    chk.onchange = ()=>{ polishMulti = !!chk.checked; state.polishMode = polishMulti?'multi':'single'; if(Array.isArray(state.polishOptions)&&state.polishOptions.length){ state.polishStatus='empty'; state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.polishDiagnosis=null; state.polishStrategies=[]; } persist(); render(); };
     const idea = $('#ideaInput');
     if(idea) idea.oninput = ()=>{ state.idea = idea.value; sync(); syncOrigIdeaCard(); };
   }
@@ -3059,6 +3152,8 @@ function bindPolishIdea(){
     snapshotPolishBatch('清除前');   // 归档当前批，之后仍可在「优化版本」找回
     delete state.polishOptions;
     delete state.polishAdopted;
+    state.polishSelectedId = null;
+    state.polishStatus = 'empty';
     persist(); render();
     toast('已清除保留方案');
   };
@@ -3066,7 +3161,7 @@ function bindPolishIdea(){
 function polishKeepBar(){
   const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
   if(!opts.length) return '';
-  const cur = state.polishAdopted || opts[0].name || '方案A';
+  const cur = state.polishAdopted || (state.polishMode==='multi' ? '尚未选择' : (opts[0].name || '方案1'));
   return `<div class="pol-keep">
     <span class="pol-keep-t">已保留 ${opts.length} 个优化方案（当前采用：${esc(cur)}）</span>
     <span class="pol-keep-btns">
@@ -3099,13 +3194,16 @@ function applyPolishBatch(idx){
   const hist = polishHistory(); const b = hist[idx]; if(!b || !Array.isArray(b.options) || !b.options.length) return;
   if(!confirm(`整批应用「${idx+1}. ${b.label||'优化版本'}」（共 ${b.options.length} 个方案）？将覆盖当前保留的方案。`)) return;
   snapshotPolishBatch('切换前');
-  state.polishOptions = b.options.map(o=>({
-    ...o, name:o.name, text:String(o.text||o.optimizedIdea||''),
+  state.polishOptions = b.options.map((o,i)=>({
+    ...o, _id:String(o._id || ('polish-'+Date.now()+'-'+i)), name:o.name, text:String(o.text||o.optimizedIdea||''),
     bookTitle:String(o.bookTitle||''), novelSummary:String(o.novelSummary||''),
     fullBookBeat:String(o.fullBookBeat||o.bookBeat||''), optimizedIdea:String(o.optimizedIdea||o.text||''),
     creativeAdditions:String(o.creativeAdditions||'')
   }));
   state.polishAdopted = (b.adopted && b.options.some(o=>o.name===b.adopted)) ? b.adopted : null;
+  state.polishSelectedId = state.polishAdopted ? (state.polishOptions.find(o=>o.name===state.polishAdopted)?._id || null) : null;
+  state.polishMode = state.polishOptions.length>1 ? 'multi' : 'single';
+  state.polishStatus = state.polishAdopted ? 'adopted' : (state.polishOptions.length>1 ? 'waiting_selection' : 'ready_single');
   persist(); closePolishBatchPanel(); render();
   const box = $('#polishBox'); if(box){ box.style.display='block'; openPolishBox(); }
   toast(`已整批应用该优化版本（${state.polishOptions.length} 个方案）`);
@@ -3813,11 +3911,11 @@ gap 数组中的每一项必须同时具备 name、cat、id、note、tips、avoi
 
 
 function aiRecipeUser(extra){
-  const cand = selectedPolishCandidate();
-  const txt = String((cand && cand.text)||'').trim();
+  const human = adoptedPolishHumanView();
+  const txt = String((human && human.optimizedIdea)||'').trim();
   if(txt){
     const body = stripStructureFromIntro(txt);
-    const head = '【所选方案完整原文（唯一蓝本：含书名+九要素，配方须百分之百贴合本小说）】\n' + body;
+    const head = '【唯一已采用优化构想创作蓝本（配方必须百分之百贴合本小说）】\n' + body;
     return extra ? `${head}\n\n以下为对该小说的写作风格配方设计请求：\n${extra}` : head;
   }
   const o = state.outline || {};
@@ -4808,7 +4906,7 @@ function scStyleBrief(){
   const parts = [];
   const tags = (state.chapterStyle && Array.isArray(state.chapterStyle.tags)) ? state.chapterStyle.tags : [];
   if(tags.length) parts.push('写作风格词条：' + tags.join('、'));
-  try{ const c = selectedPolishCandidate && selectedPolishCandidate(); if(c && c.name) parts.push('②优化构想所选方案：' + String(c.name)); }catch(e){}
+  const c=adoptedPolishCanonical(); if(c&&c.candidateName) parts.push('②优化构想唯一采用方案：' + String(c.candidateName));
   return parts.length ? parts.join('\n') : '（尚未选配方；由校长依简介与词典自行凝练守则）';
 }
 function scGlossaryBrief(maxChar){
@@ -5014,18 +5112,8 @@ function principalSourceBlocks(groups){
   _ppAddSource(out,'original_idea','用户原始构想',state.idea,'highest','user');
   _ppAddSource(out,'nav_beacon','导航灯塔 / 用户锚点',o.navBeacon,'highest','user');
   _ppAddSource(out,'outline_core','现有全书大纲核心资料',{title:o.title,logline:o.logline,tone:o.tone,chapters:o.chapters},'highest','outline');
-  _ppAddSource(out,'story_blueprint','优化构想·完整小说蓝本',o.storyBlueprint,'high','polish');
-  _ppAddSource(out,'book_beat','优化构想·全书故事节拍',o.aiBookBeat,'high','polish');
-  let cand=null; try{ cand=selectedPolishCandidate && selectedPolishCandidate(); }catch(e){}
-  if(cand){
-    _ppAddSource(out,'polish_selected','优化构想·当前选中方案',cand,'high','user_selected');
-    try{
-      const cd=polishCandidateDownstreamText(cand);
-      _ppAddSource(out,'polish_selected_summary','所选方案·小说简介',cd&&cd.summary,'high','user_selected');
-      _ppAddSource(out,'polish_selected_beat','所选方案·全书故事节拍',cd&&cd.beat,'high','user_selected');
-      _ppAddSource(out,'polish_selected_blueprint','所选方案·完整小说蓝本',cd&&cd.blueprint,'high','user_selected');
-    }catch(e){}
-  }
+  const canonical=adoptedPolishCanonical();
+  if(canonical){ _ppAddSource(out,'polish_canonical','优化构想·唯一已采用创作蓝本',canonical,'highest','adopted_canonical'); }
   _ppAddSource(out,'chapter_plans','既有《全书节拍》/章节规划',o.chapterPlans,'high','planning');
   _ppAddSource(out,'global_timeline','全书时间线 / 时间锚点',{
     timeline:o.globalTimeline || o.timeline || null,
@@ -5107,26 +5195,66 @@ const CHAPTER_ENDING_BANNED_TEMPLATES = [
 ];
 function chapterEndingFunctionText(){ return CHAPTER_ENDING_FUNCTIONS.map(x=>`${x.key}=${x.label}：${x.desc}`).join('\n'); }
 function chapterEndingFormText(){ return CHAPTER_ENDING_FORMS.map(x=>`${x.key}=${x.label}`).join('、'); }
-function extractChapterEndingDecision(i){
-  const card=principalChapterTask(i);
-  if(!card) return null;
-  const get=(names)=>{ for(const n of names){ const re=new RegExp(`(?:^|\\n)\\s*[-*]?\\s*${escapeRegExp(n)}\\s*[：:]\\s*([^\\n]+)`,'i'); const m=card.match(re); if(m) return m[1].trim(); } return ''; };
+function parseChapterEndingPlanFromCard(card, i){
+  const text=String(card||'');
+  const get=(names)=>{ for(const n of names){ const re=new RegExp(`(?:^|\\n)\\s*[-*]?\\s*${escapeRegExp(n)}\\s*[：:]\\s*([^\\n]+)`,'i'); const m=text.match(re); if(m) return m[1].trim(); } return ''; };
+  const fn=get(['主要结尾功能','结尾主要功能','本章结尾功能']);
+  const form=get(['推荐表现形式','具体收尾方式','结尾表现形式','表现形式','允许的表现形式']);
+  const intensity=get(['结尾强度','章末强度']);
+  const hook=get(['是否需要下一章钩子','是否需要钩子','钩子需求']);
+  const forbidden=get(['结尾禁止','禁止结尾','禁止的结尾形式','禁止追加']);
+  const reason=get(['结尾选择理由','结尾策略理由']);
+  const lastEffectiveEvent=get(['最后有效事件','最后有效剧情节点','章末最后有效事件']);
+  const diversityNote=get(['重复风险','多样性提示','结尾重复风险']);
+  const secondary=get(['次级结尾功能','结尾次级功能']);
   return {
-    function:get(['主要结尾功能','结尾主要功能','本章结尾功能']),
-    secondary:get(['次级结尾功能','结尾次级功能']),
-    intensity:get(['结尾强度','章末强度']),
-    hook:get(['是否需要下一章钩子','是否需要钩子','钩子需求']),
-    forms:get(['允许的表现形式','结尾表现形式','允许结尾形式']),
-    preferred:get(['推荐表现形式','结尾表现形式建议']),
-    forbidden:get(['结尾禁止','禁止结尾','禁止的结尾形式']),
-    reason:get(['结尾选择理由','结尾策略理由']),
-    lastEvent:get(['最后有效事件','最后有效剧情节点','章末最后有效事件'])
+    version:'chapter-ending-plan-v1', chapter:Number(i)+1,
+    endingFunction:fn || 'completion', secondaryFunction:secondary || '',
+    intensity: Number.isFinite(parseInt(intensity,10)) ? Math.max(0,Math.min(4,parseInt(intensity,10))) : 0,
+    hook:/^(是|yes|true|需要)/i.test(hook), hookRaw:hook||'未指定',
+    form:form || '自然停止', reason:reason || '服从本章最后一个有效事件与题材，不额外制造万能收尾。',
+    lastEffectiveEvent:lastEffectiveEvent || '',
+    forbidden:(forbidden ? forbidden.split(/[、,，；;]/).map(x=>x.trim()).filter(Boolean) : []).concat(CHAPTER_ENDING_BANNED_TEMPLATES),
+    diversityNote:diversityNote || '避免与近期章节机械重复；不以“明天/夕阳/期待/惊喜”作为默认结尾。',
+    source:'principal_chapter_task', sourceHash:String(text).length
   };
 }
+function buildChapterEndingPlansFromPrincipal(raw, chapterCount){
+  const cards=principalChapterTaskCards(raw), out={};
+  const n=Number(chapterCount||0) || Object.keys(cards).length;
+  for(let i=1;i<=n;i++){
+    const card=String(cards[i]||'').trim();
+    if(card) out[i]=parseChapterEndingPlanFromCard(card,i-1);
+  }
+  return out;
+}
+function chapterEndingPlanFor(i){
+  const n=Number(i)+1;
+  const stored=state.chapterEndingPlans && state.chapterEndingPlans[n];
+  if(stored && typeof stored==='object') return stored;
+  // 仅用于兼容旧项目：首次读取时把既有校长章级卡一次性结构化缓存；不是重新启动校长。
+  const raw=state.school?.principal?.raw || scState()?.principal?.raw || '';
+  const card=principalChapterTask(i);
+  if(!card) return null;
+  const plan=parseChapterEndingPlanFromCard(card,i);
+  state.chapterEndingPlans=state.chapterEndingPlans||{}; state.chapterEndingPlans[n]=plan;
+  persist();
+  return plan;
+}
 function chapterEndingDecisionBlock(i){
-  const d=extractChapterEndingDecision(i);
-  if(!d || (!d.function&&!d.secondary&&!d.intensity&&!d.hook&&!d.forms)) return '';
-  return `【本章结尾决策卡｜校长章级授权】\n- 主要结尾功能：${d.function||'未指定；由本章最后有效事件自然决定'}\n- 次级结尾功能：${d.secondary||'无'}\n- 结尾强度：${d.intensity||'0-4未指定；不得擅自提高'}\n- 下一章钩子：${d.hook||'未指定；不得默认制造'}\n- 允许表现形式：${d.forms||'以自然表现为准'}\n- 推荐表现形式：${d.preferred||'无'}\n- 禁止：${d.forbidden||'万能未来期待、明天、夕阳、惊喜、机械升华不得作为默认补丁'}\n- 选择理由：${d.reason||'必须服从本章实际剧情与题材'}\n- 最后有效事件：${d.lastEvent||'以本章最后一个必要事件为自然停止点'}\n执行原则：结尾是叙事功能，不是固定句式；先完成最后一个有效事件，再决定是否还有必要继续一段。`;
+  const d=chapterEndingPlanFor(i);
+  if(!d) return '';
+  return `【本章结尾结构化计划｜校长一次性统筹】
+- endingFunction：${d.endingFunction}
+- 次级功能：${d.secondaryFunction||'无'}
+- 强度：${d.intensity}
+- 是否需要钩子：${d.hook?'是':'否'}
+- 表现形式：${d.form}
+- 为什么在这里停：${d.reason}
+- 最后有效事件：${d.lastEffectiveEvent||'以本章最后一个必要事件为停止点'}
+- 禁止项：${(d.forbidden||[]).join('、')}
+- 多样性提示：${d.diversityNote}
+执行原则：结尾是叙事功能，不是固定句式；校长只负责本章结尾战略，老师负责施工，正文负责自然文学表达。`;
 }
 function recentChapterEndingHistory(i, count=8){
   const out=[];
@@ -6225,7 +6353,8 @@ async function genPrincipal(btn, opts){
         }
         storyState().canon.principalAt=Date.now(); storyState().versions.principal=Number(storyState().versions.principal||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1;
         delete sc.stale.principal;
-        sc.principal = { ts:Date.now(), folded:false, groups: groups.map((g,gi)=>({ gi, stage:g.stage, first:g.first, last:g.last })), raw:String(txt), titles, chapterTasks: principalChapterTaskCards(String(txt)) }; storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={version:storyState().versions.principal,source:'principal',ts:Date.now(),groups:sc.principal.groups,titles,chapterTasks:sc.principal.chapterTasks};
+        sc.principal = { ts:Date.now(), folded:false, groups: groups.map((g,gi)=>({ gi, stage:g.stage, first:g.first, last:g.last })), raw:String(txt), titles, chapterTasks: principalChapterTaskCards(String(txt)), chapterEndingPlans: buildChapterEndingPlansFromPrincipal(String(txt), state.chapterCount || state.outline?.chapters?.length || 0) };
+        state.chapterEndingPlans = JSON.parse(JSON.stringify(sc.principal.chapterEndingPlans || {})); storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={version:storyState().versions.principal,source:'principal',ts:Date.now(),groups:sc.principal.groups,titles,chapterTasks:sc.principal.chapterTasks};
         state.outline._principalChapterTasks = sc.principal.chapterTasks || {};
         scMark('principal', true);
         markAIDone('principal');
@@ -6936,6 +7065,8 @@ function buildTeacherAuthorizationPack(g, gi){
   for(let n=g.first;n<=g.last;n++){
     const card=String(cards[n]||'').trim();
     parts.push(card || `【第${n}章章级授权缺失】\n禁止把缺失内容自行补成校长事实；请先重新生成校长章级任务卡。`);
+    const ep=chapterEndingPlanFor(n-1);
+    if(ep) parts.push(`【第${n}章章末计划（结构化）】\n${JSON.stringify(ep,null,2)}\n老师不得改变 endingFunction / intensity / hook 的战略含义；只负责在授权范围内完成最后有效事件与自然收束。`);
   }
   parts.push(`【授权解释】\n- “必须推进”与“终止状态”是本章目标约束。\n- “允许人物/地点/道具/线索”是核心剧情白名单。\n- “信息边界”规定当前章人物可以知道什么。\n- “待确认项”不得被老师直接升级为事实。\n- 老师可以自由设计白名单资源之间的中间事件和节拍，但不得突破以上边界。`);
   return parts.join('\n\n');
@@ -8047,7 +8178,7 @@ const AIBus = {
 
 function getSystemPrompt(kind, extra){
   switch(kind){
-    case 'idea': return IDEA_POLISH_SYS + (extra && extra.multi ? POLISH_MULTI_MODE : '');
+    case 'idea': return IDEA_POLISH_SYS + (extra && extra.multi ? POLISH_MULTI_MODE : POLISH_SINGLE_MODE);
     case 'titles': return REGEN_TITLES_SYS;
     case 'chapter': return longChapterSys();
     case 'subplot': return SUBPROGRESS_UPDATE_SYS;
@@ -8367,6 +8498,8 @@ AI不得无依据地把新人物、新势力、新能力、新世界规则当成
       "fullBookBeat":"完整的宏观全书节拍与阶段推进说明，可按当前章节数映射阶段；不是逐章教案",
       "optimizedIdea":"完整故事创作蓝本，允许较长，包含主角、世界、冲突、人物关系、故事发动机、长期发展、高潮与结局方向、必要创意补充",
       "creativeAdditions":"仅列AI为了让故事可写而新增的关键创意；没有则写无",
+      "diagnosis":{"strengths":[],"defects":[],"missing":[],"constraints":[]},
+      "optimizationStrategies":[],
       "navBeacon":{"genre":"","protagonist":"","coreConflict":"","tone":""},
       "defects":[],
       "seedCharacters":[],
@@ -8411,6 +8544,10 @@ optimizedIdea 建议内部覆盖：
 □ 是否只输出JSON？`;
 
 const IDEA_POLISH_SYS = IDEA_POLISH_SYS_PRO;
+
+const POLISH_SINGLE_MODE = `
+【单方案执行层】本次只生成一个最终优化方案，不得输出多个方向、方案A/B/C或并列候选。可用统一兼容结构 options，但数组必须恰好只有1项。该方案直接作为唯一可采用方案；不得隐藏第二方案。AI新增的核心人物、关键设定、关键关系、关键剧情必须标记为建议/待确认，不得伪装成用户已确认事实。
+`;
 
 const POLISH_MULTI_MODE = `
 【多方案执行层】
@@ -10405,7 +10542,7 @@ function viewStory(){
               <span class="ch-subtag ch-subtag-idea">${(state.polishOptions&&state.polishOptions.length)?'✨ 构想已优化':'待优化'}</span>
             </div>
             <div class="ch-right">
-              <label class="pol-multi" title="生成多方向构想供比选"><input type="checkbox" id="chkPolishMulti" checked> 多方案</label>
+              <label class="pol-multi" title="生成多方向构想供比选"><input type="checkbox" id="chkPolishMulti"> 多方案</label>
             </div>
           </div>
           <div class="idea-row">
@@ -10422,7 +10559,7 @@ function viewStory(){
             </div>
             <div id="polishCards" class="pol-cards"></div>
           </div>
-          ${ (state.polishCollapsed && Array.isArray(state.polishOptions) && state.polishOptions.length) ? `<div class="pol-keep pol-keep-collapsed"><span class="pol-keep-t">✓ 已采用：${esc(state.polishAdopted || state.polishOptions[0].name || '方案1')} · 优化方案已收起</span><span class="pol-keep-btns"><button type="button" class="btn small ghost" data-pol-keep-view>🔍 展开/更换方案</button></span></div>` : '' }
+          ${ (state.polishCollapsed && Array.isArray(state.polishOptions) && state.polishOptions.length) ? `<div class="pol-keep pol-keep-collapsed"><span class="pol-keep-t">✓ 已采用：${esc(state.polishAdopted || (state.polishMode==='multi' ? '尚未选择方案' : state.polishOptions[0].name || '方案1'))} · 优化方案已收起</span><span class="pol-keep-btns"><button type="button" class="btn small ghost" data-pol-keep-view>🔍 展开/更换方案</button></span></div>` : '' }
           ${ polishKeepBar() }
           <div class="btn-row">
             <button id="btnGenOutline" class="btn primary block" ${(!(Array.isArray(state.polishOptions) && state.polishOptions.length))?'disabled title="请先优化构想再生成大纲"':''}>${(!(Array.isArray(state.polishOptions) && state.polishOptions.length))?'📋 待优化构想后生成':(isLong()?'📚 生成大纲':'✨ 生成故事大纲')}</button>
@@ -11717,10 +11854,10 @@ function titlesGenUser(opts){
   opts = opts || {};
   const o = state.outline || {};
   const parts = [];
-  const cand = selectedPolishCandidate();
-  const txt = String((cand && cand.text) || '').trim();
-  parts.push(`【蓝本：②优化构想所选方案】${(cand && cand.name) ? ('方案『' + cand.name + '』') : '（所选方案）'}`);
-  parts.push(`【所选方案完整原文（作为唯一蓝本，其中已有信息不可改动）】\n${txt || '（所选方案为空）'}`);
+  const canonical=adoptedPolishCanonical(); const human=adoptedPolishHumanView()||{};
+  const txt=String(human.optimizedIdea||'').trim();
+  parts.push(`【蓝本：②优化构想唯一已采用创作蓝本】${canonical&&canonical.candidateName ? ('方案『'+canonical.candidateName+'』') : ''}`);
+  parts.push(`【采用蓝本完整原文（唯一蓝本，其中已有信息不可改动）】\n${txt || '（采用蓝本为空）'}`);
   const n = opts.n || ((o.chapters || []).length) || 0;
   if(n){
     parts.push(`请生成恰好 ${n} 个章节标题，每个标题一行、含章号前缀，形如：\n第1章 标题\n第2章 标题\n…\n第${n}章 标题\n行数必须严格等于 ${n}，每个标题名≤18字。只输出纯文本，不要 JSON、不要 markdown 代码块、不要解释。`);
@@ -14108,13 +14245,16 @@ function applyOutlineObject(o, opts){
   const prevGloss = (state.outline && state.outline.glossary && sourceHasGlossary(state.outline.glossary)) ? state.outline.glossary : null;
   state.outline = o;
   normalizeOutline(state.outline);
+  // 历史版本可能遗留 pendingV45；迁移为待确认建议，禁止注入正式词典。
+  if(state.pendingV45){
+    state.polishPendingSuggestions = JSON.parse(JSON.stringify(state.pendingV45));
+    state.polishPendingSuggestions.status = 'pending_confirmation';
+    state.polishPendingSuggestions.source = 'optimization_concept_legacy_migrated';
+    delete state.pendingV45;
+  }
   state.outlineConfirmed = false;
   if(prevGloss) o.glossary = prevGloss;
   else if(!o.glossary) o.glossary = {characters:[], places:[], propernouns:[]};
-  if(state.pendingV45){
-    applyV45ToOutline(o, state.pendingV45);
-    state.pendingV45 = null;
-  }
   if(!o.navBeacon){
     if(String(state.idea||'').trim()){
       const _idea = String(state.idea||'').trim();
@@ -14176,16 +14316,14 @@ const genOutline = async function(){
   const st = $('#outlineStatus');
   if(st){ st.className='status'; st.textContent=''; }
   if(!canRunAI('outline')){ toast('请先完成上游步骤：优化构想'); if(btn) busy(btn,false); return; }
-  const noOpt = !(Array.isArray(state.polishOptions) && state.polishOptions.length);
-  if(noOpt){ toast('请先点「✨ 优化构想」生成方案，再点「生成大纲」搬入书名 / 简介 / 节拍'); if(btn) busy(btn,false); return; }
-  const cand = selectedPolishCandidate();
-  if(!cand){ toast('先选择一个优化方案（在②优化构想中点击某张候选卡「✔ 采用此方案」）'); if(btn) busy(btn,false); return; }
+  const adopted = adoptedPolishCanonical();
+  if(!adopted){ toast('请先在②优化构想中明确采用一个方案，建立唯一创作蓝本后再生成大纲'); if(btn) busy(btn,false); return; }
   if(dictmasterLocked()){ toast('词典达人已产出万物词典，②方案已锁定，不可再换选重搬'); if(btn) busy(btn,false); return; }
   if(!confirmOutlineContentGuard()){ if(btn) busy(btn,false); return; }
   markAIRunning('outline');
   if(btn) busy(btn,true,'搬运大纲中…');
   try{
-    const o = buildOutlineFromPolishCandidate(cand);
+    const o = buildOutlineFromPolishCanonical();
     applyOutlineObject(o, { silent: true });
     state.outlineConfirmed = true;
     state.polishCollapsed = true;
@@ -14208,9 +14346,12 @@ const genOutline = async function(){
 function selectedPolishCandidate(){
   const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
   if(!opts.length) return null;
-  const ad = state.polishAdopted;
-  if(ad){ const hit = opts.find(o=> o && o.name === ad); if(hit) return hit; }
-  return opts[0];   // 无显式选中时回退第一候选（视为已选）
+  if(state.polishMode !== 'multi' && opts.length === 1){
+    return (state.polishStatus === 'adopted' || state.polishAdopted) ? opts[0] : null;
+  }
+  if(state.polishSelectedId){ const hit = opts.find(o=>o && o._id===state.polishSelectedId); if(hit) return hit; }
+  if(state.polishAdopted){ const hit = opts.find(o=>o && o.name===state.polishAdopted); if(hit) return hit; }
+  return null;
 }
 function dictmasterLocked(){
   if(!state.dictmasterRan) return false;
@@ -14270,12 +14411,21 @@ function polishCandidateDownstreamText(cand){
   const clean = (v)=>String(v||'').replace(/(?:^|\n)\s*(?:核心卖点|核心词|推荐理由|卖点|关键词|营销分析)\s*[:：][^\n]*/g,'').trim();
   return { summary: clean(summary), beat: clean(typeof beat==='string' ? beat : JSON.stringify(beat)), blueprint: clean(blueprint) };
 }
-function buildOutlineFromPolishCandidate(cand){
-  const txt = String((cand && cand.text) || '').trim();
-  const d = polishCandidateDownstreamText(cand);
+function buildOutlineFromPolishCanonical(){
+  if(!state.polishCanonical || state.polishCanonical.machineTrace?.status !== 'adopted') {
+    throw new Error('未建立唯一已采用的优化构想蓝本，不能生成大纲');
+  }
+  const adopted = state.polishCanonical;
+  const human = adopted.humanView || adopted.creationBlueprint || {};
+  const txt = String(human.optimizedIdea || '').trim();
+  const d = {
+    summary:String(human.novelSummary||'').trim(),
+    beat:String(human.fullBookBeat||'').trim(),
+    blueprint:String(human.optimizedIdea||'').trim()
+  };
   const o = state.outline || {};
   const curTitle = (o && o.title) || '';
-  const title = String(cand?.bookTitle || '').trim() || extractCandidateBookName(txt) || curTitle || '';
+  const title = String(human.bookTitle || '').trim() || extractCandidateBookName(txt) || curTitle || ''; 
   const prevGloss = (o && o.glossary && sourceHasGlossary(o.glossary)) ? o.glossary : null;
   const build = {
     title,
@@ -14285,7 +14435,7 @@ function buildOutlineFromPolishCandidate(cand){
     storyBlueprint: d.blueprint,
     // 优化构想生成的全书宏观节拍，作为当前预设节拍的“剧情内容层”。
     aiBookBeat: d.beat,
-    polishSourceName: String(cand?.name || '').trim(),
+    polishSourceName: String(adopted.candidateName || '').trim(),
     userIdea: String(state.idea || '').trim(),
     tone: (o && o.tone) || ''
   };
@@ -14511,11 +14661,12 @@ J. 下游检查：词典充实是否能在这些设定上继续扩建；校长�
 
 记住：词典达人负责创造世界骨架；词典充实负责在骨架上继续长出血肉；前者必须定得准，后者才能扩得稳。`
 function buildDictMasterUser(ctx){
-  const cand = ctx && ctx.candidate;
-  const txt = String((cand && cand.text) || '').trim();
+  const canonical = adoptedPolishCanonical();
+  const human = adoptedPolishHumanView() || {};
+  const txt = String(human.optimizedIdea || '').trim();
   const parts = [];
-  parts.push(`【蓝本：②优化构想所选方案】${(cand && cand.name) ? ('方案『' + cand.name + '』') : '（所选方案）'}`);
-  parts.push(('【所选方案完整原文（作为唯一蓝本，其中已有角色/地名/专名不可改动）】\n' + txt) || '（所选方案为空）');
+  parts.push(`【蓝本：②优化构想唯一已采用创作蓝本】${canonical && canonical.candidateName ? ('方案『' + canonical.candidateName + '』') : ''}`);
+  parts.push(('【采用蓝本完整内容（唯一下游故事来源；已有角色/地名/专名不可擅自改动）】\n' + txt) || '（采用蓝本为空）');
   return parts.join('\n\n');
 }
 function validateDictMasterOutput(j){
@@ -14563,7 +14714,7 @@ async function genDictMaster(btn){
   if(st){ st.className='status'; st.textContent=''; }
   if(!canRunAI('dictmaster')){ toast('请先完成上游：②优化构想并选中一个方案'); return false; }
   invalidateSchoolDownstream('dictMaster');
-  if(!selectedPolishCandidate()){ toast('先选择一个优化方案'); return false; }
+  if(!adoptedPolishCanonical()){ toast('先在优化构想中采用一个方案，建立唯一创作蓝本'); return false; }
   state.originalIdeaSnapshot = String(state.idea || '').trim() || state.originalIdeaSnapshot;
   markAIRunning('dictmaster');
   if(btn) busy(btn,true,'生成万物词典中…');
@@ -15254,11 +15405,11 @@ function buildDictEnrichUser(){
   // ==========================================
   // 1. 优化构想·用户所选方案完整内容
   // ==========================================
-  let cand = null;
-  try{ cand = (typeof selectedPolishCandidate === 'function') ? selectedPolishCandidate() : null; }catch(e){}
-  const candName = (cand && cand.name) ? `【优化方案名】方案『${String(cand.name).trim()}』\n` : '';
-  const candFullText = String((cand && (cand.text || cand.raw || cand.brief)) || o.logline || '').trim();
-  const polishPart = `【第一部分：优化构想·所选方案完整内容（全书核心设定蓝本）】\n${candName}${candFullText || '（所选优化方案为空）'}`;
+  const canonical = adoptedPolishCanonical();
+  const human = adoptedPolishHumanView() || {};
+  const candName = canonical && canonical.candidateName ? `【优化方案名】方案『${String(canonical.candidateName).trim()}』\n` : '';
+  const candFullText = String(human.optimizedIdea || '').trim();
+  const polishPart = `【第一部分：优化构想唯一已采用创作蓝本（唯一故事来源）】\n${candName}${candFullText || '（采用蓝本为空）'}`;
   parts.push(polishPart);
 
   // ==========================================
@@ -16453,6 +16604,9 @@ ${_tail}
       parts.push(`【第三层 · 微观层（首章开篇物理基准）】
 本章为全书第 1 章（首章开篇）：无上一章正文。首段应从实际事件/人物现场或本章教案规定的起点自然起笔，尽早建立核心人物、当前处境与读者可继续追问的问题。若用户选择了具体开篇策略，必须与本章教案融合执行；若选择“不选择开篇策略”，不得自行生成、推荐或强行套用任何开篇策略。`);
     }
+
+    const _endingPlan = chapterEndingPlanFor(i);
+    if(_endingPlan) parts.push(chapterEndingDecisionBlock(i));
 
     const bc = chapterBoundaryContract(i);
     const isLast = bc.isLast;
