@@ -4324,10 +4324,6 @@ function wsStyleNoteBlock(items, headTitle, intro){
   lines.push('红线：以上风格仅约束表达方式，不得破坏人名/地名/专名一致性，不得违反基础剧情逻辑与人物设定。');
   return '\n\n' + lines.join('\n');
 }
-function chapterStyleNote(override){
-  const items = wsGroupStyleTags(override);
-  return wsStyleNoteBlock(items, '写作风格', '本指令是本章的表达层最高优先要求：它只决定‘怎么写’，不改写老师教案规定的‘写什么’。若与剧情推进、章节骨架、篇幅等任务发生冲突，不得删改教案事件；若与优化构想、人工润色建议等表达建议冲突，以用户已选写作风格为准。唯一不可逾越的红线：不得破坏人名/地名/专名一致性、不得违反基础剧情逻辑与人物设定。');
-}
 function writeStyleNamesBlock(){
   const items = wsGroupStyleTags(null);
   if(!items.length) return '';
@@ -4445,7 +4441,7 @@ function openingStrategyBrief(){
   const selected = openingStrategyDef(currentOpeningStrategyId());
   if(!selected || selected.id==='none') return '';
   const n = chapterCountVal() || realChapterCount() || 0;
-  return `【开篇策略·仅首章生效】全书${n||'未定'}章。用户主动选择：${selected.label}。${selected.desc}\n权限边界：本策略只决定第1章如何开笔；第2章起不得继续套用“开篇策略”，必须以各章自己的教案、上一章物理接力与动态状态为唯一开笔依据。\n执行：第1章将所选策略融入实际事件、人物现场和本章教案，不得把策略标签本身写进正文。`;
+  return `【开篇策略·仅首章生效】全书${n||'未定'}章。用户主动选择：${selected.label}。${selected.desc}\n权限边界：本策略只决定第1章如何开笔；第2章起不得继续套用“开篇策略”，必须以各章自己的教案与已提供动态状态为唯一开笔依据。\n执行：第1章将所选策略融入实际事件、人物现场和本章教案，不得把策略标签本身写进正文。`;
 }
 function openingStrategyHtml(){
   if(!isLong()) return '';
@@ -8380,7 +8376,7 @@ function narrativeIronBlock(role, opts){
     ironFull += '\n【双主角铁律】本书为双主角叙事，两名主角各有独立行动场景与弧线：本章凡涉及双主角，须给双方各自实质性的镜头与推进，不得把某一方写成另一方的附庸/背景；双视角切换必须有明确触发点与衔接（换场景/换段），禁止在同一场景内无节制的视角跳转；两人同场时，其对视/争执/配合要写得有张力与辨识声口。';
   }
   if(role === 'chapter'){
-    ironFull += '\n【章首铁律】章首开法**必须**有变化：**禁止**全书或连续多章重复同一种开法、**禁止**每章都以同一类人物动作或同一类时间词起句、也**禁止**连续两章雷同，小说整体**禁止**某一种开法超过三成。下面各方式**可以**混用、**必须**轮流换着来：①续写式（优先）：优先从上一章结局未完成的对话/动作/悬念切入（承接细则以该章承接任务书为准）；例："『这话可说不得。』上回话到一半，屋里便只剩扇子敲桌沿的声响。"；②场景/环境式：从能即时带出情绪与冲突的场景细节/物件/光线/动静切入，人物稍后才点名；例："檐角铜铃被夜风拨响时，堂屋的灯还亮着，桌上摊着两封未拆的信。"；③人物开句式：以人物称谓开句**可以**，但须与前后章错开、**禁止**连续两章相同；④时间开句式：以时间词开句**可以**，但**禁止**连续两章都用时间词开句；⑤他人/群像式：从他人口中或反应侧写入物处境，出场人物不占句首；例："『那人的名讳一提就烫嘴。』有人压着嗓子嘀咕。"；⑥悬念回接式：以章末钩子的延续、一句质问或一个反常细节起首；例："那封密信最终会不会落到衙门手中，成了压在每个人心口的石头。"';
+    ironFull += '\n【章首铁律】章首开法**必须**有变化：**禁止**全书或连续多章重复同一种开法、**禁止**每章都以同一类人物动作或同一类时间词起句、也**禁止**连续两章雷同，小说整体**禁止**某一种开法超过三成。下面各方式**可以**混用、**必须**轮流换着来：①续写式（优先）：优先从本章教案规定的起点、事件现场或已提供的状态依据切入；例："『这话可说不得。』上回话到一半，屋里便只剩扇子敲桌沿的声响。"；②场景/环境式：从能即时带出情绪与冲突的场景细节/物件/光线/动静切入，人物稍后才点名；例："檐角铜铃被夜风拨响时，堂屋的灯还亮着，桌上摊着两封未拆的信。"；③人物开句式：以人物称谓开句**可以**，但须与前后章错开、**禁止**连续两章相同；④时间开句式：以时间词开句**可以**，但**禁止**连续两章都用时间词开句；⑤他人/群像式：从他人口中或反应侧写入物处境，出场人物不占句首；例："『那人的名讳一提就烫嘴。』有人压着嗓子嘀咕。"；⑥悬念回接式：以章末钩子的延续、一句质问或一个反常细节起首；例："那封密信最终会不会落到衙门手中，成了压在每个人心口的石头。"';
   }
   if(role === 'chapter'){
     ironFull += '\n【视角与反剧透铁律】全章以主角的受限感知推进：只写主角能\/看到听到摸到感知到的；想表现他人内心，一律从主角的观察与推断出发，禁止直接钻进路人\/配角\/反派的内心"读心"。禁止提前揭示读者与主角尚不该知道的答案：伏笔只许一笔带过地埋伏笔，不点破、不解释、不揭示答案（不剥夺读者的"侦探权"）。背景\/世界观\/前史情报必须"寄生"在角色的即时感官里（听\/闻\/触）传达，禁止作者跳出来大段广播。仅在章\/节分界明显、或关键时刻"只展示不解释"的客观动作、或悬念兑现时，才可短暂切出并立即回到主角。';
@@ -9214,7 +9210,7 @@ function chapterSysBase(){
 你是长篇小说的「正文作家（学生）」，只专注文学笔力、对白交锋与生动场面铺展。你的输入不是互相竞争的几份提示词，而是一条有权限层级的创作链。
 【正文AI内部工作顺序｜必须先理解，再动笔】
 1. 先完整阅读并整合“上下文理解包”。
-2. 再逐项核对老师本章教案与上一章末尾真实原文：区分“已发生事实”与“本章计划”。
+2. 再逐项核对老师本章教案与已提供的小说状态数据：区分“已发生事实”与“本章计划”。
 3. 再确定第一段的真实承接点、人物当前状态、信息边界与事件因果。
 4. 再按老师教案的事件顺序写成连续小说，不输出分析、计划、节拍标签或后台术语。
 5. 写作过程中只进行文学表达与必要的中间动作补足，不重新设计剧情。
@@ -9227,8 +9223,8 @@ function chapterSysBase(){
 · L3【动态状态层】：上一章正文结算状态、物理接力、时间合同；这是“故事现在实际在哪里”。它优先决定开笔的真实状态，不能为了迎合教案而篡改上一章已经写成的事实。
 · L4【文学表达层】：风格、语言、节奏与场景表现；这是“怎么写”。
 任何层级都不能反向覆盖更高权威层。允许你发挥的是文学表达，以及教案允许的中间动作/细节；不允许你凭空重定义世界事实、时间状态或主线结果。
-· 【上一章末尾·物理接力】若存在，它是开笔的绝对物理起点：第一段必须从其收尾景象/动作/未完对话/人物处境自然续写。若为首章，则执行第一章开篇任务卡。
-· 【转场过桥律】：若上一章末尾的物理状态与本章教案「剧情时间落点」或骨架第①拍存在时空跨度（如上章深夜结束、教案要求次日清晨赶路），必须在首段顺势用 1~2 句自然笔法交代时空流转或环境位移，平滑过桥，严禁生硬瞬移，也严禁原地打转死扣上章不往前走。
+· 【上一章状态承接】若存在，以系统已提供的上一章结算状态作为开笔事实依据；若为首章，则执行第一章开篇任务卡。
+· 【转场过桥律】：若已提供的上一章状态与本章教案「剧情时间落点」或骨架第①拍存在时空跨度，必须在首段顺势用 1~2 句自然笔法交代时空流转或环境位移，平滑过桥。
 · 【核心主线防发散律】：正文作家不重新设计主线。词典资源由老师按章调配；正文只使用老师点名的核心人物/设定。对于不影响主线的现场动作、对话、环境和一次性过场人物，可以自然发挥，但不能创造会持续影响后文的新核心事实。
 · 【场景过场路人与临时龙套点缀权】：正文作家可根据具体场景的叙事与氛围需要，自然点缀店小二、摊贩、茶客、更夫、传令兵、前台侍者等过场闲人。
   - 授权纪律：允许现场自然拟定称谓或名字，写一两句动作或对话即止，只作环境气氛烘托；
@@ -9238,11 +9234,10 @@ function chapterSysBase(){
   return closedGate + base;
 }
 
-const longChapterSys = (styleOverride) => {
+const longChapterSys = () => {
   const parts = [];
+  // 正文不再单独注入用户全局写作风格；本章具体写法要求以老师教案中的执行指令为准。
   parts.push(chapterSysBase());
-  const styleNote = chapterStyleNote(styleOverride);
-  if(styleNote) parts.unshift(styleNote);          // 写作风格说明置顶
   const iron = narrativeIronBlock('chapter');
   if(iron) parts.push(iron);
   parts.push('\n【篇幅体量】\n'+sizeChapterInjection());
@@ -16289,7 +16284,7 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
       // 导致单章实际上下文显著膨胀，并额外增加一次 API 失败/限流机会。
       // 现在直接使用经过 budgetChapterContext 收敛后的唯一正文输入。
       const writerUser = `${user}\n\n【正文AI阅读顺序】请先完整阅读以上唯一正文输入，内部完成事实核对后再写正文；不要输出理解过程、计划或分析。`;
-      txt = unwrapAIResult(await callDeepSeek(longChapterSys(styleOverride), writerUser, {maxTokens: mt, onStream: _onStream, temperature: dynamicChapterParams(i).temperature, topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'}));
+      txt = unwrapAIResult(await callDeepSeek(longChapterSys(), writerUser, {maxTokens: mt, onStream: _onStream, temperature: dynamicChapterParams(i).temperature, topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'}));
       // v2.1：正文采用“两阶段成篇”。第一阶段先保证剧情完整；第二阶段只在已有事件内部做深描增厚，目标约为原建议体量的 2.05—2.25 倍。
       // 这样增加的是动作链、对白攻防、人物反应、感官/空间、心理判断和因果过渡，而不是凭空加剧情或同义改写。
       if(isLong()){
@@ -16299,7 +16294,7 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
         const targetHi2 = Math.round((_lb2.hi||3600) * 1.80);
         if(draftLen < targetLo2){
           onPhase('正文深描增厚：保留剧情，补足现场…');
-          const expandSys = `${longChapterSys(styleOverride)}
+          const expandSys = `${longChapterSys()}
 
 【正文第二阶段｜深描增厚协议】
 你刚刚已经完成了本章完整初稿。现在不要重新设计剧情，也不要另起炉灶。请把这份初稿加工成更有阅读沉浸感的完整长篇正文。
@@ -16338,7 +16333,7 @@ ${String(txt||'').trim()}
   const _o = state.outline;
   if(_o && Array.isArray(_o.chapters) && _o.chapters[i]){ _o.chapters[i].castOut = _cs.castOut; }
   // 章末反模板软审计：不做机械替换，避免破坏文学表达；仅在明显以万能句式收尾且校长未授权时回退到上一处自然段。
-  const _ed=extractChapterEndingDecision(i); const _rawTail=String(content||'').trim();
+  const _ed=chapterEndingPlanFor(i); const _rawTail=String(content||'').trim();
   const _risk=CHAPTER_ENDING_BANNED_TEMPLATES.some(x=>_rawTail.slice(-420).includes(x));
   const _explicitPromise=_ed && /promise|前瞻|承诺|悬念|suspense/i.test(String(_ed.function||'')+' '+String(_ed.hook||''));
   if(_risk && !_explicitPromise){
@@ -16361,7 +16356,7 @@ function splitChapterCastout(prose){
   }
   return { body: bodyLines.join('\n').replace(/\s+$/, '').trim(), castOut };
 }
-const USER_PRIO_BILL = '\n\n【优先级契约（按维度裁决，禁止把不同维度混成一个选择题）】\n1. 表达层最高权威：用户已选写作风格。它决定怎么写（叙事、对白、语言质感、节奏表现、情绪表达、幽默/悬疑/治愈等表现机制），不得被优化构想或正文模型重新改写。\n2. 剧情层最高权威：本章老师教案，但“章末结尾功能/强度/钩子/禁止项”以校长章级结尾决策卡为上位约束；老师必须在授权范围内施工收尾。\n3. 全书一致性权威：万物词典 + 上一章已落地事实 + 校长/老师已裁决的连续性规则。\n4. 人工干预只能在不破坏以上三层的前提下补充；若人工干预与用户风格冲突，保留用户风格；若与老师教案冲突，不得擅改教案核心事件。\n5. 优化构想只是创意建议：仅当校长已判断其与用户风格兼容时才执行；不得在正文阶段自行把优化构想升级成新的风格权威。\n设定词典中有台词/有戏份/反复出现的重要人地专名一致性为不可逾越红线；仅作氛围的临时路人/小地名/小专名（见正文【临时闲人】段）不属红线，可现场点缀、不入词典；上一章全文（如有）为承接类事实的最高权威，任何要求不得使其另起炉灶。';
+const USER_PRIO_BILL = '\n\n【优先级契约（按维度裁决，禁止把不同维度混成一个选择题）】\n1. 表达层：本章具体写法以老师教案中的写作执行要求为准；不得在正文阶段重新发明一套独立风格方案。\n2. 剧情层最高权威：本章老师教案，但“章末结尾功能/强度/钩子/禁止项”以校长章级结尾决策卡为上位约束；老师必须在授权范围内施工收尾。\n3. 全书一致性权威：万物词典 + 上一章已落地事实 + 校长/老师已裁决的连续性规则。\n4. 人工干预只能在不破坏以上三层的前提下补充；若与老师教案冲突，不得擅改教案核心事件。\n5. 优化构想只是创意建议：不得在正文阶段自行把优化构想升级成新的剧情、设定或风格权威。\n设定词典中有台词/有戏份/反复出现的重要人地专名一致性为不可逾越红线；仅作氛围的临时路人/小地名/小专名（见正文【临时闲人】段）不属红线，可现场点缀、不入词典；上一章已落地状态与小说状态链是承接类事实依据，任何要求不得使其违背已成立事实。';
 let _dictRedlineOver = false;
 function budgetChapterContext(parts, maxChars=18000){
   // 正文上下文必须有“硬预算”。旧版只压缩少数不存在的标签，导致
@@ -16395,7 +16390,7 @@ function budgetChapterContext(parts, maxChars=18000){
   let total = () => src.reduce((a,x)=>a+String(x||'').length,0) + Math.max(0,src.length-1)*2;
   if(total() <= cap) return src;
 
-  // 第二轮：压缩低风险重复信息；不动老师教案主体和上一章末尾的第一现场。
+  // 第二轮：压缩低风险重复信息；优先保留老师教案主体与当前状态数据。
   take('【第三层 · 微观层', 3600);
   take('【第一层 · 宏观层', 1000);
   take('【第一层附录 · 已裁决风格施工层', 900);
@@ -16430,25 +16425,6 @@ function budgetChapterContext(parts, maxChars=18000){
   return src;
 }
 
-function chapterTailExcerpt(i, maxChars=420){
-  const prev = i > 0 && state.chapters[i-1] ? String(state.chapters[i-1].content||'') : '';
-  const t = (prev||'').trim();
-  if(!t) return '';
-  if(t.length <= maxChars) return t;
-  const paras = t.split(/\n+/).map(s=>s.trim()).filter(Boolean);
-  const out = []; let acc = 0;
-  for(let k=paras.length-1; k>=0 && acc < maxChars; k--){ out.unshift(paras[k]); acc += paras[k].length + 2; }
-  let s = out.join('\n\n');
-  if(s.length > maxChars){
-    const head = out[0];
-    const seq = head.match(/[^。！？…]*[。！？…][”"」』]?/g) || [];
-    const kept = []; let a2 = 0;
-    for(let j=seq.length-1; j>=0 && a2 < maxChars; j--){ kept.unshift(seq[j]); a2 += seq[j].length; }
-    if(kept.length){ out[0] = kept.join(''); s = out.join('\n\n'); }
-    else s = head.slice(0, maxChars);
-  }
-  return s;
-}
 function principalStyleExecutionExcerpt(){
   const pr = (state.school && state.school.principal) || {};
   if(pr.raw){
@@ -16482,12 +16458,12 @@ function buildDynamicProtagonistLedger(i){
   const protagonist = (o.navBeacon && o.navBeacon.protagonist) ? String(o.navBeacon.protagonist).split(/[，,：:（(]/)[0].trim() : '主角';
 
   const lines = [];
-  lines.push(`【动态主角状态与悬念账本（承自 ${prevTitle} 完结时的物理基准）】`);
+  lines.push(`【动态主角状态与悬念账本（承自 ${prevTitle} 已结算的动态状态）】`);
   lines.push(`- 核心角色锚点：${protagonist}`);
   if(prevDigest){
     lines.push(`- 上一章剧情与状态结算：${prevDigest}`);
   }
-  lines.push(`- 物理与心理定格硬性纪律：上一章正文最末段落定格的具体地点、主角身受之伤势/生理状态、当前正在交涉的核心人物与最后一句话、持有的重要道具/线索，属于不可擅改的既成事实。本章第一段须在此物理基准上推进，严禁发生伤势突愈、道具凭空消失或死人复活等逻辑断层！`);
+  lines.push(`- 物理与心理定格硬性纪律：上一章已结算的地点、人物状态、重要道具/线索与未决事项属于不可擅改的既成事实。本章必须在这些已落地状态上推进，严禁发生伤势突愈、道具凭空消失或死人复活等逻辑断层！`);
   return lines.join('\n');
 }
 
@@ -16507,62 +16483,6 @@ function principalCausalityExcerpt(){
   return '（校长尚未产出新版因果闭环层；正文仍必须执行事件可达性硬规则：重大事件不得凭空发生，必须有前置条件、触发依据、人物行动路径与结果来源。）';
 }
 
-/* ===================== v1.0.343 正文AI上下文理解层 =====================
- * 先理解，再写作：把老师教案与上一章真实结尾压缩成“事实型理解包”。
- * 该步骤只做阅读理解/冲突识别/承接提取，不创作剧情，不生成正文。
- */
-const CHAPTER_COMPREHENSION_SYS = `你是长篇小说正文AI的“上下文理解器”，不是作者。
-你的任务只有一个：在正文AI动笔之前，完整阅读并准确理解【老师本章教案】与【上一章末尾原文】，整理出一份给正文作家使用的“事实理解包”。
-
-严格规则：
-1. 老师教案决定本章要发生什么、发生顺序、人物调度、时间、地点、情绪方向和章末状态；不要重新设计剧情。
-2. 上一章末尾原文是本章开笔的真实物理起点；必须识别最后真实动作、地点、人物、正在进行的对话、身体状态、重要物品/线索、即时情绪与未完成问题。
-3. 两者若存在时间/空间跨度，明确指出需要自然过桥的位置；不要发明新的剧情理由。
-4. 区分“教案要求”和“上一章已经发生的事实”，不得把计划写成既成事实，也不得把上一章事实改成符合教案的样子。
-5. 识别本章必须兑现的核心事件、关键因果、必须保持的人物/信息连续性、明确禁项、章末停止点。
-6. 允许指出信息缺口，但只提出“最小必要补足”的方向，不创造新的核心人物、道具、组织、秘密、冲突或剧情。
-7. 不评价文风好坏，不写正文，不写故事续篇，不扩写，不凑字数。
-8. 不要为了“完整”硬凑条目；没有内容就写“无”。
-9. 输出简洁、准确、面向正文作家执行；只输出一个 JSON 对象，不要 markdown，不要解释。
-
-JSON结构：
-{
-  "openingReality":"本章第一段必须承接的真实物理/人物状态",
-  "previousEndingFacts":[],
-  "teacherCoreEvents":[],
-  "eventOrder":[],
-  "causalLinks":[],
-  "characterContinuity":[],
-  "timeSpaceBridge":"",
-  "informationBoundary":[],
-  "forbiddenChanges":[],
-  "endingStopPoint":"",
-  "safeLiteraryFreedom":[],
-  "missingInfo":""
-}`;
-
-function buildChapterComprehensionUser(i){
-  const o=state.outline||{};
-  const card=chapterPlanAuthority(i);
-  const lesson=String(card?.raw || teacherChapterPlan(i) || '').trim();
-  const prev= i>0 ? String(state.chapters?.[i-1]?.content||'').trim() : '';
-  const prevTail=prev ? chapterTailExcerpt(i, 6500) : '';
-  const ss=storyState();
-  const prevObs= i>0 ? (ss.chapters?.[i-1]?.observed||null) : null;
-  const planned=ss.chapters?.[i]?.planned||null;
-  return `【本章教案｜完整原始内容】\n${lesson.slice(0,16000) || '（无）'}\n\n【上一章末尾｜真实原文】\n${prevTail || '（首章，无上一章）'}\n\n【上一章机器结算｜仅作辅助，不可覆盖原文】\n${JSON.stringify(prevObs||{},null,2)}\n\n【本章计划状态｜仅作辅助】\n${JSON.stringify(planned||{},null,2)}\n\n【任务】请先读完上述材料，再输出事实型理解包。只提取与本章正文写作直接相关的信息，不要替正文AI写任何句子。`;
-}
-
-async function buildChapterComprehension(i, signal){
-  try{
-    const user=buildChapterComprehensionUser(i);
-    const raw=unwrapAIResult(await callDeepSeek(CHAPTER_COMPREHENSION_SYS,user,{maxTokens:5200,temperature:0.1,topP:0.2,signal:signal||_abortCtl?.signal,taskKey:'chapter'}));
-    const j=parseJson(raw)||{};
-    return JSON.stringify(j,null,2);
-  }catch(e){
-    return '';
-  }
-}
 
 function buildChapterUser(i, opt={}){
   const o = state.outline || {};
@@ -16614,17 +16534,6 @@ ${_lesson}
 
     const microParts = [];
     if(i > 0){
-      const _tail = chapterTailExcerpt(i, 6500);
-      if(_tail){
-        microParts.push(`◆ 上一章末尾 · 物理接力（本章开笔物理现实起点）
-这是上一章正文最末真实自然断点文字。本章第一段必须与它"伤口对缝"：
-① 物理起点接力：第一段直接从本段收尾处的景象 / 动作 / 未说完的对话 / 人物处境 / 即时情绪自然续写；
-② 真实物理基准：段中人物当前处所、悬而未决的对话与最后动作定格，以此文字为准，禁止另起炉灶；
-③ 平滑过桥：若本段物理时空与上方教案「剧情时间落点」或骨架第①拍存在跨度，在首段用 1~2 句自然过渡句平滑过桥，随即全面切入教案骨架！
-——— 上一章末尾原文 ———
-${_tail}
-——— 上一章末尾结束 ———`);
-      }
       const ledger = buildDynamicProtagonistLedger(i);
       if(ledger) microParts.push(ledger);
 
@@ -16655,10 +16564,6 @@ ${_tail}
     boundary += `\n【阶段移交硬禁】任何“本阶段向下一阶段移交”“阶段高潮成果”“后续阶段悬念”等后台信息只可用于理解连续性，绝不属于本章正文剧情。`;
     parts.push(boundary);
 
-    // 先理解后写：把教案与上一章末尾的关键事实交给正文AI的上下文理解层。
-    // 这是“理解”，不是第二份剧情计划；正文AI最终仍以原始材料为权威并自行完成正文。
-    // 注意：此处不能在 buildChapterUser 中 await，因此实际理解包在 writeOneChapterContent 中异步追加。
-
   } else {
     parts.push(`【小说简介】书名：${o.title||''}\n${o.logline||''}`);
     const plan = (Array.isArray(o.chapterPlans) && o.chapterPlans[i]) || null;
@@ -16667,8 +16572,6 @@ ${_tail}
       if(_l1txt) parts.push(`【本章节拍编排】\n${_l1txt}\n`);
     }
     if(i > 0){
-      const _tail = chapterTailExcerpt(i);
-      if(_tail) parts.push(`【上一章末尾】\n${_tail}`);
       const ledger = buildDynamicProtagonistLedger(i);
       if(ledger) parts.push(ledger);
       const rolling = buildRollingSummary(i);
@@ -17523,7 +17426,7 @@ async function genNChapters(start, n){
             const res = await callDeepSeek(longChapterSys(), buildChapterUser(idx), {maxTokens: chapterMaxTokens(), onStream, temperature: _dyn.temperature, topP: _dyn.topP, signal: _abortCtl?.signal, taskKey:'chapter'});
             txt = res.text; finishReason = res.finishReason;
           } else {
-            const res = await callDeepSeek(PROMPTS.chapterSys + chapterStyleNote(), buildChapterUser(idx), {maxTokens: chapterMaxTokens(), temperature: _dyn.temperature, topP: _dyn.topP, signal: (_abortCtl && _abortCtl.signal), taskKey:'chapter'});
+            const res = await callDeepSeek(PROMPTS.chapterSys, buildChapterUser(idx), {maxTokens: chapterMaxTokens(), temperature: _dyn.temperature, topP: _dyn.topP, signal: (_abortCtl && _abortCtl.signal), taskKey:'chapter'});
             txt = res.text; finishReason = res.finishReason;
           }
           if(finishReason === 'length'){
@@ -17754,7 +17657,7 @@ async function genOneChapterNoUI(i){
   try{
     const txt = isLong()
       ? await writeOneChapterContent(i, user)
-      : unwrapAIResult(await callDeepSeek(PROMPTS.chapterSys + chapterStyleNote(), user, {temperature: resolveActiveSpec().chapterTemp, taskKey:'chapter'})).trim();
+      : unwrapAIResult(await callDeepSeek(PROMPTS.chapterSys, user, {temperature: resolveActiveSpec().chapterTemp, taskKey:'chapter'})).trim();
     state.chapters[i].content = txt;
     persist();
   }catch(e){ /* 继续后续 */ }
