@@ -1,5 +1,14 @@
 /**
  * Novel Writing AI Engine - Progressive Release Build
+ * File: app1_v1.3.0.js
+ * Version: v1.3.0
+ * Build Timestamp: 2026-09-19 12:57:02 UTC
+ * Features: Dynamic Genre Strategic Dimensions, BanList Isolation, Multi-Option Separation
+ */
+
+const APP_FILE_VERSION = 'app1_v1.3.0.js';
+/**
+ * Novel Writing AI Engine - Progressive Release Build
  * File: app1_v1.0.1.js
  * Version: v1.0.1
  * Build Timestamp: 2026-09-19 11:49:36 UTC
@@ -19287,4 +19296,41 @@ function parsePolishCandidatesFixed(raw, multi){
     seedCharacters: Array.isArray(item.seedCharacters) ? item.seedCharacters : [],
     seedPlaces: Array.isArray(item.seedPlaces) ? item.seedPlaces : []
   }));
+}
+
+
+/* ===================== v1.3.0 Web Audio 5种出错警报音色 & 4大专项任务完成提醒引擎 ===================== */
+const SND_ERR_PRESETS = [
+  { id:'err_double', name:'沉闷双响', seq:[[220.0,0,0.12],[174.61,0.14,0.22]] },
+  { id:'err_warn',   name:'警示鸣响', seq:[[440.0,0,0.1],[349.23,0.11,0.18]] },
+  { id:'err_down',   name:'下行告警', seq:[[523.25,0,0.09],[392.0,0.1,0.1],[293.66,0.21,0.2]] },
+  { id:'err_rapid',  name:'急促短鸣', seq:[[880.0,0,0.06],[880.0,0.08,0.06],[880.0,0.16,0.1]] },
+  { id:'err_deep',   name:'深沉警号', seq:[[130.81,0,0.18],[110.0,0.2,0.3]] }
+];
+
+const SND_TASK_PRESETS = {
+  idea:        { name: '优化构想提醒', seq:[[523.25,0,0.08],[659.25,0.09,0.12],[783.99,0.22,0.2]] },
+  dictmaster:  { name: '词典达人提醒', seq:[[659.25,0,0.1],[880.0,0.11,0.18]] },
+  dictenrich:  { name: '词典充实提醒', seq:[[587.33,0,0.09],[783.99,0.1,0.15]] },
+  chapterregen:{ name: '正文重生成提醒', seq:[[783.99,0,0.1],[1046.5,0.11,0.22]] }
+};
+
+function playErrorSound(presetId){
+  if(typeof _snd !== 'undefined' && !_snd.enabled) return;
+  if(typeof unlockAudio === 'function') unlockAudio();
+  if(typeof _snd === 'undefined' || !_snd.ctx || _snd.ctx.state !== 'running') return;
+  const p = SND_ERR_PRESETS.find(x=>x.id===presetId) || SND_ERR_PRESETS[0];
+  if(typeof _sndBeep === 'function'){
+    (p.seq||[]).forEach(s=> _sndBeep(s[0], s[1], s[2], 0.35));
+  }
+}
+
+function playTaskDoneSound(taskKey){
+  if(typeof _snd !== 'undefined' && !_snd.enabled) return;
+  if(typeof unlockAudio === 'function') unlockAudio();
+  if(typeof _snd === 'undefined' || !_snd.ctx || _snd.ctx.state !== 'running') return;
+  const p = SND_TASK_PRESETS[taskKey] || SND_TASK_PRESETS.idea;
+  if(typeof _sndBeep === 'function'){
+    (p.seq||[]).forEach(s=> _sndBeep(s[0], s[1], s[2], 0.28));
+  }
 }
