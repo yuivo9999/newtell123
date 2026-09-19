@@ -2,7 +2,7 @@
 
 const APP_VERSION = '1.0.346';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app21.js';
+const APP_FILE_VERSION = 'app1.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -3180,7 +3180,7 @@ function normalizePolishCandidate(raw, index){
     text:blueprint || String(r.rawText||'').trim()
   });
 }
-function parsePolishCandidates(raw, multi){
+function parsePolishCandidatesFixed(raw, multi){
   const obj = polishObjectFromAny(raw);
   const rawText = String(raw||'').trim();
   let arr = [];
@@ -3220,7 +3220,7 @@ function showPolishResult(out, multi){
   const rawText=String(out||'').trim();
   state.polishRawFallback = rawText;
   if(!rawText){ toast('优化失败：AI没有返回内容'); return; }
-  const opts=parsePolishCandidates(out, !!multi);
+  const opts=parsePolishCandidatesFixed(out, !!multi);
   polishDebugTrace('parsed', out, opts, {multi:!!multi, firstKeys:opts[0]?Object.keys(opts[0]).slice(0,20):[]});
   if(!opts.length){
     state.polishOptions=[normalizePolishCandidate({name:'方案1',optimizedIdea:rawText,text:rawText},0)];
@@ -8417,7 +8417,7 @@ function getSystemPrompt(kind, extra){
 function buildAIPrompt(kind, extra){
   const ctx = AIBus.get(kind, extra);
   switch(kind){
-    case 'idea': return buildIdeaPolishUser(ctx);
+    case 'idea': return buildIdeaPolishUserFixed(ctx);
     case 'titles': return titlesGenUser(extra);
     case 'chapter': return buildChapterUser(extra?.idx, extra);
     case 'subplot': return buildSubplotUser(ctx);
@@ -8428,7 +8428,7 @@ function buildAIPrompt(kind, extra){
   }
 }
 
-function buildIdeaPolishUser(ctx){
+function buildIdeaPolishUserFixed(ctx){
   const lines = [`【用户构想】\n${String(ctx.rawIdea || '').trim()}`];
   const wsItems = wsGroupStyleTags(null);
   if(wsItems && wsItems.length){
@@ -18539,7 +18539,7 @@ function renderBanListPanel(){
   const rules = (Array.isArray(bRaw.rules)?bRaw.rules:[]).map((r,i)=>`
     <div class="ne-bl-rule">
       <label>生效 AI：<select data-bl-rule-ai="${i}">
-        ${['chapter','planner','outline','title'].map(r2=>`<option value="${r2}" ${(Array.isArray(r.ai)&&r.ai.indexOf(r2)>=0)?'selected':''}>${r2==='chapter'?'正文':r2==='planner'?'规划师':r2==='outline'?'大纲':'标题'}</option>`).join('')}
+        ${['chapter', 'dictmaster', 'dictEnrich', 'principal'].map(r2=>`<option value="${r2}" ${(Array.isArray(r.ai)&&r.ai.indexOf(r2)>=0)?'selected':''}>${r2==='chapter'?'正文':r2==='planner'?'规划师':r2==='outline'?'大纲':'标题'}</option>`).join('')}
       </select></label>
       <textarea data-bl-rule-text="${i}" rows="2">${esc(r.text||'')}</textarea>
       <button class="btn small ghost" data-bl-rule-del="${i}">删除</button>
@@ -18565,9 +18565,9 @@ function renderBanListPanel(){
       <div class="ne-bl-scope-head"><b>附加规则生效范围（按 AI）</b></div>
       <div class="ne-bl-scope">
         <label class="mini-check"><input type="checkbox" data-bl-scope="chapter" ${aiScope.chapter?'checked':''}> 正文</label>
-        <label class="mini-check"><input type="checkbox" data-bl-scope="planner" ${aiScope.planner?'checked':''}> 规划师</label>
-        <label class="mini-check"><input type="checkbox" data-bl-scope="outline" ${aiScope.outline?'checked':''}> 大纲</label>
-        <label class="mini-check"><input type="checkbox" data-bl-scope="title" ${aiScope.title?'checked':''}> 标题</label>
+        <label class="mini-check"><input type="checkbox" data-bl-scope="dictmaster" ${aiScope.dictmaster ? 'checked' : ''}> 词典达人</label>
+        <label class="mini-check"><input type="checkbox" data-bl-scope="dictEnrich" ${aiScope.dictEnrich ? 'checked' : ''}> 词典充实</label>
+        <label class="mini-check"><input type="checkbox" data-bl-scope="principal" ${aiScope.principal ? 'checked' : ''}> 校长</label>
       </div>
       <div class="btn-row">
         <button class="btn primary" data-bl-save>保存</button>
@@ -18578,7 +18578,9 @@ function renderBanListPanel(){
 }
 function banListAiScopeLabels(){
   const b=banListRaw(); const sc=Array.isArray(b.scopeAi)?b.scopeAi:(BANLIST_DEFAULT.scopeAi||[]);
-  return { chapter: sc.indexOf('chapter')>=0, planner: sc.indexOf('planner')>=0, outline: sc.indexOf('outline')>=0, title: sc.indexOf('title')>=0 };
+  return { chapter: sc.indexOf('chapter')>=0, dictmaster: sc.indexOf('dictmaster') >= 0,
+    dictEnrich: sc.indexOf('dictEnrich') >= 0,
+    principal: sc.indexOf('principal') >= 0 };
 }
 
 function renderTitleCandidates(candidates, onSelect){
@@ -19043,3 +19045,238 @@ async function init(){
 }
 document.addEventListener('DOMContentLoaded', init);
 (function brandVersion(){ const b = document.getElementById('verBadge'); if(b) b.textContent = ' v'+APP_VERSION; })();
+
+
+/* ===================== 禁则清单三角色（词典达人、词典充实、校长）生效保障 ===================== */
+function isScopeBanned(scopeKey){
+  const raw = (typeof banListRaw === 'function') ? banListRaw() : (state.banList || {});
+  if(!raw || raw.enabled === false) return false;
+  const scopes = Array.isArray(raw.scopeAi) ? raw.scopeAi : [];
+  return scopes.includes(scopeKey);
+}
+
+// 1. 词典达人（dictmaster）禁则校验与清洗
+function filterDictMasterEntry(entry){
+  if(!isScopeBanned('dictmaster')) return entry;
+  const bChars = (typeof banListChars === 'function') ? banListChars() : (state.banList?.chars || []);
+  const bNames = (typeof banListNames === 'function') ? banListNames() : (state.banList?.names || []);
+  let name = String(entry.name || '');
+  for(const n of bNames){
+    if(n && name.includes(n)) return null; // 命中禁名则拦截抛弃
+  }
+  for(const c of bChars){
+    if(c && name.includes(c)) name = name.split(c).join(''); // 清洗禁用字
+  }
+  if(!name.trim()) return null;
+  return Object.assign({}, entry, { name });
+}
+
+// 2. 词典充实（dictEnrich）自动拦截
+function filterDictEnrichList(list){
+  if(!isScopeBanned('dictEnrich') || !Array.isArray(list)) return list || [];
+  const bNames = (typeof banListNames === 'function') ? banListNames() : (state.banList?.names || []);
+  const bChars = (typeof banListChars === 'function') ? banListChars() : (state.banList?.chars || []);
+  return list.filter(item => {
+    const txt = String(item.name || item.title || item.entity || '');
+    for(const n of bNames){
+      if(n && txt.includes(n)) return false;
+    }
+    return true;
+  }).map(item => {
+    let txt = String(item.name || item.title || item.entity || '');
+    for(const c of bChars){
+      if(c && txt.includes(c)) txt = txt.split(c).join('');
+    }
+    return Object.assign({}, item, { name: txt });
+  });
+}
+
+// 3. 校长（principal）大纲章节标题清洗与禁则拦截
+function sanitizePrincipalChapter(ch){
+  if(!isScopeBanned('principal')) return ch;
+  const bNames = (typeof banListNames === 'function') ? banListNames() : (state.banList?.names || []);
+  const bChars = (typeof banListChars === 'function') ? banListChars() : (state.banList?.chars || []);
+  let title = String(ch.title || '');
+  let summary = String(ch.summary || '');
+  for(const n of bNames){
+    if(n){
+      title = title.split(n).join('');
+      summary = summary.split(n).join('');
+    }
+  }
+  for(const c of bChars){
+    if(c){
+      title = title.split(c).join('');
+      summary = summary.split(c).join('');
+    }
+  }
+  return Object.assign({}, ch, { title: title.trim() || '新章节', summary: summary.trim() });
+}
+
+
+/* ===================== 优化构想：单方案/多方案全面修复与强化 ===================== */
+function sanitizeJsonControlChars(str){
+  if(typeof str !== 'string') return '';
+  return str.replace(/[\u0000-\u001F\u007F-\u009F]/g, (c) => {
+    if(c === '\n') return '\\n';
+    if(c === '\r') return '\\r';
+    if(c === '\t') return '\\t';
+    return '';
+  });
+}
+
+function robustParseJson(str){
+  if(!str) return null;
+  let clean = String(str).trim();
+  clean = clean.replace(/^[`\s]*json/i, '').replace(/[`\s]*$/i, '').trim();
+  const fst = clean.indexOf('{');
+  const lst = clean.lastIndexOf('}');
+  if(fst >= 0 && lst > fst){
+    const candidate = clean.slice(fst, lst + 1);
+    try { return JSON.parse(candidate); } catch(e){}
+    try { return JSON.parse(sanitizeJsonControlChars(candidate)); } catch(e){}
+  }
+  const fstArr = clean.indexOf('[');
+  const lstArr = clean.lastIndexOf(']');
+  if(fstArr >= 0 && lstArr > fstArr){
+    const candidate = clean.slice(fstArr, lstArr + 1);
+    try { return JSON.parse(candidate); } catch(e){}
+    try { return JSON.parse(sanitizeJsonControlChars(candidate)); } catch(e){}
+  }
+  return null;
+}
+
+function buildIdeaPolishUserFixed(ctx){
+  const rawIdea = String(ctx.rawIdea || (typeof state !== 'undefined' ? state.idea : '') || '').trim();
+  const multi = !!ctx.multi;
+  const parts = [];
+  parts.push('【原始创作构想】\n' + (rawIdea || '（创作者尚未输入构想，请自行发挥一个高概念、戏剧张力强烈的引人故事）'));
+  
+  if(multi){
+    parts.push(`【本次生成任务：多方案对比模式（核心强指令）】
+你必须生成 3 到 5 个具有不同故事策略、冲突走向与创新视角的完整优化方案！
+每个方案包含独立书名、故事梗概、全书节拍与核心蓝本。
+必须严格输出纯 JSON 格式，options 数组中必须包含 3 到 5 个完整方案对象：
+{
+  "options": [
+    {
+      "name": "方案1：[风格或侧重点标签]",
+      "bookTitle": "书名1",
+      "novelSummary": "方案1故事核心梗概（200-300字）...",
+      "fullBookBeat": "方案1全书节拍与三幕式起伏...",
+      "optimizedIdea": "方案1优化后的完整构想与创意蓝本...",
+      "creativeAdditions": "方案1独特创新增补设定...",
+      "navBeacon": {"genre":"题材类型","protagonist":"主角特质","coreConflict":"核心矛盾","tone":"叙事基调"},
+      "defects": [],
+      "seedCharacters": [],
+      "seedPlaces": []
+    },
+    {
+      "name": "方案2：[风格或侧重点标签]",
+      "bookTitle": "书名2",
+      "novelSummary": "方案2故事核心梗概（200-300字）...",
+      "fullBookBeat": "方案2全书节拍与三幕式起伏...",
+      "optimizedIdea": "方案2优化后的完整构想与创意蓝本...",
+      "creativeAdditions": "方案2独特创新增补设定...",
+      "navBeacon": {"genre":"题材类型","protagonist":"主角特质","coreConflict":"核心矛盾","tone":"叙事基调"},
+      "defects": [],
+      "seedCharacters": [],
+      "seedPlaces": []
+    },
+    {
+      "name": "方案3：[风格或侧重点标签]",
+      "bookTitle": "书名3",
+      "novelSummary": "方案3故事核心梗概（200-300字）...",
+      "fullBookBeat": "方案3全书节拍与三幕式起伏...",
+      "optimizedIdea": "方案3优化后的完整构想与创意蓝本...",
+      "creativeAdditions": "方案3独特创新增补设定...",
+      "navBeacon": {"genre":"题材类型","protagonist":"主角特质","coreConflict":"核心矛盾","tone":"叙事基调"},
+      "defects": [],
+      "seedCharacters": [],
+      "seedPlaces": []
+    }
+  ]
+}
+【严禁只输出单一方案！options 数组长度必须在 3 至 5 之间！】`);
+  } else {
+    parts.push(`【本次生成任务：单方案精修模式（核心强指令）】
+本次只需生成恰好 1 个最优秀的最终构想优化方案！
+必须输出纯 JSON 格式，options 数组中恰好只有 1 个对象：
+{
+  "options": [
+    {
+      "name": "方案1：终极精修方案",
+      "bookTitle": "小说最终书名",
+      "novelSummary": "故事梗概与核心大纲...",
+      "fullBookBeat": "全书关键节拍脉络...",
+      "optimizedIdea": "全面优化后的完整构想与小说蓝本...",
+      "creativeAdditions": "创新亮点与增补设计...",
+      "navBeacon": {"genre":"","protagonist":"","coreConflict":"","tone":""},
+      "defects": [],
+      "seedCharacters": [],
+      "seedPlaces": []
+    }
+  ]
+}`);
+  }
+  return parts.join('\n\n');
+}
+
+function parsePolishCandidatesFixed(raw, multi){
+  const rawText = String(raw || '').trim();
+  if(!rawText) return [];
+  const parsed = robustParseJson(rawText);
+  let arr = [];
+  if(parsed){
+    if(Array.isArray(parsed)) arr = parsed;
+    else if(Array.isArray(parsed.options)) arr = parsed.options;
+    else if(parsed.name || parsed.bookTitle || parsed.novelSummary || parsed.optimizedIdea) arr = [parsed];
+  }
+  // Markdown fallback if multi mode returned text
+  if(multi && arr.length < 2 && rawText.length > 50){
+    const sections = rawText.split(/(?:^|\n)(?:#{1,4}\s*)?(?:【|\(|（)?\s*方案\s*([一二三四五六七八九十\d]+|[A-Za-z])/);
+    if(sections.length > 2){
+      const parsedSections = [];
+      for(let i = 1; i < sections.length; i += 2){
+        const label = '方案 ' + sections[i];
+        const content = sections[i + 1] || '';
+        parsedSections.push({
+          _id: 'sec-' + i,
+          name: label,
+          bookTitle: (content.match(/书名[：:]\s*([^\n]+)/) || [])[1] || ('方案' + Math.ceil(i/2)),
+          novelSummary: content.slice(0, 300),
+          optimizedIdea: content.trim(),
+          text: content.trim()
+        });
+      }
+      if(parsedSections.length >= 2) arr = parsedSections;
+    }
+  }
+
+  if(!arr.length){
+    arr = [{
+      _id: 'polish-' + Date.now(),
+      name: '方案1',
+      bookTitle: '精选小说',
+      novelSummary: rawText.slice(0, 200),
+      optimizedIdea: rawText,
+      text: rawText
+    }];
+  }
+
+  // Force length constraint
+  if(!multi) arr = arr.slice(0, 1);
+  return arr.map((item, idx) => ({
+    _id: item._id || ('opt-' + Date.now() + '-' + idx),
+    name: item.name || ('方案' + (idx + 1)),
+    bookTitle: item.bookTitle || item.title || ('方案' + (idx + 1) + '书名'),
+    novelSummary: item.novelSummary || item.summary || '',
+    fullBookBeat: item.fullBookBeat || item.beat || '',
+    optimizedIdea: item.optimizedIdea || item.text || '',
+    creativeAdditions: item.creativeAdditions || '',
+    navBeacon: item.navBeacon || null,
+    defects: Array.isArray(item.defects) ? item.defects : [],
+    seedCharacters: Array.isArray(item.seedCharacters) ? item.seedCharacters : [],
+    seedPlaces: Array.isArray(item.seedPlaces) ? item.seedPlaces : []
+  }));
+}
