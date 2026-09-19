@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.345';
-// Version line: app20.js — 正文单次生成版（移除正文二次扩写/倍量生成逻辑）。
-const APP_FILE_VERSION = 'app17.js';
+const APP_VERSION = '1.0.346';
+// Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
+const APP_FILE_VERSION = 'app21.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -65,7 +65,7 @@ const MAX_PROJECTS = 500;
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app17.js — 正文生成稳定性修正版；保留优化构想与章末系统。 */
+/* APP VERSION: app22.js — 正文单次生成版；强化章节内部一致性、信息去重、句式多样与人物动态反应逻辑。 */
 const state = {
   mode: 'shortfilm',    // 'shortfilm' 短片 / 'longnovel' 经典长篇小说
   wordRange: null,      // (兼容遗留) 不再作为长篇必填；保留字段避免旧快照破坏
@@ -239,6 +239,9 @@ function normalizeOutline(o){
   o._rollingSummaries = o._rollingSummaries || [];
   o._factCard = o._factCard || { characters:{}, timeline:[], lastScene:'' };
   o._timeAudit = o._timeAudit || {};
+  // app21：章节内部质量账本。它只记录审计后已经写成的事实/信息与人物认知，
+  // 不拥有创作权；下一章仅把它作为“已知状态”参考，不能覆盖词典/教案。
+  o._chapterQualityLedger = o._chapterQualityLedger || {};
   if(Array.isArray(o.chapterPlans)){
     o.chapterPlans = o.chapterPlans.map(p => {
       if(typeof p === 'string') return { beatsText:'', emotionalArc:'', requiredEntities:[] };   // 旧字符串形态（原主线简述）视为旧数据，直接丢弃
@@ -469,25 +472,189 @@ function enforceChapterBoundary(i, text){
   }
   return s;
 }
-const CHAPTER_AUDIT_SYS=`你是长篇小说“状态审计AI”。你没有创作权，只负责判定正文是否忠实执行机器章节卡、上一章真实状态与世界词典。
-只检查可验证冲突：时间倒退/不可达、地点瞬移、人物生死与身体状态、关系变化、道具持有、世界规则、信息知情边界、章节必做事件缺失、禁项违规、凭空出现会持续存在的新核心实体。正常文学发挥不是错误。
-【特别时间审计】如果机器章节卡明确给出起点和终点跨越多日，必须检查正文是否真的抵达计划终点并对中间时间流逝有合理叙事承载；可以通过场景跳跃、生活节律、蒙太奇、阶段性事件等完成，不要求逐日流水账，但绝不能正文实际只发生在前一两天却声称本章覆盖五天。若正文明确落在比计划终点更早的日期，判FAIL；若无法确认抵达终点，至少WARN。
-输出严格JSON：{"status":"PASS|WARN|FAIL","issues":[{"type":"time|location|character|relationship|object|rule|knowledge|event|entity|causal","severity":"warn|fail","evidence":"正文中的明确证据","expected":"应有状态","actual":"实际状态","repair":"最小修复方向"}],"summary":"一句话"}`;
+
+/* ===================== app21：章节内部信息/人物质量账本 =====================
+ * 目的：解决“同一章内逻辑不清、前后打架、信息重复、句式频繁、人物像在交代设定”。
+ * 账本只记录已写成的事实，不参与创作裁决；它服务于下一次正文生成与本章审计。
+ */
+function chapterQualityLedger(i){
+  const o = state.outline || {};
+  o._chapterQualityLedger = o._chapterQualityLedger || {};
+  const x = o._chapterQualityLedger[i];
+  return x && typeof x === 'object' ? x : null;
+}
+
+/* ===================== app22：人物动态反应引擎 =====================
+ * 把“性格标签”升级为可执行的“刺激→判断→冲突→选择→外显→潜台词→后果”链。
+ * 稳定内核不等于固定动作；人物在不同压力、关系和信息条件下应产生不同层次的选择。
+ */
+function buildChapterCharacterDynamicReactionBlock(i){
+  const o=state.outline||{}, g=o.glossary||{}, card=chapterPlanAuthority(i)||{};
+  const castRaw=String(card.cast||'').trim(), chars=Array.isArray(g.characters)?g.characters:[], names=[];
+  const add=n=>{n=String(n||'').trim(); if(n&&!names.includes(n)) names.push(n);};
+  chars.forEach(c=>{const n=String(c&&c.name||'').trim(); if(n&&castRaw&&castRaw.includes(n)) add(n);});
+  if(!names.length){const p=String(o?.navBeacon?.protagonist||'').split(/[，,：:（(]/)[0].trim(); if(p)add(p);}
+  if(!names.length) return '';
+  const rows=names.slice(0,12).map(n=>{const c=chars.find(x=>String(x&&x.name||'').trim()===n)||{}; return `- ${n}｜身份:${String(c.identity||'未知').trim()}｜稳定内核:${String(c.trait||'未知').trim()}｜关系底色:${String(c.relation||'未知').trim()}｜习惯:${String(c.hobby||'未知').trim()}｜口头特征(低频):${String(c.catchphrase||'无').trim()}`;}).join('\n');
+  return `【人物动态反应引擎｜app22】
+人物鲜明不是“每句话都像这个人”，也不是重复口癖；要求“同一个人，在不同压力下仍有同一个内核，但会作出不同层次的选择”。
+${rows}
+
+【每个关键人物反应的内部因果链】
+刺激/事件 → 当下看见或知道什么 → 最即时的判断 → 想得到/避免什么 → 与对方关系带来的顾虑 → 情绪/利益冲突 → 选择（说/不说/做/不做/先做再说）→ 外显动作或对白 → 潜台词 → 对剧情或关系造成的后果。
+
+【人物层次规则】
+1. 不直接写“他很嘴硬/她很善良”作为性格证明，让读者从选择和后果看出来。
+2. 同一性格允许出现拒绝、沉默、转移、先行动后承认、玩笑遮掩、突然让步、事后补救等不同表现，必须由情境触发。
+3. 核心倾向可以稳定，但表层行为必须受“当前目标、压力、关系、已知信息、过去经验”影响。
+4. 人物只能使用自己已经知道或当下获得的信息。
+5. 同一事件让不同人物作不同选择：差异来自目标、价值排序、关系和经验，而不是为了凑不同句式。
+6. 人物面对亲人、朋友、陌生人、对手、上下级时的表达可受关系影响，但禁止机械套模板。
+7. 人物反常时必须有压力、认知变化或关系变化作为依据；否则视为人设漂移。
+8. 重要场面尽量留下至少一个“不靠形容词就能证明性格”的行为选择。
+9. 口头禅、固定动作低频使用；连续重复时换成另一种符合内核的行为表达。
+10. 真实交流允许打断、误解、回避、答非所问、只回应一半和用行动代替回答。
+
+【禁止的假鲜明】
+“嘴硬”≠每次都先拒绝再答应；“善良”≠每次都主动帮助；“聪明”≠每次都替作者解释设定；“冷静”≠每次都冷淡短句。`;
+}
+
+function buildChapterDialogueSubtextBlock(i){
+  return `【对话潜台词与人物声音锁｜app22】
+重要对白应有真实交流目的：索取、拒绝、试探、遮掩、安慰、威胁、争取、拖延、确认、转移、讽刺、让步、保护关系或改变对方选择。
+人物声音差异不要靠口癖，而靠信息取舍、句长、直接程度、主动/被动回应、是否回答重点、暴露程度以及面对压力时的变化。
+如果一句对白主要只是向读者重复世界观、人物履历或已经讲清的事实，应优先改成有交流目的的表达，或让行动、物件、沉默承担信息。
+潜台词不是故作高深：读者应能从上下文推断人物真正想做什么。`;
+}
+
+function buildChapterLocalInfoLedgerBlock(i){
+  const cur=chapterQualityLedger(i), prev=chapterQualityLedger(i-1);
+  const pick=(x,k)=>Array.isArray(x?.[k])?x[k].slice(0,20):[];
+  const lines=[`【本章局部信息账本｜app22】`,`写作时区分：事实、第一次揭示、人物知情、关系变化、道具/地点状态、未确认猜测。`,`同一章内信息第一次真正落地后，后续默认读者已经知道；再次出现必须带来新证据、新视角、新后果或认知变化。`,`“谁知道什么”与“读者知道什么”不是同一回事；禁止让角色为了替作者讲解而越过自己的知情边界。`];
+  if(prev){if(pick(prev,'introducedInfo').length)lines.push(`【上一章已介绍】${pick(prev,'introducedInfo').join('；')}`);if(pick(prev,'characterKnowledge').length)lines.push(`【上一章人物知情】${pick(prev,'characterKnowledge').join('；')}`);}
+  if(cur){if(pick(cur,'facts').length)lines.push(`【本章已确认事实】${pick(cur,'facts').join('；')}`);if(pick(cur,'introducedInfo').length)lines.push(`【本章已介绍】${pick(cur,'introducedInfo').join('；')}`);}
+  lines.push(`本章每出现重要新信息，内部标记其首次落地方式（行动/对白/观察/物件/结果）；后续不要再用同一种方式完整解释。`);
+  return lines.join('\n');
+}
+
+function buildChapterCharacterBehaviorBlock(i){
+  const o = state.outline || {}, g = o.glossary || {};
+  const card = chapterPlanAuthority(i);
+  const castRaw = String(card?.cast || '').trim();
+  const names = [];
+  const all = Array.isArray(g.characters) ? g.characters : [];
+  const addName = n => {
+    n = String(n||'').trim();
+    if(n && !names.includes(n)) names.push(n);
+  };
+  all.forEach(c=>{
+    const n=String(c&&c.name||'').trim();
+    if(n && castRaw && castRaw.includes(n)) addName(n);
+  });
+  if(!names.length){
+    const protagonist = String(o?.navBeacon?.protagonist||'').split(/[，,：:（(]/)[0].trim();
+    if(protagonist) addName(protagonist);
+  }
+  if(!names.length) return '';
+  const rows = names.slice(0,12).map(n=>{
+    const c=all.find(x=>String(x&&x.name||'').trim()===n) || {};
+    const trait=String(c.trait||'').trim(), rel=String(c.relation||'').trim(), hobby=String(c.hobby||'').trim();
+    const identity=String(c.identity||'').trim();
+    const pieces=[];
+    if(identity) pieces.push(`身份:${identity}`);
+    if(trait) pieces.push(`性格内核:${trait}`);
+    if(rel) pieces.push(`关系底色:${rel}`);
+    if(hobby && hobby!=='未知') pieces.push(`习惯/兴趣:${hobby}`);
+    return `- ${n}：${pieces.join('；')||'暂无可用性格资料'}`;
+  }).join('\n');
+  return `【人物反应逻辑｜稳定内核，不是固定口癖】
+以下只提供人物“为什么会这样反应”的底层依据，不要求每次都重复同一口癖、动作或句式。
+${rows}
+【执行方式】
+1. 同一件事先问：此人最在意什么、最怕什么、想得到什么、与对方是什么关系？再决定他说什么或不说什么。
+2. 性格优先通过选择、让步、拒绝、误解、行动、沉默、打断、试探、具体要求和事后补救表现。
+3. 同一人物在不同压力下可以有不同层次：嘴硬后让步、嘴上拒绝却先行动、表面平静但改变做法等；不要把“性格标签”直接写成旁白说明。
+4. 主要人物之间必须保留反应差异：不要让所有人面对同一事实都用相似的惊讶、感动、愤怒、解释和总结句式。
+5. 口头禅只是偶尔出现的声音特征，不是人物塑造主工具。`;
+}
+
+function buildChapterInformationGuard(i){
+  const prev = chapterQualityLedger(i-1);
+  const ss = storyState();
+  const prevObs = ss?.chapters?.[i-1]?.observed;
+  const lines = [`【章节内部信息账本｜写作前只读】`,
+    `本章写作必须区分：已经成立的事实、人物已知信息、第一次揭示的新信息、尚未证实的猜测。`,
+    `关键原则：一个信息第一次讲清后，后续默认读者已知道；除非出现新证据、新后果、新视角或人物认知改变，否则不要再次完整解释。`,
+    `人物知情边界：角色只能使用自己已经知道或当下通过感官/行动获得的信息；不得为了让读者明白而让角色说出他没有理由知道的设定。`];
+  if(prevObs){
+    lines.push(`【上一章已落地状态｜不可偷偷改写】${JSON.stringify(prevObs).slice(0,5000)}`);
+  }
+  if(prev){
+    const facts = Array.isArray(prev.facts)?prev.facts:[];
+    const info = Array.isArray(prev.introducedInfo)?prev.introducedInfo:[];
+    const know = Array.isArray(prev.characterKnowledge)?prev.characterKnowledge:[];
+    const rel = Array.isArray(prev.relationshipChanges)?prev.relationshipChanges:[];
+    if(facts.length) lines.push(`【前章事实账】${facts.slice(0,20).join('；')}`);
+    if(info.length) lines.push(`【前章已介绍信息】${info.slice(0,20).join('；')}`);
+    if(know.length) lines.push(`【前章人物知情】${know.slice(0,20).join('；')}`);
+    if(rel.length) lines.push(`【前章关系变化】${rel.slice(0,12).join('；')}`);
+  }
+  lines.push(`【本章内部记忆方式】正文AI在内部维护三列：①本章已明确成立；②本章刚刚新增；③仍未确认/只是猜测。新增信息一旦落地，后续只写其影响，不再把原信息重新讲一遍。`);
+  return lines.join('\n');
+}
+
+function chapterQualityPromptBlock(){
+  return `【本章质量执行锁】
+写完每一段后在内部快速复核，不输出检查过程：
+- 逻辑：人物为什么在此时做这件事？前置条件、信息来源、空间与时间是否成立？
+- 一致：刚刚确定的身份、关系、时间、地点、道具、能力和人物认知，后文是否继续成立？
+- 去重：本章已经解释过的事实是否又被完整换句重讲？如果只是自然提及可以保留，重复科普必须删掉或改成新后果。
+- 句式：连续段落是否长期使用同一种句法骨架或动作+对白模板？若是，改变叙述焦点或动作逻辑，不要机械换同义词。
+- 对话：这句话是在“做事/争取/拒绝/试探/回避/伤人/安慰/让步”，还是仅仅在给读者交代设定？若只是后者，改成有目的的对话、行动或留白。
+- 人物：人物反应是否来自自己的目标、关系、经验与性格？是否与其他人有区别？是否出现“所有人都替作者解释”的同声同气？
+- 人物层次：关键人物是否出现“刺激→判断→冲突→选择→外显→潜台词→后果”的一部分链条？是否有不靠形容词就能证明性格的行为选择？
+- 性格连续性与变化：稳定的是内核，不是动作模板；若人物反常，是否有压力、认知变化或关系变化作为依据？
+- 关系差异：人物面对不同对象时，表达是否受到关系和权力结构影响，而不是套用同一套语气？
+- 对话潜台词：重要对白是否在做事，而不只是向读者交代设定？是否有打断、回避、误解或行动代替回答？
+- 鲜明不等于口癖：稳定的是反应逻辑，不是固定动作或固定句尾。`;
+}
+
+const CHAPTER_AUDIT_SYS=`你是长篇小说“状态与叙事质量审计AI”。你没有创作权，只负责检查正文是否忠实执行机器章节卡、上一章真实状态、世界词典，并检查同一章内部的逻辑与文学执行质量。
+只检查可验证问题，不因个人审美偏好判错。重点检查：
+1. 时间倒退/不可达、地点瞬移、人物生死与身体状态、关系变化、道具持有、世界规则、信息知情边界；
+2. 章节必做事件缺失、禁项违规、凭空出现会持续存在的新核心实体；
+3. 同一章内部前后矛盾：同一人物身份/关系/年龄、同一地点、时间、道具、能力、事实或认知状态发生无解释冲突；
+4. 信息重复：同一关键事实在本章被完整解释两次以上，且第二次没有新证据、新视角、新后果或认知变化；
+5. 逻辑不清：关键行动缺少动机、前置条件、信息来源或因果桥；
+6. 对话设定化：角色用不符合当下目的的长段对白给读者讲背景/规则/人物履历；若该信息本可通过行动、冲突、试探、回避、物件或后果自然呈现，应视为质量问题；
+7. 人物同质化：不同人物面对同一事实使用近似反应、相同情绪词、相同动作/句式；或人物性格只靠口癖而没有选择与行为体现；
+8. 人物层次不足：人物只有静态性格标签，没有当前目标/关系/压力导致的具体选择；同一人物机械重复同一口癖、动作或反应模板；或突然反常却没有事件、认知、关系依据；
+9. 对话声音同质：不同人物只是换了名字，信息取舍、直接程度、回应方式、暴露程度和潜台词没有明显差异；
+10. 句式频繁：连续多个段落反复使用同一种语法骨架、动作+对白+总结结构或同一种情绪收束方式。只有明显影响阅读时才判问题。
+审计必须区分“自然重复/必要回顾”和“重复解释”；不能为了追求零重复而破坏人物回忆、强调或因果承接。
+输出严格JSON：
+{"status":"PASS|WARN|FAIL","issues":[{"type":"time|location|character|relationship|object|rule|knowledge|event|entity|causal|logic|contradiction|repetition|dialogue_exposition|character_flat|character_layer|character_voice|character_knowledge|sentence_pattern","severity":"warn|fail","evidence":"正文中的明确证据","expected":"应有状态/写法","actual":"实际写法","repair":"最小修复方向"}],"summary":"一句话","qualityLedger":{"facts":[],"introducedInfo":[],"characterKnowledge":[],"relationshipChanges":[],"objects":[],"locations":[],"unresolved":[]}}
+qualityLedger只记录本章正文明确成立或明确新增的信息，禁止脑补；每项尽量≤50字，最多各20项。`;
+
 async function auditChapterState(i,text){
-  if(!isLong()) return null; const ss=storyState(), c=chapterPlanAuthority(i), prev=ss.chapters?.[i-1]?.observed||null, obs=ss.chapters?.[i]?.observed||null;
+  if(!isLong()) return null; const o=state.outline||{}, ss=storyState(), c=chapterPlanAuthority(i), prev=ss.chapters?.[i-1]?.observed||null, obs=ss.chapters?.[i]?.observed||null;
   if(!c||!obs) return null;
   const g=(state.outline&&state.outline.glossary)||{};
   const canon=`人物:${(g.characters||[]).map(x=>x.name).join('、')}\n地点:${(g.places||[]).map(x=>x.name).join('、')}\n专名:${(g.propernouns||[]).map(x=>x.name).join('、')}\n世界规则:${(g._worldRules||[]).map(x=>x.rule).join('；')}`;
   const banAudit = stateBanEnabled() ? `\n【用户全书禁则·必须审计】\n禁用姓名：${banListNames().join('、')}\n姓名禁用字：${banListChars().join('、')}\n禁用短语：${(Array.isArray(banListRaw().phrases)?banListRaw().phrases:[]).join('、')}` : '';
   const plannedTime=c.time||''; const tr=_extractPlanTimeRange({beatsText:'剧情时间落点：'+plannedTime});
-  const user=`【机器章节卡】${JSON.stringify(c)}\n【时间覆盖核验】起点=${tr.from||'未知'}；终点=${tr.to||'未知'}；跨度=${_timeDaySpan(tr.from,tr.to)==null?'未知':_timeDaySpan(tr.from,tr.to)+'天'}；时间推进安排=${c.timeCoverage||'无'}\n【上一章正文结算】${JSON.stringify(prev||{})}\n【本章正文结算】${JSON.stringify(obs)}\n【词典只读实体】${canon}${banAudit}\n【本章正文】\n${String(text||'').slice(0,50000)}`;
-  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_AUDIT_SYS,user,{maxTokens:2200,temperature:0.05,topP:0.1,signal:_abortCtl?.signal,taskKey:'chapterAudit'})); const j=parseJson(raw)||{}; const report={status:['PASS','WARN','FAIL'].includes(j.status)?j.status:'WARN',issues:Array.isArray(j.issues)?j.issues.slice(0,20):[],summary:String(j.summary||'').trim(),ts:Date.now(),chapter:i}; const p=ss.chapters[i]?.planned||{}; const pt=_timeOrdinal(p.to), ot=_timeOrdinal(obs.time); if(pt!=null && ot!=null && ot<pt){ report.status='FAIL'; report.issues.unshift({type:'time',severity:'fail',evidence:`正文状态结算时间：${obs.time}`,expected:`本章必须抵达计划终点：${p.to}`,actual:`正文结算仍早于计划终点约${Math.max(0,pt-ot)}小时`,repair:'补足计划终点前真实发生的时间流逝/阶段性事件，并让章末状态落到计划终点。'}); } else if(pt!=null && ot==null && (p.spanDays||0)>=1){ report.status=report.status==='FAIL'?'FAIL':'WARN'; report.issues.unshift({type:'time',severity:'warn',evidence:'正文状态结算器未能确认章末日期',expected:`抵达计划终点：${p.to}`,actual:'无法确认',repair:'复核正文是否真正走到计划终点；必要时补足自然时间过桥。'}); } if(report.issues.some(x=>x.severity==='fail')) report.status='FAIL'; ss.chapters[i].audit=report; persist(); return report; }catch(e){ ss.chapters[i].audit={status:'WARN',issues:[{type:'audit',severity:'warn',evidence:'审计AI不可用',expected:'完成审计',actual:e.message,repair:'稍后重试'}],summary:'审计未完成',ts:Date.now(),chapter:i}; persist(); return ss.chapters[i].audit; }
+  const user=`【机器章节卡】${JSON.stringify(c)}\n【时间覆盖核验】起点=${tr.from||'未知'}；终点=${tr.to||'未知'}；跨度=${_timeDaySpan(tr.from,tr.to)==null?'未知':_timeDaySpan(tr.from,tr.to)+'天'}；时间推进安排=${c.timeCoverage||'无'}\n【上一章正文结算】${JSON.stringify(prev||{})}\n【本章正文结算】${JSON.stringify(obs)}\n【词典只读实体】${canon}${banAudit}\n【上一章质量账本】${JSON.stringify(ss.chapters?.[i-1]?.qualityLedger||{})}\n【本章已有质量账本】${JSON.stringify(ss.chapters?.[i]?.qualityLedger||{})}\n【本章正文】\n${String(text||'').slice(0,50000)}`;
+  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_AUDIT_SYS,user,{maxTokens:3200,temperature:0.05,topP:0.1,signal:_abortCtl?.signal,taskKey:'chapterAudit'})); const j=parseJson(raw)||{}; const ql=j.qualityLedger&&typeof j.qualityLedger==='object'?j.qualityLedger:{}; const normList=k=>Array.isArray(ql[k])?ql[k].map(x=>String(x||'').trim()).filter(Boolean).slice(0,20):[]; const qualityLedger={facts:normList('facts'),introducedInfo:normList('introducedInfo'),characterKnowledge:normList('characterKnowledge'),relationshipChanges:normList('relationshipChanges'),objects:normList('objects'),locations:normList('locations'),unresolved:normList('unresolved'),ts:Date.now(),chapter:i}; const report={status:['PASS','WARN','FAIL'].includes(j.status)?j.status:'WARN',issues:Array.isArray(j.issues)?j.issues.slice(0,30):[],summary:String(j.summary||'').trim(),qualityLedger,ts:Date.now(),chapter:i}; ss.chapters[i].qualityLedger=qualityLedger; o._chapterQualityLedger=o._chapterQualityLedger||{}; o._chapterQualityLedger[i]=qualityLedger; const p=ss.chapters[i]?.planned||{}; const pt=_timeOrdinal(p.to), ot=_timeOrdinal(obs.time); if(pt!=null && ot!=null && ot<pt){ report.status='FAIL'; report.issues.unshift({type:'time',severity:'fail',evidence:`正文状态结算时间：${obs.time}`,expected:`本章必须抵达计划终点：${p.to}`,actual:`正文结算仍早于计划终点约${Math.max(0,pt-ot)}小时`,repair:'补足计划终点前真实发生的时间流逝/阶段性事件，并让章末状态落到计划终点。'}); } else if(pt!=null && ot==null && (p.spanDays||0)>=1){ report.status=report.status==='FAIL'?'FAIL':'WARN'; report.issues.unshift({type:'time',severity:'warn',evidence:'正文状态结算器未能确认章末日期',expected:`抵达计划终点：${p.to}`,actual:'无法确认',repair:'复核正文是否真正走到计划终点；必要时补足自然时间过桥。'}); } if(report.issues.some(x=>x.severity==='fail')) report.status='FAIL'; ss.chapters[i].audit=report; persist(); return report; }catch(e){ ss.chapters[i].audit={status:'WARN',issues:[{type:'audit',severity:'warn',evidence:'审计AI不可用',expected:'完成审计',actual:e.message,repair:'稍后重试'}],summary:'审计未完成',ts:Date.now(),chapter:i}; persist(); return ss.chapters[i].audit; }
 }
-const CHAPTER_REPAIR_SYS=`你是长篇小说“局部修复AI”。你没有改写世界和剧情的权力，只能修复审计指出的最小冲突。\n规则：只处理FAIL问题；保持章节卡规定的事件、人物、时间、地点和文学风格；不得新增主线事件；不得整章重写。若FAIL属于多日时间跨度不足，允许在原有事件之间加入最小必要的时间过桥/阶段性推进，让正文自然抵达章节卡终点，但不得用一句“几天后”敷衍，也不得改变核心事件顺序。输出严格JSON：{"replacement":"要替换的最小原文片段","newText":"与原文长度大致相当的修复后片段","reason":"修复说明"}`;
+const CHAPTER_REPAIR_SYS=`你是长篇小说“局部修复AI”。你没有改写世界和剧情的权力，只能修复审计指出的最小冲突或明显质量缺陷。
+规则：只处理FAIL问题；保持章节卡规定的事件、人物、时间、地点和文学风格；不得新增主线事件；不得整章重写。若FAIL属于多日时间跨度不足，允许在原有事件之间加入最小必要的时间过桥/阶段性推进，让正文自然抵达章节卡终点，但不得用一句“几天后”敷衍，也不得改变核心事件顺序。
+若FAIL属于信息重复：删除或压缩第二次解释，让后文改写为行动、反应或新后果；若FAIL属于设定化对白：保留人物真实目的，把背景说明改成有目的的交锋、试探、回避、打断或行动；若FAIL属于人物扁平：优先改变人物在当前压力下的选择/反应，补出动机、关系影响或潜台词，但不要强行添加口癖；若FAIL属于人物层次不足：优先改变一个关键行为选择，让其体现目标+关系+压力差异，并确保不改变剧情结果；若FAIL属于人物声音同质：调整信息取舍、回应方式和潜台词，不靠替换口头禅解决；若FAIL属于句式重复：只改明显连续的同构句，不做机械同义词替换；若FAIL属于矛盾：以已经成立的事实为准，用最小修改消除冲突，不得凭空发明解释。
+输出严格JSON：{"replacement":"要替换的最小原文片段","newText":"与原文长度大致相当的修复后片段","reason":"修复说明"}`;
 async function repairChapterByAudit(i,text,report){
   const fails=(report?.issues||[]).filter(x=>x&&x.severity==='fail'); if(!fails.length) return String(text||'');
   const banRepair = stateBanEnabled() ? `\n【用户全书禁则】禁用姓名：${banListNames().join('、')}；姓名禁用字：${banListChars().join('、')}；禁用短语：${(Array.isArray(banListRaw().phrases)?banListRaw().phrases:[]).join('、')}` : '';
-  const user=`【章节卡】${JSON.stringify(chapterPlanAuthority(i))}\n【审计FAIL】${JSON.stringify(fails)}${banRepair}\n【正文】\n${String(text||'').slice(0,50000)}\n只修复最小冲突，优先修改1-3个最小连续片段。`;
+  const priorLedger = chapterQualityLedger(i);
+  const user=`【章节卡】${JSON.stringify(chapterPlanAuthority(i))}\n【审计FAIL】${JSON.stringify(fails)}${banRepair}\n【本章已确认质量账本】${JSON.stringify(priorLedger||{})}\n【正文】\n${String(text||'').slice(0,50000)}\n只修复最小冲突，优先修改1-3个最小连续片段；不得把已经成立的信息改成另一套设定。`;
   try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_REPAIR_SYS,user,{maxTokens:3500,temperature:0.15,topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterRepair'})); const j=parseJson(raw)||{}; const old=String(j.replacement||'').trim(), neu=String(j.newText||'').trim(); if(!old||!neu) return String(text||''); const idx=String(text||'').indexOf(old); if(idx<0) return String(text||''); return String(text).slice(0,idx)+neu+String(text).slice(idx+old.length); }catch(e){ return String(text||''); }
 }
 async function finalizeChapterState(i,text){
@@ -971,7 +1138,8 @@ function projectSnapshot(){
     dictmasterRan: !!state.dictmasterRan,
     originalIdeaSnapshot: state.originalIdeaSnapshot || '',
     school: (state.school && typeof state.school === 'object') ? state.school : null,   // 学校模式：校长/老师 产出 + 各步重试/完成标记（随项目持久化）
-    longMemory: state.longMemory || { uiOpen:false, foreshadow:[], lastAuditAt:0 }
+    longMemory: state.longMemory || { uiOpen:false, foreshadow:[], lastAuditAt:0 },
+    _chapterQualityLedger: (state.outline && state.outline._chapterQualityLedger) || {}
   };
 }
 function applyProject(p){
@@ -992,6 +1160,7 @@ function applyProject(p){
     if(!state.outline.aiBookBeat && p.aiBookBeat) state.outline.aiBookBeat = String(p.aiBookBeat);
   }
   if(state.outline && state.outline.chapterPlansHistory) delete state.outline.chapterPlansHistory;
+  if(state.outline){ state.outline._chapterQualityLedger = (state.outline._chapterQualityLedger && typeof state.outline._chapterQualityLedger==='object') ? state.outline._chapterQualityLedger : {}; }
   state.outlineConfirmed = !!p.outlineConfirmed;
   state.glossAdherence = (typeof p.glossAdherence === 'number') ? p.glossAdherence : 60;
   state.glossAllowFill = !!p.glossAllowFill;
@@ -8314,11 +8483,17 @@ function langLayerInjection(){
 }
 
 const NARRATIVE_IRON_HARD = `〔硬约束 · 铁律，不可逾越，冲突时以此为准〕
-· 禁止直接叙述人物内心情绪。禁止出现直白内心描写；必须改用动作、微表情、下意识小动作来外显情绪，但外显所用意象必须克制且不重复：同章内同一种微表情/小动作（如 咬牙、攥拳、拧眉、垂眸、绞手）最多出现一次，全书不得反复堆同一套动作当情绪标签。
-· 禁止频繁使用网文模板词（倏然、眸光、眼底、凤眸、邪魅一笑、轻嗤）。同章内同类模板词必须最多出现一次，能删必修。
-· 对白必须口语化，禁止「端着」的书面腔台词。允许半截话、吐槽、短暂停顿；古风也必须写现代人能读懂的「人话」，例：写「我瞧着这事不妥」，禁止写「吾观此事实为不妥」。
-· 人物行为必须有清晰动机，禁止无故推进剧情。禁止过度美化人物：言行必须与境界相符，允许小瑕疵、怯懦、私心、口误。
-· 书面语是藏起来的底牌：旁白可按题材适度书面，但对白必须口语；书面语必须只在超大高潮、深情告白、终极顿悟时用来「提咖」，禁止在赶路、打斗、系统提示等快节奏场景滥用。`;
+· 禁止直接叙述人物内心情绪。禁止出现直白内心描写；必须尽量改用选择、动作、停顿、语气、回避、让步、反问、具体需求与后果外显情绪。外显动作必须克制且有变化：同章内同一种微表情/小动作（如咬牙、攥拳、拧眉、垂眸、绞手）原则上最多一次，不得把动作当固定情绪标签。
+· 禁止频繁使用网文模板词（倏然、眸光、眼底、凤眸、邪魅一笑、轻嗤）。同章内同类模板词原则上最多一次，能删必修。
+· 对白必须口语化，禁止「端着」的书面腔台词。允许半截话、打断、停顿、反问、回避、试探、误解与没说完的话；古风也必须写现代人能读懂的人话。
+· 对话禁止承担“百科广播”职责：人物知道什么、为什么做、过去发生什么，优先通过当下目标、冲突、行动和潜台词体现；只有对方确实需要知道、角色确实愿意说、且说出口本身有戏剧功能时，才直接交代背景。
+· 人物行为必须有清晰动机，禁止无故推进剧情。禁止过度美化人物：言行必须与境界相符，允许小瑕疵、怯懦、私心、口误、误判与嘴硬。
+· 【人物鲜明原则】人物不是靠口癖区分，而是靠“稳定内核 + 情境变化 + 层次反应”区分。同一件事，不同人物应因目标、经验、关系、利益和性格产生不同反应；同一人物也不能每次都机械复用同一个动作、句式或情绪标签。
+· 【信息单次落地】本章内一个关键事实/设定/人物关系首次让读者理解后，后文默认读者已经知道；除非发生新证据、新视角、新后果或认知变化，不得换一种说法再完整解释一遍。自然提及可以，重复科普不可以。
+· 【事实一致】人物身份、年龄、关系、时间、地点、道具、能力、知情边界和事件因果一旦在本章成立，后文必须把它当既成事实；如新信息与旧信息冲突，必须通过明确的新发现/误解纠正来解释，禁止无提示自相矛盾。
+· 【句式变化】连续段落不得长期使用同一语法骨架、同一“人物+动作+对白+然后”模式或同一种情绪收束方式；变化来自叙述焦点、句长、动作、对白、环境和信息位置，而不是机械要求每句换结构。
+· 书面语是藏起来的底牌：旁白可按题材适度书面，但对白必须口语；书面语只在确有表达价值时使用。`;
+
 
 const NARRATIVE_IRON_SOFT = `〔软约束 · 尽力而为、随题材微调〕
 · 可给核心人物绑定 1-2 个专属口头禅，写到自然出现、不刻意。
@@ -16542,7 +16717,16 @@ ${_lesson}
     parts.push(`【本章任务】第 ${curN} 章${hasT ? `《${chap.title}》` : ''}`);
   }
 
-  if(isLong()){ if(!_card) commitPlannedChapterState(i, (state.outline&&state.outline.chapterPlans||[])[i]||{}, 'legacy-plan'); const _ssb=storyStateChapterBlock(i); if(_ssb) parts.push(`【小说状态链｜上一章实际结算 + 本章计划】\n${_ssb}`); }
+  if(isLong()){
+    if(!_card) commitPlannedChapterState(i, (state.outline&&state.outline.chapterPlans||[])[i]||{}, 'legacy-plan');
+    const _ssb=storyStateChapterBlock(i); if(_ssb) parts.push(`【小说状态链｜上一章实际结算 + 本章计划】\n${_ssb}`);
+    const _qg=buildChapterInformationGuard(i); if(_qg) parts.push(_qg);
+    const _cb=buildChapterCharacterBehaviorBlock(i); if(_cb) parts.push(_cb);
+    const _cdr=buildChapterCharacterDynamicReactionBlock(i); if(_cdr) parts.push(_cdr);
+    const _cdb=buildChapterDialogueSubtextBlock(i); if(_cdb) parts.push(_cdb);
+    const _cil=buildChapterLocalInfoLedgerBlock(i); if(_cil) parts.push(_cil);
+    parts.push(chapterQualityPromptBlock());
+  }
   parts.push(`【事件可达性硬门】写每个重大事件前，内部快速核对：前置状态是否已成立？触发线索是否存在？人物为什么会采取这一步？信息/道具/能力从哪里来？地点与时间是否可达？本事件是否会让前后因果断裂？若任一关键项缺失，不得用“突然/恰好/偶然”直接补过去。`);
   const _authText = principalChapterTask(i); if(_authText) parts.push(`【章级事实授权硬门】校长任务卡优先于老师教案。名单外人物若承担关键剧情功能、任何人物若获得未授权核心情报、或新事实改变主线，均不得直接写入正文；只能使用已有授权资源、走另一条有依据的路径，或保留为待确认项。`);
   const _endDecision = chapterEndingDecisionBlock(i); if(_endDecision) parts.push(_endDecision);
