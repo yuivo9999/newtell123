@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.348';
+const APP_VERSION = '1.0.346';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app24.js';
+const APP_FILE_VERSION = 'app21.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -65,7 +65,7 @@ const MAX_PROJECTS = 500;
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app23.js — 正文单次生成版；强化章末去模板化、场景语义去重、人物动态反应与正文质量审计。 */
+/* APP VERSION: app22.js — 正文单次生成版；强化章节内部一致性、信息去重、句式多样与人物动态反应逻辑。 */
 const state = {
   mode: 'shortfilm',    // 'shortfilm' 短片 / 'longnovel' 经典长篇小说
   wordRange: null,      // (兼容遗留) 不再作为长篇必填；保留字段避免旧快照破坏
@@ -473,7 +473,7 @@ function enforceChapterBoundary(i, text){
   return s;
 }
 
-/* ===================== app24：章节内部信息/人物质量账本 =====================
+/* ===================== app21：章节内部信息/人物质量账本 =====================
  * 目的：解决“同一章内逻辑不清、前后打架、信息重复、句式频繁、人物像在交代设定”。
  * 账本只记录已写成的事实，不参与创作裁决；它服务于下一次正文生成与本章审计。
  */
@@ -484,7 +484,7 @@ function chapterQualityLedger(i){
   return x && typeof x === 'object' ? x : null;
 }
 
-/* ===================== app24：人物动态反应引擎 =====================
+/* ===================== app22：人物动态反应引擎 =====================
  * 把“性格标签”升级为可执行的“刺激→判断→冲突→选择→外显→潜台词→后果”链。
  * 稳定内核不等于固定动作；人物在不同压力、关系和信息条件下应产生不同层次的选择。
  */
@@ -496,7 +496,7 @@ function buildChapterCharacterDynamicReactionBlock(i){
   if(!names.length){const p=String(o?.navBeacon?.protagonist||'').split(/[，,：:（(]/)[0].trim(); if(p)add(p);}
   if(!names.length) return '';
   const rows=names.slice(0,12).map(n=>{const c=chars.find(x=>String(x&&x.name||'').trim()===n)||{}; return `- ${n}｜身份:${String(c.identity||'未知').trim()}｜稳定内核:${String(c.trait||'未知').trim()}｜关系底色:${String(c.relation||'未知').trim()}｜习惯:${String(c.hobby||'未知').trim()}｜口头特征(低频):${String(c.catchphrase||'无').trim()}`;}).join('\n');
-  return `【人物动态反应引擎｜app24】
+  return `【人物动态反应引擎｜app22】
 人物鲜明不是“每句话都像这个人”，也不是重复口癖；要求“同一个人，在不同压力下仍有同一个内核，但会作出不同层次的选择”。
 ${rows}
 
@@ -516,25 +516,11 @@ ${rows}
 10. 真实交流允许打断、误解、回避、答非所问、只回应一半和用行动代替回答。
 
 【禁止的假鲜明】
-“嘴硬”≠每次都先拒绝再答应；“善良”≠每次都主动帮助；“聪明”≠每次都替作者解释设定；“冷静”≠每次都冷淡短句。
-
-【高频人物反应硬门｜源头轮换】
-同一章内，同一人物已经使用过某种高频反应后，后续优先更换“反应维度”，不能把同一个动作换同义词重写。
-重点避免连续机械使用：沉默、皱眉、叹气、握拳、抬头、眼神复杂、咬唇、深吸气、低头。
-每次关键刺激至少从以下维度重新选择：语言内容、动作选择、身体微反应、习惯动作、回避/转移、误判、反常行为、物件操作、空间移动、关系互动、主动承担/拒绝。
-
-【多个正向示范｜只示范机制，不得整句复制】
-- 被质疑：不要默认皱眉沉默；可以先纠正一个无关紧要的数字，再回避真正的问题；也可以直接把钥匙递过去，用行动证明自己。
-- 听到坏消息：不要默认叹气；可以继续把杯盖拧紧、重新折好账单，直到对方第二次叫他；也可以突然追问一个具体数字。
-- 被亲近的人失望：不要默认低头；可以先用一句玩笑遮掩，再默默改掉一个实际安排；也可以把重话改成一个具体请求。
-- 遇到危险：不要默认握拳；可以先推人到门后、检查出口、拿走关键物件，或故意把话题引向别处。
-- 被误解：不要默认沉默；可以只纠正一半，让误解继续存在；也可以反问一个具体问题，把决定权推回对方。
-- 关系缓和：不要默认微笑；可以把原本拒绝的东西放回对方手边、主动让出位置，或用一个实际动作代替解释。
-这些例子用于训练“同一内核、多种外显”，不要建立“情绪→固定动作”的机械词典。`;
+“嘴硬”≠每次都先拒绝再答应；“善良”≠每次都主动帮助；“聪明”≠每次都替作者解释设定；“冷静”≠每次都冷淡短句。`;
 }
 
 function buildChapterDialogueSubtextBlock(i){
-  return `【对话潜台词与人物声音锁｜app24】
+  return `【对话潜台词与人物声音锁｜app22】
 重要对白应有真实交流目的：索取、拒绝、试探、遮掩、安慰、威胁、争取、拖延、确认、转移、讽刺、让步、保护关系或改变对方选择。
 人物声音差异不要靠口癖，而靠信息取舍、句长、直接程度、主动/被动回应、是否回答重点、暴露程度以及面对压力时的变化。
 如果一句对白主要只是向读者重复世界观、人物履历或已经讲清的事实，应优先改成有交流目的的表达，或让行动、物件、沉默承担信息。
@@ -544,7 +530,7 @@ function buildChapterDialogueSubtextBlock(i){
 function buildChapterLocalInfoLedgerBlock(i){
   const cur=chapterQualityLedger(i), prev=chapterQualityLedger(i-1);
   const pick=(x,k)=>Array.isArray(x?.[k])?x[k].slice(0,20):[];
-  const lines=[`【本章局部信息账本｜app24】`,`写作时区分：事实、第一次揭示、人物知情、关系变化、道具/地点状态、未确认猜测。`,`同一章内信息第一次真正落地后，后续默认读者已经知道；再次出现必须带来新证据、新视角、新后果或认知变化。`,`“谁知道什么”与“读者知道什么”不是同一回事；禁止让角色为了替作者讲解而越过自己的知情边界。`];
+  const lines=[`【本章局部信息账本｜app22】`,`写作时区分：事实、第一次揭示、人物知情、关系变化、道具/地点状态、未确认猜测。`,`同一章内信息第一次真正落地后，后续默认读者已经知道；再次出现必须带来新证据、新视角、新后果或认知变化。`,`“谁知道什么”与“读者知道什么”不是同一回事；禁止让角色为了替作者讲解而越过自己的知情边界。`];
   if(prev){if(pick(prev,'introducedInfo').length)lines.push(`【上一章已介绍】${pick(prev,'introducedInfo').join('；')}`);if(pick(prev,'characterKnowledge').length)lines.push(`【上一章人物知情】${pick(prev,'characterKnowledge').join('；')}`);}
   if(cur){if(pick(cur,'facts').length)lines.push(`【本章已确认事实】${pick(cur,'facts').join('；')}`);if(pick(cur,'introducedInfo').length)lines.push(`【本章已介绍】${pick(cur,'introducedInfo').join('；')}`);}
   lines.push(`本章每出现重要新信息，内部标记其首次落地方式（行动/对白/观察/物件/结果）；后续不要再用同一种方式完整解释。`);
@@ -623,8 +609,6 @@ function chapterQualityPromptBlock(){
 - 逻辑：人物为什么在此时做这件事？前置条件、信息来源、空间与时间是否成立？
 - 一致：刚刚确定的身份、关系、时间、地点、道具、能力和人物认知，后文是否继续成立？
 - 去重：本章已经解释过的事实是否又被完整换句重讲？如果只是自然提及可以保留，重复科普必须删掉或改成新后果。
-- 场景去重：环境描写是否只是把同一视觉构图换成同义词？特别检查“晨光/阳光+破旧窗棂+人物脸部+斑驳光影”组合；相似画面必须改变至少两个视觉/感官/空间维度，否则删除或改写为新的叙事功能。
-- 章末去模板：最后一段是否只是“期待明天/未来/新的开始/一切才刚开始”？若本章没有具体事件依据，必须改停在最后一个真实变化上。
 - 句式：连续段落是否长期使用同一种句法骨架或动作+对白模板？若是，改变叙述焦点或动作逻辑，不要机械换同义词。
 - 对话：这句话是在“做事/争取/拒绝/试探/回避/伤人/安慰/让步”，还是仅仅在给读者交代设定？若只是后者，改成有目的的对话、行动或留白。
 - 人物：人物反应是否来自自己的目标、关系、经验与性格？是否与其他人有区别？是否出现“所有人都替作者解释”的同声同气？
@@ -647,12 +631,9 @@ const CHAPTER_AUDIT_SYS=`你是长篇小说“状态与叙事质量审计AI”�
 8. 人物层次不足：人物只有静态性格标签，没有当前目标/关系/压力导致的具体选择；同一人物机械重复同一口癖、动作或反应模板；或突然反常却没有事件、认知、关系依据；
 9. 对话声音同质：不同人物只是换了名字，信息取舍、直接程度、回应方式、暴露程度和潜台词没有明显差异；
 10. 句式频繁：连续多个段落反复使用同一种语法骨架、动作+对白+总结结构或同一种情绪收束方式。只有明显影响阅读时才判问题。
-11. 章末模板化：本章是否用“期待明天/未来/新的开始/新的旅程/一切才刚开始”等语义近似表达代替真实章末事件；若只是自然提及未来且不是收束功能，不判错。
-12. 场景语义重复：同一章是否重复相同的视觉构图/环境母题，尤其“清晨/晨光/阳光→窗棂/窗户→人物脸部→光影落面”这类组合。不能因为换成同义词就视为新描写；必须有新的空间关系、观察角度、光源、身体动作、感官信息或叙事功能。
-13. 环境描写功能重复：同一场景多次用环境开头或环境收束，却没有新的事件、信息或人物反应时，应判为重复描写。
 审计必须区分“自然重复/必要回顾”和“重复解释”；不能为了追求零重复而破坏人物回忆、强调或因果承接。
 输出严格JSON：
-{"status":"PASS|WARN|FAIL","issues":[{"type":"time|location|character|relationship|object|rule|knowledge|event|entity|causal|logic|contradiction|repetition|scene_repetition|ending_template|dialogue_exposition|character_flat|character_layer|character_voice|character_knowledge|sentence_pattern","severity":"warn|fail","evidence":"正文中的明确证据","expected":"应有状态/写法","actual":"实际写法","repair":"最小修复方向"}],"summary":"一句话","qualityLedger":{"facts":[],"introducedInfo":[],"characterKnowledge":[],"relationshipChanges":[],"objects":[],"locations":[],"unresolved":[]}}
+{"status":"PASS|WARN|FAIL","issues":[{"type":"time|location|character|relationship|object|rule|knowledge|event|entity|causal|logic|contradiction|repetition|dialogue_exposition|character_flat|character_layer|character_voice|character_knowledge|sentence_pattern","severity":"warn|fail","evidence":"正文中的明确证据","expected":"应有状态/写法","actual":"实际写法","repair":"最小修复方向"}],"summary":"一句话","qualityLedger":{"facts":[],"introducedInfo":[],"characterKnowledge":[],"relationshipChanges":[],"objects":[],"locations":[],"unresolved":[]}}
 qualityLedger只记录本章正文明确成立或明确新增的信息，禁止脑补；每项尽量≤50字，最多各20项。`;
 
 async function auditChapterState(i,text){
@@ -663,25 +644,7 @@ async function auditChapterState(i,text){
   const banAudit = stateBanEnabled() ? `\n【用户全书禁则·必须审计】\n禁用姓名：${banListNames().join('、')}\n姓名禁用字：${banListChars().join('、')}\n禁用短语：${(Array.isArray(banListRaw().phrases)?banListRaw().phrases:[]).join('、')}` : '';
   const plannedTime=c.time||''; const tr=_extractPlanTimeRange({beatsText:'剧情时间落点：'+plannedTime});
   const user=`【机器章节卡】${JSON.stringify(c)}\n【时间覆盖核验】起点=${tr.from||'未知'}；终点=${tr.to||'未知'}；跨度=${_timeDaySpan(tr.from,tr.to)==null?'未知':_timeDaySpan(tr.from,tr.to)+'天'}；时间推进安排=${c.timeCoverage||'无'}\n【上一章正文结算】${JSON.stringify(prev||{})}\n【本章正文结算】${JSON.stringify(obs)}\n【词典只读实体】${canon}${banAudit}\n【上一章质量账本】${JSON.stringify(ss.chapters?.[i-1]?.qualityLedger||{})}\n【本章已有质量账本】${JSON.stringify(ss.chapters?.[i]?.qualityLedger||{})}\n【本章正文】\n${String(text||'').slice(0,50000)}`;
-  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_AUDIT_SYS,user,{maxTokens:3200,temperature:0.05,topP:0.1,signal:_abortCtl?.signal,taskKey:'chapterAudit'})); const j=parseJson(raw)||{}; const ql=j.qualityLedger&&typeof j.qualityLedger==='object'?j.qualityLedger:{}; const normList=k=>Array.isArray(ql[k])?ql[k].map(x=>String(x||'').trim()).filter(Boolean).slice(0,20):[]; const qualityLedger={facts:normList('facts'),introducedInfo:normList('introducedInfo'),characterKnowledge:normList('characterKnowledge'),relationshipChanges:normList('relationshipChanges'),objects:normList('objects'),locations:normList('locations'),unresolved:normList('unresolved'),ts:Date.now(),chapter:i}; const report={status:['PASS','WARN','FAIL'].includes(j.status)?j.status:'WARN',issues:Array.isArray(j.issues)?j.issues.slice(0,30):[],summary:String(j.summary||'').trim(),qualityLedger,ts:Date.now(),chapter:i}; const sceneAudit=auditChapterSceneRepetition(text);
-      const tail=String(text||'').trim().slice(-900);
-      const endingTemplateHit=CHAPTER_ENDING_BANNED_TEMPLATES.filter(x=>tail.includes(x));
-      const endingFutureHit=CHAPTER_ENDING_FUTURE_REGEX.test(tail);
-      if(sceneAudit.status==='FAIL' || sceneAudit.status==='WARN'){
-        report.issues.push(...sceneAudit.issues.slice(0,12));
-        if(sceneAudit.status==='FAIL') report.status='FAIL';
-        else if(report.status==='PASS') report.status='WARN';
-      }
-      if((endingTemplateHit.length||endingFutureHit) && !(c && c.hook && /悬念|suspense/i.test(String(c.endingFunction||'')))){
-        report.issues.push({
-          type:'ending_template',severity:'fail',
-          evidence:tail.slice(-360),
-          expected:'章末应落在本章真实事件/关系/后果/物件/对白等，不以“明天/未来/新的开始”作万能收尾。',
-          actual:endingTemplateHit.length?endingTemplateHit.join('、'):'检测到未来指向式收束',
-          repair:'删除空泛未来展望，回到本章最后一个有效变化处停止；若确需前瞻，必须把它变成有具体事实依据的行动/线索/后果。'
-        });
-        report.status='FAIL';
-      } ss.chapters[i].qualityLedger=qualityLedger; o._chapterQualityLedger=o._chapterQualityLedger||{}; o._chapterQualityLedger[i]=qualityLedger; const p=ss.chapters[i]?.planned||{}; const pt=_timeOrdinal(p.to), ot=_timeOrdinal(obs.time); if(pt!=null && ot!=null && ot<pt){ report.status='FAIL'; report.issues.unshift({type:'time',severity:'fail',evidence:`正文状态结算时间：${obs.time}`,expected:`本章必须抵达计划终点：${p.to}`,actual:`正文结算仍早于计划终点约${Math.max(0,pt-ot)}小时`,repair:'补足计划终点前真实发生的时间流逝/阶段性事件，并让章末状态落到计划终点。'}); } else if(pt!=null && ot==null && (p.spanDays||0)>=1){ report.status=report.status==='FAIL'?'FAIL':'WARN'; report.issues.unshift({type:'time',severity:'warn',evidence:'正文状态结算器未能确认章末日期',expected:`抵达计划终点：${p.to}`,actual:'无法确认',repair:'复核正文是否真正走到计划终点；必要时补足自然时间过桥。'}); } if(report.issues.some(x=>x.severity==='fail')) report.status='FAIL'; ss.chapters[i].audit=report; persist(); return report; }catch(e){ ss.chapters[i].audit={status:'WARN',issues:[{type:'audit',severity:'warn',evidence:'审计AI不可用',expected:'完成审计',actual:e.message,repair:'稍后重试'}],summary:'审计未完成',ts:Date.now(),chapter:i}; persist(); return ss.chapters[i].audit; }
+  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_AUDIT_SYS,user,{maxTokens:3200,temperature:0.05,topP:0.1,signal:_abortCtl?.signal,taskKey:'chapterAudit'})); const j=parseJson(raw)||{}; const ql=j.qualityLedger&&typeof j.qualityLedger==='object'?j.qualityLedger:{}; const normList=k=>Array.isArray(ql[k])?ql[k].map(x=>String(x||'').trim()).filter(Boolean).slice(0,20):[]; const qualityLedger={facts:normList('facts'),introducedInfo:normList('introducedInfo'),characterKnowledge:normList('characterKnowledge'),relationshipChanges:normList('relationshipChanges'),objects:normList('objects'),locations:normList('locations'),unresolved:normList('unresolved'),ts:Date.now(),chapter:i}; const report={status:['PASS','WARN','FAIL'].includes(j.status)?j.status:'WARN',issues:Array.isArray(j.issues)?j.issues.slice(0,30):[],summary:String(j.summary||'').trim(),qualityLedger,ts:Date.now(),chapter:i}; ss.chapters[i].qualityLedger=qualityLedger; o._chapterQualityLedger=o._chapterQualityLedger||{}; o._chapterQualityLedger[i]=qualityLedger; const p=ss.chapters[i]?.planned||{}; const pt=_timeOrdinal(p.to), ot=_timeOrdinal(obs.time); if(pt!=null && ot!=null && ot<pt){ report.status='FAIL'; report.issues.unshift({type:'time',severity:'fail',evidence:`正文状态结算时间：${obs.time}`,expected:`本章必须抵达计划终点：${p.to}`,actual:`正文结算仍早于计划终点约${Math.max(0,pt-ot)}小时`,repair:'补足计划终点前真实发生的时间流逝/阶段性事件，并让章末状态落到计划终点。'}); } else if(pt!=null && ot==null && (p.spanDays||0)>=1){ report.status=report.status==='FAIL'?'FAIL':'WARN'; report.issues.unshift({type:'time',severity:'warn',evidence:'正文状态结算器未能确认章末日期',expected:`抵达计划终点：${p.to}`,actual:'无法确认',repair:'复核正文是否真正走到计划终点；必要时补足自然时间过桥。'}); } if(report.issues.some(x=>x.severity==='fail')) report.status='FAIL'; ss.chapters[i].audit=report; persist(); return report; }catch(e){ ss.chapters[i].audit={status:'WARN',issues:[{type:'audit',severity:'warn',evidence:'审计AI不可用',expected:'完成审计',actual:e.message,repair:'稍后重试'}],summary:'审计未完成',ts:Date.now(),chapter:i}; persist(); return ss.chapters[i].audit; }
 }
 const CHAPTER_REPAIR_SYS=`你是长篇小说“局部修复AI”。你没有改写世界和剧情的权力，只能修复审计指出的最小冲突或明显质量缺陷。
 规则：只处理FAIL问题；保持章节卡规定的事件、人物、时间、地点和文学风格；不得新增主线事件；不得整章重写。若FAIL属于多日时间跨度不足，允许在原有事件之间加入最小必要的时间过桥/阶段性推进，让正文自然抵达章节卡终点，但不得用一句“几天后”敷衍，也不得改变核心事件顺序。
@@ -1851,36 +1814,53 @@ function guardSwitchStep(){
 
 
 
-const CHAPTER_ENDING_WRITER_RULES = `【章节结尾专用规则｜app24 · 源头施工版】
-章末不是“加一句漂亮的话”，而是本章最后一个有效变化的停止点。先完成本章最后一个必要事件，再根据章级结尾决策自然停止。
-【源头链】校长选择结尾功能/强度/是否需要钩子；老师把最后有效事件施工到位；正文只把已经发生的最后变化写自然。任何下游环节都不得把“未来期待”恢复成默认章末。
-【隐性冲突清零】“下一章接口”“留下行动理由”“读者期待”“阶段移交”“前瞻/承诺”等字段只服务连续性，不等于正文最后必须写希望、明天、未来、新的开始。只有已成立的具体事实、决定、行动、后果或未决问题需要继续时，才形成接口。
+const CHAPTER_ENDING_CONTRACT_VERSION = 'app25-ending-contract-v1';
+const CHAPTER_ENDING_CONTRACT = Object.freeze({
+  version: CHAPTER_ENDING_CONTRACT_VERSION,
+  command: '禁止留钩子的感觉',
+  authority: 'single_source',
+  rule: '章末只在本章最后一个已经发生的有效变化处自然停止；不为下一章制造期待、悬念、希望、前瞻或情绪吊桥。',
+  positive: [
+    '事件完成：停在已经发生的结果，例如门锁扣上、文件交出去、伤口被处理完。',
+    '决定成立：停在人物已经做出的决定或动作，例如把签好的文件推过去，不补“以后会怎样”。',
+    '关系变化：停在当下互动，例如对方第一次没有收回手，不把关系升华成未来宣言。',
+    '信息成立：停在新事实被确认，例如电话报出一个地址，地址已经被记下。',
+    '直接后果：停在已经发生的后果，例如警报响起、玻璃碎裂、门被推开。',
+    '冲突停住：停在当前僵持、拒绝、沉默或动作未完成的事实，不追加“接下来一定会……”的感觉。',
+    '物件变化：停在证据、信件、钥匙、药片等具体状态发生变化。',
+    '认识变化：停在人物此刻已经意识到的东西，不把认识包装成“人生从此不同”。'
+  ],
+  feelingFailures: [
+    '为了让读者继续读而故意留下“下一步一定有事”的感觉。',
+    '把本章已经结束的事件再包一层“新的开始/命运改变/真正故事开始”的感觉。',
+    '即使完全不用“期待、未来、明天、希望、悬念”等词，只要读者读完明显被推向“等下一章”的情绪，也算失败。',
+    '为了形成钩子而额外增加一个本章没有发生的新问题、新承诺、新预告或抽象前瞻。'
+  ],
+  counterExamples: [
+    '失败：她把信收进抽屉，忽然觉得从这一刻起，一切都会不同。——这是未来指向感觉。',
+    '失败：门关上了，真正的故事才刚刚开始。——这是强行下一章钩子。',
+    '失败：他没有再说话，只等着接下来会发生什么。——即使没有“未来”二字，仍在要求读者等待。',
+    '失败：她握紧钥匙，命运的齿轮已经转动。——抽象升华替代了具体收束。'
+  ],
+  audit: '审计只验证正文是否服从本契约；词汇仅作辅助证据，不是主判据。'
+});
+function chapterEndingContractText(){
+  return `【唯一章末口令｜${CHAPTER_ENDING_CONTRACT_VERSION}】\n口令：${CHAPTER_ENDING_CONTRACT.command}\n${CHAPTER_ENDING_CONTRACT.rule}\n正向写法：\n${CHAPTER_ENDING_CONTRACT.positive.map(x=>' - '+x).join('\\n')}\n感觉级失败判定：\n${CHAPTER_ENDING_CONTRACT.feelingFailures.map(x=>' - '+x).join('\\n')}\n反例：\n${CHAPTER_ENDING_CONTRACT.counterExamples.map(x=>' - '+x).join('\\n')}\n唯一职责链：上游生成/选择停止点 → 老师施工最后有效事件 → 正文自然停止 → 审计只验证契约。其他层不得另立章末主口令。`;
+}
+function normalizeChapterEndingContract(plan){
+  const p=plan&&typeof plan==='object'?plan:{};
+  return {version:CHAPTER_ENDING_CONTRACT_VERSION, command:CHAPTER_ENDING_CONTRACT.command,
+    lastEffectiveEvent:String(p.lastEffectiveEvent||'').trim(), form:String(p.form||'自然停止').trim(),
+    endingFunction:String(p.endingFunction||'completion').trim(), positiveExamples:CHAPTER_ENDING_CONTRACT.positive.slice(),
+    hook:false, forbiddenFeeling:CHAPTER_ENDING_CONTRACT.feelingFailures.slice()};
+}
 
-【正向收束选择器】先问“本章最后真正改变了什么”，再选择落点：结果、决定、关系变化、信息成立、直接后果、物件状态、身体状态、冲突僵持、对白、留白、场景切断、与剧情有因果的环境变化。
-
-【多个正向示范｜不要机械复制】
-- 结果式：门锁重新扣上，名单被收回抽屉。停在事实，不补“明天会怎样”。
-- 决定式：林筱把退回的申请重新放到桌上，只说“我签”。停在决定。
-- 关系式：他把最后一把伞柄递过去，却没有解释。停在关系动作。
-- 信息式：电话只报出一个地址，地址被记在手背上，电话随即断掉。停在信息成立。
-- 后果式：玻璃碎了一地，门外的人已经听见。停在直接后果。
-- 对峙式：两人都没有让开，桌上的钥匙仍在中间。停在僵持。
-- 物件式：信封拆开后少了一页。停在新事实。
-- 留白式：她把灯关掉，走出门，没有回头。不追加人生总结。
-- 环境式：雨水退开后露出一枚纽扣；环境变化本身承载剧情，因此可以停在这里。
-
-【强制去模板】不得把“明天/未来/期待/等待/新的开始/新的旅程/一切才刚刚开始”等同类未来指向情绪作为没有具体剧情依据的默认章末。换同义词但功能仍是把情绪投向抽象未来，也算重复。
-【多样化】不要连续复用“环境+感慨”“希望+未来”“夕阳+展望”。多样化应改变落点对象、叙事功能、感官通道、人物动作或信息状态，而不是只换词。
-【没有钩子完全合法】若章级决策要求无钩子，最后有效事件完成后立即停止；若要求钩子，钩子必须来自已成立事实，不得临时创造关键新事实。`;
+const CHAPTER_ENDING_WRITER_RULES = `
+${chapterEndingContractText()}
+`;
 const LONG_CHAPTER_SYS_PRO = `你是一位资深长篇小说「正文作家」。
 
 ${CHAPTER_ENDING_WRITER_RULES}
-
-【正文源头执行：场景与人物反重复】
-正文不是等审计发现重复后再修。每写新场景或人物反应时，先读取老师给出的高频母题/反应记录。
-场景：同一章已经出现“晨光/阳光+破旧窗棂+脸部光影”，不得只换成“清晨的光+老窗框+面庞”再写。可以改为门轴声、潮湿衣袖、桌上少掉的药片、人物站位改变、远处车辆声等不同入口。已经写过“雨声+窗+沉默”，下一次可从鞋底泥水、玻璃水痕、衣物重量、门锁动作或邻屋声响进入。
-人物：同一刺激已经让角色“沉默/皱眉/叹气/握拳”，下一次优先换维度。可以改为纠正一个数字、转移问题、整理物件、改变座位、主动承担一个小动作、故意误解一句话、把决定权交给对方、说半句话后停住等。
-原则是“同一内核，多种外显”，不是“同一动作换同义词”。这些示例只用于提供选择空间，不得机械套用。
 
 你的唯一职责，是把上游已经确定的故事事实、章节教案、人物状态、时间地点和剧情推进，写成真正能够阅读的小说正文。
 
@@ -3181,7 +3161,7 @@ function showPolishResult(out, multi){
     let j = null;
     if(out && typeof out === 'object'){ j = out; }
     else { try{ j = parseJson(String(out)); }catch(e){ j = {}; } }
-    const opts = Array.isArray(j && j.options) ? j.options.filter(o=>o && String(o.optimizedIdea||o.text||'').trim()) : [];
+    const opts = Array.isArray(j && j.options) ? j.options.map(normalizeOne).filter(o=>String(o.optimizedIdea||o.novelSummary||o.fullBookBeat||'').trim()) : [];
     if(opts.length){
       snapshotPolishBatch('重新优化前');   // 覆盖前把旧整批方案归档为可回退版本（≤5）
       state.polishOptions = opts.map((o,i)=> Object.assign({}, o, {
@@ -3218,9 +3198,21 @@ function showPolishResult(out, multi){
     persist(); render();
     return;
   }
-  const single = (out && typeof out === 'object') ? out : { optimizedIdea: String(out||'').trim() };
+  const normalizeOne = (raw)=>{
+    let j = raw;
+    if(typeof j === 'string'){ try{ j=parseJson(j); }catch(e){ j={optimizedIdea:String(raw).trim()}; } }
+    if(j && Array.isArray(j.options)) j=j.options[0] || {};
+    j=j&&typeof j==='object'?j:{};
+    const rawText=String(j.optimizedIdea||j.text||'').trim();
+    const summary=String(j.novelSummary||j.storySummary||'').trim();
+    const beat=String(j.fullBookBeat||j.bookBeat||j.fullNovelBeat||'').trim();
+    let blueprint=rawText;
+    if(!blueprint && (summary||beat)) blueprint=[summary,beat].filter(Boolean).join('\n\n');
+    return Object.assign({},j,{name:String(j.name||'方案1').trim(),bookTitle:String(j.bookTitle||extractCandidateBookName(rawText)).trim(),novelSummary:summary,fullBookBeat:beat,optimizedIdea:blueprint,text:blueprint});
+  };
+  const single = normalizeOne(out);
   snapshotPolishBatch('重新优化前');
-  state.polishOptions = [{ _id:'polish-'+Date.now()+'-0', name:'方案1', ...single, text: String(single.optimizedIdea||single.text||'').trim(), _v45: pickV45(single) }];
+  state.polishOptions = [{ _id:'polish-'+Date.now()+'-0', ...single, _v45: pickV45(single) }];
   state.polishAdopted = '方案1';
   state.polishSelectedId = state.polishOptions[0]._id;
   state.polishStatus = 'adopted';
@@ -5396,7 +5388,7 @@ const CHAPTER_ENDING_FUNCTIONS = [
   {key:'decision', label:'决定式', desc:'人物完成关键选择，以决定本身作为停止点。'},
   {key:'action_launch', label:'行动启动式', desc:'新的行动已经开始，章末停在行动启动点。'},
   {key:'revelation', label:'信息揭示式', desc:'关键事实/信息在章末成立，改变读者理解。'},
-  {key:'suspense', label:'悬念式', desc:'留下明确、已建立依据的问题或危险，不要求每章使用。'},
+  {key:'tension_hold', label:'冲突停住式', desc:'停在已经成立的对峙/危险/未决事实本身，不追加下一步期待。'},
   {key:'unresolved_conflict', label:'冲突未决式', desc:'冲突暂未解决，停在真实对峙或僵持点。'},
   {key:'reversal', label:'反转式', desc:'最后信息/事实重新解释前文，但不得凭空新增关键事实。'},
   {key:'open', label:'留白式', desc:'有意不解释或不总结，让读者停留在最后一个有效事件。'},
@@ -5411,15 +5403,10 @@ const CHAPTER_ENDING_FORMS = [
   {key:'scene_cut',label:'场景切断'}, {key:'silence',label:'沉默'}, {key:'event_result',label:'事件结果'},
   {key:'consequence',label:'直接后果'}
 ];
-// app24：把“未来/明天”类收尾从少数固定句扩展为语义族；只用于检测/提示，不做粗暴文本替换。
 const CHAPTER_ENDING_BANNED_TEMPLATES = [
   '不知道明天会发生什么','期待着明天','期待未来','新的惊喜','夕阳西下','新的一天又将开始',
-  '一切才刚刚开始','未来等待着他们','明天一切都会不同','不知道接下来会有什么惊喜',
-  '等待着明天','等着明天','迎接明天','等待未来','走向未来','未来的路还很长',
-  '新的生活即将开始','新的篇章即将开始','明天会更好','明天再说','总有一天会',
-  '等待新的开始','新的开始','新的旅程','新的征程','一切都会好起来'
+  '一切才刚刚开始','未来等待着他们','明天一切都会不同','不知道接下来会有什么惊喜'
 ];
-const CHAPTER_ENDING_FUTURE_REGEX = /(?:期待|等待|等着|迎接|面对|走向|奔向|留给|属于)[^。！？\n]{0,18}(?:明天|未来|明日|新的一天|新的开始|新篇章|新旅程|新征程)|(?:明天|明日|未来|新的一天)[^。！？\n]{0,24}(?:会|将|等待着|属于|迎来|开始|到来)/;
 function chapterEndingFunctionText(){ return CHAPTER_ENDING_FUNCTIONS.map(x=>`${x.key}=${x.label}：${x.desc}`).join('\n'); }
 function chapterEndingFormText(){ return CHAPTER_ENDING_FORMS.map(x=>`${x.key}=${x.label}`).join('、'); }
 function parseChapterEndingPlanFromCard(card, i){
@@ -5428,22 +5415,21 @@ function parseChapterEndingPlanFromCard(card, i){
   const fn=get(['主要结尾功能','结尾主要功能','本章结尾功能']);
   const form=get(['推荐表现形式','具体收尾方式','结尾表现形式','表现形式','允许的表现形式']);
   const intensity=get(['结尾强度','章末强度']);
-  const hook=get(['是否需要下一章钩子','是否需要钩子','钩子需求']);
+  const hook='否';
   const forbidden=get(['结尾禁止','禁止结尾','禁止的结尾形式','禁止追加']);
   const reason=get(['结尾选择理由','结尾策略理由']);
   const lastEffectiveEvent=get(['最后有效事件','最后有效剧情节点','章末最后有效事件']);
   const diversityNote=get(['重复风险','多样性提示','结尾重复风险']);
-  const positive=get(['推荐收束方向','正向收束示范','具体收束方向']);
   const secondary=get(['次级结尾功能','结尾次级功能']);
   return {
-    version:'chapter-ending-plan-v2', chapter:Number(i)+1,
+    version:CHAPTER_ENDING_CONTRACT_VERSION, chapter:Number(i)+1,
     endingFunction:fn || 'completion', secondaryFunction:secondary || '',
     intensity: Number.isFinite(parseInt(intensity,10)) ? Math.max(0,Math.min(4,parseInt(intensity,10))) : 0,
-    hook:/^(是|yes|true|需要)/i.test(hook), hookRaw:hook||'未指定',
+    hook:false, hookRaw:'统一禁用留钩子感觉',
     form:form || '自然停止', reason:reason || '服从本章最后一个有效事件与题材，不额外制造万能收尾。',
     lastEffectiveEvent:lastEffectiveEvent || '',
-    forbidden:(forbidden ? forbidden.split(/[、,，；;]/).map(x=>x.trim()).filter(Boolean) : []).concat(CHAPTER_ENDING_BANNED_TEMPLATES),
-    diversityNote:diversityNote || '避免与近期章节机械重复；不以“明天/未来/期待/惊喜/新的开始”作为默认结尾。',
+    forbidden:CHAPTER_ENDING_CONTRACT.feelingFailures.slice(),
+    diversityNote:diversityNote || '避免与近期章节机械重复；不以“明天/夕阳/期待/惊喜”作为默认结尾。',
     source:'principal_chapter_task', sourceHash:String(text).length
   };
 }
@@ -5460,6 +5446,7 @@ function chapterEndingPlanFor(i){
   const n=Number(i)+1;
   const stored=state.chapterEndingPlans && state.chapterEndingPlans[n];
   if(stored && typeof stored==='object') return stored;
+  // 仅用于兼容旧项目：首次读取时把既有校长章级卡一次性结构化缓存；不是重新启动校长。
   const raw=state.school?.principal?.raw || scState()?.principal?.raw || '';
   const card=principalChapterTask(i);
   if(!card) return null;
@@ -5470,165 +5457,41 @@ function chapterEndingPlanFor(i){
 }
 function chapterEndingDecisionBlock(i){
   const d=chapterEndingPlanFor(i);
-  if(!d) return '';
-  return `【本章结尾结构化计划｜校长一次性统筹】
-- endingFunction：${d.endingFunction}
-- 次级功能：${d.secondaryFunction||'无'}
-- 强度：${d.intensity}
-- 是否需要钩子：${d.hook?'是':'否'}
-- 表现形式：${d.form}
-- 为什么在这里停：${d.reason}
-- 最后有效事件：${d.lastEffectiveEvent||'以本章最后一个必要事件为停止点'}
-- 禁止项：${(d.forbidden||[]).join('、')}
-- 多样性提示：${d.diversityNote}
-- 正向收束方向：${d.positiveExamples||'请根据最后有效事件从结果、决定、关系、信息、后果、物件、对峙、留白中选择，不写抽象未来口号。'}
-执行原则：结尾是叙事功能，不是固定句式。章末必须落在本章已经发生的“最后有效变化”上；下一章接口只是后台连续性信息。`;
+  const c=normalizeChapterEndingContract(d);
+  return `【唯一章末契约实例｜${c.version}】
+- 口令：${c.command}
+- 本章停止点：${c.lastEffectiveEvent||'本章最后一个已经发生的有效变化'}
+- 表现形式：${c.form}
+- 功能：${c.endingFunction}
+- hook：false（不存在“为了下一章而留钩子”的授权）
+- 正向示范：${c.positiveExamples.join('；')}
+- 感觉级失败：${c.forbiddenFeeling.join('；')}
+执行：正文只把停止点写自然；不要追加任何未来导向情绪、悬念吊桥或读者期待。审计只验证这一契约。`;
 }
-function recentChapterEndingHistory(i, count=10){
+
+function recentChapterEndingHistory(i, count=8){
   const out=[];
   const start=Math.max(0,i-count);
   for(let k=start;k<i;k++){
     const c=(state.chapters||[])[k]; if(!c||!String(c.content||'').trim()) continue;
-    const tail=String(c.content).trim().slice(-1000);
+    const tail=String(c.content).trim().slice(-900);
     let form='';
     if(/[“”"].{1,80}[。！？!?]$/.test(tail)) form='对白/语言';
-    else if(/(夕阳|黄昏|夜色|月光|晨光|天色|风|雨|阳光|窗|灯|雾)/.test(tail)) form='环境';
+    else if(/(夕阳|黄昏|夜色|月光|晨光|天色|风|雨|阳光)/.test(tail)) form='环境';
     else if(/(没有说话|沉默|无言|没有回答|不再开口)/.test(tail)) form='沉默';
     else if(/(决定|答应|拒绝|转身|推开|走进|离开|拿起|放下|关上|打开)/.test(tail)) form='动作/决定';
     else form='事件/叙述';
-    const hits=CHAPTER_ENDING_BANNED_TEMPLATES.filter(x=>tail.includes(x));
-    const futureRisk=CHAPTER_ENDING_FUTURE_REGEX.test(tail);
-    out.push({chapter:k+1,form,templateRisk:(hits.length||futureRisk)?'high':'low',tail:tail.slice(-220)});
+    const fr=chapterEndingFeelingAudit(tail);
+    out.push({chapter:k+1,form,templateRisk:fr.fail?'high':'low',feelingRisk:fr,tail:tail.slice(-180)});
   }
   return out;
 }
 function chapterEndingAuditText(i){
-  const h=recentChapterEndingHistory(i,10);
-  if(!h.length) return '【结尾多样性审计】暂无前章样本；仍禁止万能未来式收尾。';
-  return `【结尾多样性审计｜最近${h.length}章】
-${h.map(x=>`第${x.chapter}章：表现=${x.form}｜模板风险=${x.templateRisk}｜末尾片段=${x.tail.replace(/\s+/g,' ').slice(0,160)}`).join('\n')}
-规则：不得连续复用同一“功能+表现+语言模式”；尤其禁止把“期待/等待/明天/未来/新的开始”作为没有剧情依据的万能章末。下一章接口应由未决事实、关系变化、行动后果或当前事件自然产生。`;
+  const h=recentChapterEndingHistory(i,8);
+  if(!h.length) return '【结尾多样性审计】暂无前章样本；仍禁止万能结尾模板。';
+  return `【结尾多样性审计｜最近${h.length}章】\n${h.map(x=>`第${x.chapter}章：表现=${x.form}｜模板风险=${x.templateRisk}｜末尾片段=${x.tail.replace(/\s+/g,' ').slice(0,140)}`).join('\n')}\n规则：唯一主判据是CHAPTER_ENDING_CONTRACT的“禁止留钩子的感觉”；词汇命中只能作为辅助证据，不得单独决定结尾是否失败。`;
 }
-function endingTemplateGuardText(){
-  return `【章节结尾反模板硬门｜app24】
-- 章末首先回答“本章最后真正发生了什么”，然后停在这个变化上；不要为了制造余味再补一个空泛总结。
-- 禁止默认使用“期待明天/期待未来/等待新的开始/一切才刚刚开始/明天会更好/新的旅程”等未来式收束。即使换成同义词，只要叙事功能仍是“把希望投向未来”，也算重复。
-- 每章结尾优先从以下真实落点中选择：行动结果、关系变化、决定、信息成立、直接后果、物件状态、身体状态、冲突僵持、对白、沉默、场景切断、留白、环境变化。
-- “环境式结尾”不是“夕阳/晨光/夜色”万能镜头；环境必须发生具体变化，并且与本章最后事件有因果或情绪关系。
-- 同一种结尾功能可以再次出现，但不得连续用相同的语言、画面和情绪落点复刻。
-- 若章级卡要求无钩子，安静停止完全合法；若要求钩子，钩子必须来自已成立事实，不得临时制造关键新事实。`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// app24 场景语义去重：不是简单查同义词，而是识别“视觉构图/叙事功能”重复。
-// 目标：避免同一章里“晨光/阳光 + 破旧窗棂 + 人脸 + 光影落面”换词重写。
-// ─────────────────────────────────────────────────────────────────────────────
-const SCENE_REPETITION_FAMILIES = [
-  {key:'window_light_face', words:['窗','窗棂','窗框','窗户','光','晨光','阳光','清晨','脸','面庞','脸上','光影','斑驳','洒','投','照'], label:'窗光→人物面部'},
-  {key:'sunlight_room', words:['阳光','日光','晨光','光线','屋内','小屋','房间','窗','门','地板','墙','桌'], label:'日光→室内空间'},
-  {key:'sunset_silhouette', words:['夕阳','晚霞','黄昏','暮色','余晖','天边','背影','剪影','影子'], label:'暮色→剪影/背影'},
-  {key:'rain_window', words:['雨','雨声','雨幕','水珠','窗','玻璃','潮湿','滴落'], label:'雨幕→窗面'},
-  {key:'night_moon', words:['夜','月光','月色','窗','灯','昏暗','黑暗','影子'], label:'夜色→窗灯/影子'}
-];
-function _sceneNorm(s){
-  let x=String(s||'').replace(/\s+/g,'').toLowerCase();
-  const reps=[
-    [/晨光|清晨的阳光|清晨阳光|早晨的阳光|朝阳|日光/g,'光'],
-    [/窗棂|窗框|窗户|窗子|玻璃窗/g,'窗'],
-    [/脸上|脸庞|面庞|脸颊|面孔/g,'脸'],
-    [/洒落|洒在|投下|照在|落在|映在|透进|透过|穿过|射入/g,'光照'],
-    [/斑驳的光影|斑驳光影|斑驳/g,'斑驳'],
-    [/破旧的|老旧的|残破的|陈旧的|破败的/g,'旧'],
-    [/小屋|屋子|房间|屋内/g,'室内']
-  ];
-  reps.forEach(([re,r])=>x=x.replace(re,r));
-  return x;
-}
-function _charBigrams(s){
-  const x=_sceneNorm(s); const set=new Set();
-  for(let i=0;i<x.length-1;i++){ const a=x.slice(i,i+2); if(/[^\u4e00-\u9fff]/.test(a)) continue; set.add(a); }
-  return set;
-}
-function _jaccard(a,b){
-  if(!a.size||!b.size) return 0;
-  let hit=0; a.forEach(x=>{if(b.has(x))hit++;});
-  return hit/(a.size+b.size-hit);
-}
-function sceneVisualFamily(s){
-  const x=_sceneNorm(s);
-  const scores=SCENE_REPETITION_FAMILIES.map(f=>({f,score:f.words.reduce((n,w)=>n+(x.includes(_sceneNorm(w))?1:0),0)})).sort((a,b)=>b.score-a.score);
-  return scores[0] && scores[0].score>=3 ? scores[0].f : null;
-}
-function extractVisualSceneUnits(text){
-  const body=String(text||'').replace(/\r\n?/g,'\n');
-  const units=[];
-  body.split(/\n\s*\n|(?<=[。！？])\s+/).forEach((raw,idx)=>{
-    const s=String(raw||'').trim();
-    if(s.length<12) return;
-    const family=sceneVisualFamily(s);
-    const visualHits=(s.match(/光|阳光|晨光|月光|夕阳|窗|雨|雾|影|灯|天色|风|雪|树影|阴影/g)||[]).length;
-    if(family || visualHits>=3) units.push({index:idx,text:s,family:family?family.key:'generic_visual',familyLabel:family?family.label:'视觉环境',norm:_sceneNorm(s),grams:_charBigrams(s)});
-  });
-  return units;
-}
-function auditChapterSceneRepetition(text){
-  const units=extractVisualSceneUnits(text), issues=[], seen=[];
-  for(let i=0;i<units.length;i++){
-    for(let j=i+1;j<units.length;j++){
-      const a=units[i], b=units[j];
-      const sim=_jaccard(a.grams,b.grams);
-      const sameFamily=a.family===b.family && a.family!=='generic_visual';
-      const sameCore=/window_light_face/.test(a.family) && /window_light_face/.test(b.family);
-      if((sameFamily && sim>=0.56) || (sameCore && sim>=0.48) || sim>=0.78){
-        const issue={
-          type:'scene_repetition', severity:(sameCore&&sim>=0.62)||sim>=0.84?'fail':'warn',
-          evidence:`第${a.index+1}个视觉段与第${b.index+1}个视觉段高度相似：${a.text.slice(0,120)}｜${b.text.slice(0,120)}`,
-          expected:'同一章内相同视觉构图/叙事功能不得换几个同义词重复；若再次出现必须改变主体、观察角度、空间关系、时间状态或叙事功能。',
-          actual:`${a.familyLabel}重复，语义相似度约${Math.round(sim*100)}%`,
-          repair:'保留更有叙事价值的一处；另一处改为不同感官/动作/空间关系，或直接删除。禁止只做“晨光→阳光”这类同义词替换。'
-        };
-        issues.push(issue);
-        seen.push({a:a.index,b:b.index,sim});
-      }
-    }
-  }
-  return {status:issues.some(x=>x.severity==='fail')?'FAIL':issues.length?'WARN':'PASS',issues,units:units.slice(0,30),pairs:seen.slice(0,30)};
-}
-function buildChapterSceneDiversityBlock(i){
-  const recent=[];
-  const start=Math.max(0,i-3);
-  for(let k=start;k<i;k++){
-    const c=state.chapters?.[k]; if(!c?.content) continue;
-    const au=auditChapterSceneRepetition(c.content);
-    if(au.units?.length) recent.push(`第${k+1}章：${au.units.slice(-5).map(u=>u.familyLabel).join('、')}`);
-  }
-  return `【场景描写去重锁｜app24】
-同一章内部禁止把同一个视觉构图换同义词再写一遍。尤其是“清晨/晨光/阳光 + 破旧窗棂/窗户 + 林筱脸上 + 斑驳/洒落/投下光影”这一组合，一旦已经出现，后文不得再次用另一套近义词复刻同一画面。
-写每个新场景/环境段前，内部先问：
-1. 这段与本章前面是否拥有相同的光源、空间入口、人物身体部位、观察角度和光影结果？
-2. 如果相似，是否真的发生了新的时间状态、空间位置、天气、人物动作或叙事功能？
-3. 若没有新变化，删除环境描写，不要换词重写。
-4. 若必须再次描写，至少改变两个维度：观察主体/镜头距离、光源方向、空间层次、感官通道、人物动作、环境变化、叙事功能。
-5. 环境描写必须服务当下场景，不得为了“有画面感”反复铺同一张背景图。
-【高频场景硬门 + 正向替代】
-- 已用“晨光/阳光 + 破旧窗棂 + 人物脸部”，后文不能只改成“清晨的光 + 老窗框 + 面庞”。
-- 已用“雨声 + 窗户 + 人物沉默”，下一次可从鞋底泥水、玻璃水痕、潮湿衣袖、门锁动作、邻屋声响进入。
-- 已用“夜色/路灯 + 人物抬头”，下一次可改为电梯数字、路面反光、手机屏幕熄灭、卷帘门落下的声音、人物让开一步。
-- 已用“昏暗屋内 + 人物低头/握拳”，下一次可从椅背冰凉、煤气味、药片数量、门缝漏风、人物移动椅子挡住出口进入。
-【多个正向示范】
-1. 视觉：柜门没关严，里面露出半截旧照片。
-2. 听觉：楼上拖椅子的声音停在头顶，屋里一下安静下来。
-3. 嗅觉：湿木头的味道压过刚煮开的茶香。
-4. 触觉：门把手冰得发麻，他没有马上松手。
-5. 物件：桌上的药片少了一粒，包装却仍整整齐齐。
-6. 空间：她没有坐回原来的位置，而是站到了门边。
-7. 动作：他说完先把那张纸折成四折，再递回去。
-8. 环境变化：雨停后，院门口积水里浮出之前看不见的钥匙。
-这些例子用于训练“换叙事入口”，不是要求机械轮流套用。
-${recent.length?`【前3章近期视觉母题，仅作避免惯性参考】
-${recent.join('\n')}`:''}
-`;
-}
+function endingTemplateGuardText(){ return chapterEndingContractText(); }
 
 const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（全校总舵手）。
 
@@ -5915,26 +5778,10 @@ L0 是最高优先级。
 5. 老师不得把待确认项直接升级为既成事实。
 
 ━━━━━━━━━━━━━━━━━━
-【七A、章节结尾系统：结尾功能不是固定模板】
-每章必须有章末结尾决策，但校长只决定“结尾功能/强度/钩子需求/允许形式/禁止项”，不写最后一段正文。
-可用结尾功能包括：正常完成式、情绪余韵式、关系变化式、决定式、行动启动式、信息揭示式、悬念式、冲突未决式、反转式、留白式、后果式、喜剧包袱/反讽式、场景切断式、直言评述式。
-可用表现形式包括：动作、对白、信息、环境、心理、物件、场景切断、沉默、事件结果、直接后果。
-校长必须结合本章题材、章节功能、最后有效事件、情绪温度与下一章接口来选择，而不是随机选择。
-每张章级任务卡新增字段：
-- 主要结尾功能
-- 次级结尾功能
-- 结尾强度（0-4）
-- 是否需要下一章钩子
-- 允许的表现形式
-- 推荐表现形式
-- 结尾禁止
-- 结尾选择理由
-- 最后有效事件/自然停止点
-并遵守：没有悬念、没有未来期待、没有“明天”的正常收束完全合法。除非剧情确有依据，不得把“明日约定、夕阳、期待未来、新的惊喜”等当作默认收尾。
-【校长正向范式】章级任务卡不能只有“禁止未来式”，还应根据本章最后有效事件给出可执行方向：完成任务→停在结果；做出决定→停在决定动作；关系改变→停在具体互动；新信息成立→停在信息落地；直接后果出现→停在后果；冲突未决→停在具体僵持；物件/证据变化→停在物件事实；没有额外未决事项→直接正常停止。每张卡最好给1—3个不同收束方向供老师施工。
-最近章节结尾应进行多样性检查，但不能机械禁止同类结尾；检查“功能+表现形式+语言模式”的复刻风险。
+【七A、唯一章末口令】
+${chapterEndingContractText()}
+校长只生成一次本章停止点/结尾功能数据；不得另设“留钩子”“制造悬念”“读者期待”等第二套章末规则。
 
-━━━━━━━━━━━━━━━━━━
 【七B、校长章级结尾决策边界】
 ━━━━━━━━━━━━━━━━━━
 校长决定“为什么在这里停、停时读者应处于什么叙事状态”；老师决定“最后一个有效事件怎样完成”；正文决定“怎样写得自然”。
@@ -6784,49 +6631,14 @@ L3 · 正文作家的文学表达
 9. 如果授权不足以完成本章目标，不得硬补；优先输出待确认项或选择另一条已有依据的施工路径。
 
 ━━━━━━━━━━━━━━━━━━
-【一B、章节结尾施工权限｜app24源头规则】
-校长章级结尾决策卡是上位约束。老师不得把“留钩子”“下一章继续”“留下行动理由”“读者期待”理解成必须在正文末尾展望未来。
-老师必须先判断本章最后一个必要事件，再在校长允许的结尾功能/表现形式中选择最自然的施工方式。“下一章从什么状态接续”是后台连续性字段，不是要求正文最后写“以后/明天/未来”。
+【一B、章节结尾施工权限】
+${chapterEndingContractText()}
+老师只能施工本章最后一个已经发生的有效事件，并把它自然写到停止点。不得自行决定“留钩子”、不得添加未来期待、前瞻、读者等待感。老师教案中的章末字段只记录：停止点、功能、表现形式、禁止追加项；“是否留钩子”永久为否。
 
-【老师正向收尾示范】
-- 事件完成：最后一扇门锁上，停在结果。
-- 决定：人物把签好的文件推过去，停在决定动作。
-- 关系：对方第一次没有把手收回去，停在具体互动。
-- 信息：电话只报出一个地址，停在地址成立。
-- 后果：楼下传来警报，停在已经发生的直接后果。
-- 对峙：两人都站着，桌上的证据没有被拿走，停在僵持。
-- 物件：信封拆开后少了一页，停在新事实。
-- 留白：人物关灯离开，不再解释。
-- 环境：积水退去露出关键物件，仅在环境变化承载剧情时使用。
-这些只是方向示例，不得机械复制句子。
-
-【反模板原则】不得把“明天/未来/新的开始/新的旅程/一切会好起来/夕阳+感慨”等当默认章末。若剧情确有具体约定、明确行动或已发生的承诺，可以写具体事实；不要把抽象期待当结尾。
-如果校长明确要求“无钩子/正常完成式”，老师必须允许本章安静结束。
-如果发现最近章节连续使用相似的功能+表现+语言模式，应主动换一种自然形式，但不得为了多样而破坏剧情。
-老师教案的章末字段应至少包含：
-- 结尾功能（采用校长授权）
-- 结尾强度
-- 是否留钩子
-- 最后有效事件
-- 具体收尾动作/信息/对白功能
-- 表现形式
-- 禁止追加项
-- 与前几章结尾的重复风险
-- 推荐的具体收束落点（只写剧情事实，不写抽象未来口号）
-
-━━━━━━━━━━━━━━━━━━
 【二、教学观】
 ━━━━━━━━━━━━━━━━━━
 
 教案是“写作施工图”，不是正文。
-
-【老师必须提前处理重复，而不是把问题留给正文审计】
-1. 场景：教案必须指出本章已用的高频视觉母题，并给正文提供不同入口。可轮换声音、气味、触感、物件、空间距离、视线、动作后果、环境变化。例：已经用晨光照脸，下一次可以用门轴声、药片数量、潮湿袖口或人物换位置立境。
-2. 人物反应：教案不要只写“禁止沉默/皱眉/叹气/握拳”，要为关键人物提供至少2—3种不同维度的可能反应。例：被质问时可以纠正一个数字、整理物件、确认出口、转移问题、把决定权交给对方，而不是默认沉默。
-3. 每章都应有“高频母题/反应记录”和“推荐替代入口”，让正文在生成前就有多个可执行选择。
-
-【老师结尾源头任务】
-“章末结尾施工”除了禁止项，还必须给出1—3个基于本章最后有效事件的收束方向：结果、决定、关系、信息、后果、物件、对峙、留白或有剧情功能的环境变化。不得写“留下希望/期待未来/为下一章铺垫”这种抽象要求。
 
 教案必须让正文作家知道：
 
@@ -7014,7 +6826,7 @@ L3 · 正文作家的文学表达
 本章前面累积的矛盾、目标或信息，在这一拍得到一次明确回报。
 
 “收束+悬念”必须：
-完成当前阶段结算；只有已经成立的未决事实需要继续时才留下具体接口，没有真实未决事项则正常停止。
+完成当前阶段结算，同时留下下一章继续行动的理由。
 
 ━━━━━━━━━━━━━━━━━━
 【七、时间与节拍的正确组合】
@@ -7203,7 +7015,7 @@ L3 · 正文作家的文学表达
 - 中段变化
 - 高潮状态
 - 收束状态
-- 读者期待如何被改变
+- 本章实际情绪状态如何落地，不把读者推向等待下一章
 
 禁止把情绪写成：
 
@@ -7298,7 +7110,7 @@ L3 · 正文作家的文学表达
 - 还不知道什么；
 - 哪个目标已经完成；
 - 哪个目标未完成；
-- 若确有未决事实，留下什么具体的已成立接口；若没有，则明确“无额外接口，正常停止”；
+- 留下什么新的行动理由；
 - 下一章从什么状态接续。
 
 章末状态必须真实可接。
@@ -7396,7 +7208,7 @@ L3 · 正文作家的文学表达
 禁止追加：……
 重复风险：……
 
-只有在剧情确实需要时才使用前瞻/承诺；禁止把“明天/夕阳/期待未来”当作默认收尾。
+禁止把前瞻/承诺写成章末感觉；只停在已经发生的最后有效变化。
 
 逐章输出直到本组最后一章。
 
@@ -8323,25 +8135,25 @@ function bookBeatBriefHtml(){
 }
 
 const BEAT_OPTIONS = [
-  { id:5,  label:'微五拍', emoji:'⚖️', desc:'五段式最稳妥：起头→推进→加转折→交出一项成果→结尾留钩子，节奏不赶不拖、最百搭', types:[
+  { id:5,  label:'微五拍', emoji:'⚖️', desc:'五段式最稳妥：起头→推进→加转折→交出一项成果→结尾自然停止，节奏不赶不拖、最百搭', types:[
       { key:'setup',  label:'开篇铺垫', uiHint:'开头先说清：在哪里、和谁、要做什么，别急着倒信息。', note:'交代本章的时间、地点与在场人物，说明当前要做的事', aiDirective:'必须用简短铺垫立境（场景＋此刻要做的事）；禁止在本拍灌注大段设定或人物背景。' },
       { key:'rise',   label:'冲突推进', uiHint:'推进主线，制造一处具体阻力或新信息，让情节往前动。', note:'引入一个具体的阻力或新信息，推动本章目标向前进展', aiDirective:'必须引入具体的阻力或新信息推动目标进展，事件要具体可感；禁止原地重复、禁止只剩对话而无动作推进。' },
       { key:'turn',   label:'意外转折', uiHint:'先让人以为会怎样，再给出变化，超出读者预判。', note:'先建立预期，再呈现计划之外的变化，使发展超出读者预判', aiDirective:'必须先立预期再呈现计划外的变化；禁止无铺垫的随意反转、禁止反转后与主线脱节。' },
       { key:'climax', label:'阶段高潮', uiHint:'收拢整段的积累，给出一次明确的成果或回报。', note:'收拢本章积累，达成一次明确的成果或回报', aiDirective:'必须收拢前面积累并交付一项明确的成果/回报/认知；禁止在无积累时凭空给奖励、禁止重复已用过的回报类型。' },
-      { key:'hook',   label:'收束/章末节点', uiHint:'完成本章应完成的收束；是否留钩子由章级结尾决策卡决定，不得默认制造悬念。', note:'完成本章结算并自然停止；可有钩子，也可无钩子', aiDirective:'必须完成本章应有的结算并自然停下；不得把“留钩子”当作默认要求。是否制造悬念、反转或前瞻，严格服从章级结尾决策卡；禁止套用明天/未来/夕阳等万能收尾。' }
+      { key:'hook',   label:'收束/章末节点', uiHint:'完成本章应完成的收束；不设置章末钩子；只执行唯一章末契约。', note:'完成本章结算并自然停止；不设置钩子，直接自然停止', aiDirective:'必须完成本章应有的结算并自然停下；不得把“留钩子”当作默认要求。不得为了结尾制造悬念、前瞻或期待；反转若已在本章真实发生，停在其结果。' }
   ]},
-  { id:3,  label:'微三拍', emoji:'🚀', desc:'三段快速爽：开头一小节，中段一口气猛推进，结尾收尾+留钩，一章一个明确节点', types:[
+  { id:3,  label:'微三拍', emoji:'🚀', desc:'三段快速爽：开头一小节，中段一口气猛推进，结尾自然停止，一章一个明确节点', types:[
       { key:'setup',  label:'开局铺垫', uiHint:'一两句话交代主角处境和本章要处理的问题，快速入题。', note:'交代主角当前处境与本章要处理的问题', aiDirective:'必须简洁交代主角当前处境与本章要解决的问题并迅速进入；禁止用长篇心理或环境描写拖慢节奏。' },
       { key:'climax', label:'核心进展', uiHint:'给出本章最要紧的进展或成果，回应开头的期待。', note:'给出本章的关键进展或成果，回应开头建立的期待', aiDirective:'必须给出本章关键进展并回应前文期待、占篇幅最大；禁止无进展的注水对白或冗余环节。' },
       { key:'hook',   label:'收束/章末节点', uiHint:'收好本章成果；是否留新信息由本章剧情和结尾决策决定。', note:'收束本章成果，可正常停止，也可按授权留下自然接口', aiDirective:'必须收束本章成果并自然停止；不得强制增加新信息。只有章级结尾决策卡明确要求时，才可留下悬念或下一章接口；禁止强行悬念和重复信息。' }
   ]},
-  { id:7,  label:'微七拍', emoji:'🍵', desc:'七段慢慢升温、主打细腻走心：靠人物互动和情绪一点点拉近，不追快进度；结尾按章级决策自然停止，不预设暖意或未来展望', types:[
+  { id:7,  label:'微七拍', emoji:'🍵', desc:'七段慢慢升温、主打细腻走心：靠人物互动和情绪一点点拉近，不追快进度，结尾留暖意', types:[
       { key:'daily',     label:'日常铺垫', uiHint:'先立时间、地点、气温等感官氛围，让读者进得来。', note:'以时节/气温/光线等感官细节立境，交代时间地点与主角当下去向', aiDirective:'必须用具体的气候、光线、气味等感官细节把日常铺开并立境；禁止在本拍制造冲突或信息倾倒。' },
       { key:'interact',  label:'小互动', uiHint:'引入一个活物或熟识的人，几句最简往来，让画面活起来。', note:'借一个活物或熟识的人带出极简对话的细微往来', aiDirective:'必须借具体活物或熟人带出一段日常互动、对话点到为止；禁止空泛寒暄、禁止长篇对话独白。' },
       { key:'misunder',  label:'小误会', uiHint:'一次轻微又双向的理解偏差，带起一点克制的小波澜。', note:'一次双向无恶意的轻微误解，读者是"早知道"的知情者', aiDirective:'必须设计成双向无恶意的轻微偏差、并让读者处于知情位置制造张力；禁止让误会失控成激烈对立或长时间冷场。' },
       { key:'heart',     label:'谈心推进', uiHint:'借一件共同的琐事把两人推近，走到情感破冰的一刻。', note:'借外在事件（雨/食事/修葺等）促成靠近，推动一次真心交流', aiDirective:'必须用一个具体外在契机把两人推近并推进一段走心对话；禁止用说教或空谈代替具体情节。' },
       { key:'warm',      label:'温馨高点', uiHint:'全段唯一的小高点，力度极轻：只写身体本能，不靠告白。', note:'本段唯一高点但力度极轻：以手温/指尖/汤暖等生理细节呈现暖意', aiDirective:'必须以极轻的生理细节（心跳漏拍、耳朵发烫、低头搅汤、嘴角微弯）呈现暖意；禁止直接表白、禁止大动作煽情。' },
-      { key:'glow',      label:'余味收束', uiHint:'情绪缓缓回落，镜头拉远到周遭的声音、气味与光。', note:'情绪回落，镜头拉远收进环境的声音/气味/光线，余味悠长', aiDirective:'必须让上一拍的情绪自然回落并自然停止；环境只是可选表现形式。优先使用声音、气味、物件、关系或动作变化，不得默认用晨光/夕阳/夜色+感慨收尾。' },
+      { key:'glow',      label:'余味收束', uiHint:'情绪缓缓回落，镜头拉远到周遭的声音、气味与光。', note:'情绪回落，镜头拉远收进环境的声音/气味/光线，余味悠长', aiDirective:'必须让上一拍的情绪自然回落、以环境感官细节收束；禁止突然跳入新冲突。' },
       { key:'promise',   label:'前瞻/承诺（可选）', uiHint:'只有剧情自然需要时，才以约定、决定或前瞻形成下一步方向。', note:'可用约定/决定/前瞻收章，但绝非每章必用', aiDirective:'仅当章级结尾决策卡允许且剧情自然需要时使用；不得机械出现“明天/未来/期待/惊喜”。正常完成式收束同样完全合法。' }
   ]},
   { id:2,  label:'双拍结构', emoji:'🔍', desc:'前头一大段慢慢铺陈（看似平淡、其实全是伏笔），最后一小段集中揭晓真相/抛出惊吓，专治悬疑惊悚推理', types:[
@@ -8757,7 +8569,7 @@ function narrativeIronBlock(role, opts){
     ironFull += '\n【双主角铁律】本书为双主角叙事，两名主角各有独立行动场景与弧线：本章凡涉及双主角，须给双方各自实质性的镜头与推进，不得把某一方写成另一方的附庸/背景；双视角切换必须有明确触发点与衔接（换场景/换段），禁止在同一场景内无节制的视角跳转；两人同场时，其对视/争执/配合要写得有张力与辨识声口。';
   }
   if(role === 'chapter'){
-    ironFull += '\n【章首铁律】章首开法**必须**有变化：**禁止**全书或连续多章重复同一种开法、**禁止**每章都以同一类人物动作或同一类时间词起句、也**禁止**连续两章雷同，小说整体**禁止**某一种开法超过三成。下面各方式**可以**混用、**必须**轮流换着来：①续写式（优先）：优先从本章教案规定的起点、事件现场或已提供的状态依据切入；例："『这话可说不得。』上回话到一半，屋里便只剩扇子敲桌沿的声响。"；②场景/环境式：从能即时带出情绪与冲突的场景细节/物件/光线/动静切入，人物稍后才点名；例："檐角铜铃被夜风拨响时，堂屋的灯还亮着，桌上摊着两封未拆的信。"；③人物开句式：以人物称谓开句**可以**，但须与前后章错开、**禁止**连续两章相同；④时间开句式：以时间词开句**可以**，但**禁止**连续两章都用时间词开句；⑤他人/群像式：从他人口中或反应侧写入物处境，出场人物不占句首；例："『那人的名讳一提就烫嘴。』有人压着嗓子嘀咕。"；⑥悬念回接式：以章末钩子的延续、一句质问或一个反常细节起首；例："那封密信最终会不会落到衙门手中，成了压在每个人心口的石头。"';
+    ironFull += '\n【章首铁律】章首开法**必须**有变化：**禁止**全书或连续多章重复同一种开法、**禁止**每章都以同一类人物动作或同一类时间词起句、也**禁止**连续两章雷同，小说整体**禁止**某一种开法超过三成。下面各方式**可以**混用、**必须**轮流换着来：①续写式（优先）：优先从本章教案规定的起点、事件现场或已提供的状态依据切入；例："『这话可说不得。』上回话到一半，屋里便只剩扇子敲桌沿的声响。"；②场景/环境式：从能即时带出情绪与冲突的场景细节/物件/光线/动静切入，人物稍后才点名；例："檐角铜铃被夜风拨响时，堂屋的灯还亮着，桌上摊着两封未拆的信。"；③人物开句式：以人物称谓开句**可以**，但须与前后章错开、**禁止**连续两章相同；④时间开句式：以时间词开句**可以**，但**禁止**连续两章都用时间词开句；⑤他人/群像式：从他人口中或反应侧写入物处境，出场人物不占句首；例："『那人的名讳一提就烫嘴。』有人压着嗓子嘀咕。"；⑥直接回接式：从上一章已经发生的事实继续，不预告下一步；例："那封密信还在桌角，纸边已经被水汽卷起。"';
   }
   if(role === 'chapter'){
     ironFull += '\n【视角与反剧透铁律】全章以主角的受限感知推进：只写主角能\/看到听到摸到感知到的；想表现他人内心，一律从主角的观察与推断出发，禁止直接钻进路人\/配角\/反派的内心"读心"。禁止提前揭示读者与主角尚不该知道的答案：伏笔只许一笔带过地埋伏笔，不点破、不解释、不揭示答案（不剥夺读者的"侦探权"）。背景\/世界观\/前史情报必须"寄生"在角色的即时感官里（听\/闻\/触）传达，禁止作者跳出来大段广播。仅在章\/节分界明显、或关键时刻"只展示不解释"的客观动作、或悬念兑现时，才可短暂切出并立即回到主角。';
@@ -15878,6 +15690,28 @@ function buildDictEnrichUser(){
 
   return parts.join('\n\n');
 }
+const PERSON_GENERIC_NAMES = new Set(['医生','护士','校长','老师','主任','经理','老板','店员','服务员','保安','司机','警察','法官','律师','记者','学生','路人','老人','女人','男人','男孩','女孩','姑娘','青年','少年','少女','顾客','邻居','村民','村长','院长','教授','工程师','护士长','会计','秘书','助理','前台','店主','船员','工人','司机','快递员','黑名单','会议室','村口']);
+const PERSON_TITLE_WORDS = /(医生|护士|老师|校长|主任|经理|老板|叔|姨|婶|伯|爷|奶|哥|姐|师傅|先生|女士|小姐|大叔|大妈|阿姨|阿哥|阿姐)$/;
+const COMMON_CN_SURNAMES = '赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻柏水窦章云苏潘葛范彭郎鲁韦昌马苗凤花方俞任袁柳史唐费薛雷贺倪汤罗毕郝安常乐于时傅皮卞齐康伍余元卜顾孟平黄和穆萧尹姚邵湛汪祁毛禹狄米贝明臧计伏成戴谈宋茅庞熊纪舒屈项祝董梁杜阮蓝闵席季麻强贾路娄危江童颜郭梅盛林刁钟徐邱骆高夏蔡田樊胡凌霍虞万支柯昝管卢莫经房裘缪解应宗丁宣邓单杭洪包诸左石崔吉钮龚程邢滑裴陆荣翁荀羊於惠甄曲封储靳汲邴糜松井段富巫乌焦巴弓牧隗山车侯宓蓬全郗班仰秋仲伊宫宁仇栾暴甘钭厉戎祖武符刘景詹束龙叶幸司韶郜黎蓟薄印宿白怀蒲邰从鄂索咸籍赖卓蔺屠蒙池乔阴郁胥能苍双闻莘党翟谭贡劳逄姬申扶堵冉宰郦雍璩桑桂濮牛寿通边扈燕冀郏浦尚农温别庄晏柴瞿阎充慕连茹习宦艾鱼容向古易慎戈廖庾终暨居衡步都耿满弘匡国文寇广禄阙东欧殳沃利蔚越夔隆师巩厍聂晁勾敖融冷訾辛阚那简饶空曾毋沙乜养鞠须丰巢关蒯相查后荆红游竺权逯盖益桓公岳帅况郁商牟佘佴伯赏墨哈谯笪年爱阳佟第五言福';
+function isLikelyPersonEntity(name, obj){
+  const n=String(name||'').trim(); const o=obj&&typeof obj==='object'?obj:{}; if(!n) return false;
+  if(PERSON_GENERIC_NAMES.has(n)) return false;
+  const evidence=[o.identity,o.relation,o.age,o.gender,o.appearance,o.trait,o.hobby,o.catchphrase,o.note,o.desc].map(x=>String(x||'').trim()).filter(x=>x&&x!=='未知'&&x!=='无').join('；');
+  const explicitPerson=/(人物|角色|主角|配角|路人|龙套|姓名|人名|他|她|男|女|妻|夫|父|母|儿|女儿|儿子|同事|邻居|朋友|上司|下属|店主|医生|护士|老师|校长|主任|经理|老板|叔|姨|婶|伯|爷|奶|哥|姐|师傅|先生|女士)/.test(evidence);
+  if(explicitPerson) return true;
+  if(PERSON_TITLE_WORDS.test(n) && n.length>=2 && COMMON_CN_SURNAMES.includes(n[0])) return true;
+  if(/^老[一-龥]$|^小[一-龥]$|^阿[一-龥]$/.test(n) && n.length===2) return true;
+  if(n.length>=2 && n.length<=4 && COMMON_CN_SURNAMES.includes(n[0]) && /^[一-龥]+$/.test(n)) return true;
+  if(/[A-Za-z]/.test(n) && /[A-Za-z]{2,}/.test(n) && explicitPerson) return true;
+  return false;
+}
+function sanitizePersonCollections(res){
+  if(!res||typeof res!=='object') return res;
+  res.characters=(res.characters||[]).filter(x=>isLikelyPersonEntity(x&&x.name,x));
+  res.walkons=(res.walkons||[]).filter(x=>isLikelyPersonEntity(x&&x.name,x));
+  return res;
+}
+
 function parseDictEnrichText(txt){
   const res = { characters:[], places:[], propernouns:[], walkons:[] };
   if(!txt) return res;
@@ -15928,7 +15762,7 @@ function parseDictEnrichText(txt){
           if(cleanName) res.walkons.push({ name: cleanName, note: (extraNote ? extraNote + '；' : '') + (w.note || w.说明 || ''), _auto:true, tier:'walkon' });
         }
       });
-      if(res.characters.length || res.places.length || res.propernouns.length || res.walkons.length) return res;
+      if(res.characters.length || res.places.length || res.propernouns.length || res.walkons.length) return sanitizePersonCollections(res);
     } catch(e){}
   }
 
@@ -16074,7 +15908,7 @@ function parseDictEnrichText(txt){
     }
   }
 
-  return res;
+  return sanitizePersonCollections(res);
 }
 function mergeDictEnrich(res){
   const o = state.outline; if(!o) return {c:0,w:0,p:0,k:0,total:0};
@@ -16090,7 +15924,7 @@ function mergeDictEnrich(res){
     });
   };
 
-  (res.characters||[]).forEach(it=>{
+  (res.characters||[]).filter(it=>isLikelyPersonEntity(it&&it.name,it)).forEach(it=>{
     const [nm, extra] = cleanEntityName(it.name);
     if(!nm) return;
     it.name = nm;
@@ -16145,7 +15979,7 @@ function mergeDictEnrich(res){
     n.k++;
   });
 
-  (res.walkons||[]).forEach(it=>{
+  (res.walkons||[]).filter(it=>isLikelyPersonEntity(it&&it.name,it)).forEach(it=>{
     const [nm, extra] = cleanEntityName(it.name);
     if(!nm) return;
     it.name = nm;
@@ -16629,6 +16463,16 @@ function stripSegmentMarkers(txt){
 function splitChapterOutput(txt){
   return { content: stripSegmentMarkers(txt), strip: '' };
 }
+function chapterEndingFeelingAudit(text){
+  const tail=String(text||'').trim().slice(-900);
+  const paragraphs=String(text||'').trim().split(/\n\s*\n/).filter(Boolean);
+  const last=paragraphs.length?paragraphs[paragraphs.length-1]:tail;
+  const futureFeeling=/(从此|从那以后|这一刻之后|命运|人生|真正的故事|一切都将|一切都会|故事才|新的开始|新的旅程|接下来|等待着|等着|终会|终将|迟早|总有一天|会有一天|将会|注定|尚未结束|远方|未来|明天|期待|希望)/.test(last);
+  const readerHookFeeling=/(让人无法|不禁期待|令人期待|谁也不知道接下来|没有人知道接下来|等着看|等待着下一|下一章|下一步|会发生什么|究竟会|到底会|还会继续|真正开始|新的篇章)/.test(last);
+  const abstractLift=/(从此不同|命运的齿轮|命运已经|一切才刚刚|新的篇章|新的征程|故事正式开始|未来会|以后会)/.test(last);
+  return {fail:futureFeeling||readerHookFeeling||abstractLift, futureFeeling, readerHookFeeling, abstractLift, last};
+}
+
 async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride, signal){
   const mt = chapterMaxTokens();
   onPhase = onPhase || (()=>{});
@@ -16667,32 +16511,12 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
   if(state.chapters && state.chapters[i]){ state.chapters[i].castOut = _cs.castOut; }
   const _o = state.outline;
   if(_o && Array.isArray(_o.chapters) && _o.chapters[i]){ _o.chapters[i].castOut = _cs.castOut; }
-  // app24：章末反模板 + 场景语义去重。只在明确违规时回退/标记，绝不做机械同义词替换。
+  // 章末反模板软审计：不做机械替换，避免破坏文学表达；仅在明显以万能句式收尾且校长未授权时回退到上一处自然段。
   const _ed=chapterEndingPlanFor(i); const _rawTail=String(content||'').trim();
-  const _tail=_rawTail.slice(-650);
-  const _risk=_tail && (CHAPTER_ENDING_BANNED_TEMPLATES.some(x=>_tail.includes(x)) || CHAPTER_ENDING_FUTURE_REGEX.test(_tail));
-  const _explicitEnding=_ed && (
-    /悬念|suspense|hook/i.test(String(_ed.endingFunction||'')+' '+String(_ed.form||'')) || !!_ed.hook
-  );
-  // 即便允许悬念，也禁止用“期待未来/明天”充当悬念本身。
-  if(_risk && !_explicitEnding){
+  const _tail=chapterEndingFeelingAudit(_rawTail);
+  if(_tail.fail){
     const paras=_rawTail.split(/\n\s*\n/).filter(x=>x.trim());
-    if(paras.length>1){
-      const last=paras[paras.length-1];
-      const previous=paras[paras.length-2];
-      // 只有最后一段本身高度像万能收尾时才回退，避免误删真正的事件结果。
-      if(CHAPTER_ENDING_FUTURE_REGEX.test(last) || CHAPTER_ENDING_BANNED_TEMPLATES.some(x=>last.includes(x))){
-        paras.pop(); content=paras.join('\n\n').trim();
-      }
-    }
-  }
-  const _sceneAudit=auditChapterSceneRepetition(content);
-  if(_sceneAudit.status!=='PASS'){
-    state.outline=state.outline||{};
-    state.outline._sceneAudit=state.outline._sceneAudit||{};
-    state.outline._sceneAudit[i]={
-      chapter:i+1,status:_sceneAudit.status,issues:_sceneAudit.issues.slice(0,20),ts:Date.now()
-    };
+    if(paras.length>1){ paras.pop(); content=paras.join('\n\n').trim(); }
   }
   return enforceChapterBoundary(i, content);
 }
@@ -16710,7 +16534,7 @@ function splitChapterCastout(prose){
   }
   return { body: bodyLines.join('\n').replace(/\s+$/, '').trim(), castOut };
 }
-const USER_PRIO_BILL = '\n\n【优先级契约（按维度裁决，禁止把不同维度混成一个选择题）】\n1. 表达层：本章具体写法以老师教案中的写作执行要求为准；不得在正文阶段重新发明一套独立风格方案。\n2. 剧情层最高权威：本章老师教案，但“章末结尾功能/强度/钩子/禁止项”以校长章级结尾决策卡为上位约束；老师必须在授权范围内施工收尾。\n3. 全书一致性权威：万物词典 + 上一章已落地事实 + 校长/老师已裁决的连续性规则。\n4. 人工干预只能在不破坏以上三层的前提下补充；若与老师教案冲突，不得擅改教案核心事件。\n5. 优化构想只是创意建议：不得在正文阶段自行把优化构想升级成新的剧情、设定或风格权威。\n设定词典中有台词/有戏份/反复出现的重要人地专名一致性为不可逾越红线；仅作氛围的临时路人/小地名/小专名（见正文【临时闲人】段）不属红线，可现场点缀、不入词典；上一章已落地状态与小说状态链是承接类事实依据，任何要求不得使其违背已成立事实。';
+const USER_PRIO_BILL = '\n\n【优先级契约（按维度裁决，禁止把不同维度混成一个选择题）】\n1. 表达层：本章具体写法以老师教案中的写作执行要求为准；不得在正文阶段重新发明一套独立风格方案。\n2. 剧情层最高权威：本章老师教案；章末只服从唯一CHAPTER_ENDING_CONTRACT，老师不得另立结尾口令。\n3. 全书一致性权威：万物词典 + 上一章已落地事实 + 校长/老师已裁决的连续性规则。\n4. 人工干预只能在不破坏以上三层的前提下补充；若与老师教案冲突，不得擅改教案核心事件。\n5. 优化构想只是创意建议：不得在正文阶段自行把优化构想升级成新的剧情、设定或风格权威。\n设定词典中有台词/有戏份/反复出现的重要人地专名一致性为不可逾越红线；仅作氛围的临时路人/小地名/小专名（见正文【临时闲人】段）不属红线，可现场点缀、不入词典；上一章已落地状态与小说状态链是承接类事实依据，任何要求不得使其违背已成立事实。';
 let _dictRedlineOver = false;
 function budgetChapterContext(parts, maxChars=18000){
   // 正文上下文必须有“硬预算”。旧版只压缩少数不存在的标签，导致
@@ -16950,12 +16774,10 @@ ${_lesson}
     const _cdr=buildChapterCharacterDynamicReactionBlock(i); if(_cdr) parts.push(_cdr);
     const _cdb=buildChapterDialogueSubtextBlock(i); if(_cdb) parts.push(_cdb);
     const _cil=buildChapterLocalInfoLedgerBlock(i); if(_cil) parts.push(_cil);
-    const _sdr=buildChapterSceneDiversityBlock(i); if(_sdr) parts.push(_sdr);
     parts.push(chapterQualityPromptBlock());
   }
   parts.push(`【事件可达性硬门】写每个重大事件前，内部快速核对：前置状态是否已成立？触发线索是否存在？人物为什么会采取这一步？信息/道具/能力从哪里来？地点与时间是否可达？本事件是否会让前后因果断裂？若任一关键项缺失，不得用“突然/恰好/偶然”直接补过去。`);
   const _authText = principalChapterTask(i); if(_authText) parts.push(`【章级事实授权硬门】校长任务卡优先于老师教案。名单外人物若承担关键剧情功能、任何人物若获得未授权核心情报、或新事实改变主线，均不得直接写入正文；只能使用已有授权资源、走另一条有依据的路径，或保留为待确认项。`);
-  const _sdr2=buildChapterSceneDiversityBlock(i); if(_sdr2) parts.push(_sdr2);
   const _endDecision = chapterEndingDecisionBlock(i); if(_endDecision) parts.push(_endDecision);
   parts.push(chapterEndingAuditText(i));
   parts.push(endingTemplateGuardText());
