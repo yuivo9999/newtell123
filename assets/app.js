@@ -75,6 +75,8 @@ const state = {
   idea: '',
   polishMode: 'single',
   polishStatus: 'empty',
+  strategyStage1Status: 'empty',
+  strategyStage2Status: 'empty',
   polishSelectedId: null,
   polishDiagnosis: null,
   polishStrategies: [],
@@ -1146,6 +1148,8 @@ function projectSnapshot(){
     polishAdopted: state.polishAdopted,
     polishMode: state.polishMode,
     polishStatus: state.polishStatus,
+    strategyStage1Status: state.strategyStage1Status,
+    strategyStage2Status: state.strategyStage2Status,
     polishSelectedId: state.polishSelectedId,
     polishDiagnosis: state.polishDiagnosis,
     polishStrategies: state.polishStrategies,
@@ -1242,6 +1246,8 @@ function applyProject(p){
   }
   state.polishPendingSuggestions = (p.polishPendingSuggestions && typeof p.polishPendingSuggestions === 'object') ? p.polishPendingSuggestions : null;
   state.polishRevision = Number.isFinite(+p.polishRevision) ? +p.polishRevision : 0;
+  state.strategyStage1Status = ['empty','generating','ready','error'].includes(p.strategyStage1Status) ? p.strategyStage1Status : (state.originalIdeaAnchors && state.strategicDimensions?.length ? 'ready' : 'empty');
+  state.strategyStage2Status = ['empty','generating','ready','adopted','error'].includes(p.strategyStage2Status) ? p.strategyStage2Status : (state.polishAdopted ? 'adopted' : (state.polishOptions?.length ? 'ready' : 'empty'));
   state.polishStatus = ['empty','generating','ready_single','waiting_selection','adopted'].includes(p.polishStatus) ? p.polishStatus : ((state.polishAdopted && state.polishOptions?.length) ? 'adopted' : (state.polishOptions?.length>1?'waiting_selection':state.polishOptions?.length?'ready_single':'empty'));
   state.polishHistory = Array.isArray(p.polishHistory) ? p.polishHistory : undefined;
   state.polishRawFallback = typeof p.polishRawFallback === 'string' ? p.polishRawFallback : '';
@@ -3038,69 +3044,101 @@ const SIZE_DEFAULT = { min:3000, max:5000 };
 
 let polishMulti = true;
 
-async function polishIdea(btn, force){
+async function generateStrategyStage(btn, force){
   const idea = (state.idea || '').trim();
-  if(!idea){
-    const kept = Array.isArray(state.polishOptions) && state.polishOptions.length;
-    toast(kept ? '输入框为空：请先在上方输入构想，或点某张历史方案卡「✔ 采用此方案」，再点「✨ 优化构想」重新生成' : '请先输入故事构想');
-    return;
-  }
-  const kept = Array.isArray(state.polishOptions) && state.polishOptions.length;
-  if(kept && !force){
-    if(!confirm(`已有 ${kept} 个保留方案，重新优化将覆盖它们。继续？`)) return;
-  }
-  const multi = polishMulti === true;
-  state.polishMode = multi ? 'multi' : 'single';
-  state.polishStatus = 'generating';
-  state.polishSelectedId = null;
-  state.polishAdopted = null;
-  state.polishCanonical = null;
-  state.canonicalStoryStrategy = null;
-  state.strategicDimensions = [];
-  state.originalIdeaAnchors = null;
-  state.polishDiagnosis = null;
-  state.polishStrategies = [];
-  if(!canRunAI('idea')){ toast('优化构想暂不可运行'); return; }
-
+  if(!idea){ toast('请先输入故事构想'); return false; }
+  const hasStage1 = state.strategyStage1Status === 'ready' && Array.isArray(state.strategicDimensions) && state.strategicDimensions.length;
+  if(hasStage1 && !force){ toast('第一阶段战略地图已经生成；如需重新生成，请点击「① 重新生成战略维度」'); return false; }
+  state.strategyStage1Status = 'generating';
+  state.strategyStage2Status = 'empty';
+  state.polishStatus = 'empty';
+  state.polishSelectedId = null; state.polishAdopted = null; state.polishCanonical = null; state.canonicalStoryStrategy = null;
+  state.polishOptions = [];
+  state.strategicDimensions = []; state.originalIdeaAnchors = null; state.polishDiagnosis = null; state.polishStrategies = [];
+  persist(); render();
   markAIRunning('ideaStrategy');
-  markAIRunning('idea');
-  if(btn) busy(btn,true,'① 分析战略维度中…');
+  if(btn) busy(btn,true,'① 正在生成战略维度…');
   try{
-    // ===== 第一阶段：独立战略分析 =====
-    const strategyRaw = await callAIGuarded('ideaStrategy', {}, {temperature: resolveActiveSpec().ideaTemp, maxTokens: Math.max(2500, Math.min(5000, clampMaxTokens('polish')))});
-    const strategy = extractJsonObject(strategyRaw);
-    const strategyCheck = validateIdeaStrategyOutput(strategy);
-    if(!strategyCheck.ok) throw new Error(`第一阶段战略分析校验失败：${strategyCheck.code} ${strategyCheck.details||''}`);
-
+    const raw = await callAIGuarded('ideaStrategy', {}, {temperature: resolveActiveSpec().ideaTemp, maxTokens: Math.max(2500, Math.min(5000, clampMaxTokens('polish')))});
+    const strategy = extractJsonObject(raw);
+    const check = validateIdeaStrategyOutput(strategy);
+    if(!check.ok) throw new Error(`第一阶段战略分析校验失败：${check.code} ${check.details||''}`);
     state.originalIdeaAnchors = strategy.originalAnchors;
     state.strategicDimensions = strategy.strategicDimensions;
-    state.polishStrategyTrace = { ts:Date.now(), originalAnchors:strategy.originalAnchors, strategicDimensions:strategy.strategicDimensions };
+    state.polishStrategyTrace = {ts:Date.now(), originalAnchors:strategy.originalAnchors, strategicDimensions:strategy.strategicDimensions};
+    state.strategyStage1Status = 'ready';
+    state.strategyStage2Status = 'empty';
     persist();
     markAIDone('ideaStrategy');
-
-    // ===== 第二阶段：基于第一阶段结果生成最终方案 =====
-    if(btn) busy(btn,true,multi ? '② 根据战略地图生成3～5个方案…' : '② 根据战略地图生成最终方案…');
-    const txt = await callAIGuarded('ideaPolishStage2', {
-      multi,
-      originalAnchors: strategy.originalAnchors,
-      strategicDimensions: strategy.strategicDimensions
-    }, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')});
-    const out = String(txt||'').trim();
-    if(!out) throw new Error('第二阶段没有返回内容');
-
-    showPolishResult(out, multi);
-    markAIDone('idea');
-    toast('优化完成：已完成两阶段战略→方案生成');
-    playEventSound('polish_done');
+    toast(`第一阶段完成：已生成 ${strategy.strategicDimensions.length} 个动态战略维度`);
+    render();
+    return true;
   }catch(e){
-    addToFixQueue({kind:'idea', error:e.message});
-    toast('优化失败：'+e.message);
+    state.strategyStage1Status = 'error';
+    addToFixQueue({kind:'ideaStrategy', error:e.message});
+    toast('战略维度生成失败：'+e.message);
     reportSoundError('polish', e);
+    persist(); render();
+    return false;
   }finally{
-    state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='idea' && k!=='ideaStrategy');
+    state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='ideaStrategy');
     if(btn) busy(btn,false);
   }
 }
+
+async function generatePolishStage(btn, force){
+  const idea = (state.idea || '').trim();
+  if(!idea){ toast('请先输入故事构想'); return false; }
+  if(state.strategyStage1Status !== 'ready' || !state.originalIdeaAnchors || !Array.isArray(state.strategicDimensions) || !state.strategicDimensions.length){
+    toast('请先完成「① 生成战略维度」，再进入第二阶段'); return false;
+  }
+  const kept = Array.isArray(state.polishOptions) && state.polishOptions.length;
+  if(kept && !force){ if(!confirm(`已有 ${kept} 个优化方案，重新生成将覆盖它们。继续？`)) return false; }
+  const multi = polishMulti === true;
+  state.polishMode = multi ? 'multi' : 'single';
+  state.strategyStage2Status = 'generating';
+  state.polishStatus = 'generating'; state.polishSelectedId = null; state.polishAdopted = null;
+  state.polishCanonical = null; state.canonicalStoryStrategy = null;
+  state.polishDiagnosis = null; state.polishStrategies = [];
+  persist(); render();
+  markAIRunning('ideaPolishStage2'); markAIRunning('idea');
+  if(btn) busy(btn,true,multi ? '② 正在生成3～5个优化构想…' : '② 正在生成最终优化构想…');
+  try{
+    const txt = await callAIGuarded('ideaPolishStage2', {
+      multi,
+      originalAnchors: state.originalIdeaAnchors,
+      strategicDimensions: state.strategicDimensions
+    }, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')});
+    const out = String(txt||'').trim();
+    if(!out) throw new Error('第二阶段没有返回内容');
+    showPolishResult(out, multi);
+    state.strategyStage2Status = 'ready';
+    markAIDone('ideaPolishStage2');
+    markAIDone('idea');
+    persist();
+    toast('第二阶段完成：3～5个优化构想已生成，请选择并采用方案');
+    playEventSound('polish_done');
+    render();
+    return true;
+  }catch(e){
+    state.strategyStage2Status = 'error';
+    addToFixQueue({kind:'ideaPolishStage2', error:e.message});
+    toast('优化构想生成失败：'+e.message);
+    reportSoundError('polish', e);
+    persist(); render();
+    return false;
+  }finally{
+    state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='ideaPolishStage2' && k!=='idea');
+    if(btn) busy(btn,false);
+  }
+}
+
+// 兼容历史入口：旧代码/历史按钮若仍调用 polishIdea，严格执行完整两阶段，但 UI 新入口不再直接绑定它。
+async function polishIdea(btn, force){
+  const ok = await generateStrategyStage($('#btnStrategyStage1') || btn, !!force);
+  if(ok) await generatePolishStage($('#btnStrategyStage2'), true);
+}
+
 function formatIdeaBrief(b){
   return [
     `题材：${b.genre || ''}`,
@@ -3451,7 +3489,9 @@ function renderPolishCards(container){
   const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
   if(!opts.length){
     container.style.display = 'block';
-    container.innerHTML = state.polishRawFallback ? `<div class="pol-cand-body" style="white-space:pre-wrap">${esc(state.polishRawFallback)}</div>` : `<p class="muted" style="margin:8px 0 0">👆 点「✨ 优化构想」生成候选方案。</p>`;
+    const dims = Array.isArray(state.strategicDimensions) ? state.strategicDimensions : [];
+    const dimHtml = dims.length ? `<div class="strategy-map" style="margin-bottom:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff)"><div style="font-weight:700;margin-bottom:8px">🧭 AI动态战略地图 <span style="font-size:11px;font-weight:400;color:var(--muted)">${dims.length} 个候选维度</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px">${dims.map((d,i)=>{const n=String(d?.name||d?.title||d?.id||'战略维度'+(i+1));const de=String(d?.description||'');const why=String(d?.whyFit||'');return `<div style="padding:8px;border:1px solid var(--line,#ddd);border-radius:8px"><b>${esc(n)}</b><div style="font-size:12px;margin-top:4px;line-height:1.5">${esc(de)}</div>${why?`<div style="font-size:11px;color:var(--muted);margin-top:4px">契合：${esc(why)}</div>`:''}</div>`}).join('')}</div></div>` : '';
+    container.innerHTML = dimHtml + (state.polishRawFallback ? `<div class="pol-cand-body" style="white-space:pre-wrap">${esc(state.polishRawFallback)}</div>` : `<p class="muted" style="margin:8px 0 0">第一阶段完成后，点击上方「② 生成优化构想」生成3～5个候选方案。</p>`);
     return;
   }
   container.style.display = 'block';
@@ -3494,6 +3534,7 @@ function renderPolishCards(container){
       state.polishAdopted = o.name || null;
       state.polishSelectedId = o._id || null;
       state.polishStatus = 'adopted';
+      state.strategyStage2Status = 'adopted';
       state.polishRevision = Number(state.polishRevision||0) + 1;
       syncPolishMetaFromCandidate(o);
       state.polishCanonical = buildPolishCanonical(o, state.polishRevision);
@@ -3518,8 +3559,10 @@ function renderPolishCards(container){
 }
 
 function bindPolishIdea(){
-  const b = $('#btnPolishIdea');
-  if(b) b.onclick = ()=> polishIdea(b);
+  const b1 = $('#btnStrategyStage1');
+  if(b1) b1.onclick = ()=> generateStrategyStage(b1, true);
+  const b2 = $('#btnStrategyStage2');
+  if(b2) b2.onclick = ()=> generatePolishStage(b2, false);
   const chk = $('#chkPolishMulti');
   if(chk){
     const sync = ()=>{
@@ -3527,7 +3570,7 @@ function bindPolishIdea(){
       chk.disabled = false;
     };
     sync();
-    chk.onchange = ()=>{ polishMulti = !!chk.checked; state.polishMode = polishMulti?'multi':'single'; if(Array.isArray(state.polishOptions)&&state.polishOptions.length){ state.polishStatus='empty'; state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null; state.polishDiagnosis=null; state.polishStrategies=[]; } persist(); render(); };
+    chk.onchange = ()=>{ polishMulti = !!chk.checked; state.polishMode = polishMulti?'multi':'single'; if(Array.isArray(state.polishOptions)&&state.polishOptions.length){ state.polishStatus='empty'; state.strategyStage2Status='empty'; state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null; state.polishDiagnosis=null; state.polishStrategies=[]; } persist(); render(); };
     const idea = $('#ideaInput');
     if(idea) idea.oninput = ()=>{ state.idea = idea.value; sync(); syncOrigIdeaCard(); };
   }
@@ -3541,7 +3584,7 @@ function bindPolishIdea(){
   const view = $('[data-pol-keep-view]');
   if(view) view.onclick = (e)=>{ e.stopPropagation(); openPolishBox(); };
   const again = $('[data-pol-keep-again]');
-  if(again) again.onclick = (e)=>{ e.stopPropagation(); polishIdea($('#btnPolishIdea'), true); };
+  if(again) again.onclick = async (e)=>{ e.stopPropagation(); const ok=await generateStrategyStage($('#btnStrategyStage1'), true); if(ok) await generatePolishStage($('#btnStrategyStage2'), true); };
   const clear = $('[data-pol-keep-clear]');
   if(clear) clear.onclick = (e)=>{
     e.stopPropagation();
@@ -10996,8 +11039,13 @@ function viewStory(){
           <div class="idea-row">
             <textarea id="ideaInput" placeholder="描述你的故事点子（世界观、主角、核心冲突等）…">${esc(state.idea)}</textarea>
           </div>
-          <div class="btn-row">
-            <button id="btnPolishIdea" class="btn ghost ${polishIdle()?'first':''}">✨ 优化构想</button>
+          <div class="btn-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <button id="btnStrategyStage1" class="btn ghost ${polishIdle()?'first':''}">${state.strategyStage1Status==='ready'?'🔄 ① 重新生成战略维度':'① 生成战略维度'}</button>
+            <button id="btnStrategyStage2" class="btn ghost" ${state.strategyStage1Status!=='ready'?'disabled title="请先完成第一阶段战略维度生成"':''}>${state.strategyStage2Status==='ready'?'🔄 ② 重新生成优化构想':'② 生成优化构想'}</button>
+          </div>
+          <div style="margin:7px 0 10px;font-size:12px;line-height:1.7;color:var(--muted)">
+            <span>${state.strategyStage1Status==='ready'?'✅ 第一阶段：动态战略地图已完成':'① 第一阶段：先根据题材生成6～10个动态战略维度'}</span>
+            <span style="margin-left:12px">${state.strategyStage2Status==='ready'?'✅ 第二阶段：候选优化构想已完成':'② 第二阶段：基于第一阶段战略地图生成3～5个方案'}</span>
           </div>
           <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}">
             <div class="pol-head"><b>✨ 方案比选</b>
