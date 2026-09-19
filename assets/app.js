@@ -1108,6 +1108,7 @@ function projectSnapshot(){
     polishCanonical: state.polishCanonical,
     polishRevision: state.polishRevision,
     polishHistory: state.polishHistory,
+    polishRawFallback: state.polishRawFallback || '',
     chapterEndingPlans: state.chapterEndingPlans,
     chapters: state.chapters,
     characters: state.characters,
@@ -1189,6 +1190,7 @@ function applyProject(p){
   state.polishRevision = Number.isFinite(+p.polishRevision) ? +p.polishRevision : 0;
   state.polishStatus = ['empty','generating','ready_single','waiting_selection','adopted'].includes(p.polishStatus) ? p.polishStatus : ((state.polishAdopted && state.polishOptions?.length) ? 'adopted' : (state.polishOptions?.length>1?'waiting_selection':state.polishOptions?.length?'ready_single':'empty'));
   state.polishHistory = Array.isArray(p.polishHistory) ? p.polishHistory : undefined;
+  state.polishRawFallback = typeof p.polishRawFallback === 'string' ? p.polishRawFallback : '';
   state.chapterEndingPlans = (p.chapterEndingPlans && typeof p.chapterEndingPlans === 'object') ? p.chapterEndingPlans : {};
   state.chapters = p.chapters || [];
   (state.chapters||[]).forEach(c=>{ if(c) delete c.qcRecord; });
@@ -3145,82 +3147,116 @@ function syncPolishMetaFromCandidate(c){
   state.polishStrategies = Array.isArray(c&&c.optimizationStrategies) ? JSON.parse(JSON.stringify(c.optimizationStrategies)) : [];
 }
 
-function showPolishResult(out, multi){
-  const box = $('#polishBox'), cards = $('#polishCards');
-  if(!box || !cards) return;
-  box.style.display = 'block';
-  const pickV45 = (o)=> ({
-    defects: Array.isArray(o&&o.defects) ? o.defects : [],
-    navBeacon: (o && o.navBeacon && typeof o.navBeacon==='object') ? o.navBeacon : null,
-    seedCharacters: Array.isArray(o&&o.seedCharacters) ? o.seedCharacters : [],
-    seedPlaces: Array.isArray(o&&o.seedPlaces) ? o.seedPlaces : [],
-    diagnosis: (o&&o.diagnosis&&typeof o.diagnosis==='object') ? o.diagnosis : null,
-    optimizationStrategies: Array.isArray(o&&o.optimizationStrategies) ? o.optimizationStrategies : []
-  });
-  if(multi){
-    let j = null;
-    if(out && typeof out === 'object'){ j = out; }
-    else { try{ j = parseJson(String(out)); }catch(e){ j = {}; } }
-    const opts = Array.isArray(j && j.options) ? j.options.map(normalizeOne).filter(o=>String(o.optimizedIdea||o.novelSummary||o.fullBookBeat||'').trim()) : [];
-    if(opts.length){
-      snapshotPolishBatch('重新优化前');   // 覆盖前把旧整批方案归档为可回退版本（≤5）
-      state.polishOptions = opts.map((o,i)=> Object.assign({}, o, {
-        _id:String(o._id || ('polish-'+Date.now()+'-'+i)),
-        text: String(o.optimizedIdea||o.text||'').trim(),
-        _v45: pickV45(o)
-      }));
-      state.polishAdopted = null;
-      state.polishSelectedId = null;
-      state.polishStatus = 'waiting_selection';
-      state.polishCollapsed = false;
-      persist();
-      render(); openPolishBox();
-      return;
-    }
-    if(typeof out === 'string'){
-      const segs = splitPolishMultiText(out);
-      if(segs.length >= 2){
-        snapshotPolishBatch('重新优化前');   // 覆盖前把旧整批方案归档为可回退版本（≤5）
-        state.polishOptions = segs.map((o,i)=>({...o,_id:String(o._id||('polish-'+Date.now()+'-'+i))}));
-        state.polishAdopted = null;
-        state.polishSelectedId = null;
-        state.polishStatus = 'waiting_selection';
-        persist();
-        render(); openPolishBox();
-        return;
-      }
-    }
-    toast('多方案解析失败：没有生成可供选择的独立候选，本次不自动采用任何方案，请重试');
-    state.polishStatus = 'empty';
-    state.polishOptions = [];
-    state.polishAdopted = null;
-    state.polishSelectedId = null;
-    persist(); render();
-    return;
+function polishObjectFromAny(raw){
+  // APP26: 统一“优化构想”响应入口。允许对象、JSON字符串、代码围栏JSON、旧版纯文本。
+  if(raw && typeof raw === 'object') return raw;
+  const text = String(raw||'').trim();
+  if(!text) return {};
+  try { return parseJson(text); } catch(e) {
+    const fenced = text.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+    if(fenced !== text){ try { return parseJson(fenced); } catch(_){} }
+    return { optimizedIdea:text, text:text, _rawFallback:true };
   }
-  const normalizeOne = (raw)=>{
-    let j = raw;
-    if(typeof j === 'string'){ try{ j=parseJson(j); }catch(e){ j={optimizedIdea:String(raw).trim()}; } }
-    if(j && Array.isArray(j.options)) j=j.options[0] || {};
-    j=j&&typeof j==='object'?j:{};
-    const rawText=String(j.optimizedIdea||j.text||'').trim();
-    const summary=String(j.novelSummary||j.storySummary||'').trim();
-    const beat=String(j.fullBookBeat||j.bookBeat||j.fullNovelBeat||'').trim();
-    let blueprint=rawText;
-    if(!blueprint && (summary||beat)) blueprint=[summary,beat].filter(Boolean).join('\n\n');
-    return Object.assign({},j,{name:String(j.name||'方案1').trim(),bookTitle:String(j.bookTitle||extractCandidateBookName(rawText)).trim(),novelSummary:summary,fullBookBeat:beat,optimizedIdea:blueprint,text:blueprint});
-  };
-  const single = normalizeOne(out);
+}
+function normalizePolishCandidate(raw, index){
+  let j = raw;
+  if(typeof j === 'string') j = polishObjectFromAny(j);
+  if(Array.isArray(j)) j = j[index||0] || {};
+  if(!j || typeof j !== 'object') j = {};
+  const nested = (j.candidate && typeof j.candidate==='object') ? j.candidate : j;
+  const r = nested;
+  const rawText = String(r.optimizedIdea||r.text||r.storyBlueprint||r.creationBlueprint?.optimizedIdea||'').trim();
+  const summary = String(r.novelSummary||r.storySummary||r.summary||r.creationBlueprint?.novelSummary||'').trim();
+  const beat = String(r.fullBookBeat||r.bookBeat||r.fullNovelBeat||r.creationBlueprint?.fullBookBeat||'').trim();
+  let blueprint = rawText;
+  if(!blueprint && (summary||beat)) blueprint=[summary,beat].filter(Boolean).join('\n\n');
+  const title = String(r.bookTitle||r.title||extractCandidateBookName(rawText)||'').trim();
+  return Object.assign({}, r, {
+    name:String(r.name||r.optionName||('方案'+((index||0)+1))).trim(),
+    bookTitle:title,
+    novelSummary:summary,
+    fullBookBeat:beat,
+    optimizedIdea:blueprint,
+    text:blueprint || String(r.rawText||'').trim()
+  });
+}
+function parsePolishCandidates(raw, multi){
+  const obj = polishObjectFromAny(raw);
+  const rawText = String(raw||'').trim();
+  let arr = [];
+  if(Array.isArray(obj)) arr = obj;
+  else if(Array.isArray(obj.options)) arr = obj.options;
+  else if(Array.isArray(obj.candidates)) arr = obj.candidates;
+  else if(obj.data && typeof obj.data==='object' && Array.isArray(obj.data.options)) arr=obj.data.options;
+  else if(obj.result && typeof obj.result==='object' && Array.isArray(obj.result.options)) arr=obj.result.options;
+  if(!multi){
+    const one = arr.length ? arr[0] : (obj && typeof obj==='object' ? obj : {});
+    const c = normalizePolishCandidate(one,0);
+    if(!String(c.optimizedIdea||c.novelSummary||c.fullBookBeat||c.text).trim() && rawText) {
+      c.optimizedIdea=rawText; c.text=rawText; c._rawFallback=true;
+    }
+    return [c];
+  }
+  if(arr.length){
+    const out=arr.map((x,i)=>normalizePolishCandidate(x,i)).filter(c=>String(c.optimizedIdea||c.novelSummary||c.fullBookBeat||c.text).trim());
+    if(out.length) return out;
+  }
+  // 兼容旧版“方案一/方案二”纯文本格式
+  const segs=splitPolishMultiText(rawText);
+  if(segs.length>=2) return segs.map((x,i)=>normalizePolishCandidate(x,i));
+  // 最后安全兜底：不能让合法AI结果静默消失。
+  if(rawText) return [normalizePolishCandidate({name:'方案1',optimizedIdea:rawText,text:rawText},0)];
+  return [];
+}
+function polishDebugTrace(stage, raw, candidates, extra){
+  try{
+    if(typeof console==='undefined' || !console.debug) return;
+    const text=String(raw||'');
+    console.debug('[APP26][优化构想]', Object.assign({stage,rawLength:text.length,candidateCount:Array.isArray(candidates)?candidates.length:0}, extra||{}));
+  }catch(_){ }
+}
+function showPolishResult(out, multi){
+  const box=$('#polishBox'), cards=$('#polishCards');
+  const rawText=String(out||'').trim();
+  state.polishRawFallback = rawText;
+  if(!rawText){ toast('优化失败：AI没有返回内容'); return; }
+  const opts=parsePolishCandidates(out, !!multi);
+  polishDebugTrace('parsed', out, opts, {multi:!!multi, firstKeys:opts[0]?Object.keys(opts[0]).slice(0,20):[]});
+  if(!opts.length){
+    state.polishOptions=[normalizePolishCandidate({name:'方案1',optimizedIdea:rawText,text:rawText},0)];
+  }else{
+    state.polishOptions=opts;
+  }
+  const pickV45=(o)=>({
+    defects:Array.isArray(o?.defects)?o.defects:[],
+    navBeacon:(o?.navBeacon&&typeof o.navBeacon==='object')?o.navBeacon:null,
+    seedCharacters:Array.isArray(o?.seedCharacters)?o.seedCharacters:[],
+    seedPlaces:Array.isArray(o?.seedPlaces)?o.seedPlaces:[],
+    diagnosis:(o?.diagnosis&&typeof o.diagnosis==='object')?o.diagnosis:null,
+    optimizationStrategies:Array.isArray(o?.optimizationStrategies)?o.optimizationStrategies:[]
+  });
+  state.polishOptions=state.polishOptions.map((o,i)=>Object.assign({},o,{
+    _id:String(o._id||('polish-'+Date.now()+'-'+i)),
+    name:String(o.name||('方案'+(i+1))),
+    text:String(o.text||o.optimizedIdea||o.novelSummary||o.fullBookBeat||rawText).trim(),
+    _v45:pickV45(o)
+  }));
   snapshotPolishBatch('重新优化前');
-  state.polishOptions = [{ _id:'polish-'+Date.now()+'-0', ...single, _v45: pickV45(single) }];
-  state.polishAdopted = '方案1';
-  state.polishSelectedId = state.polishOptions[0]._id;
-  state.polishStatus = 'adopted';
+  state.polishSelectedId = state.polishMode==='multi' ? null : state.polishOptions[0]._id;
+  state.polishAdopted = state.polishMode==='multi' ? null : (state.polishOptions[0].name||'方案1');
+  state.polishStatus = state.polishMode==='multi' ? 'waiting_selection' : 'adopted';
   state.polishRevision = Number(state.polishRevision||0) + 1;
-  syncPolishMetaFromCandidate(state.polishOptions[0]);
-  state.polishCanonical = buildPolishCanonical(state.polishOptions[0], state.polishRevision);
+  if(state.polishMode!=='multi'){
+    syncPolishMetaFromCandidate(state.polishOptions[0]);
+    state.polishCanonical=buildPolishCanonical(state.polishOptions[0],state.polishRevision);
+  }else{
+    state.polishCanonical=null;
+    state.polishDiagnosis=null;
+    state.polishStrategies=[];
+  }
   persist();
-  render(); openPolishBox();
+  if(box && cards){ box.style.display='block'; render(); openPolishBox(); }
+  else { persist(); }
 }
 
 function applyV45ToOutline(o, d){
@@ -3277,7 +3313,7 @@ function renderPolishCards(container){
   const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
   if(!opts.length){
     container.style.display = 'block';
-    container.innerHTML = `<p class="muted" style="margin:8px 0 0">👆 点「✨ 优化构想」从五个方向（商业/反差/情感/悬疑智斗/轻松日常）中按契合度生成 3~5 个候选方案；点某张卡的「✔ 采用此方案」即选中（不覆盖原始构想），再点「生成大纲」搬入书名 / 简介 / 节拍。</p>`;
+    container.innerHTML = state.polishRawFallback ? `<div class="pol-cand-body" style="white-space:pre-wrap">${esc(state.polishRawFallback)}</div>` : `<p class="muted" style="margin:8px 0 0">👆 点「✨ 优化构想」生成候选方案。</p>`;
     return;
   }
   container.style.display = 'block';
@@ -3288,8 +3324,9 @@ function renderPolishCards(container){
     const isAdopted = !!adopted && adopted === name;
     const defects = (o._v45 && Array.isArray(o._v45.defects)) ? o._v45.defects.filter(d=>String(d||'').trim()) : [];
     const hasV45 = !!(o._v45 && (o._v45.navBeacon || (o._v45.seedCharacters&&o._v45.seedCharacters.length) || (o._v45.seedPlaces&&o._v45.seedPlaces.length)));
-    const pTitle = extractPolishTitle(o.text);
-    const pBody = String(o.text||'').replace(/^\s*书名\s*[：:][^\n]*\n?/, '').trim();   // 书名已置顶，正文去掉首行以免重复
+    const displaySource = String(o.text||o.optimizedIdea||o.novelSummary||o.fullBookBeat||'').trim();
+    const pTitle = String(o.bookTitle||'').trim() || extractPolishTitle(displaySource);
+    const pBody = displaySource.replace(/^\s*书名\s*[：:][^\n]*\n?/, '').trim();   // 书名已置顶，正文去掉首行以免重复
     return `<div class="pol-cand${isAdopted?' on':''}" style="--pc:${c}" data-idx="${i}">
       <div class="pol-cand-head">
         <span class="pol-no" style="background:${c}">${i+1}</span>
