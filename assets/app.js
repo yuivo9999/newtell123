@@ -1,8 +1,16 @@
+/**
+ * Novel Writing AI Engine - Progressive Release Build
+ * File: app1_v1.0.1.js
+ * Version: v1.0.1
+ * Build Timestamp: 2026-09-19 11:49:36 UTC
+ * Features: Dynamic Genre Strategic Dimensions, BanList Isolation, Multi-Option Separation
+ */
+
 'use strict';
 
 const APP_VERSION = '1.0.346';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.js';
+const APP_FILE_VERSION = 'app1_v1.0.1.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
