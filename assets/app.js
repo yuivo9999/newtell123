@@ -3055,9 +3055,12 @@ async function generateStrategyStage(btn, force){
   state.polishSelectedId = null; state.polishAdopted = null; state.polishCanonical = null; state.canonicalStoryStrategy = null;
   state.polishOptions = [];
   state.strategicDimensions = []; state.originalIdeaAnchors = null; state.polishDiagnosis = null; state.polishStrategies = [];
-  persist(); render();
+  // 先进入生成态并把可见按钮切换为 loading；不能在 busy 前 render，否则旧按钮会被替换成脱离 DOM 的节点。
+  persist();
+  render();
+  const liveBtn1 = $('#btnStrategyStage1');
+  if(liveBtn1) busy(liveBtn1,true,'① 正在生成战略维度…');
   markAIRunning('ideaStrategy');
-  if(btn) busy(btn,true,'① 正在生成战略维度…');
   try{
     const raw = await callAIGuarded('ideaStrategy', {}, {temperature: resolveActiveSpec().ideaTemp, maxTokens: Math.max(2500, Math.min(5000, clampMaxTokens('polish')))});
     const strategy = extractJsonObject(raw);
@@ -3082,7 +3085,6 @@ async function generateStrategyStage(btn, force){
     return false;
   }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='ideaStrategy');
-    if(btn) busy(btn,false);
   }
 }
 
@@ -3100,9 +3102,12 @@ async function generatePolishStage(btn, force){
   state.polishStatus = 'generating'; state.polishSelectedId = null; state.polishAdopted = null;
   state.polishCanonical = null; state.canonicalStoryStrategy = null;
   state.polishDiagnosis = null; state.polishStrategies = [];
-  persist(); render();
+  // 同样先 render 出“第二阶段生成中”状态，再对当前 DOM 按钮加 loading。
+  persist();
+  render();
+  const liveBtn2 = $('#btnStrategyStage2');
+  if(liveBtn2) busy(liveBtn2,true,multi ? '② 正在生成3～5个优化构想…' : '② 正在生成最终优化构想…');
   markAIRunning('ideaPolishStage2'); markAIRunning('idea');
-  if(btn) busy(btn,true,multi ? '② 正在生成3～5个优化构想…' : '② 正在生成最终优化构想…');
   try{
     const txt = await callAIGuarded('ideaPolishStage2', {
       multi,
@@ -3129,7 +3134,6 @@ async function generatePolishStage(btn, force){
     return false;
   }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='ideaPolishStage2' && k!=='idea');
-    if(btn) busy(btn,false);
   }
 }
 
@@ -9785,6 +9789,12 @@ function render(){
   else if(currentStep===4) v.innerHTML = viewStoryboard();
   else if(currentStep===5) v.innerHTML = viewExport();
   bindView();
+  // 主故事页的 #polishCards 是两阶段流水线的可见结果区：
+  // 第一阶段完成后立即显示战略地图；第二阶段完成后显示3～5个候选方案。
+  if(currentStep===1){
+    const _pc = $('#polishCards');
+    if(_pc) renderPolishCards(_pc);
+  }
   if(currentStep===1) bindFlowSideNav();
   updateWcTotal();
   if(_restY >= 0){ try{ window.scrollTo(0, _restY); }catch(e){} }
