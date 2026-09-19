@@ -1,7 +1,7 @@
 'use strict';
 
 const APP_VERSION = '1.0.345';
-// Version line: app17.js — 正文生成稳定性修正版（上下文收敛、重复注入清理、两阶段扩写降风险）。
+// Version line: app20.js — 正文单次生成版（移除正文二次扩写/倍量生成逻辑）。
 const APP_FILE_VERSION = 'app17.js';
 const KEY_CFG = nsKey('cfg');
 
@@ -4538,7 +4538,7 @@ function chapterMaxTokens(){
 }
 function clampMaxTokens(task){
   const limits = {
-    chapter: 12000,     // 正文单次输出提高：为“完整初稿 + 深描增厚稿”留足空间，避免长章被输出上限截断
+    chapter: 12000,     // 正文单次输出上限：仅用于一次正常正文生成
     principal: 16384,   // 校长统筹总控
     teacher: 16384,     // 老师分批教案
     dictmaster: 16384,  // 万物词典生成
@@ -9170,23 +9170,13 @@ function sizeChapterInjection(){
   const b = chapterLenBounds();
   const lo = (b && +b.lo > 0) ? +b.lo : 3000;
   const hi = (b && +b.hi > 0) ? +b.hi : 3600;
-  const deepLo = Math.round(lo * 2.05);
-  const deepHi = Math.round(hi * 2.25);
   const total = n ? `全书共 ${n} 章；` : '';
-  return `${total}本章原建议篇幅约 ${lo.toLocaleString()}—${hi.toLocaleString()} 字；正文成稿的目标体量约 ${deepLo.toLocaleString()}—${deepHi.toLocaleString()} 字（约为原建议体量的 2.05—2.25 倍）。这里的“2倍以上”是体量目标，不允许靠废话、重复或新增主线事件完成。
-【篇幅原则｜先完整，再深描】
+  return `${total}本章建议篇幅约 ${lo.toLocaleString()}—${hi.toLocaleString()} 字。篇幅是参考范围，不以字数不足为理由自动进行第二次生成或扩写。
+【篇幅原则】
 · 第一优先：完成老师教案规定的全部核心事件、因果推进、人物选择与章末状态。
-· 第二优先：在已经发生的事件内部把“发生过程”写完整，而不是只写“结果”。对重要场景主动展开：人物进入/观察 → 触发 → 动作与反应 → 对话往返 → 信息变化 → 选择/后果 → 场景余波，并让这些环节彼此因果相连。
-· 第三优先：增加真正有叙事功能的细节，包括动作链、对白攻防、潜台词、人物观察、感官变化、空间关系、微小阻碍、心理反应、情绪递进和自然过渡；每一段新增文字都应让读者更清楚地“看见/听见/感到”事件，而不是换一种说法重复它。
-· 不要把一个事件简单压成一句“他做了X”，再用形容词拉长；应把关键动作拆成有先后、有因果、有反馈的现场过程。
-· 对关键对白，不要只写一问一答；允许出现有目的的试探、打断、回避、反问、误解、停顿、动作反应与潜台词，只要符合人物和教案。
-· 对关键场景，不要只给静态环境清单；让环境参与人物行动、限制、观察或情绪变化。环境描写必须与当前动作/感受绑定。
-· 对人物心理，不要连续解释“他很紧张/她很难过”；优先通过身体反应、视线、动作、语气、停顿、错误选择和内心判断呈现。
-· 如果某个节拍本身简单，就保持简洁；体量主要来自重要事件的充分呈现，而不是平均给每个节拍塞同样多的字。
-· 严禁为了达到 2 倍体量新增重大事件、核心人物、关键道具、世界规则、关键秘密、核心关系或下一章剧情；不得重复已经发生的场景/对白，不得循环描写。
-· 达到约 2.05—2.25 倍且最后一个必要事件已经完成时自然收束；如果必要剧情仍未完成，可以继续完成本章，但不得为了数字提前截断。
-· 如果初稿明显短于上述目标，不是“补字数”，而是执行一次“深描增厚”：只在已有事件内部补齐动作链、对白往返、人物反应、感官/空间、心理判断、因果过渡和情绪余波，并保持原剧情事实不变。
-· 长度服务于叙事质量；“增加内容密度”比“增加句子数量”更重要。`;
+· 第二优先：在已经发生的事件内部把必要过程写完整，让动作、对白、反应、信息变化和因果关系自然呈现。
+· 第三优先：使用有叙事功能的动作、对白、人物观察、感官、空间、心理和自然过渡；不要为了凑字数重复同一信息。
+· 如果剧情在较短篇幅内已经完整成立，应自然收束，不强行增加篇幅。`;
 }
 
 function bindSizeHint(){
@@ -16258,13 +16248,6 @@ function stripSegmentMarkers(txt){
 function splitChapterOutput(txt){
   return { content: stripSegmentMarkers(txt), strip: '' };
 }
-async function expandShortChapter(i, content, floor, signal){
-  // v1.0.343：取消“低于硬下限就自动补字数”的二次写作。
-  // 字数不足不再触发机械扩写；正文以剧情完整、承接自然、章末状态成立为停止条件。
-  // 保留函数名是为了兼容旧调用与旧存档，但现在只返回原文。
-  return String(content||'').trim();
-}
-
 async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride, signal){
   const mt = chapterMaxTokens();
   onPhase = onPhase || (()=>{});
@@ -16285,35 +16268,6 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
       // 现在直接使用经过 budgetChapterContext 收敛后的唯一正文输入。
       const writerUser = `${user}\n\n【正文AI阅读顺序】请先完整阅读以上唯一正文输入，内部完成事实核对后再写正文；不要输出理解过程、计划或分析。`;
       txt = unwrapAIResult(await callDeepSeek(longChapterSys(), writerUser, {maxTokens: mt, onStream: _onStream, temperature: dynamicChapterParams(i).temperature, topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'}));
-      // v2.1：正文采用“两阶段成篇”。第一阶段先保证剧情完整；第二阶段只在已有事件内部做深描增厚，目标约为原建议体量的 2.05—2.25 倍。
-      // 这样增加的是动作链、对白攻防、人物反应、感官/空间、心理判断和因果过渡，而不是凭空加剧情或同义改写。
-      if(isLong()){
-        const draftLen = countWords(String(txt||'')).cjk;
-        const _lb2 = chapterLenBounds();
-        const targetLo2 = Math.round((_lb2.lo||3000) * 1.55);
-        const targetHi2 = Math.round((_lb2.hi||3600) * 1.80);
-        if(draftLen < targetLo2){
-          onPhase('正文深描增厚：保留剧情，补足现场…');
-          const expandSys = `${longChapterSys()}
-
-【正文第二阶段｜深描增厚协议】
-你刚刚已经完成了本章完整初稿。现在不要重新设计剧情，也不要另起炉灶。请把这份初稿加工成更有阅读沉浸感的完整长篇正文。
-目标体量：约 ${targetLo2.toLocaleString()}—${targetHi2.toLocaleString()} 字；当前初稿约 ${draftLen.toLocaleString()} 字。
-【只允许增加的内容】已有事件中的动作链、对白往返与潜台词、人物即时反应、感官与空间关系、必要的心理判断、因果过渡、情绪递进、场景余波。
-【绝对禁止】新增主线事件/重大冲突/核心人物/关键设定；重复同一事件；换词重述同一信息；空泛抒情；无功能环境描写；为了长度提前进入下一章。
-【质量判定】每一段新增文字都必须至少承担“让动作更可见、让对白更有来回、让人物选择更有原因、让空间更具体、让情绪变化有触发、让因果更清楚”中的一项。若某处已经充分展开，就不要硬加。
-【输出】只输出加工后的完整小说正文，不要解释加工过程，不要标注“扩写/第二阶段/深描”。`;
-          const expandUser = `【本章完整初稿】
-${String(txt||'').trim()}
-
-【加工指令】在不改变初稿已成立事实、人物关系、事件顺序和章末状态的前提下，进行深描增厚。优先扩充最关键的场景和人物互动，直到自然接近目标体量；若继续增加会变成重复或破坏节奏，则以质量优先。`;
-          const expanded = await callDeepSeek(expandSys, expandUser, {maxTokens: Math.min(9000, Math.max(7000, mt)), onStream: _onStream, temperature: Math.min(0.92, dynamicChapterParams(i).temperature), topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'});
-          const expandedText = unwrapAIResult(expanded);
-          if(String(expandedText||'').trim().length > String(txt||'').trim().length * 1.20){
-            txt = expandedText;
-          }
-        }
-      }
       delete state._chapterPartial[i];
       persist();
     }catch(e){
