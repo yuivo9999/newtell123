@@ -758,6 +758,31 @@ const SND_ALL_PRESETS = [
   { id:'al_spark',   name:'星光四步',   seq:[[659.25,0,0.08],[783.99,0.1,0.08],[1046.5,0.2,0.1],[1567.98,0.32,0.24]] },
   { id:'al_finish',  name:'完成回响',   seq:[[587.33,0,0.1],[783.99,0.12,0.11],[987.77,0.25,0.12],[1174.66,0.39,0.3]] }
 ];
+const SND_ERROR_KEY = (typeof nsKey==='function') ? nsKey('snd_error_type') : 'tz_snd_error_type';
+const SND_ERROR_PRESETS = [
+  { id:'err_beep',   name:'错误短鸣', seq:[[220,0,0.12],[180,0.14,0.18]] },
+  { id:'err_double', name:'双重警示', seq:[[330,0,0.10],[220,0.12,0.10],[330,0.24,0.16]] },
+  { id:'err_alert',  name:'警报提示', seq:[[440,0,0.10],[330,0.12,0.10],[440,0.24,0.10],[330,0.36,0.16]] },
+  { id:'err_low',    name:'低沉提醒', seq:[[196,0,0.18],[146.83,0.20,0.24]] },
+  { id:'err_urgent', name:'紧急三连', seq:[[523.25,0,0.08],[392,0.10,0.08],[261.63,0.20,0.08],[196,0.30,0.22]] }
+];
+function _sndErrorType(){ try{ const v=localStorage.getItem(SND_ERROR_KEY); return SND_ERROR_PRESETS.some(x=>x.id===v)?v:'err_double'; }catch(e){ return 'err_double'; } }
+function setSoundErrorType(id){ try{ if(SND_ERROR_PRESETS.some(x=>x.id===id)) localStorage.setItem(SND_ERROR_KEY,id); }catch(e){} }
+function _doPlayErrorSound(){
+  if(!_snd.enabled) return;
+  unlockAudio();
+  if(!_snd.ctx || _snd.ctx.state !== 'running') return;
+  const p=SND_ERROR_PRESETS.find(x=>x.id===_sndErrorType())||SND_ERROR_PRESETS[0];
+  (p.seq||[]).forEach(x=>_sndBeep(x[0],x[1],x[2],0.26));
+}
+let _lastErrorSoundTs=0;
+function playErrorSound(){
+  if(!_snd.enabled) return;
+  const now=Date.now();
+  if(now-_lastErrorSoundTs<700) return;
+  _lastErrorSoundTs=now;
+  _doPlayErrorSound();
+}
 const SND_TSINGLE_KEY = (typeof nsKey==='function') ? nsKey('snd_t_beats') : 'tz_snd_t_beats'; // 键名沿用旧值，保留用户已选音色
 const SND_TALL_KEY   = (typeof nsKey==='function') ? nsKey('snd_t_all')   : 'tz_snd_t_all';
 function _sndSingleType(){ try{ const v = localStorage.getItem(SND_TSINGLE_KEY); return SND_SINGLE_PRESETS.some(x=>x.id===v) ? v : 'be_dingdong'; }catch(e){ return 'be_dingdong'; } }
@@ -799,6 +824,29 @@ function playDoneSound(kind){ // kind:'single' 单个完成 | 'all' 全部完成
 }
 function initThemeSoundPanel(){
   const sb = document.getElementById('cfgSndSingle'), sa = document.getElementById('cfgSndAll');
+  // 在“主题”面板动态加入错误提醒设置，避免依赖外部 HTML 文件。
+  const panel = document.getElementById('themePanel');
+  if(panel && !document.getElementById('cfgSndError')){
+    const box=document.createElement('div');
+    box.id='themeSoundErrorBox';
+    box.style.cssText='margin-top:10px;padding:10px;border:1px solid var(--line,#334155);border-radius:10px;background:var(--panel2,rgba(255,255,255,.03))';
+    box.innerHTML=`<div style="font-weight:700;margin-bottom:7px">⚠️ 出错提醒声音</div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <select id="cfgSndError" style="min-width:150px"></select>
+        <button type="button" class="btn small ghost" id="cfgSndErrorPrev">🔊 试听</button>
+      </div>
+      <div class="muted" style="font-size:12px;margin-top:5px">AI生成、正文重生成等任务发生错误时播放。</div>`;
+    const anchor=panel.querySelector('.theme-btns');
+    (anchor?.parentElement||panel).appendChild(box);
+  }
+  const se=document.getElementById('cfgSndError');
+  if(se){
+    if(!se._tsf){ se.innerHTML=SND_ERROR_PRESETS.map(p=>`<option value="${p.id}">${p.name}</option>`).join(''); se._tsf=1; }
+    se.value=_sndErrorType();
+    if(!se._tsb){ se._tsb=1; se.addEventListener('change',()=>setSoundErrorType(se.value)); }
+  }
+  const sep=document.getElementById('cfgSndErrorPrev');
+  if(sep && !sep._tsb){ sep._tsb=1; sep.addEventListener('click',e=>{e.stopPropagation(); playErrorSound();}); }
   const optsB = SND_SINGLE_PRESETS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   const optsA = SND_ALL_PRESETS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
   if(sb){
@@ -3013,6 +3061,7 @@ async function polishIdea(btn, force){
 
     showPolishResult(out, multi);
     markAIDone('idea');
+    playDoneSound('single');
     toast('优化完成');
   }catch(e){
     addToFixQueue({kind:'idea', error:e.message});
@@ -8516,6 +8565,7 @@ function markAIDone(kind){
 }
 
 function addToFixQueue(entry){
+  playErrorSound();
   state._fixQueue = state._fixQueue || [];
   if(entry && Number.isInteger(entry.ch)){
     const exist = state._fixQueue.find(x => x.ch === entry.ch);
@@ -13237,6 +13287,7 @@ async function regenSelectedChapters(list){
     }
     closeGlossaryPanel();
     renderChapters();
+    playDoneSound('single');
     toast('所选章节已按新词典重生成完成');
   }finally{ state.generating = false; }
 }
@@ -14988,6 +15039,7 @@ async function genDictMaster(btn){
     collapseGlossaryAfterDictionaryGeneration();
     render();
     markAIDone('dictmaster');
+    playDoneSound('single');
     toast(`万物词典已生成：人物 ${result.nChar} 位 · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系表 ${result.nRel} 条 · 世界观规则 ${result.nWR} 条（已并入万物词典）`);
     return true;
   }catch(e){
@@ -16232,6 +16284,7 @@ async function genDictEnrich(btn, opts){
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, ts:Date.now() };
     persist(); render(); markAIDone('dictEnrich');
+    playDoneSound('single');
     if(stream) stream.style.display='none';
     toast(`词典已充实：主要人物 ${n.main||0} · 次要配角 ${n.support||0} · 路人 ${n.w||0} · 地名 ${n.p} · 专名 ${n.k}（已并入万物词典，正文可直接选用）`);
     return true;
@@ -17485,6 +17538,7 @@ async function genChapterCompare(i, styleA, styleB){
     if(st){ st.className='status ok'; st.textContent = `第 ${i+1} 章双风格对比稿已生成，请在弹窗中选择采用。`; }
     toast('两稿已生成，请选择采用');
   }catch(e){
+    playErrorSound();
     chState[i] = 'error'; patchChapter(i);
     if(st){ st.className='status err'; st.textContent = '对比生成失败：'+e.message; }
     toast('对比生成失败：'+e.message);
@@ -17585,11 +17639,12 @@ async function genOneChapter(i, btn, opt={}){
     persist();                       // 不整页 render，仅定点刷新
     patchChapter(i);
     if(st){ st.className='status ok'; st.textContent = `第 ${i+1} 章已生成。`; }
+    playDoneSound('single');
     toast('第'+(i+1)+'章完成');
     generateRollingSummaries().catch(()=>{});
   }catch(e){
     if(e.name==='AbortError'){ if(st) st.textContent = '第'+(i+1)+'章已停止生成'; }
-    else { chState[i] = 'error'; patchChapter(i); if(st){ st.className='status err'; st.textContent = '第'+(i+1)+'章生成失败：'+e.message; } toast('第'+(i+1)+'章生成失败：'+e.message); }
+    else { playErrorSound(); chState[i] = 'error'; patchChapter(i); if(st){ st.className='status err'; st.textContent = '第'+(i+1)+'章生成失败：'+e.message; } toast('第'+(i+1)+'章生成失败：'+e.message); }
   }
   finally{ hideStopBtn(); state.generating = false; if(btn) busy(btn,false); patchChapter(i); autoUpdateSubplots(); autoUpdateTimeAnchors(); }
 }
