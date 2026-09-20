@@ -1759,80 +1759,13 @@ async function callDeepSeek(system, user, {temperature=null, topP=null, signal=n
 }
 
 function parseJson(text){
-  return robustParseJson(text);
-}
-
-
-const AI_ERR = {
-  TRUNCATED: 'AI_TRUNCATED',
-  PARSE_FAIL: 'AI_PARSE_FAIL',
-  COUNT_MISMATCH: 'AI_COUNT_MISMATCH',
-  SCHEMA_MISS: 'AI_SCHEMA_MISS',
-  TIMEOUT: 'AI_TIMEOUT',
-  NETWORK: 'AI_NETWORK'
-};
-
-async function callAIWithContract(promise, opt={}){
-  const out = { ok:false, text:'', data:null, finishReason:'', usage:null, errorCode:'', error:'' };
-  try{
-    const res = await promise;
-    if(res && typeof res === 'object' && ('text' in res)){
-      out.text = String(res.text||'');
-      out.finishReason = res.finishReason || '';
-      out.usage = res.usage || null;
-    } else {
-      out.text = String(res||'');
-    }
-    if(out.finishReason === 'length'){ out.errorCode = AI_ERR.TRUNCATED; out.error='响应被截断'; return out; }
-    if(opt.needJson !== false){
-      try{ out.data = parseJson(out.text); }catch(e){ out.errorCode=AI_ERR.PARSE_FAIL; out.error='JSON解析失败：'+e.message; return out; }
-    }
-    if(opt.expectedCount != null && opt.countPath){
-      const arr = opt.countPath.split('.').reduce((o,k)=> (o&&o[k]!=null)?o[k]:null, out.data);
-      if(!Array.isArray(arr) || arr.length !== opt.expectedCount){
-        out.errorCode = AI_ERR.COUNT_MISMATCH;
-        out.error = `数量不符：期望 ${opt.expectedCount}，实际 ${Array.isArray(arr)?arr.length:'非数组'}`;
-        return out;
-      }
-    }
-    if(opt.schemaValidator && typeof opt.schemaValidator === 'function'){
-      const schemaErr = opt.schemaValidator(out.data);
-      if(schemaErr){ out.errorCode=AI_ERR.SCHEMA_MISS; out.error=schemaErr; return out; }
-    }
-    out.ok = true;
-  }catch(e){
-    out.error = e.message || String(e);
-    out.errorCode = (e.name==='AbortError' || /timeout/i.test(out.error)) ? AI_ERR.TIMEOUT : AI_ERR.NETWORK;
-  }
-  return out;
-}
-
-function assertCount(arr, expected, label){
-  if(!Array.isArray(arr)) throw new Error(`${label} 不是数组`);
-  if(arr.length !== expected) throw new Error(`${label} 数量不符：期望 ${expected}，实际 ${arr.length}`);
-}
-
-function robustParseJson(text){
-  if(!text) throw new Error('模型返回为空');
-  let t = String(text).trim();
-  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if(fence) t = fence[1].trim();
-  try{ return JSON.parse(t); }catch(e){}
-  const m = t.match(/[\{\[]\s*[\s\S]*[\}\]]/);
-  if(m){ try{ return JSON.parse(m[0]); }catch(e){} }
-  const fix = t
-    .replace(/[\u201c\u201d]/g, '"')
-    .replace(/[\u2018\u2019]/g, "'")
-    .replace(/,\s*([}\]])/g, '$1');
-  try{ return JSON.parse(fix); }catch(e){}
-  const obj = {};
-  const re = /"([^"]+)"\s*:\s*("([^"]*)"|\[[\s\S]*?\]|\{[\s\S]*?\})/g;
-  let mm;
-  while((mm = re.exec(t)) !== null){
-    try{ obj[mm[1]] = JSON.parse(mm[2]); }catch(e){ obj[mm[1]] = mm[2]; }
-  }
-  if(Object.keys(obj).length > 0) return obj;
-  throw new Error('返回不是合法 JSON（已原样保留）');
+  const raw=String((text && typeof text==='object' && 'text' in text) ? text.text : (text||'')).trim();
+  if(!raw) throw new Error('模型返回为空');
+  const candidates=[]; const add=v=>{const x=String(v||'').trim(); if(x&&!candidates.includes(x)) candidates.push(x);};
+  add(raw); const fence=raw.match(/```(?:json)?\s*([\s\S]*?)```/i); if(fence) add(fence[1]);
+  const obj=raw.match(/\{[\s\S]*\}/); if(obj) add(obj[0]); const arr=raw.match(/\[[\s\S]*\]/); if(arr) add(arr[0]);
+  let lastErr=null; for(const c of candidates){try{return JSON.parse(c);}catch(e){lastErr=e;} const fixed=c.replace(/[\u201c\u201d]/g,'"').replace(/[\u2018\u2019]/g,"'").replace(/,\s*([}\]])/g,'$1'); try{return JSON.parse(fixed);}catch(e){lastErr=e;}}
+  throw new Error('返回不是合法 JSON：'+(lastErr?.message||'解析失败'));
 }
 
 function unwrapAIResult(res){ return (res && typeof res === 'object' && 'text' in res) ? res.text : String(res||''); }
@@ -3123,33 +3056,14 @@ const STRATEGIC_DIMENSIONS_SYS = `你是一名资深故事战略策划师。你�
 {"originalAnchors":{"characters":[],"relationships":[],"goals":[],"coreConflict":"","worldRules":[],"fixedFacts":[]},"strategicDimensions":[{"name":"","description":"","whyFit":""}]}
 要求 strategicDimensions 为6—10个；每个维度必须真正不同；不得把“商业/反差/情感/悬疑/日常”当固定五盒子；不得擅自改写用户事实。`;
 function parseStrategicDimensions(raw){
-  // callDeepSeek may return {text, finishReason, usage}; always parse the actual text payload.
-  // 这一阶段对模型返回更宽容：允许 JSON fence、前后说明文字、尾逗号及常见字段别名，
-  // 但最终仍严格要求 strategicDimensions 为 6—10 个有效维度，由上层统一做数量校验。
   const t=String(unwrapAIResult(raw)||'').trim();
   if(!t) return {anchors:{},dims:[],parseError:'模型返回为空'};
-  let j=null, lastErr='';
-  const candidates=[];
-  const push=(x)=>{ if(x && !candidates.includes(x)) candidates.push(x); };
-  push(t);
-  const fence=t.match(/```(?:json)?\s*([\s\S]*?)```/i); if(fence) push(fence[1].trim());
-  const obj=t.match(/\{[\s\S]*\}/); if(obj) push(obj[0]);
-  for(const c of candidates){
-    try{ j=JSON.parse(c); break; }catch(e){ lastErr=e.message||'JSON解析失败'; }
-    try{ j=JSON.parse(c.replace(/[\u201c\u201d]/g,'\"').replace(/[\u2018\u2019]/g,"'").replace(/,\s*([}\]])/g,'$1')); break; }catch(e){ lastErr=e.message||lastErr; }
-  }
-  if(!j || typeof j!=='object'){
-    try{ j=robustParseJson(t); }catch(e){ return {anchors:{},dims:[],parseError:lastErr||e.message||'返回不是合法JSON'}; }
-  }
-  const dimsRaw = Array.isArray(j.strategicDimensions) ? j.strategicDimensions
-    : (Array.isArray(j.strategic_dimensions) ? j.strategic_dimensions
-    : (Array.isArray(j.dimensions) ? j.dimensions : (Array.isArray(j.dims) ? j.dims : [])));
-  const dims=dimsRaw.map((d,i)=>({
-    name:String(d?.name||d?.title||d?.dimension||'战略维度'+(i+1)).trim(),
-    description:String(d?.description||d?.desc||d?.how||'').trim(),
-    whyFit:String(d?.whyFit||d?.why_fit||d?.reason||d?.fit||'').trim()
-  })).filter(d=>d.name&&d.description);
-  return {anchors:j.originalAnchors&&typeof j.originalAnchors==='object'?j.originalAnchors:{},dims,parseError:dims.length?'':(lastErr||'缺少 strategicDimensions')};
+  let j;
+  try{ j=parseJson(t); }catch(e){ return {anchors:{},dims:[],parseError:e.message||'返回不是合法JSON'}; }
+  if(!j || typeof j!=='object') return {anchors:{},dims:[],parseError:'返回结构不是对象'};
+  const dimsRaw=Array.isArray(j.strategicDimensions)?j.strategicDimensions:(Array.isArray(j.strategic_dimensions)?j.strategic_dimensions:(Array.isArray(j.dimensions)?j.dimensions:(Array.isArray(j.dims)?j.dims:[])));
+  const dims=dimsRaw.map((d,i)=>({name:String(d?.name||d?.title||d?.dimension||'战略维度'+(i+1)).trim(),description:String(d?.description||d?.desc||d?.how||'').trim(),whyFit:String(d?.whyFit||d?.why_fit||d?.reason||d?.fit||'').trim()})).filter(d=>d.name&&d.description);
+  return {anchors:j.originalAnchors&&typeof j.originalAnchors==='object'?j.originalAnchors:{},dims,parseError:dims.length?'':'缺少 strategicDimensions 或维度字段不完整'};
 }
 function strategicStagePrompt(){
   const idea=String(state.idea||'').trim();
@@ -3158,7 +3072,7 @@ function strategicStagePrompt(){
 async function generateStrategicDimensions(btn){
   const idea=(state.idea||'').trim();
   if(!idea){ toast('请先输入故事构想'); return; }
-  state.strategicDimensionsStatus='generating'; state.strategicDimensionsConfirmed=false; persist(); render();
+  state.strategicDimensionsStatus='generating'; state.strategicDimensionsConfirmed=false; state.strategicDimensions=[]; state.strategicDimensionsSelected=[]; state.polishOptions=[]; state.polishAdopted=null; state.polishSelectedId=null; state.polishCanonical=null; state.canonicalStoryStrategy=null; state.polishRawFallback=''; persist(); render();
   const b=$('#btnGenerateStrategic'); if(b) busy(b,true,'正在生成战略维度…');
   try{
     const raw=await callDeepSeek(STRATEGIC_DIMENSIONS_SYS,strategicStagePrompt(),{temperature:0.65,maxTokens:2600,taskKey:'strategic_dimensions'});
@@ -3191,18 +3105,18 @@ async function generateOptimizedIdeas(btn, force){
   const selectedDims=dims.filter(d=>selectedNames.includes(String(d?.name||d?.title||d?.id||'')));
   if(!state.strategicDimensionsConfirmed || selectedDims.length<1){toast('请先在第一阶段选择并确认至少1个战略维度');openTwoStagePanel('dimensions');return;}
   if(state.polishOptions?.length && !force){if(!confirm(`已有 ${state.polishOptions.length} 个优化方案，重新生成将覆盖它们。继续？`))return;}
-  state.polishMode=polishMulti?'multi':'single'; state.polishStatus='generating'; state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null; persist(); render();
+  state.polishMode=polishMulti?'multi':'single'; state.polishStatus='generating'; state.polishSelectedId=null; state.polishAdopted=null; state.polishOptions=[]; state.polishRawFallback=''; state.polishCanonical=null; state.canonicalStoryStrategy=null; persist(); render();
   const b=$('#btnGenerateOptimized'); if(b) busy(b,true,'正在基于战略维度生成方案…');
   const dimText=selectedDims.map((d,i)=>`${i+1}. ${d.name}\n${d.description}\n契合：${d.whyFit}`).join('\n');
   const sys=`你是一名资深故事策划师。现在执行第二阶段：只能读取第一阶段已经确认的战略维度，并基于它们生成3—5个彼此真正不同的优化构想候选方案。不得回退到旧的一步式“五向”逻辑。严格JSON：{"options":[{"name":"","bookTitle":"","novelSummary":"","fullBookBeat":"","optimizedIdea":"","creativeAdditions":"","originalAnchors":{},"strategicDimensions":[],"strategyFingerprint":{"mainStrategy":"","secondaryStrategy":"","coreConflict":"","storyEngine":"","emotionalPromise":"","pacing":""},"diagnosis":{"strengths":[],"defects":[],"missing":[],"constraints":[]},"optimizationStrategies":[],"navBeacon":{}}]}. 每个方案必须从确认的战略维度组合而来，战略指纹高度相似则重做。`;
   const user=`【原始构想】\n${idea}\n\n【第一阶段已确认战略维度】\n${dimText}\n\n请执行第二阶段，只输出最终3—5个候选优化方案。`;
   try{
     const raw=await callDeepSeek(sys,user,{temperature:resolveActiveSpec().ideaTemp,maxTokens:clampMaxTokens('polish'),taskKey:'polish_stage2'});
-    const opts=parsePolishCandidatesFixed(raw,true);
+    const opts=parseOptimizationCandidates(raw,true);
     if(opts.length<3 || opts.length>5) throw new Error(`候选方案数量校验失败：${opts.length}，应为3—5个`);
-    state.polishOptions=opts; state.polishRawFallback=String(raw||''); state.polishStatus='waiting_selection';
+    state.polishOptions=opts; state.polishRawFallback=String(unwrapAIResult(raw)||''); state.polishStatus='waiting_selection';
     state.strategicDimensionsConfirmed=true; persist(); render(); openTwoStagePanel('options'); toast(`优化构想生成完成，共 ${opts.length} 个方案`);
-  }catch(e){ state.polishStatus='empty'; persist(); toast('优化构想生成失败：'+e.message); }
+  }catch(e){ state.polishStatus='empty'; state.polishOptions=[]; state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null; state.polishRawFallback=''; persist(); render(); toast('优化构想生成失败：'+e.message); }
   finally{ if(b) busy(b,false); }
 }
 
@@ -3454,7 +3368,7 @@ function normalizePolishCandidate(raw, index){
     text:blueprint || String(r.rawText||'').trim()
   });
 }
-function parsePolishCandidatesFixed(raw, multi){
+function parseOptimizationCandidates(raw, multi){
   raw = unwrapAIResult(raw);
   const obj = polishObjectFromAny(raw);
   const rawText = String(raw||'').trim();
@@ -3495,7 +3409,7 @@ function showPolishResult(out, multi){
   const rawText=String(out||'').trim();
   state.polishRawFallback = rawText;
   if(!rawText){ toast('优化失败：AI没有返回内容'); return; }
-  const opts=parsePolishCandidatesFixed(out, !!multi);
+  const opts=parseOptimizationCandidates(out, !!multi);
   polishDebugTrace('parsed', out, opts, {multi:!!multi, firstKeys:opts[0]?Object.keys(opts[0]).slice(0,20):[]});
   if(!opts.length){
     state.polishOptions=[normalizePolishCandidate({name:'方案1',optimizedIdea:rawText,text:rawText},0)];
@@ -3597,76 +3511,16 @@ function extractPolishTitle(text){
   return String(ln.replace(/^书名\s*[：:]\s*/, '')).trim();
 }
 function renderPolishCards(container){
-  if(!container) return;
-  const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
-  if(!opts.length){
-    container.style.display = 'block';
-    container.innerHTML = state.polishRawFallback ? `<div class="pol-cand-body" style="white-space:pre-wrap">${esc(state.polishRawFallback)}</div>` : `<p class="muted" style="margin:8px 0 0">👆 点「✨ 优化构想」生成候选方案。</p>`;
-    return;
-  }
-  container.style.display = 'block';
-  const dims = Array.isArray(state.strategicDimensions) ? state.strategicDimensions : [];
-  const dimHtml = dims.length ? `<div class="strategy-map" style="margin-bottom:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff)"><div style="font-weight:700;margin-bottom:8px">🧭 AI动态战略地图 <span style="font-size:11px;font-weight:400;color:var(--muted)">${dims.length} 个候选维度</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px">${dims.map((d,i)=>{const n=String(d?.name||d?.title||d?.id||'战略维度'+(i+1));const de=String(d?.description||'');const why=String(d?.whyFit||'');return `<div style="padding:8px;border:1px solid var(--line,#ddd);border-radius:8px"><b>${esc(n)}</b><div style="font-size:12px;margin-top:4px;line-height:1.5">${esc(de)}</div>${why?`<div style="font-size:11px;color:var(--muted);margin-top:4px">契合：${esc(why)}</div>`:''}</div>`}).join('')}</div><div style="margin-top:8px;font-size:11px;color:var(--muted)">以上是AI针对当前故事动态生成的战略地图，不是固定模板。下面的3～5个方案会从这些维度组合生成。</div></div>` : '';
-  const adopted = state.polishAdopted;
-  container.innerHTML = dimHtml + opts.map((o,i)=>{
-    const c = POLISH_PALETTE[i % POLISH_PALETTE.length];
-    const name = o.name || ('方案'+(i+1));
-    const isAdopted = !!adopted && adopted === name;
-    const defects = (o._v45 && Array.isArray(o._v45.defects)) ? o._v45.defects.filter(d=>String(d||'').trim()) : [];
-    const hasV45 = !!(o._v45 && (o._v45.navBeacon || (o._v45.seedCharacters&&o._v45.seedCharacters.length) || (o._v45.seedPlaces&&o._v45.seedPlaces.length)));
-    const displaySource = String(o.text||o.optimizedIdea||o.novelSummary||o.fullBookBeat||'').trim();
-    const pTitle = String(o.bookTitle||'').trim() || extractPolishTitle(displaySource);
-    const pBody = displaySource.replace(/^\s*书名\s*[：:][^\n]*\n?/, '').trim();   // 书名已置顶，正文去掉首行以免重复
-    return `<div class="pol-cand${isAdopted?' on':''}" style="--pc:${c}" data-idx="${i}">
-      <div class="pol-cand-head">
-        <span class="pol-no" style="background:${c}">${i+1}</span>
-        <b class="pol-name" style="color:${c}">${esc(name)}</b>
-        ${isAdopted?'<span class="pol-adopted-tag">✔ 已采用</span>':''}
-        <span class="pol-cand-actions">
-          <button type="button" class="btn small ghost" data-pol-copy="${i}" title="复制此方案">📋 复制</button>
-        </span>
-      </div>
-      ${pTitle?`<div class="pol-cand-title" style="background:${c}">📖 ${esc(pTitle)}</div>`:''}
-      <div class="pol-cand-body">${esc(pBody ? pBody : String(o.text||''))}</div>
-      ${String(o.novelSummary||'').trim()?`<div class="pol-cand-body" style="border-top:1px dashed var(--line,#ddd)"><b>📖 小说简介（下游创作材料）</b><br>${esc(String(o.novelSummary).trim())}</div>`:''}
-      ${String(o.fullBookBeat||o.bookBeat||'').trim()?`<div class="pol-cand-body" style="border-top:1px dashed var(--line,#ddd)"><b>🎬 全书故事节拍</b><br>${esc(String(o.fullBookBeat||o.bookBeat).trim())}</div>`:''}
-      ${defects.length?`<div class="pol-cand-body" style="opacity:.85"><b>⚠️ 构想缺陷清单：</b><br>${defects.map(d=>'· '+esc(String(d))).join('<br>')}</div>`:''}
-      <div class="pol-cand-foot">
-        ${hasV45?`<button type="button" class="btn small ghost" data-pol-import="${i}" title="导入结构化设定（导航灯塔/种子人物/种子地点/建议章节数）">📥 导入设定</button>`:''}
-        <button type="button" class="btn small pt-accent" data-pol-use="${i}" style="background:${c}">✔ 采用此方案</button>
-      </div>
-    </div>`;
-  }).join('');
-  container.querySelectorAll('[data-pol-use]').forEach(b=>{
-    b.onclick = (e)=>{ e.preventDefault();
-      const o = (state.polishOptions||[])[+b.dataset.polUse]; if(!o) return;
-      if(dictmasterLocked()){ toast('词典达人已产出万物词典，②方案已锁定，不可更换'); return; }
-      state.polishAdopted = o.name || null;
-      state.polishSelectedId = o._id || null;
-      state.polishStatus = 'adopted';
-      state.polishRevision = Number(state.polishRevision||0) + 1;
-      syncPolishMetaFromCandidate(o);
-      state.polishCanonical = buildPolishCanonical(o, state.polishRevision);
-      state.canonicalStoryStrategy = Object.assign({}, state.polishCanonical, { sourceType:'canonical_story_strategy', sourceVersion:'phase3', machineTrace:Object.assign({}, state.polishCanonical.machineTrace||{}, {status:'adopted'}) });
-      invalidateAfterStoryStrategyChange();
-      persist(); render();
-      toast('已选中：'+(o.name||('方案'+(+b.dataset.polUse+1)))+'（不覆盖原始构想；可点「生成大纲」搬入书名/简介/全书节拍）');
-    };
-  });
-  container.querySelectorAll('[data-pol-import]').forEach(b=>{
-    b.onclick = (e)=>{ e.preventDefault();
-      const o = (state.polishOptions||[])[+b.dataset.polImport]; if(!o) return;
-      importPolishToState(o);
-    };
-  });
-  container.querySelectorAll('[data-pol-copy]').forEach(b=>{
-    b.onclick = (e)=>{ e.preventDefault();
-      const o = (state.polishOptions||[])[+b.dataset.polCopy]; if(!o) return;
-      copyText(o.text||'');
-    };
-  });
+  if(!container)return; const opts=Array.isArray(state.polishOptions)?state.polishOptions:[];
+  if(!opts.length){container.style.display='block';container.innerHTML=state.polishRawFallback?`<div class="ts-empty-result"><b>本次没有形成可比较方案。</b><pre>${esc(state.polishRawFallback)}</pre></div>`:`<div class="ts-empty-result">👆 确认战略维度后，点击“生成优化构想”。</div>`;return;}
+  container.style.display='block'; const adopted=state.polishAdopted,dims=Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected:[]; const context=dims.length?`<details class="ts-verified-context" open><summary>🔗 本轮方案依据：${dims.length} 个已确认战略维度 <span>收起</span></summary><div class="ts-context-list">${dims.map(x=>`<span>${esc(String(x))}</span>`).join('')}</div></details>`:'';
+  const cards=opts.map((o,i)=>{const c=POLISH_PALETTE[i%POLISH_PALETTE.length],name=String(o.name||'方案'+(i+1)),isAdopted=adopted===name,defects=(o._v45&&Array.isArray(o._v45.defects))?o._v45.defects.filter(d=>String(d||'').trim()):[],hasV45=!!(o._v45&&(o._v45.navBeacon||(o._v45.seedCharacters&&o._v45.seedCharacters.length)||(o._v45.seedPlaces&&o._v45.seedPlaces.length))),title=String(o.bookTitle||'').trim()||extractPolishTitle(String(o.text||o.optimizedIdea||'')),body=String(o.optimizedIdea||o.text||'').trim(),summary=String(o.novelSummary||'').trim(),beat=String(o.fullBookBeat||o.bookBeat||'').trim(),brief=summary||body.slice(0,260);return `<details class="pol-cand ${isAdopted?'on':''}" data-idx="${i}" ${i===0&&!adopted?'open':''}><summary class="pol-cand-summary"><span class="pol-no" style="background:${c}">${i+1}</span><span class="pol-summary-main"><b>${esc(name)}</b>${title?`<em>📖 ${esc(title)}</em>`:''}<small>${esc(brief.replace(/\s+/g,' ').slice(0,180))}${brief.length>180?'…':''}</small></span>${isAdopted?'<span class="pol-adopted-tag">✔ 已采用</span>':'<span class="pol-expand">展开方案 ▾</span>'}</summary><div class="pol-cand-detail"><div class="pol-detail-toolbar"><span>方案 ${i+1} · 完整创作蓝本</span><button type="button" class="btn small ghost" data-pol-copy="${i}">📋 复制</button></div>${title?`<div class="pol-cand-title" style="background:${c}">📖 ${esc(title)}</div>`:''}${body?`<div class="pol-cand-body"><b>🧠 核心优化构想</b><div>${esc(body)}</div></div>`:''}${summary?`<details class="pol-subfold"><summary>📖 小说简介</summary><div>${esc(summary)}</div></details>`:''}${beat?`<details class="pol-subfold"><summary>🎬 全书故事节拍</summary><div>${esc(beat)}</div></details>`:''}${defects.length?`<details class="pol-subfold"><summary>⚠️ 构想缺陷与修正点（${defects.length}）</summary><div>${defects.map(d=>'· '+esc(String(d))).join('<br>')}</div></details>`:''}<div class="pol-cand-foot">${hasV45?`<button type="button" class="btn small ghost" data-pol-import="${i}">📥 导入建议设定</button>`:''}<button type="button" class="btn small pt-accent" data-pol-use="${i}" style="background:${c}">${isAdopted?'✔ 已采用':'✔ 采用此方案'}</button></div></div></details>`;}).join('');
+  container.innerHTML=`<div class="ts-options-head"><div><b>方案比选</b><span>共 ${opts.length} 个候选方案 · 默认只展开第一张，其他方案点击标题展开</span></div><button type="button" class="btn small ghost" id="tsExpandAll">全部展开</button></div>${context}${cards}`;
+  container.querySelector('#tsExpandAll')?.addEventListener('click',()=>{const ds=[...container.querySelectorAll('.pol-cand')],allOpen=ds.every(d=>d.open);ds.forEach(d=>d.open=!allOpen);container.querySelector('#tsExpandAll').textContent=allOpen?'全部展开':'全部收起';});
+  container.querySelectorAll('[data-pol-use]').forEach(b=>b.onclick=e=>{e.preventDefault();const o=opts[+b.dataset.polUse];if(!o)return;if(dictmasterLocked()){toast('词典达人已产出万物词典，②方案已锁定，不可更换');return;}state.polishAdopted=o.name||null;state.polishSelectedId=o._id||null;state.polishStatus='adopted';state.polishRevision=Number(state.polishRevision||0)+1;syncPolishMetaFromCandidate(o);state.polishCanonical=buildPolishCanonical(o,state.polishRevision);state.canonicalStoryStrategy=Object.assign({},state.polishCanonical,{sourceType:'canonical_story_strategy',sourceVersion:'phase3',machineTrace:Object.assign({},state.polishCanonical.machineTrace||{},{status:'adopted'})});invalidateAfterStoryStrategyChange();persist();render();toast('已采用：'+(o.name||('方案'+(+b.dataset.polUse+1)))+'（将作为后续大纲与创作链路的正式故事战略）');});
+  container.querySelectorAll('[data-pol-copy]').forEach(b=>b.onclick=async e=>{e.preventDefault();const o=opts[+b.dataset.polCopy];if(!o)return;const txt=[o.bookTitle,o.novelSummary,o.optimizedIdea,o.fullBookBeat].filter(Boolean).join('\n\n');try{await navigator.clipboard.writeText(txt);toast('方案已复制');}catch(_){toast('复制失败，请手动选择文本');}});
+  container.querySelectorAll('[data-pol-import]').forEach(b=>b.onclick=e=>{e.preventDefault();const o=opts[+b.dataset.polImport];if(o)importPolishToState(o);});
 }
-
 function bindPolishIdea(){
   const b = $('#btnGenerateStrategic');
   if(b) b.onclick = ()=> generateStrategicDimensions(b);
@@ -8345,8 +8199,8 @@ const BANLIST_DEFAULT = {
     properNouns: []
   },
   prose: {
-    words: [],
-    phrases: ['天刚蒙蒙亮'],
+    words: ['窗棂'],
+    phrases: ['天刚蒙蒙亮','透过破旧的窗棂'],
     patterns: [],
     rules: []
   },
@@ -11264,8 +11118,7 @@ function bindLongNovelControlDeck(){
 
 const TWO_STAGE_PIPELINE_CSS = `
 .two-stage-flow{display:grid;gap:0;margin:12px 0;padding:12px;border:1px solid var(--line,#d9dce3);border-radius:16px;background:linear-gradient(145deg,rgba(99,102,241,.07),rgba(16,185,129,.05));box-shadow:0 8px 30px rgba(0,0,0,.06)}
-.two-stage-step{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:13px;background:var(--card,#fff);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}.two-stage-step:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(0,0,0,.08)}
-.ts-step-no{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:12px;background:#111827;color:#fff;flex:none}.ts-step-main{min-width:0;flex:1}.ts-step-title{font-weight:800}.ts-step-note{font-size:11px;line-height:1.5;color:var(--muted,#6b7280);margin-top:3px}.ts-btn{position:relative;overflow:hidden;min-width:128px;font-weight:800;border-radius:11px;transition:transform .18s ease,box-shadow .18s ease,filter .18s ease}.ts-btn:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.04);box-shadow:0 8px 20px rgba(0,0,0,.12)}.ts-btn:active:not(:disabled){transform:scale(.97)}.ts-btn-strategy{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:0}.ts-btn-opt{background:linear-gradient(135deg,#059669,#0d9488);color:#fff;border:0}.ts-btn:disabled{opacity:.45;cursor:not-allowed}.ts-connector{height:20px;width:2px;margin-left:30px;background:linear-gradient(#8b5cf6,#10b981);position:relative}.ts-connector:after{content:'↓';position:absolute;bottom:-8px;left:-6px;font-size:14px}.two-stage-panel{margin:10px 0;padding:14px;border:1px dashed var(--line,#bbb);border-radius:13px;background:var(--card,#fff)}.ts-enter{animation:tsEnter .35s ease both}@keyframes tsEnter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@media(max-width:680px){.two-stage-step{align-items:flex-start;flex-wrap:wrap}.ts-step-main{flex-basis:calc(100% - 55px)}.ts-btn{width:100%;margin-left:50px}}
+.two-stage-step{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:13px;background:var(--card,#fff)}.ts-step-no{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:12px;background:#111827;color:#fff;flex:none}.ts-step-main{min-width:0;flex:1}.ts-step-title{font-weight:800}.ts-step-note{font-size:11px;line-height:1.5;color:var(--muted,#6b7280);margin-top:3px}.ts-btn{min-width:128px;font-weight:800;border-radius:11px}.ts-btn-strategy{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:0}.ts-btn-opt{background:linear-gradient(135deg,#059669,#0d9488);color:#fff;border:0}.ts-btn:disabled{opacity:.45;cursor:not-allowed}.ts-connector{height:20px;width:2px;margin-left:30px;background:linear-gradient(#8b5cf6,#10b981);position:relative}.ts-connector:after{content:'↓';position:absolute;bottom:-8px;left:-6px;font-size:14px}.two-stage-panel{margin:10px 0}.ts-stage-card{margin:10px 0;padding:16px;border:1px solid var(--line,#d9dce3);border-radius:16px;background:var(--card,#fff);box-shadow:0 6px 22px rgba(0,0,0,.05)}.ts-stage-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.ts-stage-title{display:flex;gap:10px;align-items:flex-start;min-width:0}.ts-stage-index{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;background:#111827;color:#fff;font-weight:800;flex:none}.ts-stage-sub{font-size:12px;color:var(--muted,#6b7280);margin-top:4px;line-height:1.5}.ts-status{font-size:11px;font-weight:800;padding:5px 9px;border-radius:999px;white-space:nowrap}.ts-status.ok{background:rgba(16,185,129,.12);color:#047857}.ts-status.pending{background:rgba(245,158,11,.12);color:#b45309}.ts-purpose{display:grid;gap:3px;margin:12px 0;padding:11px 12px;border-radius:10px;background:rgba(79,70,229,.06);font-size:12px;line-height:1.6}.ts-toolbar,.ts-confirm-row,.ts-options-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.ts-toolbar{font-size:12px;margin:10px 0}.ts-toolbar-actions{display:flex;gap:6px}.ts-dim-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:9px}.ts-dim-item{position:relative;display:flex;gap:9px;align-items:flex-start;padding:12px;border:1px solid var(--line,#ddd);border-radius:12px;cursor:pointer;transition:.15s;background:var(--card,#fff)}.ts-dim-item.selected{border-color:var(--accent,#4c6fff);background:rgba(76,111,255,.06)}.ts-dim-item input{margin-top:4px;flex:none}.ts-dim-copy{min-width:0}.ts-dim-name{font-weight:800}.ts-dim-desc,.ts-dim-fit{font-size:12px;line-height:1.55;margin-top:4px}.ts-dim-fit{font-size:11px;color:var(--muted,#6b7280)}.ts-check{margin-left:auto;font-weight:900;color:var(--accent,#4c6fff)}.ts-confirm-row{margin-top:12px}.ts-confirm-note{font-size:11px;color:var(--muted,#6b7280);flex:1;min-width:220px}.ts-context,.ts-verified-context{border:1px solid var(--line,#ddd);border-radius:11px;margin:10px 0;background:rgba(16,185,129,.04)}.ts-context summary,.ts-verified-context summary{cursor:pointer;padding:10px 12px;font-size:12px;font-weight:800}.ts-context summary span,.ts-verified-context summary span{float:right;color:var(--muted,#6b7280);font-weight:400}.ts-context-list{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 11px}.ts-context-list span{padding:5px 8px;border-radius:999px;background:rgba(76,111,255,.08);font-size:11px}.ts-next-note{font-size:11px;color:var(--muted,#6b7280)}.ts-options-head{padding:4px 0 10px}.ts-options-head span{display:block;font-size:11px;color:var(--muted,#6b7280);font-weight:400;margin-top:3px}.pol-cand{margin:9px 0;border:1px solid var(--line,#d9dce3);border-radius:13px;background:var(--card,#fff);overflow:hidden}.pol-cand[open]{box-shadow:0 7px 24px rgba(0,0,0,.06)}.pol-cand.on{border-color:var(--accent,#4c6fff)}.pol-cand-summary{display:flex;align-items:center;gap:10px;padding:12px;cursor:pointer;list-style:none}.pol-cand-summary::-webkit-details-marker{display:none}.pol-no{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:#fff;font-weight:800;flex:none}.pol-summary-main{display:grid;gap:3px;min-width:0;flex:1}.pol-summary-main b{font-size:14px}.pol-summary-main em{font-style:normal;font-size:12px;color:var(--muted,#6b7280)}.pol-summary-main small{font-size:11px;line-height:1.45;color:var(--muted,#6b7280);font-weight:400}.pol-expand{font-size:11px;color:var(--muted,#6b7280);white-space:nowrap}.pol-cand-detail{padding:0 12px 12px}.pol-detail-toolbar{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line,#eee);font-size:11px;color:var(--muted,#6b7280)}.pol-cand-title{padding:9px 11px;color:#fff;font-weight:800;border-radius:8px;margin-bottom:8px}.pol-cand-body{padding:11px 0;font-size:12px;line-height:1.75;white-space:pre-wrap}.pol-subfold{border-top:1px dashed var(--line,#ddd);padding:8px 0}.pol-subfold summary{cursor:pointer;font-size:12px;font-weight:700}.pol-subfold>div{padding:8px 0;font-size:12px;line-height:1.7;white-space:pre-wrap}.pol-cand-foot{display:flex;gap:7px;justify-content:flex-end;flex-wrap:wrap;padding-top:10px}.ts-empty-result{padding:16px;border:1px dashed var(--line,#bbb);border-radius:12px;color:var(--muted,#6b7280);font-size:12px}.ts-empty-result pre{white-space:pre-wrap;margin:10px 0 0;font:inherit}.ts-enter{animation:tsEnter .3s ease both}@keyframes tsEnter{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}@media(max-width:680px){.two-stage-step{align-items:flex-start;flex-wrap:wrap}.ts-step-main{flex-basis:calc(100% - 55px)}.ts-btn{width:100%;margin-left:50px}.ts-stage-head{align-items:flex-start}.ts-dim-list{grid-template-columns:1fr}.pol-cand-summary{align-items:flex-start}.pol-expand{display:none}.pol-cand-foot{justify-content:stretch}.pol-cand-foot .btn{flex:1}.ts-confirm-row .btn{width:100%}}
 `;
 function ensureTwoStagePipelineStyles(){ if(document.getElementById('twoStagePipelineStyles')) return; const st=document.createElement('style'); st.id='twoStagePipelineStyles'; st.textContent=TWO_STAGE_PIPELINE_CSS; document.head.appendChild(st); }
 
@@ -14722,52 +14575,19 @@ function buildMarkdown(){
 
 function renderTwoStagePanel(){
   const el=document.getElementById('twoStagePanel'); if(!el) return;
-  const dims=Array.isArray(state.strategicDimensions)?state.strategicDimensions:[];
-  const opts=Array.isArray(state.polishOptions)?state.polishOptions:[];
-  if(!dims.length&&!opts.length){el.style.display='none';el.innerHTML='';return;}
-  el.style.display='block';
-  const selected=new Set((Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected:[]).map(String));
-  const dimHtml=dims.length?`<section style="padding:14px;border:1px solid var(--line,#ddd);border-radius:12px;background:var(--card,#fff)">
-    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
-      <div><b style="font-size:15px">🧭 第一步：战略维度结果</b><div class="muted" style="margin-top:5px;line-height:1.55">AI 已根据你的故事动态分析出 ${dims.length} 个候选方向。请阅读后勾选你希望下一步重点采用的维度。</div></div>
-      <span class="ts-result-badge">${state.strategicDimensionsConfirmed?'✓ 已确认':'待选择与确认'}</span>
-    </div>
-    <div style="margin:10px 0;padding:10px;border-radius:9px;background:rgba(80,120,180,.08);font-size:12px;line-height:1.6"><b>这一步有什么意义？</b> 战略维度不是最终故事方案，而是下一步“优化构想”的方向盘。你勾选的维度会直接作为第二阶段 AI 的输入约束；未勾选的维度不会作为重点方向。</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:9px;margin-top:10px">
-      ${dims.map((d,i)=>{const name=String(d?.name||d?.title||d?.id||'战略维度'+(i+1));const key=name;const checked=selected.has(key);return `<label class="ts-dim-choice" style="display:block;padding:11px;border:1px solid ${checked?'var(--accent,#4c6fff)':'var(--line,#ddd)'};border-radius:10px;cursor:pointer;background:${checked?'rgba(76,111,255,.07)':'transparent'}"><div style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" data-ts-dim="${esc(key)}" ${checked?'checked':''} style="margin-top:3px"><div><b>${esc(name)}</b><div style="font-size:12px;line-height:1.55;margin-top:4px">${esc(String(d?.description||''))}</div>${String(d?.whyFit||'').trim()?`<div style="font-size:11px;color:var(--muted);margin-top:5px">契合：${esc(String(d.whyFit))}</div>`:''}</div></div></label>`}).join('')}
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
-      <button type="button" class="btn primary" id="btnConfirmStrategicDimensions">✓ 确认所选战略维度</button>
-      <span class="muted" id="tsDimCount">已选择 ${[...selected].filter(x=>dims.some(d=>String(d?.name||d?.title||d?.id||'')===x)).length} / ${dims.length}</span>
-    </div>
-  </section>`:'';
-  const ohtml=opts.length?`<section style="margin-top:14px;padding:14px;border:1px solid var(--line,#ddd);border-radius:12px;background:var(--card,#fff)">
-    <div><b style="font-size:15px">✨ 第二步：优化构想结果</b><div class="muted" style="margin-top:5px;line-height:1.55">AI 已生成 ${opts.length} 个候选方案。完整内容会同时显示在下面“方案比选”区域，你可以查看、复制并选择采用的方案。</div></div>
-    <div style="margin-top:9px">${opts.map((o,i)=>`<div style="padding:10px;border:1px solid var(--line,#ddd);border-radius:9px;margin-top:7px"><b>${i+1}. ${esc(o.name||'方案'+(i+1))}</b><div style="font-size:12px;line-height:1.55;margin-top:4px;white-space:pre-wrap">${esc(o.optimizedIdea||o.novelSummary||o.text||'')}</div></div>`).join('')}</div>
-    <div style="margin-top:9px;padding:9px;background:rgba(80,120,180,.08);border-radius:8px;font-size:12px;line-height:1.55"><b>这一步有什么意义？</b> 这是把你确认的战略方向转化为可比较的具体故事方案。选择“采用此方案”后，才会成为后续大纲与创作链路的正式战略依据。</div>
-  </section>`:'';
-  el.innerHTML=dimHtml+ohtml;
-  el.querySelectorAll('[data-ts-dim]').forEach(ch=>{
-    ch.onchange=()=>{
-      const key=String(ch.dataset.tsDim||'');
-      const cur=new Set((Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected:[]).map(String));
-      if(ch.checked) cur.add(key); else cur.delete(key);
-      state.strategicDimensionsSelected=[...cur];
-      state.strategicDimensionsConfirmed=false;
-      persist(); renderTwoStagePanel();
-    };
-  });
-  const confirmBtn=el.querySelector('#btnConfirmStrategicDimensions');
-  if(confirmBtn) confirmBtn.onclick=()=>{
-    const valid=dims.filter(d=>(Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected:[]).includes(String(d?.name||d?.title||d?.id||'')));
-    if(!valid.length){toast('至少选择1个战略维度后才能确认');return;}
-    state.strategicDimensionsSelected=valid.map(d=>String(d?.name||d?.title||d?.id||''));
-    state.strategicDimensionsConfirmed=true;
-    persist(); render(); openTwoStagePanel('options');
-    toast(`已确认 ${valid.length} 个战略维度，下一步优化构想将只重点依据这些方向生成`);
-  };
+  const dims=Array.isArray(state.strategicDimensions)?state.strategicDimensions:[]; const opts=Array.isArray(state.polishOptions)?state.polishOptions:[];
+  const selected=new Set((state.strategicDimensionsSelected||[]).map(String)); const confirmed=!!state.strategicDimensionsConfirmed;
+  if(!dims.length&&!opts.length){el.style.display='none';el.innerHTML='';return;} el.style.display='block';
+  const selectedCount=dims.filter(d=>selected.has(String(d?.name||d?.title||d?.id||''))).length;
+  const dimHtml=dims.length?`<section class="ts-stage-card ${confirmed?'is-confirmed':''}"><div class="ts-stage-head"><div class="ts-stage-title"><span class="ts-stage-index">01</span><div><b>🧭 战略维度</b><div class="ts-stage-sub">先决定故事往哪些方向优化；确认后才会进入第二阶段。</div></div></div><span class="ts-status ${confirmed?'ok':'pending'}">${confirmed?'✓ 已确认':'待选择'}</span></div><div class="ts-purpose"><b>为什么先做这一步？</b><span>战略维度不是最终故事方案，而是“优化构想”的方向盘。你最终确认的维度会直接成为第二阶段 AI 的约束与创作重点。</span></div><div class="ts-toolbar"><span>已选择 <b id="tsDimCount">${selectedCount}</b> / ${dims.length}</span><div class="ts-toolbar-actions"><button type="button" class="btn small ghost" id="tsSelectAll">全选</button><button type="button" class="btn small ghost" id="tsClearAll">清空</button></div></div><div class="ts-dim-list">${dims.map((d,i)=>{const name=String(d?.name||d?.title||d?.id||'战略维度'+(i+1)),key=name,checked=selected.has(key);return `<label class="ts-dim-item ${checked?'selected':''}"><input type="checkbox" data-ts-dim="${esc(key)}" ${checked?'checked':''}><div class="ts-dim-copy"><div class="ts-dim-name">${esc(name)}</div><div class="ts-dim-desc">${esc(String(d?.description||''))}</div>${String(d?.whyFit||'').trim()?`<div class="ts-dim-fit">契合当前故事：${esc(String(d.whyFit))}</div>`:''}</div><span class="ts-check">${checked?'✓':''}</span></label>`}).join('')}</div><div class="ts-confirm-row"><div class="ts-confirm-note">${confirmed?'已锁定本轮战略方向；如需修改，请重新选择并再次确认。':'请选择至少 1 个维度，再确认后才能生成优化构想。'}</div><button type="button" class="btn primary" id="btnConfirmStrategicDimensions" ${selectedCount?'':'disabled'}>${confirmed?'↻ 更新战略维度':'✓ 确认战略维度'}</button></div></section>`:'';
+  const confirmedDims=dims.filter(d=>selected.has(String(d?.name||d?.title||d?.id||''))); const contextHtml=confirmed&&confirmedDims.length?`<details class="ts-context" open><summary>🔗 本轮“优化构想”将基于 ${confirmedDims.length} 个已确认战略维度 <span>点击查看</span></summary><div class="ts-context-list">${confirmedDims.map(d=>`<span>${esc(String(d?.name||d?.title||d?.id||''))}</span>`).join('')}</div></details>`:'';
+  const optHtml=opts.length?`<section class="ts-stage-card ts-stage-opt"><div class="ts-stage-head"><div class="ts-stage-title"><span class="ts-stage-index">02</span><div><b>✨ 优化构想</b><div class="ts-stage-sub">把已确认的战略方向转化为可比较、可采用的完整故事方案。</div></div></div><span class="ts-status ok">✓ 已生成 ${opts.length} 个方案</span></div>${contextHtml}<div class="ts-purpose"><b>这一步会影响什么？</b><span>这里的方案不是最终正文，而是后续大纲、词典和章节施工的故事战略来源。你采用的唯一方案才会成为正式下游输入。</span></div><div class="ts-next-note">👇 方案详情统一放在下方“方案比选”，每个方案都可独立展开/收起。</div></section>`:'';
+  el.innerHTML=dimHtml+optHtml;
+  el.querySelectorAll('[data-ts-dim]').forEach(ch=>ch.onchange=()=>{const key=String(ch.dataset.tsDim||''),cur=new Set((state.strategicDimensionsSelected||[]).map(String));if(ch.checked)cur.add(key);else cur.delete(key);state.strategicDimensionsSelected=[...cur];state.strategicDimensionsConfirmed=false;state.polishOptions=[];state.polishAdopted=null;state.polishSelectedId=null;state.polishCanonical=null;state.canonicalStoryStrategy=null;state.polishStatus='empty';persist();render();openTwoStagePanel('dimensions');});
+  el.querySelector('#tsSelectAll')?.addEventListener('click',()=>{state.strategicDimensionsSelected=dims.map(d=>String(d?.name||d?.title||d?.id||'')).filter(Boolean);state.strategicDimensionsConfirmed=false;persist();render();openTwoStagePanel('dimensions');});
+  el.querySelector('#tsClearAll')?.addEventListener('click',()=>{state.strategicDimensionsSelected=[];state.strategicDimensionsConfirmed=false;persist();render();openTwoStagePanel('dimensions');});
+  el.querySelector('#btnConfirmStrategicDimensions')?.addEventListener('click',()=>{const valid=dims.filter(d=>selected.has(String(d?.name||d?.title||d?.id||'')));if(!valid.length){toast('至少选择1个战略维度后才能确认');return;}state.strategicDimensionsSelected=valid.map(d=>String(d?.name||d?.title||d?.id||''));state.strategicDimensionsConfirmed=true;state.polishOptions=[];state.polishAdopted=null;state.polishSelectedId=null;state.polishStatus='empty';state.polishCanonical=null;state.canonicalStoryStrategy=null;persist();render();openTwoStagePanel('options');toast(`已确认 ${valid.length} 个战略维度；下一步将只使用这些方向生成优化构想`);});
 }
-
 function bindView(){
   bindCopyBtns();
   bindCharEdit();
@@ -19747,173 +19567,4 @@ function sanitizePrincipalChapter(ch){
     }
   }
   return Object.assign({}, ch, { title: title.trim() || '新章节', summary: summary.trim() });
-}
-
-
-/* ===================== 优化构想：单方案/多方案全面修复与强化 ===================== */
-function sanitizeJsonControlChars(str){
-  if(typeof str !== 'string') return '';
-  return str.replace(/[\u0000-\u001F\u007F-\u009F]/g, (c) => {
-    if(c === '\n') return '\\n';
-    if(c === '\r') return '\\r';
-    if(c === '\t') return '\\t';
-    return '';
-  });
-}
-
-function robustParseJson(str){
-  if(!str) return null;
-  let clean = String(str).trim();
-  clean = clean.replace(/^[`\s]*json/i, '').replace(/[`\s]*$/i, '').trim();
-  const fst = clean.indexOf('{');
-  const lst = clean.lastIndexOf('}');
-  if(fst >= 0 && lst > fst){
-    const candidate = clean.slice(fst, lst + 1);
-    try { return JSON.parse(candidate); } catch(e){}
-    try { return JSON.parse(sanitizeJsonControlChars(candidate)); } catch(e){}
-  }
-  const fstArr = clean.indexOf('[');
-  const lstArr = clean.lastIndexOf(']');
-  if(fstArr >= 0 && lstArr > fstArr){
-    const candidate = clean.slice(fstArr, lstArr + 1);
-    try { return JSON.parse(candidate); } catch(e){}
-    try { return JSON.parse(sanitizeJsonControlChars(candidate)); } catch(e){}
-  }
-  return null;
-}
-
-function buildIdeaPolishUserFixed(ctx){
-  const rawIdea = String(ctx.rawIdea || (typeof state !== 'undefined' ? state.idea : '') || '').trim();
-  const multi = !!ctx.multi;
-  const parts = [];
-  parts.push('【原始创作构想】\n' + (rawIdea || '（创作者尚未输入构想，请自行发挥一个高概念、戏剧张力强烈的引人故事）'));
-  
-  if(multi){
-    parts.push(`【本次生成任务：多方案对比模式（核心强指令）】
-你必须生成 3 到 5 个具有不同故事策略、冲突走向与创新视角的完整优化方案！
-每个方案包含独立书名、故事梗概、全书节拍与核心蓝本。
-必须严格输出纯 JSON 格式，options 数组中必须包含 3 到 5 个完整方案对象：
-{
-  "options": [
-    {
-      "name": "方案1：[风格或侧重点标签]",
-      "bookTitle": "书名1",
-      "novelSummary": "方案1故事核心梗概（200-300字）...",
-      "fullBookBeat": "方案1全书节拍与三幕式起伏...",
-      "optimizedIdea": "方案1优化后的完整构想与创意蓝本...",
-      "creativeAdditions": "方案1独特创新增补设定...",
-      "navBeacon": {"genre":"题材类型","protagonist":"主角特质","coreConflict":"核心矛盾","tone":"叙事基调"},
-      "defects": [],
-      "seedCharacters": [],
-      "seedPlaces": []
-    },
-    {
-      "name": "方案2：[风格或侧重点标签]",
-      "bookTitle": "书名2",
-      "novelSummary": "方案2故事核心梗概（200-300字）...",
-      "fullBookBeat": "方案2全书节拍与三幕式起伏...",
-      "optimizedIdea": "方案2优化后的完整构想与创意蓝本...",
-      "creativeAdditions": "方案2独特创新增补设定...",
-      "navBeacon": {"genre":"题材类型","protagonist":"主角特质","coreConflict":"核心矛盾","tone":"叙事基调"},
-      "defects": [],
-      "seedCharacters": [],
-      "seedPlaces": []
-    },
-    {
-      "name": "方案3：[风格或侧重点标签]",
-      "bookTitle": "书名3",
-      "novelSummary": "方案3故事核心梗概（200-300字）...",
-      "fullBookBeat": "方案3全书节拍与三幕式起伏...",
-      "optimizedIdea": "方案3优化后的完整构想与创意蓝本...",
-      "creativeAdditions": "方案3独特创新增补设定...",
-      "navBeacon": {"genre":"题材类型","protagonist":"主角特质","coreConflict":"核心矛盾","tone":"叙事基调"},
-      "defects": [],
-      "seedCharacters": [],
-      "seedPlaces": []
-    }
-  ]
-}
-【严禁只输出单一方案！options 数组长度必须在 3 至 5 之间！】`);
-  } else {
-    parts.push(`【本次生成任务：单方案精修模式（核心强指令）】
-本次只需生成恰好 1 个最优秀的最终构想优化方案！
-必须输出纯 JSON 格式，options 数组中恰好只有 1 个对象：
-{
-  "options": [
-    {
-      "name": "方案1：终极精修方案",
-      "bookTitle": "小说最终书名",
-      "novelSummary": "故事梗概与核心大纲...",
-      "fullBookBeat": "全书关键节拍脉络...",
-      "optimizedIdea": "全面优化后的完整构想与小说蓝本...",
-      "creativeAdditions": "创新亮点与增补设计...",
-      "navBeacon": {"genre":"","protagonist":"","coreConflict":"","tone":""},
-      "defects": [],
-      "seedCharacters": [],
-      "seedPlaces": []
-    }
-  ]
-}`);
-  }
-  return parts.join('\n\n');
-}
-
-function parsePolishCandidatesFixed(raw, multi){
-  // Normalize callDeepSeek's {text,...} response before JSON/text parsing.
-  const rawText = String(unwrapAIResult(raw) || '').trim();
-  if(!rawText) return [];
-  const parsed = robustParseJson(rawText);
-  let arr = [];
-  if(parsed){
-    if(Array.isArray(parsed)) arr = parsed;
-    else if(Array.isArray(parsed.options)) arr = parsed.options;
-    else if(parsed.name || parsed.bookTitle || parsed.novelSummary || parsed.optimizedIdea) arr = [parsed];
-  }
-  // Markdown fallback if multi mode returned text
-  if(multi && arr.length < 2 && rawText.length > 50){
-    const sections = rawText.split(/(?:^|\n)(?:#{1,4}\s*)?(?:【|\(|（)?\s*方案\s*([一二三四五六七八九十\d]+|[A-Za-z])/);
-    if(sections.length > 2){
-      const parsedSections = [];
-      for(let i = 1; i < sections.length; i += 2){
-        const label = '方案 ' + sections[i];
-        const content = sections[i + 1] || '';
-        parsedSections.push({
-          _id: 'sec-' + i,
-          name: label,
-          bookTitle: (content.match(/书名[：:]\s*([^\n]+)/) || [])[1] || ('方案' + Math.ceil(i/2)),
-          novelSummary: content.slice(0, 300),
-          optimizedIdea: content.trim(),
-          text: content.trim()
-        });
-      }
-      if(parsedSections.length >= 2) arr = parsedSections;
-    }
-  }
-
-  if(!arr.length){
-    arr = [{
-      _id: 'polish-' + Date.now(),
-      name: '方案1',
-      bookTitle: '精选小说',
-      novelSummary: rawText.slice(0, 200),
-      optimizedIdea: rawText,
-      text: rawText
-    }];
-  }
-
-  // Force length constraint
-  if(!multi) arr = arr.slice(0, 1);
-  return arr.map((item, idx) => ({
-    _id: item._id || ('opt-' + Date.now() + '-' + idx),
-    name: item.name || ('方案' + (idx + 1)),
-    bookTitle: item.bookTitle || item.title || ('方案' + (idx + 1) + '书名'),
-    novelSummary: item.novelSummary || item.summary || '',
-    fullBookBeat: item.fullBookBeat || item.beat || '',
-    optimizedIdea: item.optimizedIdea || item.text || '',
-    creativeAdditions: item.creativeAdditions || '',
-    navBeacon: item.navBeacon || null,
-    defects: Array.isArray(item.defects) ? item.defects : [],
-    seedCharacters: Array.isArray(item.seedCharacters) ? item.seedCharacters : [],
-    seedPlaces: Array.isArray(item.seedPlaces) ? item.seedPlaces : []
-  }));
 }
