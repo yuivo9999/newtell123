@@ -79,9 +79,6 @@ const state = {
   polishDiagnosis: null,
   polishStrategies: [],
   strategicDimensions: [],
-  strategicDimensionsSelected: [],
-  strategicDimensionsConfirmed: false,
-  strategicDimensionsStatus: 'empty',
   originalIdeaAnchors: null,
   polishCanonical: null,
   // 第三阶段：后续全链路唯一权威故事战略；新流程下游不得直接读取 polishCanonical。
@@ -718,8 +715,6 @@ function toastLogClear(){ try{ localStorage.removeItem(TOAST_LOG_KEY); }catch(e)
 function toast(msg){
   const t = $('#toast');
   toastLogPush(msg);
-  const _toastMsg = String(msg??'');
-  if(/(?:失败|错误|异常|网络\/跨域失败|解析失败|校验失败|不可用|生成失败|请求失败)/.test(_toastMsg)) { try{ playThemeErrorSound(); }catch(e){} }
   t.innerHTML = `<span class="toast-msg">${esc(String(msg??''))}</span><button type="button" class="toast-hist" title="打开消息看板，回看全部提示" data-toast-board>📋</button>`;
   const hb = t.querySelector('[data-toast-board]'); if(hb) hb.onclick = (e)=>{ e.stopPropagation(); openToastBoard(); };
   t.classList.remove('hidden');
@@ -771,8 +766,8 @@ const SND_ALL_PRESETS = [
 ];
 const SND_TSINGLE_KEY = (typeof nsKey==='function') ? nsKey('snd_t_beats') : 'tz_snd_t_beats'; // 键名沿用旧值，保留用户已选音色
 const SND_TALL_KEY   = (typeof nsKey==='function') ? nsKey('snd_t_all')   : 'tz_snd_t_all';
-function _sndSingleType(){ try{ const v = localStorage.getItem(SND_TSINGLE_KEY); return SND_SINGLE_PRESETS.some(x=>x.id===v) ? v : 'be_paper'; }catch(e){ return 'be_paper'; } }
-function _sndAllType(){   try{ const v = localStorage.getItem(SND_TALL_KEY);   return SND_ALL_PRESETS.some(x=>x.id===v) ? v : 'al_piano';   }catch(e){ return 'al_up2';   } }
+function _sndSingleType(){ try{ const v = localStorage.getItem(SND_TSINGLE_KEY); return SND_SINGLE_PRESETS.some(x=>x.id===v) ? v : 'be_dingdong'; }catch(e){ return 'be_dingdong'; } }
+function _sndAllType(){   try{ const v = localStorage.getItem(SND_TALL_KEY);   return SND_ALL_PRESETS.some(x=>x.id===v) ? v : 'al_up2';   }catch(e){ return 'al_up2';   } }
 function setSoundSingleType(id){ try{ if(SND_SINGLE_PRESETS.some(x=>x.id===id)) localStorage.setItem(SND_TSINGLE_KEY, id); }catch(e){} }
 function setSoundAllType(id){   try{ if(SND_ALL_PRESETS.some(x=>x.id===id))   localStorage.setItem(SND_TALL_KEY,   id); }catch(e){} }
 let _lastSoundTs = 0;
@@ -808,97 +803,6 @@ function playDoneSound(kind){ // kind:'single' 单个完成 | 'all' 全部完成
     }, 120);
   }
 }
-
-// ===== 主题声音提醒 v2：四项独立完成提醒 + 五种独立错误音 =====
-const THEME_SOUND_DEFS = [
-  { key:'polish', label:'优化构想完成', icon:'💡' },
-  { key:'dictMaster', label:'词典达人完成', icon:'📖' },
-  { key:'dictEnrich', label:'词典充实完成', icon:'🗂️' },
-  { key:'chapterRegen', label:'正文重生成完成', icon:'🔄' }
-];
-const THEME_SOUND_ERR_PRESETS = [
-  { id:'err_buzz',  name:'低沉警报', seq:[[220,0,0.12],[165,0.14,0.18]] },
-  { id:'err_double',name:'双短警示', seq:[[330,0,0.10],[220,0.13,0.10]] },
-  { id:'err_drop',  name:'下降警铃', seq:[[440,0,0.09],[330,0.11,0.09],[220,0.22,0.20]] },
-  { id:'err_pulse', name:'脉冲警告', seq:[[262,0,0.08],[262,0.12,0.08],[196,0.24,0.20]] },
-  { id:'err_alert', name:'紧急提示', seq:[[523.25,0,0.07],[392,0.09,0.07],[523.25,0.18,0.07],[262,0.28,0.22]] }
-];
-function themeSoundKey(k){ return (typeof nsKey==='function') ? nsKey('theme_sound_'+k) : 'tz_theme_sound_'+k; }
-function themeSoundEnabled(k){ try{ return localStorage.getItem(themeSoundKey(k)+'_on') !== '0'; }catch(e){ return true; } }
-function themeSoundSetEnabled(k,on){ try{ localStorage.setItem(themeSoundKey(k)+'_on', on?'1':'0'); }catch(e){} }
-function themeSoundType(k){
-  try{
-    const v=localStorage.getItem(themeSoundKey(k)+'_type');
-    return SND_SINGLE_PRESETS.some(x=>x.id===v) ? v : 'be_paper';
-  }catch(e){ return 'be_paper'; }
-}
-function themeSoundSetType(k,id){ if(SND_SINGLE_PRESETS.some(x=>x.id===id)){ try{ localStorage.setItem(themeSoundKey(k)+'_type',id); }catch(e){} } }
-function themeErrorType(){
-  try{ const v=localStorage.getItem(themeSoundKey('error')+'_type'); return THEME_SOUND_ERR_PRESETS.some(x=>x.id===v)?v:'err_buzz'; }
-  catch(e){ return 'err_buzz'; }
-}
-function themeErrorSetType(id){ if(THEME_SOUND_ERR_PRESETS.some(x=>x.id===id)){ try{ localStorage.setItem(themeSoundKey('error')+'_type',id); }catch(e){} } }
-function _themePlaySeq(seq){
-  if(!_snd.enabled) return false;
-  unlockAudio();
-  if(!_snd.ctx) return false;
-  try{ if(_snd.ctx.state==='suspended') _snd.ctx.resume().catch(()=>{}); }catch(e){}
-  if(_snd.ctx.state!=='running') return false;
-  (seq||[]).forEach(x=>_sndBeep(x[0],x[1],x[2],0.24));
-  return true;
-}
-function playThemeSound(k, force=false){
-  if(!_snd.enabled) return false;
-  if(k==='error'){
-    if(!force && !themeSoundEnabled('error')) return false;
-    const p=THEME_SOUND_ERR_PRESETS.find(x=>x.id===themeErrorType())||THEME_SOUND_ERR_PRESETS[0];
-    return _themePlaySeq(p.seq);
-  }
-  if(!force && !themeSoundEnabled(k)) return false;
-  const p=SND_SINGLE_PRESETS.find(x=>x.id===themeSoundType(k))||SND_SINGLE_PRESETS[0];
-  return _themePlaySeq(p.seq);
-}
-function playThemeErrorSound(){ return playThemeSound('error'); }
-function renderThemeSoundSettings(){
-  const p=document.getElementById('themePanel'); if(!p) return;
-  let box=document.getElementById('themeSoundSettings');
-  if(!box){
-    box=document.createElement('div'); box.id='themeSoundSettings';
-    box.style.cssText='margin-top:12px;padding:12px;border:1px solid rgba(127,127,127,.25);border-radius:10px;background:rgba(127,127,127,.06);';
-    p.appendChild(box);
-  }
-  const opts=SND_SINGLE_PRESETS.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
-  const errOpts=THEME_SOUND_ERR_PRESETS.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
-  box.innerHTML=`
-    <div style="font-weight:700;margin-bottom:8px">🔔 任务声音提醒</div>
-    <div style="font-size:11px;opacity:.72;margin-bottom:10px">每项独立开关、独立音色，可单独试听；设置自动保存在本机。</div>
-    ${THEME_SOUND_DEFS.map(d=>`<div data-theme-snd-row="${d.key}" style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:7px 0">
-      <label style="display:flex;align-items:center;gap:5px;min-width:145px"><input type="checkbox" data-theme-snd-on="${d.key}" ${themeSoundEnabled(d.key)?'checked':''}> ${d.icon} ${d.label}</label>
-      <select data-theme-snd-type="${d.key}" style="flex:1;min-width:125px">${opts}</select>
-      <button type="button" class="btn small ghost" data-theme-snd-test="${d.key}">试听</button>
-    </div>`).join('')}
-    <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(127,127,127,.2)">
-      <div style="font-weight:700;margin-bottom:5px">⚠️ 出错提醒</div>
-      <div style="font-size:11px;opacity:.72;margin-bottom:7px">共 5 种错误提示声音，选择后可立即试听。</div>
-      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
-        <label style="display:flex;align-items:center;gap:5px;min-width:145px"><input type="checkbox" data-theme-snd-on="error" ${themeSoundEnabled('error')?'checked':''}> ⚠️ 出错提醒</label>
-        <select data-theme-snd-error style="flex:1;min-width:125px">${errOpts}</select>
-        <button type="button" class="btn small ghost" data-theme-snd-test="error">试听</button>
-      </div>
-    </div>`;
-  THEME_SOUND_DEFS.forEach(d=>{
-    const sel=box.querySelector(`[data-theme-snd-type="${d.key}"]`); if(sel) sel.value=themeSoundType(d.key);
-  });
-  const es=box.querySelector('[data-theme-snd-error]'); if(es) es.value=themeErrorType();
-  box.querySelectorAll('[data-theme-snd-on]').forEach(el=>{ el.onchange=()=>themeSoundSetEnabled(el.dataset.themeSndOn,!!el.checked); });
-  box.querySelectorAll('[data-theme-snd-type]').forEach(el=>{ el.onchange=()=>themeSoundSetType(el.dataset.themeSndType,el.value); });
-  if(es) es.onchange=()=>themeErrorSetType(es.value);
-  box.querySelectorAll('[data-theme-snd-test]').forEach(b=>{ b.onclick=e=>{ e.stopPropagation(); playThemeSound(b.dataset.themeSndTest,true); }; });
-}
-function initThemeSoundPanelExtended(){
-  renderThemeSoundSettings();
-}
-
 function initThemeSoundPanel(){
   const sb = document.getElementById('cfgSndSingle'), sa = document.getElementById('cfgSndAll');
   const optsB = SND_SINGLE_PRESETS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
@@ -1208,9 +1112,6 @@ function projectSnapshot(){
     polishDiagnosis: state.polishDiagnosis,
     polishStrategies: state.polishStrategies,
     strategicDimensions: state.strategicDimensions,
-    strategicDimensionsSelected: Array.isArray(state.strategicDimensionsSelected) ? state.strategicDimensionsSelected : [],
-    strategicDimensionsConfirmed: !!state.strategicDimensionsConfirmed,
-    strategicDimensionsStatus: state.strategicDimensionsStatus,
     originalIdeaAnchors: state.originalIdeaAnchors,
     polishCanonical: state.polishCanonical,
     canonicalStoryStrategy: state.canonicalStoryStrategy,
@@ -1294,9 +1195,6 @@ function applyProject(p){
   state.polishDiagnosis = (p.polishDiagnosis && typeof p.polishDiagnosis === 'object') ? p.polishDiagnosis : null;
   state.polishStrategies = Array.isArray(p.polishStrategies) ? p.polishStrategies : [];
   state.strategicDimensions = Array.isArray(p.strategicDimensions) ? p.strategicDimensions : [];
-  state.strategicDimensionsSelected = Array.isArray(p.strategicDimensionsSelected) ? p.strategicDimensionsSelected.map(String) : state.strategicDimensions.map(d=>String(d?.name||d?.title||d?.id||'')).filter(Boolean);
-  state.strategicDimensionsConfirmed = !!p.strategicDimensionsConfirmed;
-  state.strategicDimensionsStatus = ['empty','generating','ready'].includes(p.strategicDimensionsStatus) ? p.strategicDimensionsStatus : (state.strategicDimensions.length ? 'ready' : 'empty');
   state.originalIdeaAnchors = (p.originalIdeaAnchors && typeof p.originalIdeaAnchors==='object') ? p.originalIdeaAnchors : null;
   state.polishCanonical = (p.polishCanonical && typeof p.polishCanonical === 'object') ? p.polishCanonical : null;
   state.canonicalStoryStrategy = (p.canonicalStoryStrategy && typeof p.canonicalStoryStrategy === 'object') ? p.canonicalStoryStrategy : null;
@@ -1948,7 +1846,7 @@ function guardSwitchStep(){
 
 
 
-const CHAPTER_ENDING_CONTRACT_VERSION = 'app25-ending-contract-v2';
+const CHAPTER_ENDING_CONTRACT_VERSION = 'app25-ending-contract-v1';
 const CHAPTER_ENDING_CONTRACT = Object.freeze({
   version: CHAPTER_ENDING_CONTRACT_VERSION,
   command: '禁止留钩子的感觉',
@@ -1968,8 +1866,7 @@ const CHAPTER_ENDING_CONTRACT = Object.freeze({
     '为了让读者继续读而故意留下“下一步一定有事”的感觉。',
     '把本章已经结束的事件再包一层“新的开始/命运改变/真正故事开始”的感觉。',
     '即使完全不用“期待、未来、明天、希望、悬念”等词，只要读者读完明显被推向“等下一章”的情绪，也算失败。',
-    '为了形成钩子而额外增加一个本章没有发生的新问题、新承诺、新预告或抽象前瞻。',
-    '禁止出现“期望”和“希望”这类的对后面剧情的美好憧憬。'
+    '为了形成钩子而额外增加一个本章没有发生的新问题、新承诺、新预告或抽象前瞻。'
   ],
   counterExamples: [
     '失败：她把信收进抽屉，忽然觉得从这一刻起，一切都会不同。——这是未来指向感觉。',
@@ -3117,116 +3014,6 @@ const SIZE_DEFAULT = { min:3000, max:5000 };
 
 let polishMulti = true;
 
-const STRATEGIC_DIMENSIONS_SYS = `你是一名资深故事战略策划师。你的任务只有第一阶段：根据用户原始故事构想，动态生成适合本故事的候选战略维度。
-绝对禁止使用固定五向模板。必须根据题材、混合题材、人物驱动力、核心冲突、世界规则、信息结构、读者体验和创作目标重新设计战略地图。
-输出严格JSON，不要Markdown，不要解释：
-{"originalAnchors":{"characters":[],"relationships":[],"goals":[],"coreConflict":"","worldRules":[],"fixedFacts":[]},"strategicDimensions":[{"name":"","description":"","whyFit":""}]}
-要求 strategicDimensions 为6—10个；每个维度必须真正不同；不得把“商业/反差/情感/悬疑/日常”当固定五盒子；不得擅自改写用户事实。`;
-function parseStrategicDimensions(raw){
-  // callDeepSeek may return {text, finishReason, usage}; always parse the actual text payload.
-  // 这一阶段对模型返回更宽容：允许 JSON fence、前后说明文字、尾逗号及常见字段别名，
-  // 但最终仍严格要求 strategicDimensions 为 6—10 个有效维度，由上层统一做数量校验。
-  const t=String(unwrapAIResult(raw)||'').trim();
-  if(!t) return {anchors:{},dims:[],parseError:'模型返回为空'};
-  let j=null, lastErr='';
-  const candidates=[];
-  const push=(x)=>{ if(x && !candidates.includes(x)) candidates.push(x); };
-  push(t);
-  const fence=t.match(/```(?:json)?\s*([\s\S]*?)```/i); if(fence) push(fence[1].trim());
-  const obj=t.match(/\{[\s\S]*\}/); if(obj) push(obj[0]);
-  for(const c of candidates){
-    try{ j=JSON.parse(c); break; }catch(e){ lastErr=e.message||'JSON解析失败'; }
-    try{ j=JSON.parse(c.replace(/[\u201c\u201d]/g,'\"').replace(/[\u2018\u2019]/g,"'").replace(/,\s*([}\]])/g,'$1')); break; }catch(e){ lastErr=e.message||lastErr; }
-  }
-  if(!j || typeof j!=='object'){
-    try{ j=robustParseJson(t); }catch(e){ return {anchors:{},dims:[],parseError:lastErr||e.message||'返回不是合法JSON'}; }
-  }
-  const dimsRaw = Array.isArray(j.strategicDimensions) ? j.strategicDimensions
-    : (Array.isArray(j.strategic_dimensions) ? j.strategic_dimensions
-    : (Array.isArray(j.dimensions) ? j.dimensions : (Array.isArray(j.dims) ? j.dims : [])));
-  const dims=dimsRaw.map((d,i)=>({
-    name:String(d?.name||d?.title||d?.dimension||'战略维度'+(i+1)).trim(),
-    description:String(d?.description||d?.desc||d?.how||'').trim(),
-    whyFit:String(d?.whyFit||d?.why_fit||d?.reason||d?.fit||'').trim()
-  })).filter(d=>d.name&&d.description);
-  return {anchors:j.originalAnchors&&typeof j.originalAnchors==='object'?j.originalAnchors:{},dims,parseError:dims.length?'':(lastErr||'缺少 strategicDimensions')};
-}
-function strategicStagePrompt(){
-  const idea=String(state.idea||'').trim();
-  return `【用户原始故事构想】\n${idea}\n\n【当前模式】${state.mode||''}\n【长篇模式】${isLong()?'是':'否'}\n请只完成第一阶段：战略维度分析。`;
-}
-async function generateStrategicDimensions(btn){
-  const idea=(state.idea||'').trim();
-  if(!idea){ toast('请先输入故事构想'); return; }
-  state.strategicDimensionsStatus='generating'; state.strategicDimensionsConfirmed=false; persist(); render();
-  const b=btn || $('#btnGenerateStrategic'); if(b) busy(b,true,'正在生成战略维度…');
-  try{
-    const raw=await callDeepSeek(STRATEGIC_DIMENSIONS_SYS,strategicStagePrompt(),{temperature:0.65,maxTokens:2600,taskKey:'strategic_dimensions'});
-    const parsed=parseStrategicDimensions(raw);
-    if(parsed.dims.length<6 || parsed.dims.length>10){
-      const rawText=String(unwrapAIResult(raw)||'').trim();
-      const detail=parsed.parseError ? `；解析原因：${parsed.parseError}` : '';
-      throw new Error(`战略维度数量校验失败：实际解析到 ${parsed.dims.length} 个，应为6—10个${detail}${rawText?`；AI已返回约${rawText.length}字内容`:''}`);
-    }
-    state.originalIdeaAnchors=parsed.anchors;
-    state.strategicDimensions=parsed.dims;
-    state.strategicDimensionsStatus='ready';
-    state.strategicDimensionsSelected=parsed.dims.map(d=>String(d?.name||d?.title||d?.id||'')).filter(Boolean);
-    state.strategicDimensionsConfirmed=false;
-    state.polishOptions=[]; state.polishAdopted=null; state.polishSelectedId=null; state.polishCanonical=null; state.canonicalStoryStrategy=null;
-    persist(); render(); openTwoStagePanel('dimensions');
-    toast(`战略维度生成完成，共 ${parsed.dims.length} 个`);
-  }catch(e){ state.strategicDimensionsStatus='empty'; state.strategicDimensionsSelected=[]; state.strategicDimensionsConfirmed=false; persist(); render(); toast('战略维度生成失败：'+e.message); }
-  finally{ if(b) busy(b,false); }
-}
-async function generateStrategicAndOptimized(btn){
-  const idea=(state.idea||'').trim();
-  if(!idea){ toast('请先输入故事构想'); return; }
-  const b=btn || $('#btnGenerateStrategyAndOptimize');
-  if(b) busy(b,true,'正在一键完成战略维度与优化构想…');
-  try{
-    await generateStrategicDimensions(b);
-    if(state.strategicDimensionsStatus!=='ready' || !Array.isArray(state.strategicDimensions) || !state.strategicDimensions.length) return;
-    // 一键模式沿用原第二阶段生成逻辑，只把原本需要人工勾选/确认的维度改为自动全选确认。
-    state.strategicDimensionsSelected=state.strategicDimensions.map(d=>String(d?.name||d?.title||d?.id||'')).filter(Boolean);
-    state.strategicDimensionsConfirmed=state.strategicDimensionsSelected.length>0;
-    persist(); render();
-    await generateOptimizedIdeas(b);
-  }catch(e){
-    console.error('[TwoStage][one-click]',e);
-    toast('一键生成失败：'+(e&&e.message?e.message:e));
-  }finally{
-    if(b) busy(b,false);
-  }
-}
-
-function openTwoStagePanel(kind){
-  const el=document.getElementById('twoStagePanel'); if(!el) return;
-  el.style.display='block'; el.classList.remove('ts-enter'); void el.offsetWidth; el.classList.add('ts-enter');
-  el.scrollIntoView({behavior:'smooth',block:'center'});
-}
-async function generateOptimizedIdeas(btn, force){
-  const idea=(state.idea||'').trim(); const dims=Array.isArray(state.strategicDimensions)?state.strategicDimensions:[];
-  if(!idea){toast('请先输入故事构想');return;}
-  const selectedNames=Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected.map(String):[];
-  const selectedDims=dims.filter(d=>selectedNames.includes(String(d?.name||d?.title||d?.id||'')));
-  if(!state.strategicDimensionsConfirmed || selectedDims.length<1){toast('请先在第一阶段选择并确认至少1个战略维度');openTwoStagePanel('dimensions');return;}
-  if(state.polishOptions?.length && !force){if(!confirm(`已有 ${state.polishOptions.length} 个优化方案，重新生成将覆盖它们。继续？`))return;}
-  state.polishMode=polishMulti?'multi':'single'; state.polishStatus='generating'; state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null; persist(); render();
-  const b=$('#btnGenerateOptimized'); if(b) busy(b,true,'正在基于战略维度生成方案…');
-  const dimText=selectedDims.map((d,i)=>`${i+1}. ${d.name}\n${d.description}\n契合：${d.whyFit}`).join('\n');
-  const sys=`你是一名资深故事策划师。现在执行第二阶段：只能读取第一阶段已经确认的战略维度，并基于它们生成3—5个彼此真正不同的优化构想候选方案。不得回退到旧的一步式“五向”逻辑。严格JSON：{"options":[{"name":"","bookTitle":"","novelSummary":"","fullBookBeat":"","optimizedIdea":"","creativeAdditions":"","originalAnchors":{},"strategicDimensions":[],"strategyFingerprint":{"mainStrategy":"","secondaryStrategy":"","coreConflict":"","storyEngine":"","emotionalPromise":"","pacing":""},"diagnosis":{"strengths":[],"defects":[],"missing":[],"constraints":[]},"optimizationStrategies":[],"navBeacon":{}}]}. 每个方案必须从确认的战略维度组合而来，战略指纹高度相似则重做。`;
-  const user=`【原始构想】\n${idea}\n\n【第一阶段已确认战略维度】\n${dimText}\n\n请执行第二阶段，只输出最终3—5个候选优化方案。`;
-  try{
-    const raw=await callDeepSeek(sys,user,{temperature:resolveActiveSpec().ideaTemp,maxTokens:clampMaxTokens('polish'),taskKey:'polish_stage2'});
-    const opts=parsePolishCandidatesFixed(raw,true);
-    if(opts.length<3 || opts.length>5) throw new Error(`候选方案数量校验失败：${opts.length}，应为3—5个`);
-    state.polishOptions=opts; state.polishRawFallback=String(raw||''); state.polishStatus='waiting_selection';
-    state.strategicDimensionsConfirmed=true; persist(); render(); openTwoStagePanel('options'); toast(`优化构想生成完成，共 ${opts.length} 个方案`);
-  }catch(e){ state.polishStatus='empty'; persist(); toast('优化构想生成失败：'+e.message); }
-  finally{ if(b) busy(b,false); }
-}
-
 async function polishIdea(btn, force){
   const idea = (state.idea || '').trim();
   if(!idea){
@@ -3476,7 +3263,6 @@ function normalizePolishCandidate(raw, index){
   });
 }
 function parsePolishCandidatesFixed(raw, multi){
-  raw = unwrapAIResult(raw);
   const obj = polishObjectFromAny(raw);
   const rawText = String(raw||'').trim();
   let arr = [];
@@ -3563,7 +3349,6 @@ function showPolishResult(out, multi){
     state.polishStrategies=[];
   }
   persist();
-  playThemeSound('polish');
   if(box && cards){ box.style.display='block'; render(); openPolishBox(); }
   else { persist(); }
 }
@@ -3689,10 +3474,8 @@ function renderPolishCards(container){
 }
 
 function bindPolishIdea(){
-  const b = $('#btnGenerateStrategic');
-  if(b) b.onclick = ()=> generateStrategicDimensions(b);
-  const b2 = $('#btnGenerateOptimized');
-  if(b2) b2.onclick = ()=> generateOptimizedIdeas(b2);
+  const b = $('#btnPolishIdea');
+  if(b) b.onclick = ()=> polishIdea(b);
   const chk = $('#chkPolishMulti');
   if(chk){
     const sync = ()=>{
@@ -3714,7 +3497,7 @@ function bindPolishIdea(){
   const view = $('[data-pol-keep-view]');
   if(view) view.onclick = (e)=>{ e.stopPropagation(); openPolishBox(); };
   const again = $('[data-pol-keep-again]');
-  if(again) again.onclick = (e)=>{ e.stopPropagation(); generateOptimizedIdeas($('#btnGenerateOptimized'), true); };
+  if(again) again.onclick = (e)=>{ e.stopPropagation(); polishIdea($('#btnPolishIdea'), true); };
   const clear = $('[data-pol-keep-clear]');
   if(clear) clear.onclick = (e)=>{
     e.stopPropagation();
@@ -8352,7 +8135,7 @@ const NM_WEB_BLACKLIST = ['林晚','苏晚','顾沉','云深','顾言','江晚',
 const NM_BANNED_CHARS = ['晚','砚','秋','檐'];   // 姓名中禁止出现这四个汉字（任何位置）
 const NM_BANNED_NAMES = [   // 逐字精确禁用名单（含去空格），命中即判违规
   '林辰','苏辰','顾夜寒','陆泽','墨渊','叶辰','江亦琛','傅景深','沈辞','萧景琰','凌夜','顾言','裴衍','楚慕言','厉承勋','谢珩','温景然','云烬','宋砚','慕云凡',
-  '苏清月','晚卿','沈知予','顾晚柠','林晚星','慕晚晴','苏沐瑶','温妤','夏晚璃','楚清鸢','叶轻寒','姜知微','云舒','苏念汐','洛清欢','白若曦','顾绾绾','江晚渔','宋知晚','宁疏影','林小满'
+  '苏清月','晚卿','沈知予','顾晚柠','林晚星','慕晚晴','苏沐瑶','温妤','夏晚璃','楚清鸢','叶轻寒','姜知微','云舒','苏念汐','洛清欢','白若曦','顾绾绾','江晚渔','宋知晚','宁疏影'
 ];
 const BANLIST_DEFAULT = {
   enabled: true,
@@ -8366,8 +8149,8 @@ const BANLIST_DEFAULT = {
     properNouns: []
   },
   prose: {
-    words: ['窗棂'],
-    phrases: ['天刚蒙蒙亮'],
+    words: [],
+    phrases: [],
     patterns: [],
     rules: []
   },
@@ -8479,8 +8262,8 @@ function banListChars(){ const b=banListRaw(); return mergeBanListLists(NM_BANNE
 function banListNames(){ const b=banListRaw(); return mergeBanListLists(NM_BANNED_NAMES, b.naming && b.naming.names); }
 function banListPlaces(){ const b=banListRaw(); return uniqueTrimList(b.naming && b.naming.places); }
 function banListProperNouns(){ const b=banListRaw(); return uniqueTrimList(b.naming && b.naming.properNouns); }
-function banListProseWords(){ const b=banListRaw(); return mergeBanListLists(BANLIST_DEFAULT.prose && BANLIST_DEFAULT.prose.words, b.prose && b.prose.words); }
-function banListProsePhrases(){ const b=banListRaw(); return mergeBanListLists(BANLIST_DEFAULT.prose && BANLIST_DEFAULT.prose.phrases, b.prose && b.prose.phrases, b.phrases); }
+function banListProseWords(){ const b=banListRaw(); return uniqueTrimList(b.prose && b.prose.words); }
+function banListProsePhrases(){ const b=banListRaw(); return mergeBanListLists(b.prose && b.prose.phrases, b.phrases); }
 function banListProsePatterns(){ const b=banListRaw(); return uniqueTrimList(b.prose && b.prose.patterns); }
 function banListRules(){ const b=banListRaw(); return Array.isArray(b.prose && b.prose.rules) ? b.prose.rules : (Array.isArray(b.rules)?b.rules:[]); }
 function banListNamingActive(role){
@@ -10048,7 +9831,6 @@ function render(){
   else if(currentStep===4) v.innerHTML = viewStoryboard();
   else if(currentStep===5) v.innerHTML = viewExport();
   bindView();
-  if(currentStep===1) renderTwoStagePanel();
   if(currentStep===1) bindFlowSideNav();
   updateWcTotal();
   if(_restY >= 0){ try{ window.scrollTo(0, _restY); }catch(e){} }
@@ -11283,15 +11065,7 @@ function bindLongNovelControlDeck(){
   });
 }
 
-const TWO_STAGE_PIPELINE_CSS = `
-.two-stage-flow{display:grid;gap:0;margin:12px 0;padding:12px;border:1px solid var(--line,#d9dce3);border-radius:16px;background:linear-gradient(145deg,rgba(99,102,241,.07),rgba(16,185,129,.05));box-shadow:0 8px 30px rgba(0,0,0,.06)}
-.two-stage-step{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:13px;background:var(--card,#fff);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}.two-stage-step:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(0,0,0,.08)}
-.ts-step-no{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:12px;background:#111827;color:#fff;flex:none}.ts-step-main{min-width:0;flex:1}.ts-step-title{font-weight:800}.ts-step-note{font-size:11px;line-height:1.5;color:var(--muted,#6b7280);margin-top:3px}.ts-btn{position:relative;overflow:hidden;min-width:128px;font-weight:800;border-radius:11px;transition:transform .18s ease,box-shadow .18s ease,filter .18s ease}.ts-btn:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.04);box-shadow:0 8px 20px rgba(0,0,0,.12)}.ts-btn:active:not(:disabled){transform:scale(.97)}.ts-btn-strategy{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:0}.ts-btn-opt{background:linear-gradient(135deg,#059669,#0d9488);color:#fff;border:0}.ts-btn:disabled{opacity:.45;cursor:not-allowed}.ts-connector{height:20px;width:2px;margin-left:30px;background:linear-gradient(#8b5cf6,#10b981);position:relative}.ts-connector:after{content:'↓';position:absolute;bottom:-8px;left:-6px;font-size:14px}.two-stage-panel{margin:10px 0;padding:14px;border:1px dashed var(--line,#bbb);border-radius:13px;background:var(--card,#fff)}.ts-enter{animation:tsEnter .35s ease both}@keyframes tsEnter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@media(max-width:680px){.two-stage-step{align-items:flex-start;flex-wrap:wrap}.ts-step-main{flex-basis:calc(100% - 55px)}.ts-btn{width:100%;margin-left:50px}}
-`;
-function ensureTwoStagePipelineStyles(){ if(document.getElementById('twoStagePipelineStyles')) return; const st=document.createElement('style'); st.id='twoStagePipelineStyles'; st.textContent=TWO_STAGE_PIPELINE_CSS; document.head.appendChild(st); }
-
 function viewStory(){
-  ensureTwoStagePipelineStyles();
   if(!state.outline){
     const homeSub = isLong()
       ? `用几句话描述你的长篇构想（世界观、主角、核心冲突都行）。AI 会按你设定的章节数与全书拍子扩写成大纲，之后按「生成章节」逐步写完。`
@@ -11305,19 +11079,15 @@ function viewStory(){
               <span class="ch-subtag ch-subtag-idea">${(state.polishOptions&&state.polishOptions.length)?'✨ 构想已优化':'待优化'}</span>
             </div>
             <div class="ch-right">
-              <span class="pol-multi" title="第二阶段固定生成3～5个候选方案">3～5方案 · 两阶段流水线</span>
+              <label class="pol-multi" title="生成多方向构想供比选"><input type="checkbox" id="chkPolishMulti"> 多方案</label>
             </div>
           </div>
           <div class="idea-row">
             <textarea id="ideaInput" placeholder="描述你的故事点子（世界观、主角、核心冲突等）…">${esc(state.idea)}</textarea>
           </div>
-          <div class="two-stage-flow" id="twoStageFlow">
-            <div class="two-stage-step ${state.polishOptions?.length?'done':''}">
-              <div class="ts-step-no">01→02</div><div class="ts-step-main"><div class="ts-step-title">🧭✨ 一键生成战略维度 + 优化构想</div><div class="ts-step-note">自动完成原来的两步：先生成6～10个动态战略维度并自动全选确认，再按原有第二阶段逻辑生成3～5个优化方案。</div></div>
-              <button id="btnGenerateStrategyAndOptimize" class="btn ts-btn ts-btn-opt">一键生成<span class="ts-ripple"></span></button>
-            </div>
+          <div class="btn-row">
+            <button id="btnPolishIdea" class="btn ghost ${polishIdle()?'first':''}">✨ 优化构想</button>
           </div>
-          <div id="twoStagePanel" class="two-stage-panel" style="display:${state.strategicDimensions.length||state.polishOptions?.length?'block':'none'}"></div>
           <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}">
             <div class="pol-head"><b>✨ 方案比选</b>
               <span class="pol-tools">
@@ -14736,54 +14506,6 @@ function buildMarkdown(){
   return md;
 }
 
-function renderTwoStagePanel(){
-  const el=document.getElementById('twoStagePanel'); if(!el) return;
-  const dims=Array.isArray(state.strategicDimensions)?state.strategicDimensions:[];
-  const opts=Array.isArray(state.polishOptions)?state.polishOptions:[];
-  if(!dims.length&&!opts.length){el.style.display='none';el.innerHTML='';return;}
-  el.style.display='block';
-  const selected=new Set((Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected:[]).map(String));
-  const dimHtml=dims.length?`<section style="padding:14px;border:1px solid var(--line,#ddd);border-radius:12px;background:var(--card,#fff)">
-    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
-      <div><b style="font-size:15px">🧭 第一步：战略维度结果</b><div class="muted" style="margin-top:5px;line-height:1.55">AI 已根据你的故事动态分析出 ${dims.length} 个候选方向。请阅读后勾选你希望下一步重点采用的维度。</div></div>
-      <span class="ts-result-badge">${state.strategicDimensionsConfirmed?'✓ 已确认':'待选择与确认'}</span>
-    </div>
-    <div style="margin:10px 0;padding:10px;border-radius:9px;background:rgba(80,120,180,.08);font-size:12px;line-height:1.6"><b>这一步有什么意义？</b> 战略维度不是最终故事方案，而是下一步“优化构想”的方向盘。你勾选的维度会直接作为第二阶段 AI 的输入约束；未勾选的维度不会作为重点方向。</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:9px;margin-top:10px">
-      ${dims.map((d,i)=>{const name=String(d?.name||d?.title||d?.id||'战略维度'+(i+1));const key=name;const checked=selected.has(key);return `<label class="ts-dim-choice" style="display:block;padding:11px;border:1px solid ${checked?'var(--accent,#4c6fff)':'var(--line,#ddd)'};border-radius:10px;cursor:pointer;background:${checked?'rgba(76,111,255,.07)':'transparent'}"><div style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" data-ts-dim="${esc(key)}" ${checked?'checked':''} style="margin-top:3px"><div><b>${esc(name)}</b><div style="font-size:12px;line-height:1.55;margin-top:4px">${esc(String(d?.description||''))}</div>${String(d?.whyFit||'').trim()?`<div style="font-size:11px;color:var(--muted);margin-top:5px">契合：${esc(String(d.whyFit))}</div>`:''}</div></div></label>`}).join('')}
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
-      <button type="button" class="btn primary" id="btnConfirmStrategicDimensions">✓ 确认所选战略维度</button>
-      <span class="muted" id="tsDimCount">已选择 ${[...selected].filter(x=>dims.some(d=>String(d?.name||d?.title||d?.id||'')===x)).length} / ${dims.length}</span>
-    </div>
-  </section>`:'';
-  const ohtml=opts.length?`<section style="margin-top:14px;padding:14px;border:1px solid var(--line,#ddd);border-radius:12px;background:var(--card,#fff)">
-    <div><b style="font-size:15px">✨ 第二步：优化构想结果</b><div class="muted" style="margin-top:5px;line-height:1.55">AI 已生成 ${opts.length} 个候选方案。完整内容会同时显示在下面“方案比选”区域，你可以查看、复制并选择采用的方案。</div></div>
-    <div style="margin-top:9px">${opts.map((o,i)=>`<div style="padding:10px;border:1px solid var(--line,#ddd);border-radius:9px;margin-top:7px"><b>${i+1}. ${esc(o.name||'方案'+(i+1))}</b><div style="font-size:12px;line-height:1.55;margin-top:4px;white-space:pre-wrap">${esc(o.optimizedIdea||o.novelSummary||o.text||'')}</div></div>`).join('')}</div>
-    <div style="margin-top:9px;padding:9px;background:rgba(80,120,180,.08);border-radius:8px;font-size:12px;line-height:1.55"><b>这一步有什么意义？</b> 这是把你确认的战略方向转化为可比较的具体故事方案。选择“采用此方案”后，才会成为后续大纲与创作链路的正式战略依据。</div>
-  </section>`:'';
-  el.innerHTML=dimHtml+ohtml;
-  el.querySelectorAll('[data-ts-dim]').forEach(ch=>{
-    ch.onchange=()=>{
-      const key=String(ch.dataset.tsDim||'');
-      const cur=new Set((Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected:[]).map(String));
-      if(ch.checked) cur.add(key); else cur.delete(key);
-      state.strategicDimensionsSelected=[...cur];
-      state.strategicDimensionsConfirmed=false;
-      persist(); renderTwoStagePanel();
-    };
-  });
-  const confirmBtn=el.querySelector('#btnConfirmStrategicDimensions');
-  if(confirmBtn) confirmBtn.onclick=()=>{
-    const valid=dims.filter(d=>(Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected:[]).includes(String(d?.name||d?.title||d?.id||'')));
-    if(!valid.length){toast('至少选择1个战略维度后才能确认');return;}
-    state.strategicDimensionsSelected=valid.map(d=>String(d?.name||d?.title||d?.id||''));
-    state.strategicDimensionsConfirmed=true;
-    persist(); render(); openTwoStagePanel('options');
-    toast(`已确认 ${valid.length} 个战略维度，下一步优化构想将只重点依据这些方向生成`);
-  };
-}
-
 function bindView(){
   bindCopyBtns();
   bindCharEdit();
@@ -14801,7 +14523,6 @@ function bindView(){
     }
   }
   bindPolishIdea();
-  const _twoStageOneClick = $('#btnGenerateStrategyAndOptimize'); if(_twoStageOneClick) _twoStageOneClick.onclick = ()=> generateStrategicAndOptimized(_twoStageOneClick);
   const _goB = $('#btnGenOutline'); if(_goB) _goB.onclick = ()=> genOutline();
   const _p2 = $('#polishCards2'); if(_p2) renderPolishCards(_p2);
   $$('[data-gen-outline]').forEach(b=> b.onclick = ()=> genOutline());
@@ -15592,7 +15313,6 @@ async function genDictMaster(btn){
     collapseGlossaryAfterDictionaryGeneration();
     render();
     markAIDone('dictmaster');
-    playThemeSound('dictMaster');
     toast(`万物词典已生成：人物 ${result.nChar} 位 · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系表 ${result.nRel} 条 · 世界观规则 ${result.nWR} 条（已并入万物词典）`);
     return true;
   }catch(e){
@@ -16839,7 +16559,6 @@ async function genDictEnrich(btn, opts){
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, ts:Date.now() };
     persist(); render(); markAIDone('dictEnrich');
-    playThemeSound('dictEnrich');
     if(stream) stream.style.display='none';
     toast(`词典已充实：主要人物 ${n.main||0} · 次要配角 ${n.support||0} · 路人 ${n.w||0} · 地名 ${n.p} · 专名 ${n.k}（已并入万物词典，正文可直接选用）`);
     return true;
@@ -18198,7 +17917,6 @@ async function genOneChapter(i, btn, opt={}){
     patchChapter(i);
     if(st){ st.className='status ok'; st.textContent = `第 ${i+1} 章已生成。`; }
     toast('第'+(i+1)+'章完成');
-    playThemeSound('chapterRegen');
     generateRollingSummaries().catch(()=>{});
   }catch(e){
     if(e.name==='AbortError'){ if(st) st.textContent = '第'+(i+1)+'章已停止生成'; }
@@ -19652,7 +19370,6 @@ async function init(){
   const btnTheme = $('#btnTheme');
   if(btnTheme) btnTheme.onclick = (e)=>{ e.stopPropagation(); const p=$('#themePanel'); if(p.classList.contains('hidden')) openThemePanel(); else closeThemePanel(); };
   initThemeSoundPanel();
-  initThemeSoundPanelExtended();
   rebindNarrativeEngine();
   const btnTS = $('#btnTempSave');
   if(btnTS) btnTS.onclick = (e)=>{
@@ -19876,8 +19593,7 @@ function buildIdeaPolishUserFixed(ctx){
 }
 
 function parsePolishCandidatesFixed(raw, multi){
-  // Normalize callDeepSeek's {text,...} response before JSON/text parsing.
-  const rawText = String(unwrapAIResult(raw) || '').trim();
+  const rawText = String(raw || '').trim();
   if(!rawText) return [];
   const parsed = robustParseJson(rawText);
   let arr = [];
