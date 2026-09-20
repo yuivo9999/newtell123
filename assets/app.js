@@ -3159,7 +3159,7 @@ async function generateStrategicDimensions(btn){
   const idea=(state.idea||'').trim();
   if(!idea){ toast('请先输入故事构想'); return; }
   state.strategicDimensionsStatus='generating'; state.strategicDimensionsConfirmed=false; persist(); render();
-  const b=$('#btnGenerateStrategic'); if(b) busy(b,true,'正在生成战略维度…');
+  const b=btn || $('#btnGenerateStrategic'); if(b) busy(b,true,'正在生成战略维度…');
   try{
     const raw=await callDeepSeek(STRATEGIC_DIMENSIONS_SYS,strategicStagePrompt(),{temperature:0.65,maxTokens:2600,taskKey:'strategic_dimensions'});
     const parsed=parseStrategicDimensions(raw);
@@ -3179,6 +3179,27 @@ async function generateStrategicDimensions(btn){
   }catch(e){ state.strategicDimensionsStatus='empty'; state.strategicDimensionsSelected=[]; state.strategicDimensionsConfirmed=false; persist(); render(); toast('战略维度生成失败：'+e.message); }
   finally{ if(b) busy(b,false); }
 }
+async function generateStrategicAndOptimized(btn){
+  const idea=(state.idea||'').trim();
+  if(!idea){ toast('请先输入故事构想'); return; }
+  const b=btn || $('#btnGenerateStrategyAndOptimize');
+  if(b) busy(b,true,'正在一键完成战略维度与优化构想…');
+  try{
+    await generateStrategicDimensions(b);
+    if(state.strategicDimensionsStatus!=='ready' || !Array.isArray(state.strategicDimensions) || !state.strategicDimensions.length) return;
+    // 一键模式沿用原第二阶段生成逻辑，只把原本需要人工勾选/确认的维度改为自动全选确认。
+    state.strategicDimensionsSelected=state.strategicDimensions.map(d=>String(d?.name||d?.title||d?.id||'')).filter(Boolean);
+    state.strategicDimensionsConfirmed=state.strategicDimensionsSelected.length>0;
+    persist(); render();
+    await generateOptimizedIdeas(b);
+  }catch(e){
+    console.error('[TwoStage][one-click]',e);
+    toast('一键生成失败：'+(e&&e.message?e.message:e));
+  }finally{
+    if(b) busy(b,false);
+  }
+}
+
 function openTwoStagePanel(kind){
   const el=document.getElementById('twoStagePanel'); if(!el) return;
   el.style.display='block'; el.classList.remove('ts-enter'); void el.offsetWidth; el.classList.add('ts-enter');
@@ -8345,7 +8366,7 @@ const BANLIST_DEFAULT = {
     properNouns: []
   },
   prose: {
-    words: [],
+    words: ['窗棂'],
     phrases: ['天刚蒙蒙亮'],
     patterns: [],
     rules: []
@@ -8458,7 +8479,7 @@ function banListChars(){ const b=banListRaw(); return mergeBanListLists(NM_BANNE
 function banListNames(){ const b=banListRaw(); return mergeBanListLists(NM_BANNED_NAMES, b.naming && b.naming.names); }
 function banListPlaces(){ const b=banListRaw(); return uniqueTrimList(b.naming && b.naming.places); }
 function banListProperNouns(){ const b=banListRaw(); return uniqueTrimList(b.naming && b.naming.properNouns); }
-function banListProseWords(){ const b=banListRaw(); return uniqueTrimList(b.prose && b.prose.words); }
+function banListProseWords(){ const b=banListRaw(); return mergeBanListLists(BANLIST_DEFAULT.prose && BANLIST_DEFAULT.prose.words, b.prose && b.prose.words); }
 function banListProsePhrases(){ const b=banListRaw(); return mergeBanListLists(BANLIST_DEFAULT.prose && BANLIST_DEFAULT.prose.phrases, b.prose && b.prose.phrases, b.phrases); }
 function banListProsePatterns(){ const b=banListRaw(); return uniqueTrimList(b.prose && b.prose.patterns); }
 function banListRules(){ const b=banListRaw(); return Array.isArray(b.prose && b.prose.rules) ? b.prose.rules : (Array.isArray(b.rules)?b.rules:[]); }
@@ -11291,14 +11312,9 @@ function viewStory(){
             <textarea id="ideaInput" placeholder="描述你的故事点子（世界观、主角、核心冲突等）…">${esc(state.idea)}</textarea>
           </div>
           <div class="two-stage-flow" id="twoStageFlow">
-            <div class="two-stage-step ${state.strategicDimensionsStatus==='ready'?'done':''}">
-              <div class="ts-step-no">01</div><div class="ts-step-main"><div class="ts-step-title">🧭 生成战略维度</div><div class="ts-step-note">AI先根据当前题材动态生成6～10个候选战略维度，不再固定“五向”。</div></div>
-              <button id="btnGenerateStrategic" class="btn ts-btn ts-btn-strategy">生成战略维度<span class="ts-ripple"></span></button>
-            </div>
-            <div class="ts-connector"></div>
-            <div class="two-stage-step ${state.strategicDimensionsConfirmed?'ready':''}">
-              <div class="ts-step-no">02</div><div class="ts-step-main"><div class="ts-step-title">✨ 生成优化构想</div><div class="ts-step-note">读取第一阶段已确认战略维度，再生成3～5个真正不同的优化方案。</div></div>
-              <button id="btnGenerateOptimized" class="btn ts-btn ts-btn-opt" ${state.strategicDimensionsConfirmed?'':'disabled title="请先完成第一步"'}>生成优化构想<span class="ts-ripple"></span></button>
+            <div class="two-stage-step ${state.polishOptions?.length?'done':''}">
+              <div class="ts-step-no">01→02</div><div class="ts-step-main"><div class="ts-step-title">🧭✨ 一键生成战略维度 + 优化构想</div><div class="ts-step-note">自动完成原来的两步：先生成6～10个动态战略维度并自动全选确认，再按原有第二阶段逻辑生成3～5个优化方案。</div></div>
+              <button id="btnGenerateStrategyAndOptimize" class="btn ts-btn ts-btn-opt">一键生成<span class="ts-ripple"></span></button>
             </div>
           </div>
           <div id="twoStagePanel" class="two-stage-panel" style="display:${state.strategicDimensions.length||state.polishOptions?.length?'block':'none'}"></div>
@@ -14785,6 +14801,7 @@ function bindView(){
     }
   }
   bindPolishIdea();
+  const _twoStageOneClick = $('#btnGenerateStrategyAndOptimize'); if(_twoStageOneClick) _twoStageOneClick.onclick = ()=> generateStrategicAndOptimized(_twoStageOneClick);
   const _goB = $('#btnGenOutline'); if(_goB) _goB.onclick = ()=> genOutline();
   const _p2 = $('#polishCards2'); if(_p2) renderPolishCards(_p2);
   $$('[data-gen-outline]').forEach(b=> b.onclick = ()=> genOutline());
