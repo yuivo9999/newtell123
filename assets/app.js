@@ -1945,7 +1945,7 @@ function guardSwitchStep(){
 
 
 
-const CHAPTER_ENDING_CONTRACT_VERSION = 'app25-ending-contract-v1';
+const CHAPTER_ENDING_CONTRACT_VERSION = 'app25-ending-contract-v2';
 const CHAPTER_ENDING_CONTRACT = Object.freeze({
   version: CHAPTER_ENDING_CONTRACT_VERSION,
   command: '禁止留钩子的感觉',
@@ -1965,7 +1965,8 @@ const CHAPTER_ENDING_CONTRACT = Object.freeze({
     '为了让读者继续读而故意留下“下一步一定有事”的感觉。',
     '把本章已经结束的事件再包一层“新的开始/命运改变/真正故事开始”的感觉。',
     '即使完全不用“期待、未来、明天、希望、悬念”等词，只要读者读完明显被推向“等下一章”的情绪，也算失败。',
-    '为了形成钩子而额外增加一个本章没有发生的新问题、新承诺、新预告或抽象前瞻。'
+    '为了形成钩子而额外增加一个本章没有发生的新问题、新承诺、新预告或抽象前瞻。',
+    '禁止出现“期望”和“希望”这类的对后面剧情的美好憧憬。'
   ],
   counterExamples: [
     '失败：她把信收进抽屉，忽然觉得从这一刻起，一切都会不同。——这是未来指向感觉。',
@@ -3119,11 +3120,33 @@ const STRATEGIC_DIMENSIONS_SYS = `你是一名资深故事战略策划师。你�
 {"originalAnchors":{"characters":[],"relationships":[],"goals":[],"coreConflict":"","worldRules":[],"fixedFacts":[]},"strategicDimensions":[{"name":"","description":"","whyFit":""}]}
 要求 strategicDimensions 为6—10个；每个维度必须真正不同；不得把“商业/反差/情感/悬疑/日常”当固定五盒子；不得擅自改写用户事实。`;
 function parseStrategicDimensions(raw){
-  let t=String(raw||'').trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
-  try{
-    const j=JSON.parse(t); const dims=Array.isArray(j.strategicDimensions)?j.strategicDimensions:[];
-    return {anchors:j.originalAnchors&&typeof j.originalAnchors==='object'?j.originalAnchors:{},dims:dims.map((d,i)=>({name:String(d?.name||'战略维度'+(i+1)).trim(),description:String(d?.description||'').trim(),whyFit:String(d?.whyFit||'').trim()})).filter(d=>d.name&&d.description)};
-  }catch(e){ return {anchors:{},dims:[]}; }
+  // callDeepSeek may return {text, finishReason, usage}; always parse the actual text payload.
+  // 这一阶段对模型返回更宽容：允许 JSON fence、前后说明文字、尾逗号及常见字段别名，
+  // 但最终仍严格要求 strategicDimensions 为 6—10 个有效维度，由上层统一做数量校验。
+  const t=String(unwrapAIResult(raw)||'').trim();
+  if(!t) return {anchors:{},dims:[],parseError:'模型返回为空'};
+  let j=null, lastErr='';
+  const candidates=[];
+  const push=(x)=>{ if(x && !candidates.includes(x)) candidates.push(x); };
+  push(t);
+  const fence=t.match(/```(?:json)?\s*([\s\S]*?)```/i); if(fence) push(fence[1].trim());
+  const obj=t.match(/\{[\s\S]*\}/); if(obj) push(obj[0]);
+  for(const c of candidates){
+    try{ j=JSON.parse(c); break; }catch(e){ lastErr=e.message||'JSON解析失败'; }
+    try{ j=JSON.parse(c.replace(/[\u201c\u201d]/g,'\"').replace(/[\u2018\u2019]/g,"'").replace(/,\s*([}\]])/g,'$1')); break; }catch(e){ lastErr=e.message||lastErr; }
+  }
+  if(!j || typeof j!=='object'){
+    try{ j=robustParseJson(t); }catch(e){ return {anchors:{},dims:[],parseError:lastErr||e.message||'返回不是合法JSON'}; }
+  }
+  const dimsRaw = Array.isArray(j.strategicDimensions) ? j.strategicDimensions
+    : (Array.isArray(j.strategic_dimensions) ? j.strategic_dimensions
+    : (Array.isArray(j.dimensions) ? j.dimensions : (Array.isArray(j.dims) ? j.dims : [])));
+  const dims=dimsRaw.map((d,i)=>({
+    name:String(d?.name||d?.title||d?.dimension||'战略维度'+(i+1)).trim(),
+    description:String(d?.description||d?.desc||d?.how||'').trim(),
+    whyFit:String(d?.whyFit||d?.why_fit||d?.reason||d?.fit||'').trim()
+  })).filter(d=>d.name&&d.description);
+  return {anchors:j.originalAnchors&&typeof j.originalAnchors==='object'?j.originalAnchors:{},dims,parseError:dims.length?'':(lastErr||'缺少 strategicDimensions')};
 }
 function strategicStagePrompt(){
   const idea=String(state.idea||'').trim();
@@ -3137,7 +3160,11 @@ async function generateStrategicDimensions(btn){
   try{
     const raw=await callDeepSeek(STRATEGIC_DIMENSIONS_SYS,strategicStagePrompt(),{temperature:0.65,maxTokens:2600,taskKey:'strategic_dimensions'});
     const parsed=parseStrategicDimensions(raw);
-    if(parsed.dims.length<6 || parsed.dims.length>10) throw new Error('战略维度数量校验失败：应为6—10个');
+    if(parsed.dims.length<6 || parsed.dims.length>10){
+      const rawText=String(unwrapAIResult(raw)||'').trim();
+      const detail=parsed.parseError ? `；解析原因：${parsed.parseError}` : '';
+      throw new Error(`战略维度数量校验失败：实际解析到 ${parsed.dims.length} 个，应为6—10个${detail}${rawText?`；AI已返回约${rawText.length}字内容`:''}`);
+    }
     state.originalIdeaAnchors=parsed.anchors;
     state.strategicDimensions=parsed.dims;
     state.strategicDimensionsStatus='ready';
@@ -3422,6 +3449,7 @@ function normalizePolishCandidate(raw, index){
   });
 }
 function parsePolishCandidatesFixed(raw, multi){
+  raw = unwrapAIResult(raw);
   const obj = polishObjectFromAny(raw);
   const rawText = String(raw||'').trim();
   let arr = [];
@@ -8297,7 +8325,7 @@ const NM_WEB_BLACKLIST = ['林晚','苏晚','顾沉','云深','顾言','江晚',
 const NM_BANNED_CHARS = ['晚','砚','秋','檐'];   // 姓名中禁止出现这四个汉字（任何位置）
 const NM_BANNED_NAMES = [   // 逐字精确禁用名单（含去空格），命中即判违规
   '林辰','苏辰','顾夜寒','陆泽','墨渊','叶辰','江亦琛','傅景深','沈辞','萧景琰','凌夜','顾言','裴衍','楚慕言','厉承勋','谢珩','温景然','云烬','宋砚','慕云凡',
-  '苏清月','晚卿','沈知予','顾晚柠','林晚星','慕晚晴','苏沐瑶','温妤','夏晚璃','楚清鸢','叶轻寒','姜知微','云舒','苏念汐','洛清欢','白若曦','顾绾绾','江晚渔','宋知晚','宁疏影'
+  '苏清月','晚卿','沈知予','顾晚柠','林晚星','慕晚晴','苏沐瑶','温妤','夏晚璃','楚清鸢','叶轻寒','姜知微','云舒','苏念汐','洛清欢','白若曦','顾绾绾','江晚渔','宋知晚','宁疏影','林小满'
 ];
 const BANLIST_DEFAULT = {
   enabled: true,
@@ -8312,7 +8340,7 @@ const BANLIST_DEFAULT = {
   },
   prose: {
     words: [],
-    phrases: [],
+    phrases: ['天刚蒙蒙亮'],
     patterns: [],
     rules: []
   },
@@ -8425,7 +8453,7 @@ function banListNames(){ const b=banListRaw(); return mergeBanListLists(NM_BANNE
 function banListPlaces(){ const b=banListRaw(); return uniqueTrimList(b.naming && b.naming.places); }
 function banListProperNouns(){ const b=banListRaw(); return uniqueTrimList(b.naming && b.naming.properNouns); }
 function banListProseWords(){ const b=banListRaw(); return uniqueTrimList(b.prose && b.prose.words); }
-function banListProsePhrases(){ const b=banListRaw(); return mergeBanListLists(b.prose && b.prose.phrases, b.phrases); }
+function banListProsePhrases(){ const b=banListRaw(); return mergeBanListLists(BANLIST_DEFAULT.prose && BANLIST_DEFAULT.prose.phrases, b.prose && b.prose.phrases, b.phrases); }
 function banListProsePatterns(){ const b=banListRaw(); return uniqueTrimList(b.prose && b.prose.patterns); }
 function banListRules(){ const b=banListRaw(); return Array.isArray(b.prose && b.prose.rules) ? b.prose.rules : (Array.isArray(b.rules)?b.rules:[]); }
 function banListNamingActive(role){
@@ -19787,7 +19815,8 @@ function buildIdeaPolishUserFixed(ctx){
 }
 
 function parsePolishCandidatesFixed(raw, multi){
-  const rawText = String(raw || '').trim();
+  // Normalize callDeepSeek's {text,...} response before JSON/text parsing.
+  const rawText = String(unwrapAIResult(raw) || '').trim();
   if(!rawText) return [];
   const parsed = robustParseJson(rawText);
   let arr = [];
