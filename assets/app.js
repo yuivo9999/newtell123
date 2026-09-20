@@ -75,12 +75,12 @@ const state = {
   idea: '',
   polishMode: 'single',
   polishStatus: 'empty',
-  strategyStage1Status: 'empty',
-  strategyStage2Status: 'empty',
   polishSelectedId: null,
   polishDiagnosis: null,
   polishStrategies: [],
   strategicDimensions: [],
+  strategicDimensionsConfirmed: false,
+  strategicDimensionsStatus: 'empty',
   originalIdeaAnchors: null,
   polishCanonical: null,
   // 第三阶段：后续全链路唯一权威故事战略；新流程下游不得直接读取 polishCanonical。
@@ -717,6 +717,8 @@ function toastLogClear(){ try{ localStorage.removeItem(TOAST_LOG_KEY); }catch(e)
 function toast(msg){
   const t = $('#toast');
   toastLogPush(msg);
+  const _toastMsg = String(msg??'');
+  if(/(?:失败|错误|异常|网络\/跨域失败|解析失败|校验失败|不可用|生成失败|请求失败)/.test(_toastMsg)) { try{ playThemeErrorSound(); }catch(e){} }
   t.innerHTML = `<span class="toast-msg">${esc(String(msg??''))}</span><button type="button" class="toast-hist" title="打开消息看板，回看全部提示" data-toast-board>📋</button>`;
   const hb = t.querySelector('[data-toast-board]'); if(hb) hb.onclick = (e)=>{ e.stopPropagation(); openToastBoard(); };
   t.classList.remove('hidden');
@@ -766,97 +768,152 @@ const SND_ALL_PRESETS = [
   { id:'al_spark',   name:'星光四步',   seq:[[659.25,0,0.08],[783.99,0.1,0.08],[1046.5,0.2,0.1],[1567.98,0.32,0.24]] },
   { id:'al_finish',  name:'完成回响',   seq:[[587.33,0,0.1],[783.99,0.12,0.11],[987.77,0.25,0.12],[1174.66,0.39,0.3]] }
 ];
-const SND_ERROR_PRESETS = [
-  { id:'er_soft',  name:'错误轻鸣', seq:[[330,0,0.12],[220,0.14,0.22]] },
-  { id:'er_low',   name:'低沉警示', seq:[[260,0,0.16],[196,0.18,0.25]] },
-  { id:'er_double',name:'双短警报', seq:[[392,0,0.10],[294,0.13,0.10]] },
-  { id:'er_alert', name:'紧凑警报', seq:[[440,0,0.09],[330,0.11,0.09],[247,0.22,0.16]] },
-  { id:'er_buzzer',name:'低频蜂鸣', seq:[[180,0,0.24],[180,0.27,0.24]] }
-];
-const SND_EVENT_PRESETS = {
-  polish_done:'优化构想完成', dictmaster_done:'词典达人完成', dictEnrich_done:'词典充实完成', chapter_regen_done:'正文重生成完成'
-};
-const SND_TSINGLE_KEY = (typeof nsKey==='function') ? nsKey('snd_t_beats') : 'tz_snd_t_beats';
+const SND_TSINGLE_KEY = (typeof nsKey==='function') ? nsKey('snd_t_beats') : 'tz_snd_t_beats'; // 键名沿用旧值，保留用户已选音色
 const SND_TALL_KEY   = (typeof nsKey==='function') ? nsKey('snd_t_all')   : 'tz_snd_t_all';
-const SND_EVENT_KEY_PREFIX = (typeof nsKey==='function') ? nsKey('snd_event_') : 'tz_snd_event_';
-const SND_ERROR_KEY = (typeof nsKey==='function') ? nsKey('snd_error_type') : 'tz_snd_error_type';
-const SND_ERROR_ENABLED_KEY = (typeof nsKey==='function') ? nsKey('snd_error_enabled') : 'tz_snd_error_enabled';
-function _soundStoreGet(key, fallback){ try{ const v=localStorage.getItem(key); return v==null||v===''?fallback:v; }catch(e){ return fallback; } }
-function _soundStoreSet(key, value){ try{ localStorage.setItem(key, String(value)); }catch(e){} }
-function _sndSingleType(){ const v=_soundStoreGet(SND_TSINGLE_KEY,'be_paper'); return SND_SINGLE_PRESETS.some(x=>x.id===v)?v:'be_paper'; }
-function _sndAllType(){ const v=_soundStoreGet(SND_TALL_KEY,'al_piano'); return SND_ALL_PRESETS.some(x=>x.id===v)?v:'al_piano'; }
-function setSoundSingleType(id){ if(SND_SINGLE_PRESETS.some(x=>x.id===id)) _soundStoreSet(SND_TSINGLE_KEY,id); }
-function setSoundAllType(id){ if(SND_ALL_PRESETS.some(x=>x.id===id)) _soundStoreSet(SND_TALL_KEY,id); }
-function _sndEventType(eventKey){
-  const legacy = _soundStoreGet(SND_TSINGLE_KEY,'be_paper');
-  const v = _soundStoreGet(SND_EVENT_KEY_PREFIX+eventKey, legacy);
-  return SND_SINGLE_PRESETS.some(x=>x.id===v)?v:'be_paper';
-}
-function setSoundEventType(eventKey,id){ if(SND_SINGLE_PRESETS.some(x=>x.id===id)) _soundStoreSet(SND_EVENT_KEY_PREFIX+eventKey,id); }
-function _sndErrorEnabled(){ return _soundStoreGet(SND_ERROR_ENABLED_KEY,'1') !== '0'; }
-function setSoundErrorEnabled(on){ _soundStoreSet(SND_ERROR_ENABLED_KEY,on?'1':'0'); const el=document.getElementById('cfgSndErrorEnabled'); if(el) el.checked=!!on; }
-function _sndErrorType(){ const v=_soundStoreGet(SND_ERROR_KEY,'er_soft'); return SND_ERROR_PRESETS.some(x=>x.id===v)?v:'er_soft'; }
-function setSoundErrorType(id){ if(SND_ERROR_PRESETS.some(x=>x.id===id)) _soundStoreSet(SND_ERROR_KEY,id); }
-let _lastSoundTs = 0, _lastSoundKind = '', _soundTimer = null;
-let _lastErrorSoundSig = '', _lastErrorSoundTs = 0;
-function _doPlaySound(kind, eventKey){
+function _sndSingleType(){ try{ const v = localStorage.getItem(SND_TSINGLE_KEY); return SND_SINGLE_PRESETS.some(x=>x.id===v) ? v : 'be_paper'; }catch(e){ return 'be_paper'; } }
+function _sndAllType(){   try{ const v = localStorage.getItem(SND_TALL_KEY);   return SND_ALL_PRESETS.some(x=>x.id===v) ? v : 'al_piano';   }catch(e){ return 'al_up2';   } }
+function setSoundSingleType(id){ try{ if(SND_SINGLE_PRESETS.some(x=>x.id===id)) localStorage.setItem(SND_TSINGLE_KEY, id); }catch(e){} }
+function setSoundAllType(id){   try{ if(SND_ALL_PRESETS.some(x=>x.id===id))   localStorage.setItem(SND_TALL_KEY,   id); }catch(e){} }
+let _lastSoundTs = 0;
+let _lastSoundKind = '';
+let _soundTimer = null;
+function _doPlaySound(kind){
   if(!_snd.enabled) return;
-  unlockAudio(); if(!_snd.ctx || _snd.ctx.state!=='running') return;
-  let lib=SND_SINGLE_PRESETS, id=_sndSingleType();
-  if(kind==='all'){ lib=SND_ALL_PRESETS; id=_sndAllType(); }
-  else if(kind==='event'){ id=_sndEventType(eventKey); }
-  else if(kind==='error'){ if(!_sndErrorEnabled()) return; lib=SND_ERROR_PRESETS; id=_sndErrorType(); }
-  const p=lib.find(x=>x.id===id)||lib[0]; (p.seq||[]).forEach(s=>_sndBeep(s[0],s[1],s[2]));
+  unlockAudio();
+  if(!_snd.ctx || _snd.ctx.state !== 'running') return;
+  const lib = (kind==='all') ? SND_ALL_PRESETS : SND_SINGLE_PRESETS;
+  const id  = (kind==='all') ? _sndAllType()   : _sndSingleType();
+  const p = lib.find(x=>x.id===id) || lib[0];
+  (p.seq||[]).forEach(s=> _sndBeep(s[0], s[1], s[2]));
 }
-function playDoneSound(kind){
+function playDoneSound(kind){ // kind:'single' 单个完成 | 'all' 全部完成 —— 各用各的音色库，智能去重防冲突
   if(!_snd.enabled) return;
-  const now=Date.now();
-  if(kind==='all'){ if(_soundTimer){clearTimeout(_soundTimer);_soundTimer=null;} _lastSoundTs=now;_lastSoundKind='all';_doPlaySound('all');return; }
-  if(kind==='single'){
-    if(now-_lastSoundTs<450&&_lastSoundKind==='all') return;
+  const now = Date.now();
+  if(kind === 'all'){
+    if(_soundTimer){ clearTimeout(_soundTimer); _soundTimer = null; }
+    _lastSoundTs = now;
+    _lastSoundKind = 'all';
+    _doPlaySound('all');
+    return;
+  }
+  if(kind === 'single'){
+    if(now - _lastSoundTs < 450 && _lastSoundKind === 'all') return;
     if(_soundTimer) clearTimeout(_soundTimer);
-    _soundTimer=setTimeout(()=>{_soundTimer=null;_lastSoundTs=Date.now();_lastSoundKind='single';_doPlaySound('single');},120);
+    _soundTimer = setTimeout(()=>{
+      _soundTimer = null;
+      _lastSoundTs = Date.now();
+      _lastSoundKind = 'single';
+      _doPlaySound('single');
+    }, 120);
   }
 }
-function playEventSound(eventKey){
-  if(!_snd.enabled || !SND_EVENT_PRESETS[eventKey]) return;
-  const now=Date.now(), sig='done:'+eventKey;
-  if(now-_lastSoundTs<250 && _lastSoundKind===sig) return;
-  if(_soundTimer){clearTimeout(_soundTimer);_soundTimer=null;}
-  _lastSoundTs=now; _lastSoundKind=sig; _doPlaySound('event',eventKey);
+
+// ===== 主题声音提醒 v2：四项独立完成提醒 + 五种独立错误音 =====
+const THEME_SOUND_DEFS = [
+  { key:'polish', label:'优化构想完成', icon:'💡' },
+  { key:'dictMaster', label:'词典达人完成', icon:'📖' },
+  { key:'dictEnrich', label:'词典充实完成', icon:'🗂️' },
+  { key:'chapterRegen', label:'正文重生成完成', icon:'🔄' }
+];
+const THEME_SOUND_ERR_PRESETS = [
+  { id:'err_buzz',  name:'低沉警报', seq:[[220,0,0.12],[165,0.14,0.18]] },
+  { id:'err_double',name:'双短警示', seq:[[330,0,0.10],[220,0.13,0.10]] },
+  { id:'err_drop',  name:'下降警铃', seq:[[440,0,0.09],[330,0.11,0.09],[220,0.22,0.20]] },
+  { id:'err_pulse', name:'脉冲警告', seq:[[262,0,0.08],[262,0.12,0.08],[196,0.24,0.20]] },
+  { id:'err_alert', name:'紧急提示', seq:[[523.25,0,0.07],[392,0.09,0.07],[523.25,0.18,0.07],[262,0.28,0.22]] }
+];
+function themeSoundKey(k){ return (typeof nsKey==='function') ? nsKey('theme_sound_'+k) : 'tz_theme_sound_'+k; }
+function themeSoundEnabled(k){ try{ return localStorage.getItem(themeSoundKey(k)+'_on') !== '0'; }catch(e){ return true; } }
+function themeSoundSetEnabled(k,on){ try{ localStorage.setItem(themeSoundKey(k)+'_on', on?'1':'0'); }catch(e){} }
+function themeSoundType(k){
+  try{
+    const v=localStorage.getItem(themeSoundKey(k)+'_type');
+    return SND_SINGLE_PRESETS.some(x=>x.id===v) ? v : 'be_paper';
+  }catch(e){ return 'be_paper'; }
 }
-function playErrorSound(errorKey){
-  if(!_snd.enabled || !_sndErrorEnabled()) return;
-  const now=Date.now(), sig=String(errorKey||'unknown');
-  if(sig===_lastErrorSoundSig && now-_lastErrorSoundTs<1800) return;
-  _lastErrorSoundSig=sig; _lastErrorSoundTs=now; _doPlaySound('error');
+function themeSoundSetType(k,id){ if(SND_SINGLE_PRESETS.some(x=>x.id===id)){ try{ localStorage.setItem(themeSoundKey(k)+'_type',id); }catch(e){} } }
+function themeErrorType(){
+  try{ const v=localStorage.getItem(themeSoundKey('error')+'_type'); return THEME_SOUND_ERR_PRESETS.some(x=>x.id===v)?v:'err_buzz'; }
+  catch(e){ return 'err_buzz'; }
 }
+function themeErrorSetType(id){ if(THEME_SOUND_ERR_PRESETS.some(x=>x.id===id)){ try{ localStorage.setItem(themeSoundKey('error')+'_type',id); }catch(e){} } }
+function _themePlaySeq(seq){
+  if(!_snd.enabled) return false;
+  unlockAudio();
+  if(!_snd.ctx) return false;
+  try{ if(_snd.ctx.state==='suspended') _snd.ctx.resume().catch(()=>{}); }catch(e){}
+  if(_snd.ctx.state!=='running') return false;
+  (seq||[]).forEach(x=>_sndBeep(x[0],x[1],x[2],0.24));
+  return true;
+}
+function playThemeSound(k, force=false){
+  if(!_snd.enabled) return false;
+  if(k==='error'){
+    if(!force && !themeSoundEnabled('error')) return false;
+    const p=THEME_SOUND_ERR_PRESETS.find(x=>x.id===themeErrorType())||THEME_SOUND_ERR_PRESETS[0];
+    return _themePlaySeq(p.seq);
+  }
+  if(!force && !themeSoundEnabled(k)) return false;
+  const p=SND_SINGLE_PRESETS.find(x=>x.id===themeSoundType(k))||SND_SINGLE_PRESETS[0];
+  return _themePlaySeq(p.seq);
+}
+function playThemeErrorSound(){ return playThemeSound('error'); }
+function renderThemeSoundSettings(){
+  const p=document.getElementById('themePanel'); if(!p) return;
+  let box=document.getElementById('themeSoundSettings');
+  if(!box){
+    box=document.createElement('div'); box.id='themeSoundSettings';
+    box.style.cssText='margin-top:12px;padding:12px;border:1px solid rgba(127,127,127,.25);border-radius:10px;background:rgba(127,127,127,.06);';
+    p.appendChild(box);
+  }
+  const opts=SND_SINGLE_PRESETS.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
+  const errOpts=THEME_SOUND_ERR_PRESETS.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('');
+  box.innerHTML=`
+    <div style="font-weight:700;margin-bottom:8px">🔔 任务声音提醒</div>
+    <div style="font-size:11px;opacity:.72;margin-bottom:10px">每项独立开关、独立音色，可单独试听；设置自动保存在本机。</div>
+    ${THEME_SOUND_DEFS.map(d=>`<div data-theme-snd-row="${d.key}" style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:7px 0">
+      <label style="display:flex;align-items:center;gap:5px;min-width:145px"><input type="checkbox" data-theme-snd-on="${d.key}" ${themeSoundEnabled(d.key)?'checked':''}> ${d.icon} ${d.label}</label>
+      <select data-theme-snd-type="${d.key}" style="flex:1;min-width:125px">${opts}</select>
+      <button type="button" class="btn small ghost" data-theme-snd-test="${d.key}">试听</button>
+    </div>`).join('')}
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(127,127,127,.2)">
+      <div style="font-weight:700;margin-bottom:5px">⚠️ 出错提醒</div>
+      <div style="font-size:11px;opacity:.72;margin-bottom:7px">共 5 种错误提示声音，选择后可立即试听。</div>
+      <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:5px;min-width:145px"><input type="checkbox" data-theme-snd-on="error" ${themeSoundEnabled('error')?'checked':''}> ⚠️ 出错提醒</label>
+        <select data-theme-snd-error style="flex:1;min-width:125px">${errOpts}</select>
+        <button type="button" class="btn small ghost" data-theme-snd-test="error">试听</button>
+      </div>
+    </div>`;
+  THEME_SOUND_DEFS.forEach(d=>{
+    const sel=box.querySelector(`[data-theme-snd-type="${d.key}"]`); if(sel) sel.value=themeSoundType(d.key);
+  });
+  const es=box.querySelector('[data-theme-snd-error]'); if(es) es.value=themeErrorType();
+  box.querySelectorAll('[data-theme-snd-on]').forEach(el=>{ el.onchange=()=>themeSoundSetEnabled(el.dataset.themeSndOn,!!el.checked); });
+  box.querySelectorAll('[data-theme-snd-type]').forEach(el=>{ el.onchange=()=>themeSoundSetType(el.dataset.themeSndType,el.value); });
+  if(es) es.onchange=()=>themeErrorSetType(es.value);
+  box.querySelectorAll('[data-theme-snd-test]').forEach(b=>{ b.onclick=e=>{ e.stopPropagation(); playThemeSound(b.dataset.themeSndTest,true); }; });
+}
+function initThemeSoundPanelExtended(){
+  renderThemeSoundSettings();
+}
+
 function initThemeSoundPanel(){
-  const sb=document.getElementById('cfgSndSingle'), sa=document.getElementById('cfgSndAll');
-  const optsB=SND_SINGLE_PRESETS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-  const optsA=SND_ALL_PRESETS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-  if(sb){ if(!sb._tsf){sb.innerHTML=optsB;sb._tsf=1;} sb.value=_sndSingleType(); if(!sb._tsb){sb._tsb=1;sb.addEventListener('change',()=>setSoundSingleType(sb.value));} }
-  if(sa){ if(!sa._tsf){sa.innerHTML=optsA;sa._tsf=1;} sa.value=_sndAllType(); if(!sa._tsb){sa._tsb=1;sa.addEventListener('change',()=>setSoundAllType(sa.value));} }
-  $$('[data-snd-prev]').forEach(b=>{if(b._tsb)return;b._tsb=1;b.addEventListener('click',ev=>{ev.stopPropagation();playDoneSound(b.dataset.sndPrev);});});
-  renderThemeSoundUpgrade();
-}
-function renderThemeSoundUpgrade(){
-  const panel=document.getElementById('themePanel'); if(!panel) return;
-  let box=document.getElementById('themeSoundUpgrade');
-  if(!box){ box=document.createElement('div'); box.id='themeSoundUpgrade'; box.className='theme-sound-upgrade'; panel.appendChild(box); }
-  const opts=SND_SINGLE_PRESETS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-  const rows=Object.entries(SND_EVENT_PRESETS).map(([key,label])=>`<div style="display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;margin:7px 0"><span>🔔 ${label}</span><select data-snd-event="${key}" style="min-width:130px">${opts}</select><button type="button" class="btn small ghost" data-snd-event-prev="${key}">▶ 试听</button></div>`).join('');
-  const eopts=SND_ERROR_PRESETS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
-  box.innerHTML=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line,#ddd)"><b>🔔 独立完成提醒</b>${rows}</div><div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--line,#ddd)"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b>⚠️ 出错提醒</b><label style="font-size:12px"><input id="cfgSndErrorEnabled" type="checkbox"> 启用</label></div><div style="display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;margin-top:7px"><select id="cfgSndErrorType">${eopts}</select><button type="button" class="btn small ghost" data-snd-error-prev>▶ 试听</button></div></div>`;
-  box.querySelectorAll('[data-snd-event]').forEach(el=>{el.value=_sndEventType(el.dataset.sndEvent);el.onchange=()=>setSoundEventType(el.dataset.sndEvent,el.value);});
-  box.querySelectorAll('[data-snd-event-prev]').forEach(b=>b.onclick=e=>{e.stopPropagation();playEventSound(b.dataset.sndEventPrev);});
-  const ee=box.querySelector('#cfgSndErrorEnabled'); if(ee){ee.checked=_sndErrorEnabled();ee.onchange=()=>setSoundErrorEnabled(ee.checked);}
-  const es=box.querySelector('#cfgSndErrorType'); if(es){es.value=_sndErrorType();es.onchange=()=>setSoundErrorType(es.value);}
-  const ep=box.querySelector('[data-snd-error-prev]'); if(ep) ep.onclick=e=>{e.stopPropagation();playErrorSound('preview');};
-}
-function reportSoundError(kind, err){
-  const msg=err&&err.message?String(err.message):String(err||'未知错误');
-  playErrorSound(String(kind||'unknown')+':'+msg.slice(0,120));
+  const sb = document.getElementById('cfgSndSingle'), sa = document.getElementById('cfgSndAll');
+  const optsB = SND_SINGLE_PRESETS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  const optsA = SND_ALL_PRESETS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  if(sb){
+    if(!sb._tsf){ sb.innerHTML = optsB; sb._tsf = 1; }
+    sb.value = _sndSingleType();
+    if(!sb._tsb){ sb._tsb = 1; sb.addEventListener('change', ()=>{ setSoundSingleType(sb.value); }); }
+  }
+  if(sa){
+    if(!sa._tsf){ sa.innerHTML = optsA; sa._tsf = 1; }
+    sa.value = _sndAllType();
+    if(!sa._tsb){ sa._tsb = 1; sa.addEventListener('change', ()=>{ setSoundAllType(sa.value); }); }
+  }
+  $$('[data-snd-prev]').forEach(b=>{ if(b._tsb) return; b._tsb = 1;
+    b.addEventListener('click', (ev)=>{ ev.stopPropagation(); playDoneSound(b.dataset.sndPrev); }); });
 }
 function setSoundEnabled(on){
   try{ localStorage.setItem(SND_KEY, on?'1':'0'); }catch(e){}
@@ -890,8 +947,6 @@ function bindPlannerSoundTool(){
     vol.addEventListener('change', ()=>{ playDoneSound('single'); });   // 松开音量滑杆即试听一声
   }
 }
-window.addEventListener('error', e=>{ try{ reportSoundError('global', e&&e.error?e.error:(e&&e.message)||'运行时错误'); }catch(_){} });
-window.addEventListener('unhandledrejection', e=>{ try{ reportSoundError('promise', e&&e.reason?e.reason:'未处理的Promise错误'); }catch(_){} });
 window.addEventListener('pointerdown', unlockAudio, {capture:true});
 window.addEventListener('keydown', unlockAudio, {capture:true});
 window.addEventListener('touchend', unlockAudio, {capture:true});
@@ -1148,12 +1203,12 @@ function projectSnapshot(){
     polishAdopted: state.polishAdopted,
     polishMode: state.polishMode,
     polishStatus: state.polishStatus,
-    strategyStage1Status: state.strategyStage1Status,
-    strategyStage2Status: state.strategyStage2Status,
     polishSelectedId: state.polishSelectedId,
     polishDiagnosis: state.polishDiagnosis,
     polishStrategies: state.polishStrategies,
     strategicDimensions: state.strategicDimensions,
+    strategicDimensionsConfirmed: !!state.strategicDimensionsConfirmed,
+    strategicDimensionsStatus: state.strategicDimensionsStatus,
     originalIdeaAnchors: state.originalIdeaAnchors,
     polishCanonical: state.polishCanonical,
     canonicalStoryStrategy: state.canonicalStoryStrategy,
@@ -1237,6 +1292,8 @@ function applyProject(p){
   state.polishDiagnosis = (p.polishDiagnosis && typeof p.polishDiagnosis === 'object') ? p.polishDiagnosis : null;
   state.polishStrategies = Array.isArray(p.polishStrategies) ? p.polishStrategies : [];
   state.strategicDimensions = Array.isArray(p.strategicDimensions) ? p.strategicDimensions : [];
+  state.strategicDimensionsConfirmed = !!p.strategicDimensionsConfirmed;
+  state.strategicDimensionsStatus = ['empty','generating','ready'].includes(p.strategicDimensionsStatus) ? p.strategicDimensionsStatus : (state.strategicDimensions.length ? 'ready' : 'empty');
   state.originalIdeaAnchors = (p.originalIdeaAnchors && typeof p.originalIdeaAnchors==='object') ? p.originalIdeaAnchors : null;
   state.polishCanonical = (p.polishCanonical && typeof p.polishCanonical === 'object') ? p.polishCanonical : null;
   state.canonicalStoryStrategy = (p.canonicalStoryStrategy && typeof p.canonicalStoryStrategy === 'object') ? p.canonicalStoryStrategy : null;
@@ -1246,8 +1303,6 @@ function applyProject(p){
   }
   state.polishPendingSuggestions = (p.polishPendingSuggestions && typeof p.polishPendingSuggestions === 'object') ? p.polishPendingSuggestions : null;
   state.polishRevision = Number.isFinite(+p.polishRevision) ? +p.polishRevision : 0;
-  state.strategyStage1Status = ['empty','generating','ready','error'].includes(p.strategyStage1Status) ? p.strategyStage1Status : (state.originalIdeaAnchors && state.strategicDimensions?.length ? 'ready' : 'empty');
-  state.strategyStage2Status = ['empty','generating','ready','adopted','error'].includes(p.strategyStage2Status) ? p.strategyStage2Status : (state.polishAdopted ? 'adopted' : (state.polishOptions?.length ? 'ready' : 'empty'));
   state.polishStatus = ['empty','generating','ready_single','waiting_selection','adopted'].includes(p.polishStatus) ? p.polishStatus : ((state.polishAdopted && state.polishOptions?.length) ? 'adopted' : (state.polishOptions?.length>1?'waiting_selection':state.polishOptions?.length?'ready_single':'empty'));
   state.polishHistory = Array.isArray(p.polishHistory) ? p.polishHistory : undefined;
   state.polishRawFallback = typeof p.polishRawFallback === 'string' ? p.polishRawFallback : '';
@@ -1585,12 +1640,26 @@ async function callDeepSeek(system, user, {temperature=null, topP=null, signal=n
       const s = resolveActiveSpec(taskKey);
       if(taskKey) _rec.tmo = !!s.taskOverride;
       if(!s.apiKey) throw new Error('请先在 ⚙️ 配置并选择要使用的 AI 账号（API Key）');
+
+      // Phase 2 核心：在“真正发送请求”的这一刻重新读取 Ban List。
+      // 不使用页面加载时快照，也不依赖调用方提前构建的 Prompt。
+      const banRole = (taskKey==='dictHarvest') ? 'dictHarvest' : String(taskKey||'');
+      const banBlock = banListRequestBlock(banRole);
+      const requestSystem = banBlock ? (String(system||'') + banBlock) : String(system||'');
+      const banSnap = banListRuntimeSnapshot(banRole);
+      _rec.sys = String(requestSystem||'').slice(0,500);
+      _rec.sysLen = String(requestSystem||'').length;
+      if(banBlock){
+        _rec.banListVersion = banSnap.version;
+        _rec.banListRole = banRole;
+        _rec.banListDomain = banSnap.domain;
+      }
       const url = s.baseUrl + '/chat/completions';
       const streaming = typeof onStream === 'function';
       const _reason = isReasonModel(s.model);
       const body = {
         model: s.model,
-        messages: [{role:'system', content: system}, {role:'user', content: user}],
+        messages: [{role:'system', content: requestSystem}, {role:'user', content: user}],
         ...(!_reason ? {
           temperature: _f2(temperature==null ? s.temperature : temperature),
           top_p: _f2(topP==null ? 0.95 : topP)
@@ -3044,103 +3113,107 @@ const SIZE_DEFAULT = { min:3000, max:5000 };
 
 let polishMulti = true;
 
-async function generateStrategyStage(btn, force){
-  const idea = (state.idea || '').trim();
-  if(!idea){ toast('请先输入故事构想'); return false; }
-  const hasStage1 = state.strategyStage1Status === 'ready' && Array.isArray(state.strategicDimensions) && state.strategicDimensions.length;
-  if(hasStage1 && !force){ toast('第一阶段战略地图已经生成；如需重新生成，请点击「① 重新生成战略维度」'); return false; }
-  state.strategyStage1Status = 'generating';
-  state.strategyStage2Status = 'empty';
-  state.polishStatus = 'empty';
-  state.polishSelectedId = null; state.polishAdopted = null; state.polishCanonical = null; state.canonicalStoryStrategy = null;
-  state.polishOptions = [];
-  state.strategicDimensions = []; state.originalIdeaAnchors = null; state.polishDiagnosis = null; state.polishStrategies = [];
-  // 先进入生成态并把可见按钮切换为 loading；不能在 busy 前 render，否则旧按钮会被替换成脱离 DOM 的节点。
-  persist();
-  render();
-  const liveBtn1 = $('#btnStrategyStage1');
-  if(liveBtn1) busy(liveBtn1,true,'① 正在生成战略维度…');
-  markAIRunning('ideaStrategy');
+const STRATEGIC_DIMENSIONS_SYS = `你是一名资深故事战略策划师。你的任务只有第一阶段：根据用户原始故事构想，动态生成适合本故事的候选战略维度。
+绝对禁止使用固定五向模板。必须根据题材、混合题材、人物驱动力、核心冲突、世界规则、信息结构、读者体验和创作目标重新设计战略地图。
+输出严格JSON，不要Markdown，不要解释：
+{"originalAnchors":{"characters":[],"relationships":[],"goals":[],"coreConflict":"","worldRules":[],"fixedFacts":[]},"strategicDimensions":[{"name":"","description":"","whyFit":""}]}
+要求 strategicDimensions 为6—10个；每个维度必须真正不同；不得把“商业/反差/情感/悬疑/日常”当固定五盒子；不得擅自改写用户事实。`;
+function parseStrategicDimensions(raw){
+  let t=String(raw||'').trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();
   try{
-    const raw = await callAIGuarded('ideaStrategy', {}, {temperature: resolveActiveSpec().ideaTemp, maxTokens: Math.max(2500, Math.min(5000, clampMaxTokens('polish')))});
-    const strategy = extractJsonObject(raw);
-    const check = validateIdeaStrategyOutput(strategy);
-    if(!check.ok) throw new Error(`第一阶段战略分析校验失败：${check.code} ${check.details||''}`);
-    state.originalIdeaAnchors = strategy.originalAnchors;
-    state.strategicDimensions = strategy.strategicDimensions;
-    state.polishStrategyTrace = {ts:Date.now(), originalAnchors:strategy.originalAnchors, strategicDimensions:strategy.strategicDimensions};
-    state.strategyStage1Status = 'ready';
-    state.strategyStage2Status = 'empty';
-    persist();
-    markAIDone('ideaStrategy');
-    toast(`第一阶段完成：已生成 ${strategy.strategicDimensions.length} 个动态战略维度`);
-    render();
-    return true;
-  }catch(e){
-    state.strategyStage1Status = 'error';
-    addToFixQueue({kind:'ideaStrategy', error:e.message});
-    toast('战略维度生成失败：'+e.message);
-    reportSoundError('polish', e);
-    persist(); render();
-    return false;
-  }finally{
-    state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='ideaStrategy');
-  }
+    const j=JSON.parse(t); const dims=Array.isArray(j.strategicDimensions)?j.strategicDimensions:[];
+    return {anchors:j.originalAnchors&&typeof j.originalAnchors==='object'?j.originalAnchors:{},dims:dims.map((d,i)=>({name:String(d?.name||'战略维度'+(i+1)).trim(),description:String(d?.description||'').trim(),whyFit:String(d?.whyFit||'').trim()})).filter(d=>d.name&&d.description)};
+  }catch(e){ return {anchors:{},dims:[]}; }
+}
+function strategicStagePrompt(){
+  const idea=String(state.idea||'').trim();
+  return `【用户原始故事构想】\n${idea}\n\n【当前模式】${state.mode||''}\n【长篇模式】${isLong()?'是':'否'}\n请只完成第一阶段：战略维度分析。`;
+}
+async function generateStrategicDimensions(btn){
+  const idea=(state.idea||'').trim();
+  if(!idea){ toast('请先输入故事构想'); return; }
+  state.strategicDimensionsStatus='generating'; state.strategicDimensionsConfirmed=false; persist(); render();
+  const b=$('#btnGenerateStrategic'); if(b) busy(b,true,'正在生成战略维度…');
+  try{
+    const raw=await callDeepSeek(STRATEGIC_DIMENSIONS_SYS,strategicStagePrompt(),{temperature:0.65,maxTokens:2600,taskKey:'strategic_dimensions'});
+    const parsed=parseStrategicDimensions(raw);
+    if(parsed.dims.length<6 || parsed.dims.length>10) throw new Error('战略维度数量校验失败：应为6—10个');
+    state.originalIdeaAnchors=parsed.anchors;
+    state.strategicDimensions=parsed.dims;
+    state.strategicDimensionsStatus='ready';
+    state.strategicDimensionsConfirmed=true;
+    state.polishOptions=[]; state.polishAdopted=null; state.polishSelectedId=null; state.polishCanonical=null; state.canonicalStoryStrategy=null;
+    persist(); render(); openTwoStagePanel('dimensions');
+    toast(`战略维度生成完成，共 ${parsed.dims.length} 个`);
+  }catch(e){ state.strategicDimensionsStatus='empty'; persist(); toast('战略维度生成失败：'+e.message); }
+  finally{ if(b) busy(b,false); }
+}
+function openTwoStagePanel(kind){
+  const el=document.getElementById('twoStagePanel'); if(!el) return;
+  el.style.display='block'; el.classList.remove('ts-enter'); void el.offsetWidth; el.classList.add('ts-enter');
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+}
+async function generateOptimizedIdeas(btn, force){
+  const idea=(state.idea||'').trim(); const dims=Array.isArray(state.strategicDimensions)?state.strategicDimensions:[];
+  if(!idea){toast('请先输入故事构想');return;}
+  if(!state.strategicDimensionsConfirmed || dims.length<6){toast('请先完成第一步「生成战略维度」');openTwoStagePanel('dimensions');return;}
+  if(state.polishOptions?.length && !force){if(!confirm(`已有 ${state.polishOptions.length} 个优化方案，重新生成将覆盖它们。继续？`))return;}
+  state.polishMode=polishMulti?'multi':'single'; state.polishStatus='generating'; state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null; persist(); render();
+  const b=$('#btnGenerateOptimized'); if(b) busy(b,true,'正在基于战略维度生成方案…');
+  const dimText=dims.map((d,i)=>`${i+1}. ${d.name}\n${d.description}\n契合：${d.whyFit}`).join('\n');
+  const sys=`你是一名资深故事策划师。现在执行第二阶段：只能读取第一阶段已经确认的战略维度，并基于它们生成3—5个彼此真正不同的优化构想候选方案。不得回退到旧的一步式“五向”逻辑。严格JSON：{"options":[{"name":"","bookTitle":"","novelSummary":"","fullBookBeat":"","optimizedIdea":"","creativeAdditions":"","originalAnchors":{},"strategicDimensions":[],"strategyFingerprint":{"mainStrategy":"","secondaryStrategy":"","coreConflict":"","storyEngine":"","emotionalPromise":"","pacing":""},"diagnosis":{"strengths":[],"defects":[],"missing":[],"constraints":[]},"optimizationStrategies":[],"navBeacon":{}}]}. 每个方案必须从确认的战略维度组合而来，战略指纹高度相似则重做。`;
+  const user=`【原始构想】\n${idea}\n\n【第一阶段已确认战略维度】\n${dimText}\n\n请执行第二阶段，只输出最终3—5个候选优化方案。`;
+  try{
+    const raw=await callDeepSeek(sys,user,{temperature:resolveActiveSpec().ideaTemp,maxTokens:clampMaxTokens('polish'),taskKey:'polish_stage2'});
+    const opts=parsePolishCandidatesFixed(raw,true);
+    if(opts.length<3 || opts.length>5) throw new Error(`候选方案数量校验失败：${opts.length}，应为3—5个`);
+    state.polishOptions=opts; state.polishRawFallback=String(raw||''); state.polishStatus='waiting_selection';
+    state.strategicDimensionsConfirmed=true; persist(); render(); openTwoStagePanel('options'); toast(`优化构想生成完成，共 ${opts.length} 个方案`);
+  }catch(e){ state.polishStatus='empty'; persist(); toast('优化构想生成失败：'+e.message); }
+  finally{ if(b) busy(b,false); }
 }
 
-async function generatePolishStage(btn, force){
+async function polishIdea(btn, force){
   const idea = (state.idea || '').trim();
-  if(!idea){ toast('请先输入故事构想'); return false; }
-  if(state.strategyStage1Status !== 'ready' || !state.originalIdeaAnchors || !Array.isArray(state.strategicDimensions) || !state.strategicDimensions.length){
-    toast('请先完成「① 生成战略维度」，再进入第二阶段'); return false;
+  if(!idea){
+    const kept = Array.isArray(state.polishOptions) && state.polishOptions.length;
+    toast(kept ? '输入框为空：请先在上方输入构想，或点某张历史方案卡「✔ 采用此方案」，再点「✨ 优化构想」重新生成' : '请先输入故事构想');
+    return;
   }
   const kept = Array.isArray(state.polishOptions) && state.polishOptions.length;
-  if(kept && !force){ if(!confirm(`已有 ${kept} 个优化方案，重新生成将覆盖它们。继续？`)) return false; }
-  const multi = polishMulti === true;
-  state.polishMode = multi ? 'multi' : 'single';
-  state.strategyStage2Status = 'generating';
-  state.polishStatus = 'generating'; state.polishSelectedId = null; state.polishAdopted = null;
-  state.polishCanonical = null; state.canonicalStoryStrategy = null;
-  state.polishDiagnosis = null; state.polishStrategies = [];
-  // 同样先 render 出“第二阶段生成中”状态，再对当前 DOM 按钮加 loading。
-  persist();
-  render();
-  const liveBtn2 = $('#btnStrategyStage2');
-  if(liveBtn2) busy(liveBtn2,true,multi ? '② 正在生成3～5个优化构想…' : '② 正在生成最终优化构想…');
-  markAIRunning('ideaPolishStage2'); markAIRunning('idea');
-  try{
-    const txt = await callAIGuarded('ideaPolishStage2', {
-      multi,
-      originalAnchors: state.originalIdeaAnchors,
-      strategicDimensions: state.strategicDimensions
-    }, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')});
-    const out = String(txt||'').trim();
-    if(!out) throw new Error('第二阶段没有返回内容');
-    showPolishResult(out, multi);
-    state.strategyStage2Status = 'ready';
-    markAIDone('ideaPolishStage2');
-    markAIDone('idea');
-    persist();
-    toast('第二阶段完成：3～5个优化构想已生成，请选择并采用方案');
-    playEventSound('polish_done');
-    render();
-    return true;
-  }catch(e){
-    state.strategyStage2Status = 'error';
-    addToFixQueue({kind:'ideaPolishStage2', error:e.message});
-    toast('优化构想生成失败：'+e.message);
-    reportSoundError('polish', e);
-    persist(); render();
-    return false;
-  }finally{
-    state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='ideaPolishStage2' && k!=='idea');
+  if(kept && !force){
+    if(!confirm(`已有 ${kept} 个保留方案，重新优化将覆盖它们。继续？`)) return;
   }
-}
+  const multi = polishMulti === true; // 只由“多方案”开关决定，不再因输入长度强制多方案
+  state.polishMode = multi ? 'multi' : 'single';
+  state.polishStatus = 'generating';
+  state.polishSelectedId = null;
+  state.polishAdopted = null;
+  state.polishCanonical = null;
+  state.canonicalStoryStrategy = null;
+  state.strategicDimensions = [];
+  state.originalIdeaAnchors = null;
+  state.polishDiagnosis = null;
+  state.polishStrategies = [];
+  if(!canRunAI('idea')){ toast('优化构想暂不可运行'); return; }
+  markAIRunning('idea');
+  if(btn) busy(btn,true, multi ? '生成多方案构想中…' : '优化构想中…');
+  try{
+    const txt = await callAIGuarded('idea', { multi }, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')});
+    const out = String(txt||'').trim();
+    if(!out){ toast('优化失败，请重试'); return; }
 
-// 兼容历史入口：旧代码/历史按钮若仍调用 polishIdea，严格执行完整两阶段，但 UI 新入口不再直接绑定它。
-async function polishIdea(btn, force){
-  const ok = await generateStrategyStage($('#btnStrategyStage1') || btn, !!force);
-  if(ok) await generatePolishStage($('#btnStrategyStage2'), true);
+    showPolishResult(out, multi);
+    markAIDone('idea');
+    toast('优化完成');
+  }catch(e){
+    addToFixQueue({kind:'idea', error:e.message});
+    toast('优化失败：'+e.message);
+  }
+  finally{
+    state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='idea');
+    if(btn) busy(btn,false);
+  }
 }
 
 function formatIdeaBrief(b){
@@ -3435,6 +3508,7 @@ function showPolishResult(out, multi){
     state.polishStrategies=[];
   }
   persist();
+  playThemeSound('polish');
   if(box && cards){ box.style.display='block'; render(); openPolishBox(); }
   else { persist(); }
 }
@@ -3493,9 +3567,7 @@ function renderPolishCards(container){
   const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
   if(!opts.length){
     container.style.display = 'block';
-    const dims = Array.isArray(state.strategicDimensions) ? state.strategicDimensions : [];
-    const dimHtml = dims.length ? `<div class="strategy-map" style="margin-bottom:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff)"><div style="font-weight:700;margin-bottom:8px">🧭 AI动态战略地图 <span style="font-size:11px;font-weight:400;color:var(--muted)">${dims.length} 个候选维度</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px">${dims.map((d,i)=>{const n=String(d?.name||d?.title||d?.id||'战略维度'+(i+1));const de=String(d?.description||'');const why=String(d?.whyFit||'');return `<div style="padding:8px;border:1px solid var(--line,#ddd);border-radius:8px"><b>${esc(n)}</b><div style="font-size:12px;margin-top:4px;line-height:1.5">${esc(de)}</div>${why?`<div style="font-size:11px;color:var(--muted);margin-top:4px">契合：${esc(why)}</div>`:''}</div>`}).join('')}</div></div>` : '';
-    container.innerHTML = dimHtml + (state.polishRawFallback ? `<div class="pol-cand-body" style="white-space:pre-wrap">${esc(state.polishRawFallback)}</div>` : `<p class="muted" style="margin:8px 0 0">第一阶段完成后，点击上方「② 生成优化构想」生成3～5个候选方案。</p>`);
+    container.innerHTML = state.polishRawFallback ? `<div class="pol-cand-body" style="white-space:pre-wrap">${esc(state.polishRawFallback)}</div>` : `<p class="muted" style="margin:8px 0 0">👆 点「✨ 优化构想」生成候选方案。</p>`;
     return;
   }
   container.style.display = 'block';
@@ -3538,7 +3610,6 @@ function renderPolishCards(container){
       state.polishAdopted = o.name || null;
       state.polishSelectedId = o._id || null;
       state.polishStatus = 'adopted';
-      state.strategyStage2Status = 'adopted';
       state.polishRevision = Number(state.polishRevision||0) + 1;
       syncPolishMetaFromCandidate(o);
       state.polishCanonical = buildPolishCanonical(o, state.polishRevision);
@@ -3563,10 +3634,10 @@ function renderPolishCards(container){
 }
 
 function bindPolishIdea(){
-  const b1 = $('#btnStrategyStage1');
-  if(b1) b1.onclick = ()=> generateStrategyStage(b1, true);
-  const b2 = $('#btnStrategyStage2');
-  if(b2) b2.onclick = ()=> generatePolishStage(b2, false);
+  const b = $('#btnGenerateStrategic');
+  if(b) b.onclick = ()=> generateStrategicDimensions(b);
+  const b2 = $('#btnGenerateOptimized');
+  if(b2) b2.onclick = ()=> generateOptimizedIdeas(b2);
   const chk = $('#chkPolishMulti');
   if(chk){
     const sync = ()=>{
@@ -3574,7 +3645,7 @@ function bindPolishIdea(){
       chk.disabled = false;
     };
     sync();
-    chk.onchange = ()=>{ polishMulti = !!chk.checked; state.polishMode = polishMulti?'multi':'single'; if(Array.isArray(state.polishOptions)&&state.polishOptions.length){ state.polishStatus='empty'; state.strategyStage2Status='empty'; state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null; state.polishDiagnosis=null; state.polishStrategies=[]; } persist(); render(); };
+    chk.onchange = ()=>{ polishMulti = !!chk.checked; state.polishMode = polishMulti?'multi':'single'; if(Array.isArray(state.polishOptions)&&state.polishOptions.length){ state.polishStatus='empty'; state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null; state.polishDiagnosis=null; state.polishStrategies=[]; } persist(); render(); };
     const idea = $('#ideaInput');
     if(idea) idea.oninput = ()=>{ state.idea = idea.value; sync(); syncOrigIdeaCard(); };
   }
@@ -3588,7 +3659,7 @@ function bindPolishIdea(){
   const view = $('[data-pol-keep-view]');
   if(view) view.onclick = (e)=>{ e.stopPropagation(); openPolishBox(); };
   const again = $('[data-pol-keep-again]');
-  if(again) again.onclick = async (e)=>{ e.stopPropagation(); const ok=await generateStrategyStage($('#btnStrategyStage1'), true); if(ok) await generatePolishStage($('#btnStrategyStage2'), true); };
+  if(again) again.onclick = (e)=>{ e.stopPropagation(); generateOptimizedIdeas($('#btnGenerateOptimized'), true); };
   const clear = $('[data-pol-keep-clear]');
   if(clear) clear.onclick = (e)=>{
     e.stopPropagation();
@@ -7793,7 +7864,7 @@ function bindSchoolSteps(){
         refreshSchoolProgressUi();
         try {
           const ok = await nailRetry('dictMaster','词典达人', ()=> genDictMaster(btn), btn);
-          if(ok){ scMark('dictMaster', true); }
+          if(ok){ scMark('dictMaster', true); playDoneSound('single'); }
           else { scSetFailed('dictMaster', true); }
         } catch(e){
           scSetFailed('dictMaster', true);
@@ -7809,7 +7880,7 @@ function bindSchoolSteps(){
         refreshSchoolProgressUi();
         try {
           const ok = await nailRetry('dictEnrich','词典充实', ()=> genDictEnrich(btn,{}), btn);
-          if(ok){ scMark('dictEnrich', true); }
+          if(ok){ scMark('dictEnrich', true); playDoneSound('single'); }
           else { scSetFailed('dictEnrich', true); }
         } catch(e){
           scSetFailed('dictEnrich', true);
@@ -8229,12 +8300,32 @@ const NM_BANNED_NAMES = [   // 逐字精确禁用名单（含去空格），命�
   '苏清月','晚卿','沈知予','顾晚柠','林晚星','慕晚晴','苏沐瑶','温妤','夏晚璃','楚清鸢','叶轻寒','姜知微','云舒','苏念汐','洛清欢','白若曦','顾绾绾','江晚渔','宋知晚','宁疏影'
 ];
 const BANLIST_DEFAULT = {
-  enabled: true,                            // 总开关（默认开）：清单是否参与注入
-  chars: [],                                // 禁用字/词（人名/专名任何位置命中即拒，由校验器联动）；默认沿用 NM_BANNED_CHARS 读取
-  names: [],                                // 禁用姓名（逐字精确）；默认沿用 NM_BANNED_NAMES
-  phrases: [],                              // 禁用短语/模板词（仅正文注入，控词频）
-  rules: [],                                 // 附加规则条目：每条声明生效 AI 范围
-  scopeAi: ['chapter']                       // 缺省生效范围（仅正文）；用户可按 AI 扩展大纲/标题/规划师
+  enabled: true,
+  version: 1,
+  updatedAt: 0,
+  // Phase 1：把禁则正式拆成两个规则域。legacy 字段仍保留兼容旧项目快照。
+  naming: {
+    chars: [],
+    names: [],
+    places: [],
+    properNouns: []
+  },
+  prose: {
+    words: [],
+    phrases: [],
+    patterns: [],
+    rules: []
+  },
+  // 哪些模块读取命名禁则；老师刻意不在其中。
+  scopeNaming: ['idea','dictmaster','dictEnrich','principal'],
+  // 哪些模块读取正文禁则；Phase 1 只建立运行时数据层，正文执行仍沿用 chapter。
+  scopeProse: ['chapter'],
+  // 旧字段兼容：后续阶段逐步移除读取点，但本阶段不破坏旧项目。
+  chars: [],
+  names: [],
+  phrases: [],
+  rules: [],
+  scopeAi: ['chapter']
 };
 function nmNameRuleViolation(nm){
   const s = String(nm||'').trim();
@@ -8254,50 +8345,242 @@ function nmNameRuleViolation(nm){
   return '';
 }
 
-function normalizeBanList(b){
-  if(!b || typeof b !== 'object') return null;
-  const out = { enabled: !(b.enabled === false) };
-  out.chars = Array.isArray(b.chars) ? b.chars.filter(x=>x&&String(x).trim()) : [];
-  out.names = Array.isArray(b.names) ? b.names.filter(x=>x&&String(x).trim()) : [];
-  out.phrases = Array.isArray(b.phrases) ? b.phrases.filter(x=>x&&String(x).trim()) : [];
-  out.rules = Array.isArray(b.rules) ? b.rules.filter(r=>r&&r.text).map(r=>({ text:String(r.text), ai:Array.isArray(r.ai)?r.ai:[] })) : [];
-  out.scopeAi = Array.isArray(b.scopeAi) ? b.scopeAi.filter(x=>x) : (Array.isArray(BANLIST_DEFAULT.scopeAi) ? BANLIST_DEFAULT.scopeAi.slice() : []);
+function uniqueTrimList(list){
+  if(!Array.isArray(list)) return [];
+  const out=[]; const seen=new Set();
+  list.forEach(x=>{
+    const v=String(x==null?'':x).trim();
+    if(v && !seen.has(v)){ seen.add(v); out.push(v); }
+  });
   return out;
 }
-function banListRaw(){ return (state.banList && typeof state.banList === 'object') ? state.banList : BANLIST_DEFAULT; }
+function mergeBanListLists(...lists){
+  const out=[]; const seen=new Set();
+  lists.flatMap(x=>Array.isArray(x)?x:[]).forEach(v=>{
+    const s=String(v==null?'':v).trim();
+    if(s && !seen.has(s)){ seen.add(s); out.push(s); }
+  });
+  return out;
+}
+function normalizeBanList(b){
+  if(!b || typeof b !== 'object') return null;
+  const legacyChars = uniqueTrimList(b.chars);
+  const legacyNames = uniqueTrimList(b.names);
+  const legacyPhrases = uniqueTrimList(b.phrases);
+  const legacyRules = Array.isArray(b.rules) ? b.rules.filter(r=>r&&String(r.text||'').trim()).map(r=>({
+    text:String(r.text).trim(),
+    ai:Array.isArray(r.ai)?uniqueTrimList(r.ai):[]
+  })) : [];
+  const n = b.naming && typeof b.naming === 'object' ? b.naming : {};
+  const p = b.prose && typeof b.prose === 'object' ? b.prose : {};
+  const namingChars = mergeBanListLists(n.chars, legacyChars);
+  const namingNames = mergeBanListLists(n.names, legacyNames);
+  const prosePhrases = mergeBanListLists(p.phrases, legacyPhrases);
+  const proseRules = Array.isArray(p.rules) ? p.rules.filter(r=>r&&String(r.text||'').trim()).map(r=>({
+    text:String(r.text).trim(),
+    ai:Array.isArray(r.ai)?uniqueTrimList(r.ai):[]
+  })) : legacyRules.slice();
+  const out = {
+    enabled: !(b.enabled === false),
+    version: Math.max(1, Number(b.version)||1),
+    updatedAt: Number(b.updatedAt)||0,
+    naming: {
+      chars: namingChars,
+      names: namingNames,
+      places: uniqueTrimList(n.places),
+      properNouns: uniqueTrimList(n.properNouns)
+    },
+    prose: {
+      words: uniqueTrimList(p.words),
+      phrases: prosePhrases,
+      patterns: uniqueTrimList(p.patterns),
+      rules: proseRules
+    },
+    scopeNaming: Array.isArray(b.scopeNaming) && b.scopeNaming.length
+      ? uniqueTrimList(b.scopeNaming)
+      : BANLIST_DEFAULT.scopeNaming.slice(),
+    scopeProse: Array.isArray(b.scopeProse) && b.scopeProse.length
+      ? uniqueTrimList(b.scopeProse)
+      : BANLIST_DEFAULT.scopeProse.slice(),
+    // legacy mirrors：保存时继续写入，避免旧逻辑/旧快照断裂。
+    chars: namingChars.slice(),
+    names: namingNames.slice(),
+    phrases: prosePhrases.slice(),
+    rules: legacyRules.length ? legacyRules.slice() : proseRules.slice(),
+    scopeAi: Array.isArray(b.scopeAi) && b.scopeAi.length ? uniqueTrimList(b.scopeAi) : BANLIST_DEFAULT.scopeAi.slice()
+  };
+  return out;
+}
+function ensureBanListRuntime(){
+  const before = state.banList;
+  const normalized = normalizeBanList(before) || normalizeBanList(BANLIST_DEFAULT);
+  if(!normalized) return null;
+  if(!before || JSON.stringify(before)!==JSON.stringify(normalized)) state.banList = normalized;
+  return state.banList;
+}
+function banListRaw(){ return ensureBanListRuntime() || BANLIST_DEFAULT; }
 function stateBanEnabled(){ const b = banListRaw(); return !(b && b.enabled === false); }
-function banListChars(){ const c = banListRaw().chars; return (Array.isArray(c) && c.length) ? c : NM_BANNED_CHARS; }
-function banListNames(){ const n = banListRaw().names; return (Array.isArray(n) && n.length) ? n : NM_BANNED_NAMES; }
+function banListChars(){ const b=banListRaw(); return mergeBanListLists(NM_BANNED_CHARS, b.naming && b.naming.chars); }
+function banListNames(){ const b=banListRaw(); return mergeBanListLists(NM_BANNED_NAMES, b.naming && b.naming.names); }
+function banListPlaces(){ const b=banListRaw(); return uniqueTrimList(b.naming && b.naming.places); }
+function banListProperNouns(){ const b=banListRaw(); return uniqueTrimList(b.naming && b.naming.properNouns); }
+function banListProseWords(){ const b=banListRaw(); return uniqueTrimList(b.prose && b.prose.words); }
+function banListProsePhrases(){ const b=banListRaw(); return mergeBanListLists(b.prose && b.prose.phrases, b.phrases); }
+function banListProsePatterns(){ const b=banListRaw(); return uniqueTrimList(b.prose && b.prose.patterns); }
+function banListRules(){ const b=banListRaw(); return Array.isArray(b.prose && b.prose.rules) ? b.prose.rules : (Array.isArray(b.rules)?b.rules:[]); }
+function banListNamingActive(role){
+  const sc=banListRaw().scopeNaming;
+  const scopeRole = role==='dictHarvest' ? 'dictEnrich' : role;
+  return !Array.isArray(sc) || !sc.length || sc.indexOf(scopeRole)>=0;
+}
+function banListProseActive(role){
+  const sc=banListRaw().scopeProse;
+  return !Array.isArray(sc) || !sc.length || sc.indexOf(role)>=0;
+}
 function banListAiActive(role){
+  // 兼容旧调用：命名角色走新的 scopeNaming，正文走 scopeProse。
+  if(['idea','dictmaster','dictEnrich','dictHarvest','principal'].includes(role)) return banListNamingActive(role);
+  if(role==='chapter') return banListProseActive(role);
   const sc = banListRaw().scopeAi;
   if(!Array.isArray(sc) || !sc.length) return true;
   return sc.indexOf(role) >= 0;
 }
+function banListRuntimeSnapshot(role){
+  // 每次 AI 请求前调用：故意不缓存，确保 UI 保存后的最新 Ban List 立即进入下一次请求。
+  const b=banListRaw();
+  const namingRoles=['idea','dictmaster','dictEnrich','dictHarvest','principal'];
+  const proseRoles=['chapter'];
+  const domain = namingRoles.includes(role) ? 'naming' : (proseRoles.includes(role) ? 'prose' : 'none');
+  return {
+    version: Number(b && b.version)||0,
+    updatedAt: Number(b && b.updatedAt)||0,
+    enabled: !(b && b.enabled===false),
+    role: String(role||''),
+    domain,
+    namingActive: domain==='naming' && stateBanEnabled() && banListNamingActive(role),
+    proseActive: domain==='prose' && stateBanEnabled() && banListProseActive(role)
+  };
+}
 function banListBlockFor(role){
-  if(!isLong()) return '';
   if(!stateBanEnabled()) return '';
-  const b = banListRaw();
-  const lines = [];
-  const chars = banListChars(), names = banListNames();
-  if(chars.length && banListAiActive(role)) lines.push('人名禁用字：' + chars.join('、') + '（姓名任何位置命中即违规）');
-  if(names.length && banListAiActive(role)) lines.push('禁用姓名（不得逐字原样使用或当作现成名）：' + names.join('、'));
-  const rules = Array.isArray(b.rules) ? b.rules : [];
-  rules.forEach(r => {
-    if(!r || !r.text) return;
-    const ai = Array.isArray(r.ai) ? r.ai : [];
-    if(ai.indexOf(role) >= 0) lines.push(r.text);
-  });
-  const phrases = Array.isArray(b.phrases) ? b.phrases : [];
-  if(role === 'chapter' && phrases.length) lines.push('规避高频模板词/禁用短语：' + phrases.join('、'));
+  const lines=[]; const naming=banListNamingActive(role), prose=banListProseActive(role);
+  const chars=banListChars(), names=banListNames();
+  if(naming && chars.length) lines.push('命名禁用字：' + chars.join('、') + '（人物名/地名/专名命中即违规）');
+  if(naming && names.length) lines.push('命名禁用姓名：' + names.join('、') + '（不得逐字原样使用或当作现成名）');
+  if(naming && banListPlaces().length) lines.push('命名禁用地名：' + banListPlaces().join('、'));
+  if(naming && banListProperNouns().length) lines.push('命名禁用专名：' + banListProperNouns().join('、'));
+  if(prose && role==='chapter'){
+    const words=banListProseWords(), phrases=banListProsePhrases(), patterns=banListProsePatterns();
+    if(words.length) lines.push('正文禁用词：' + words.join('、'));
+    if(phrases.length) lines.push('正文禁用短语/模板词：' + phrases.join('、'));
+    if(patterns.length) lines.push('正文禁用写法/模式：' + patterns.join('；'));
+    banListRules().forEach(r=>{
+      if(!r || !r.text) return;
+      const ai=Array.isArray(r.ai)?r.ai:[];
+      if(!ai.length || ai.includes(role)) lines.push(String(r.text).trim());
+    });
+  }
   if(!lines.length) return '';
-  return '\n\n【用户禁则清单（最高优先）】\n' + lines.join('\n');
+  const b=banListRaw();
+  return `\n\n【用户禁则清单（最高优先）】\n【Ban List Runtime版本：v${Number(b.version)||0}｜更新时间：${Number(b.updatedAt)||0}｜本请求角色：${String(role||'')}】\n` + lines.join('\n');
+}
+function banListRequestBlock(role){
+  // AI 请求真正发送前调用；不要在调用方提前缓存此字符串。
+  const snap=banListRuntimeSnapshot(role);
+  if(!snap.enabled || snap.domain==='none') return '';
+  return banListBlockFor(role);
 }
 function banListViolation(nm){
-  const s = String(nm||'').trim(); if(!s) return '';
-  const ch = banListChars().find(c => s.indexOf(c) >= 0);
+  const s=String(nm||'').trim(); if(!s) return '';
+  const ch=banListChars().find(c=>s.indexOf(c)>=0);
   if(ch) return `名字含禁用字「${ch}」（禁则清单）`;
-  if(banListNames().indexOf(s) >= 0) return `命中禁则名单「${s}」`;
+  if(banListNames().indexOf(s)>=0) return `命中禁则姓名「${s}」`;
+  if(banListPlaces().indexOf(s)>=0) return `命中禁则地名「${s}」`;
+  if(banListProperNouns().indexOf(s)>=0) return `命中禁则专名「${s}」`;
   return '';
+}
+function banListProseViolation(text){
+  const r=validateBanListOutput('chapter',text);
+  return r.ok ? '' : (r.details||'正文命中禁则');
+}
+
+/* ===================== Ban List Phase 3 · 程序级最终闸门 ===================== */
+function _banRuleId(domain, type, index, text){
+  const raw = `${domain}|${type}|${index}|${String(text||'').trim()}`;
+  let h = 2166136261;
+  for(let i=0;i<raw.length;i++){ h ^= raw.charCodeAt(i); h = Math.imul(h,16777619); }
+  return `ban_${domain}_${type}_${(h>>>0).toString(36)}`;
+}
+function _banViolation(domain, type, index, text, matched, message){
+  return {
+    ruleId:_banRuleId(domain,type,index,text), domain, type, index,
+    ruleText:String(text||'').trim(), matched:String(matched||'').trim(),
+    message:String(message||'').trim(),
+    role:'', version:Number(banListRaw().version)||0, updatedAt:Number(banListRaw().updatedAt)||0
+  };
+}
+function _banPatternMatch(text, pattern){
+  const s=String(text||''); const p=String(pattern||'').trim();
+  if(!s || !p) return '';
+  // 可扩展模式：以 re: 开头的规则按正则执行；普通规则仍按包含匹配，避免旧数据行为改变。
+  if(p.startsWith('re:')){
+    try{ const body=p.slice(3).trim(); const re=new RegExp(body,'i'); const m=s.match(re); return m&&m[0] ? m[0] : ''; }catch(e){ return ''; }
+  }
+  return s.includes(p) ? p : '';
+}
+function _banNamingViolations(text, role){
+  const s=String(text||''); if(!s || !stateBanEnabled() || !banListNamingActive(role)) return [];
+  const out=[];
+  const b=banListRaw();
+  const scanList=(arr,type,msg)=>{ (Array.isArray(arr)?arr:[]).forEach((v,i)=>{ const m=_banPatternMatch(s,v); if(m) out.push(_banViolation('naming',type,i,v,m,msg(v,m))); }); };
+  scanList(banListChars(),'char', (v,m)=>`命中命名禁用字「${m}」`);
+  scanList(banListNames(),'name', (v,m)=>`命中命名禁用姓名「${m}」`);
+  scanList(banListPlaces(),'place',(v,m)=>`命中命名禁用地名「${m}」`);
+  scanList(banListProperNouns(),'properNoun',(v,m)=>`命中命名禁用专名「${m}」`);
+  return out;
+}
+function _banProseViolations(text, role){
+  const s=String(text||''); if(!s || !stateBanEnabled() || !banListProseActive(role)) return [];
+  const out=[]; const b=banListRaw();
+  const scanList=(arr,type,msg)=>{ (Array.isArray(arr)?arr:[]).forEach((v,i)=>{ const m=_banPatternMatch(s,v); if(m) out.push(_banViolation('prose',type,i,v,m,msg(v,m))); }); };
+  scanList(banListProseWords(),'word',(v,m)=>`命中正文禁用词「${m}」`);
+  scanList(banListProsePhrases(),'phrase',(v,m)=>`命中正文禁用短语/模板「${m}」`);
+  scanList(banListProsePatterns(),'pattern',(v,m)=>`命中正文禁用写法/模式「${m}」`);
+  banListRules().forEach((r,i)=>{
+    if(!r || !String(r.text||'').trim()) return;
+    const ai=Array.isArray(r.ai)?r.ai:[];
+    if(ai.length && !ai.includes(role)) return;
+    const m=_banPatternMatch(s,r.text);
+    if(m) out.push(_banViolation('prose','rule',i,r.text,m,`命中正文禁则「${m}」`));
+  });
+  return out;
+}
+function banListOutputViolations(role, text){
+  const snap=banListRuntimeSnapshot(role);
+  if(!snap.enabled || snap.domain==='none') return [];
+  const violations = snap.domain==='naming' ? _banNamingViolations(text,role) : _banProseViolations(text,role);
+  violations.forEach(v=>{ v.role=role; v.version=snap.version; v.updatedAt=snap.updatedAt; });
+  return violations;
+}
+function validateBanListOutput(role, text){
+  const violations=banListOutputViolations(role,text);
+  if(!violations.length) return {ok:true, role, version:Number(banListRuntimeSnapshot(role).version)||0, violations:[]};
+  return {ok:false, role, version:violations[0].version, violations, details:violations.map(v=>v.message).join('；')};
+}
+function assertBanListOutput(role, text){
+  const report=validateBanListOutput(role,text);
+  if(!report.ok){
+    const e=new Error(`禁则清单拦截：${report.details}`);
+    e.code='BANLIST_VIOLATION'; e.banListReport=report;
+    throw e;
+  }
+  return report;
+}
+function recordBanListRejection(role, report){
+  try{
+    state._banListLastRejection={ts:Date.now(),role,version:report&&report.version||0,violations:(report&&report.violations)||[]};
+    persist();
+  }catch(e){}
 }
 
 
@@ -8454,26 +8737,12 @@ function validateStripLen(text, target){
 
 const AIValidators = {
   idea: validateIdeaProOutput,
-  ideaStrategy: validateIdeaStrategyOutput,
-  ideaPolishStage2: validateIdeaProOutput,
   titles: validateTitleOutput,
   subplot: validateSubplotOutput,
     glossary: validateGlossaryExtract,
     strip: validateStripLen,
     dictmaster: validateDictMasterOutput
 };
-
-function validateIdeaStrategyOutput(j){
-  if(!j || typeof j!=='object') return {ok:false, code:'NOT_OBJECT'};
-  if(!j.originalAnchors || typeof j.originalAnchors!=='object') return {ok:false, code:'MISSING_ORIGINAL_ANCHORS'};
-  if(!Array.isArray(j.strategicDimensions)) return {ok:false, code:'MISSING_STRATEGIC_DIMENSIONS'};
-  if(j.strategicDimensions.length < 6 || j.strategicDimensions.length > 10) return {ok:false, code:'STRATEGIC_DIMENSIONS_COUNT', details:String(j.strategicDimensions.length)};
-  for(const d of j.strategicDimensions){
-    if(!d || typeof d!=='object') return {ok:false, code:'BAD_STRATEGIC_DIMENSION'};
-    for(const k of ['name','description','whyFit']) if(!String(d[k]||'').trim()) return {ok:false, code:'STRATEGIC_DIMENSION_FIELD_MISSING', details:k};
-  }
-  return {ok:true};
-}
 
 function ideaKeyTerms(idea){
   const t = String(idea||'').trim();
@@ -8547,6 +8816,12 @@ async function callAIGuarded(kind, systemOrExtra, userOrOpts, ctx, opts){
     if(!report.ok){
       throw new Error(`${kind} AI 输出校验失败：${report.code} ${report.details || ''}`);
     }
+    if(['idea','dictmaster','principal'].includes(kind)){
+      try{ assertBanListOutput(kind, txt); }catch(e){
+        if(e && e.code==='BANLIST_VIOLATION') recordBanListRejection(kind, e.banListReport);
+        throw e;
+      }
+    }
     return txt;
   }
   const extra = systemOrExtra || {};
@@ -8558,6 +8833,12 @@ async function callAIGuarded(kind, systemOrExtra, userOrOpts, ctx, opts){
   const report = validateAIOutput(kind, txt, busCtx);
   if(!report.ok){
     throw new Error(`${kind} AI 输出校验失败：${report.code} ${report.details || ''}`);
+  }
+  if(['idea','dictmaster','principal'].includes(kind)){
+    try{ assertBanListOutput(kind, txt); }catch(e){
+      if(e && e.code==='BANLIST_VIOLATION') recordBanListRejection(kind, e.banListReport);
+      throw e;
+    }
   }
   return txt;
 }
@@ -8573,8 +8854,6 @@ const AIBus = {
       idea: state.idea || ''
     };
     switch(kind){
-      case 'ideaStrategy': return { ...base, rawIdea: state.idea || '' };
-      case 'ideaPolishStage2': return { ...base, rawIdea: state.idea || '', multi: !!extra?.multi, originalAnchors: extra?.originalAnchors || state.originalIdeaAnchors || null, strategicDimensions: extra?.strategicDimensions || state.strategicDimensions || [] };
       case 'idea': return { ...base, rawIdea: state.idea || '' };
       case 'titles': return { ...base, outline: o, glossary: o.glossary, expectedN: extra?.n || (o.chapters||[]).length };
       case 'chapter': return this._chapterCtx(extra?.idx);
@@ -8605,8 +8884,6 @@ const AIBus = {
 
 function getSystemPrompt(kind, extra){
   switch(kind){
-    case 'ideaStrategy': return IDEA_STRATEGY_SYS;
-    case 'ideaPolishStage2': return IDEA_POLISH_STAGE2_SYS + (extra && extra.multi ? POLISH_MULTI_MODE : POLISH_SINGLE_MODE);
     case 'idea': return IDEA_POLISH_SYS + (extra && extra.multi ? POLISH_MULTI_MODE : POLISH_SINGLE_MODE);
     case 'titles': return REGEN_TITLES_SYS;
     case 'chapter': return longChapterSys();
@@ -8626,8 +8903,6 @@ function getSystemPrompt(kind, extra){
 function buildAIPrompt(kind, extra){
   const ctx = AIBus.get(kind, extra);
   switch(kind){
-    case 'ideaStrategy': return buildIdeaStrategyUser(ctx);
-    case 'ideaPolishStage2': return buildIdeaPolishStage2User(ctx);
     case 'idea': return buildIdeaPolishUserFixed(ctx);
     case 'titles': return titlesGenUser(extra);
     case 'chapter': return buildChapterUser(extra?.idx, extra);
@@ -8637,31 +8912,6 @@ function buildAIPrompt(kind, extra){
     case 'strip': return buildStripUser(ctx);
     default: throw new Error('未知 AI kind: '+kind);
   }
-}
-
-function buildIdeaStrategyUser(ctx){
-  const lines = [`【原始创作构想】\n${String(ctx.rawIdea || '').trim()}`];
-  const wsItems = wsGroupStyleTags(null);
-  if(wsItems && wsItems.length){
-    const names = wsItems.map(s=>s.name).join(' + ');
-    const details = wsItems.map(s=>`· ${s.name}：${s.note||''}${Array.isArray(s.tips)&&s.tips.length?`（写法：${s.tips.join('；')}）`:''}`).join('\n');
-    lines.push(`【用户已锁定写作风格】\n${names}\n${details}`);
-  }
-  const bb=currentBookBeatCfg(), mb=currentBeatCfg(), cc=chapterCountVal();
-  const parts=[];
-  if(bb) parts.push(`全书拍子·${bb.label}（${bb.subtitle}）\n阶段：${((bb.ai&&bb.ai.stages)||[]).join(' → ')}`);
-  if(mb) parts.push(`章节微拍·${mb.label}${mb.wc?`（${mb.wc}）`:''}`);
-  if(cc) parts.push(`全书章节数：${cc} 章`);
-  if(parts.length) lines.push(`【已有叙事结构上下文】\n${parts.join('\n\n')}`);
-  lines.push(`【阶段边界】\n本次只分析“原始构想核心锚点 + 动态战略维度”。不要生成最终方案。`);
-  return lines.join('\n\n');
-}
-
-function buildIdeaPolishStage2User(ctx){
-  const base = buildIdeaPolishUserFixed(ctx);
-  const anchors = ctx.originalAnchors || {};
-  const dims = Array.isArray(ctx.strategicDimensions) ? ctx.strategicDimensions : [];
-  return base + `\n\n【第一阶段战略分析结果·权威输入】\n原始构想核心锚点：\n${JSON.stringify(anchors)}\n\n动态战略维度（只能从这里组合）：\n${JSON.stringify(dims)}\n\n【第二阶段任务】\n现在基于以上第一阶段结果，生成最终3—5个优化构想方案。不要再次生成战略地图；不要使用固定五向。每个方案必须体现不同的战略组合和独立战略指纹。`;
 }
 
 function buildIdeaPolishUserFixed(ctx){
@@ -8730,8 +8980,6 @@ function buildStripUser(ctx){
 function canRunAI(kind){
   if(kind==='outline' && !currentCanonicalStoryStrategy()) return false;
   const deps = {
-    ideaStrategy: [],
-    ideaPolishStage2: [],
     idea: [],
     recipe: [],
     outline: ['idea'],
@@ -8807,17 +9055,10 @@ const NARRATIVE_IRON_PLANNING = `【全书叙事铁律·规划层】这是用户
 · 以上只约束叙事方式与剧情设计，不限制题材、人物、世界观的正常创造，也不剥夺 AI 的创造自由。`;
 
 function globalCreativeConstraintBlock(kind){
+  // Ban List 不再在这里注入：Phase 2 统一由 callDeepSeek() 在真正发请求的瞬间读取 Runtime Ban List。
+  // 这样可确保老师不会误读 Ban List，也避免调用方提前缓存旧规则。
   const creative = ['idea','principal','teacher','chapter','planner','outline'];
-  const banRoles = ['idea','titles','dictmaster','dictEnrich','principal','teacher'];
   const parts=[];
-  if(banRoles.indexOf(kind)>=0 && stateBanEnabled()){
-    const b=banListRaw();
-    const chars=banListChars(), names=banListNames();
-    if(chars.length) parts.push('【用户禁则清单·全书姓名禁用字】以下字不得用于新人物/地点/专名命名：'+chars.join('、'));
-    if(names.length) parts.push('【用户禁则清单·全书禁用姓名】以下姓名不得被新创作、复用、建议或写入本阶段成果：'+names.join('、'));
-    const rules=Array.isArray(b.rules)?b.rules:[];
-    rules.forEach(r=>{ if(r&&r.text && (!Array.isArray(r.ai)||!r.ai.length || r.ai.indexOf(kind)>=0)) parts.push('【用户禁则·规则】'+String(r.text).trim()); });
-  }
   if(creative.indexOf(kind)>=0 && kind!=='chapter' && state._narrIron!==false) parts.push(NARRATIVE_IRON_PLANNING);
   return parts.length ? '\n\n'+parts.join('\n') : '';
 }
@@ -9011,43 +9252,6 @@ optimizedIdea 建议内部覆盖：
 □ 是否没有核心卖点、核心词、推荐理由等营销分析？
 □ 是否没有越权写逐章教案或正文？
 □ 是否只输出JSON？`;
-
-const IDEA_STRATEGY_SYS = `你是本项目的“故事战略分析引擎”。本阶段只做战略分析，不生成最终优化方案。
-
-【唯一任务】
-根据用户当前故事构想、题材、人物、核心冲突、世界规则、写作风格和已有上下文，提取用户原始构想核心锚点，并动态生成6—10个最契合当前故事的候选战略维度。
-
-【绝对禁止】
-1. 禁止使用固定的“商业/反差/情感/悬疑智斗/轻松日常”五向模板。
-2. 禁止为了凑数把通用标签硬套进故事。
-3. 本阶段不要生成3—5个最终优化方案，不要写完整小说蓝本，不要输出书名、简介或全书节拍。
-
-【动态维度原则】
-战略维度必须由当前题材和故事本身决定。例如武侠可能偏向江湖成长、门派权谋、复仇、探案、群像、武学探索；科幻可能偏向技术伦理、生存危机、太空冒险、AI关系、社会变革、宇宙探索；言情可能偏向关系成长、错位关系、婚姻现实、慢热、强冲突、群像。但这些只是示例，不得照抄或固定化。
-
-【输出】
-只输出JSON，不要Markdown，不要解释：
-{
-  "originalAnchors":{"characters":[],"relationships":[],"goals":[],"coreConflict":"","worldRules":[],"fixedFacts":[]},
-  "strategicDimensions":[{"name":"","description":"","whyFit":""}]
-}
-
-【质量要求】
-- strategicDimensions必须为6—10个。
-- 每个维度必须真正不同，并说明如何展开故事以及为什么适合当前故事。
-- originalAnchors只记录用户已经明确给出或可以从其构想直接确认的核心事实；不要把AI新增创意伪装成用户事实。`;
-
-const IDEA_POLISH_STAGE2_SYS = IDEA_POLISH_SYS_PRO + `
-
-【真实两阶段流水线·第二阶段硬约束】
-你现在处于第二阶段。第一阶段已经独立完成了原始构想核心锚点和动态战略地图。你必须把下面用户消息中提供的【第一阶段战略分析结果】视为本次战略规划的权威输入。
-- 禁止重新生成一套新的战略维度。
-- 禁止回退到固定五向。
-- 必须从提供的6—10个战略维度中组合、取舍、交叉，生成3—5个真正不同的最终方案。
-- 每个方案的strategicDimensions必须来自或明确组合第一阶段提供的维度。
-- 所有方案共享第一阶段originalAnchors中的用户事实底盘。
-- 第一阶段没有确认的新增内容，只能作为方案创意/creativeAdditions出现。
-- 本阶段唯一产物是最终options，不再输出独立的战略分析步骤。`;
 
 const IDEA_POLISH_SYS = IDEA_POLISH_SYS_PRO;
 
@@ -9789,12 +9993,6 @@ function render(){
   else if(currentStep===4) v.innerHTML = viewStoryboard();
   else if(currentStep===5) v.innerHTML = viewExport();
   bindView();
-  // 主故事页的 #polishCards 是两阶段流水线的可见结果区：
-  // 第一阶段完成后立即显示战略地图；第二阶段完成后显示3～5个候选方案。
-  if(currentStep===1){
-    const _pc = $('#polishCards');
-    if(_pc) renderPolishCards(_pc);
-  }
   if(currentStep===1) bindFlowSideNav();
   updateWcTotal();
   if(_restY >= 0){ try{ window.scrollTo(0, _restY); }catch(e){} }
@@ -11029,7 +11227,15 @@ function bindLongNovelControlDeck(){
   });
 }
 
+const TWO_STAGE_PIPELINE_CSS = `
+.two-stage-flow{display:grid;gap:0;margin:12px 0;padding:12px;border:1px solid var(--line,#d9dce3);border-radius:16px;background:linear-gradient(145deg,rgba(99,102,241,.07),rgba(16,185,129,.05));box-shadow:0 8px 30px rgba(0,0,0,.06)}
+.two-stage-step{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:13px;background:var(--card,#fff);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}.two-stage-step:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(0,0,0,.08)}
+.ts-step-no{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:12px;background:#111827;color:#fff;flex:none}.ts-step-main{min-width:0;flex:1}.ts-step-title{font-weight:800}.ts-step-note{font-size:11px;line-height:1.5;color:var(--muted,#6b7280);margin-top:3px}.ts-btn{position:relative;overflow:hidden;min-width:128px;font-weight:800;border-radius:11px;transition:transform .18s ease,box-shadow .18s ease,filter .18s ease}.ts-btn:hover:not(:disabled){transform:translateY(-1px);filter:brightness(1.04);box-shadow:0 8px 20px rgba(0,0,0,.12)}.ts-btn:active:not(:disabled){transform:scale(.97)}.ts-btn-strategy{background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border:0}.ts-btn-opt{background:linear-gradient(135deg,#059669,#0d9488);color:#fff;border:0}.ts-btn:disabled{opacity:.45;cursor:not-allowed}.ts-connector{height:20px;width:2px;margin-left:30px;background:linear-gradient(#8b5cf6,#10b981);position:relative}.ts-connector:after{content:'↓';position:absolute;bottom:-8px;left:-6px;font-size:14px}.two-stage-panel{margin:10px 0;padding:14px;border:1px dashed var(--line,#bbb);border-radius:13px;background:var(--card,#fff)}.ts-enter{animation:tsEnter .35s ease both}@keyframes tsEnter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@media(max-width:680px){.two-stage-step{align-items:flex-start;flex-wrap:wrap}.ts-step-main{flex-basis:calc(100% - 55px)}.ts-btn{width:100%;margin-left:50px}}
+`;
+function ensureTwoStagePipelineStyles(){ if(document.getElementById('twoStagePipelineStyles')) return; const st=document.createElement('style'); st.id='twoStagePipelineStyles'; st.textContent=TWO_STAGE_PIPELINE_CSS; document.head.appendChild(st); }
+
 function viewStory(){
+  ensureTwoStagePipelineStyles();
   if(!state.outline){
     const homeSub = isLong()
       ? `用几句话描述你的长篇构想（世界观、主角、核心冲突都行）。AI 会按你设定的章节数与全书拍子扩写成大纲，之后按「生成章节」逐步写完。`
@@ -11043,20 +11249,24 @@ function viewStory(){
               <span class="ch-subtag ch-subtag-idea">${(state.polishOptions&&state.polishOptions.length)?'✨ 构想已优化':'待优化'}</span>
             </div>
             <div class="ch-right">
-              <label class="pol-multi" title="生成多方向构想供比选"><input type="checkbox" id="chkPolishMulti"> 多方案</label>
+              <span class="pol-multi" title="第二阶段固定生成3～5个候选方案">3～5方案 · 两阶段流水线</span>
             </div>
           </div>
           <div class="idea-row">
             <textarea id="ideaInput" placeholder="描述你的故事点子（世界观、主角、核心冲突等）…">${esc(state.idea)}</textarea>
           </div>
-          <div class="btn-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <button id="btnStrategyStage1" class="btn ghost ${polishIdle()?'first':''}">${state.strategyStage1Status==='ready'?'🔄 ① 重新生成战略维度':'① 生成战略维度'}</button>
-            <button id="btnStrategyStage2" class="btn ghost" ${state.strategyStage1Status!=='ready'?'disabled title="请先完成第一阶段战略维度生成"':''}>${state.strategyStage2Status==='ready'?'🔄 ② 重新生成优化构想':'② 生成优化构想'}</button>
+          <div class="two-stage-flow" id="twoStageFlow">
+            <div class="two-stage-step ${state.strategicDimensionsStatus==='ready'?'done':''}">
+              <div class="ts-step-no">01</div><div class="ts-step-main"><div class="ts-step-title">🧭 生成战略维度</div><div class="ts-step-note">AI先根据当前题材动态生成6～10个候选战略维度，不再固定“五向”。</div></div>
+              <button id="btnGenerateStrategic" class="btn ts-btn ts-btn-strategy">生成战略维度<span class="ts-ripple"></span></button>
+            </div>
+            <div class="ts-connector"></div>
+            <div class="two-stage-step ${state.strategicDimensionsConfirmed?'ready':''}">
+              <div class="ts-step-no">02</div><div class="ts-step-main"><div class="ts-step-title">✨ 生成优化构想</div><div class="ts-step-note">读取第一阶段已确认战略维度，再生成3～5个真正不同的优化方案。</div></div>
+              <button id="btnGenerateOptimized" class="btn ts-btn ts-btn-opt" ${state.strategicDimensionsConfirmed?'':'disabled title="请先完成第一步"'}>生成优化构想<span class="ts-ripple"></span></button>
+            </div>
           </div>
-          <div style="margin:7px 0 10px;font-size:12px;line-height:1.7;color:var(--muted)">
-            <span>${state.strategyStage1Status==='ready'?'✅ 第一阶段：动态战略地图已完成':'① 第一阶段：先根据题材生成6～10个动态战略维度'}</span>
-            <span style="margin-left:12px">${state.strategyStage2Status==='ready'?'✅ 第二阶段：候选优化构想已完成':'② 第二阶段：基于第一阶段战略地图生成3～5个方案'}</span>
-          </div>
+          <div id="twoStagePanel" class="two-stage-panel" style="display:${state.strategicDimensions.length||state.polishOptions?.length?'block':'none'}"></div>
           <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}">
             <div class="pol-head"><b>✨ 方案比选</b>
               <span class="pol-tools">
@@ -14475,6 +14685,17 @@ function buildMarkdown(){
   return md;
 }
 
+function renderTwoStagePanel(){
+  const el=document.getElementById('twoStagePanel'); if(!el) return;
+  const dims=Array.isArray(state.strategicDimensions)?state.strategicDimensions:[];
+  const opts=Array.isArray(state.polishOptions)?state.polishOptions:[];
+  if(!dims.length&&!opts.length){el.style.display='none';el.innerHTML='';return;}
+  el.style.display='block';
+  const dhtml=dims.length?`<div><b>🧭 第一阶段：已生成战略地图</b><span class="muted" style="margin-left:6px">${dims.length} 个维度</span><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:8px">${dims.map(d=>`<div style="padding:8px;border:1px solid var(--line,#ddd);border-radius:9px"><b>${esc(d.name)}</b><div style="font-size:11px;line-height:1.5;margin-top:3px">${esc(d.description)}</div><div style="font-size:10px;color:var(--muted);margin-top:3px">契合：${esc(d.whyFit)}</div></div>`).join('')}</div></div>`:'';
+  const ohtml=opts.length?`<div style="margin-top:14px"><b>✨ 第二阶段：${opts.length} 个优化构想</b><div style="margin-top:7px">${opts.map((o,i)=>`<div style="padding:8px 10px;border:1px solid var(--line,#ddd);border-radius:9px;margin-top:6px"><b>${i+1}. ${esc(o.name||'方案'+(i+1))}</b><div style="font-size:11px;margin-top:3px">${esc(o.novelSummary||o.optimizedIdea||'')}</div></div>`).join('')}</div></div>`:'';
+  el.innerHTML=dhtml+ohtml;
+}
+
 function bindView(){
   bindCopyBtns();
   bindCharEdit();
@@ -15282,13 +15503,12 @@ async function genDictMaster(btn){
     collapseGlossaryAfterDictionaryGeneration();
     render();
     markAIDone('dictmaster');
+    playThemeSound('dictMaster');
     toast(`万物词典已生成：人物 ${result.nChar} 位 · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系表 ${result.nRel} 条 · 世界观规则 ${result.nWR} 条（已并入万物词典）`);
-    playEventSound('dictmaster_done');
     return true;
   }catch(e){
     if(e.name !== 'AbortError') addToFixQueue({kind:'dictmaster', error:e.message});
     toast(e.name==='AbortError' ? '已停止生成万物词典' : '万物词典生成失败：'+e.message);
-    if(e.name!=='AbortError') reportSoundError('dictmaster', e);
     if(st){ st.className='status err'; st.textContent = e.message; }
     return false;
   }finally{
@@ -16442,6 +16662,7 @@ async function genDictHarvest(btn, opts){
     if(!res.ok) throw new Error(res.error || '生成失败');
     const txt = String(res.text || '').trim();
     if(!txt) throw new Error('未返回收编内容');
+    try{ assertBanListOutput('dictHarvest', txt); }catch(e){ if(e && e.code==='BANLIST_VIOLATION') recordBanListRejection('dictHarvest', e.banListReport); throw e; }
     const parsed = parseDictEnrichText(txt);
     const n = mergeDictHarvest(parsed);
     state.outline._dictHarvestText = txt;
@@ -16521,6 +16742,7 @@ async function genDictEnrich(btn, opts){
     if(!res.ok) throw new Error(res.error || '生成失败');
     const txt = String(res.text || '').trim();
     if(!txt) throw new Error('未返回词典充实内容');
+    try{ assertBanListOutput('dictEnrich', txt); }catch(e){ if(e && e.code==='BANLIST_VIOLATION') recordBanListRejection('dictEnrich', e.banListReport); throw e; }
     const parsed = parseDictEnrichText(txt);
     if(!(parsed.characters.length || parsed.walkons.length || parsed.places.length || parsed.propernouns.length)) throw new Error('未识别到有效条目（人物/路人/地名/专名），请重试');
     const n = mergeDictEnrich(parsed); ssProtectMasterCanon(); storyState().canon.dictEnrichAt=Date.now(); storyState().versions.dictEnrich=Number(storyState().versions.dictEnrich||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldExpansion={version:storyState().versions.dictEnrich,source:'dictEnrich',ts:Date.now(),added:n};
@@ -16528,13 +16750,13 @@ async function genDictEnrich(btn, opts){
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, ts:Date.now() };
     persist(); render(); markAIDone('dictEnrich');
+    playThemeSound('dictEnrich');
     if(stream) stream.style.display='none';
     toast(`词典已充实：主要人物 ${n.main||0} · 次要配角 ${n.support||0} · 路人 ${n.w||0} · 地名 ${n.p} · 专名 ${n.k}（已并入万物词典，正文可直接选用）`);
-    playEventSound('dictEnrich_done');
     return true;
   }catch(e){
     if(e && e.name !== 'AbortError') addToFixQueue({ kind:'dictEnrich', error:'词典充实：'+(e&&e.message) });
-    if(!(e && e.name === 'AbortError')) { toast('词典充实失败：'+(e&&e.message)); reportSoundError('dictEnrich', e); }
+    if(!(e && e.name === 'AbortError')) toast('词典充实失败：'+(e&&e.message));
     if(st){ st.className='status err'; st.textContent=(e&&e.message)||'失败'; }
     return false;
   }finally{
@@ -16852,7 +17074,9 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
     const paras=_rawTail.split(/\n\s*\n/).filter(x=>x.trim());
     if(paras.length>1){ paras.pop(); content=paras.join('\n\n').trim(); }
   }
-  return enforceChapterBoundary(i, content);
+  content = enforceChapterBoundary(i, content);
+  try{ assertBanListOutput('chapter', content); }catch(e){ if(e && e.code==='BANLIST_VIOLATION') recordBanListRejection('chapter', e.banListReport); throw e; }
+  return content;
 }
 function splitChapterCastout(prose){
   const lines = String(prose||'').split(/\r?\n/);
@@ -17885,11 +18109,11 @@ async function genOneChapter(i, btn, opt={}){
     patchChapter(i);
     if(st){ st.className='status ok'; st.textContent = `第 ${i+1} 章已生成。`; }
     toast('第'+(i+1)+'章完成');
-    playEventSound('chapter_regen_done');
+    playThemeSound('chapterRegen');
     generateRollingSummaries().catch(()=>{});
   }catch(e){
     if(e.name==='AbortError'){ if(st) st.textContent = '第'+(i+1)+'章已停止生成'; }
-    else { chState[i] = 'error'; patchChapter(i); if(st){ st.className='status err'; st.textContent = '第'+(i+1)+'章生成失败：'+e.message; } toast('第'+(i+1)+'章生成失败：'+e.message); reportSoundError('chapter_regen', e); }
+    else { chState[i] = 'error'; patchChapter(i); if(st){ st.className='status err'; st.textContent = '第'+(i+1)+'章生成失败：'+e.message; } toast('第'+(i+1)+'章生成失败：'+e.message); }
   }
   finally{ hideStopBtn(); state.generating = false; if(btn) busy(btn,false); patchChapter(i); autoUpdateSubplots(); autoUpdateTimeAnchors(); }
 }
@@ -17959,6 +18183,7 @@ async function genNChapters(start, n){
           }
         }
         let content = enforceChapterBoundary(idx, String(txt||'').trim());
+        try{ assertBanListOutput('chapter', content); }catch(e){ if(e && e.code==='BANLIST_VIOLATION') recordBanListRejection('chapter', e.banListReport); throw e; }
         snapshotChapterVersion(idx);
         state.chapters[idx].content = content;
         if(!isLong()) state.chapters[idx].confirmed = false;
@@ -18029,6 +18254,7 @@ async function continueAndFinalizeChapter(i, sourceNote){
     const txt = await continueTruncatedChapter(i, '', partial);
     const content = enforceChapterBoundary(i, String(txt||'').trim());
     if(!content) throw new Error('续写结果为空或越过本章边界后无剩余正文');
+    try{ assertBanListOutput('chapter', content); }catch(e){ if(e && e.code==='BANLIST_VIOLATION') recordBanListRejection('chapter', e.banListReport); throw e; }
     delete state._chapterPartial[i];
     snapshotChapterVersion(i);
     state.chapters[i].content = content;
@@ -18182,6 +18408,7 @@ async function genOneChapterNoUI(i){
     const txt = isLong()
       ? await writeOneChapterContent(i, user)
       : unwrapAIResult(await callDeepSeek(PROMPTS.chapterSys, user, {temperature: resolveActiveSpec().chapterTemp, taskKey:'chapter'})).trim();
+    assertBanListOutput('chapter', txt);
     state.chapters[i].content = txt;
     persist();
   }catch(e){ /* 继续后续 */ }
@@ -18688,7 +18915,6 @@ function openThemePanel(){
   const cur = (document.documentElement.getAttribute('data-theme')) || 'dark';
   $$('.theme-btns .theme').forEach(b=> b.classList.toggle('active', b.dataset.theme===cur));
   p.classList.remove('hidden');
-  renderThemeSoundUpgrade();
 }
 function closeThemePanel(){ const p=$('#themePanel'); if(p) p.classList.add('hidden'); }
 
@@ -18774,30 +19000,57 @@ function handleBanListAction(e){
   const add=e.target.closest('[data-bl-rule-add]'); if(add){
     const b=banListRaw();
     const cur=normalizeBanList(b)||{enabled:true,chars:[],names:[],phrases:[],rules:[],scopeAi:[]};
-    cur.rules.push({ text:'', ai:['chapter'] });
+    cur.prose = cur.prose || {words:[],phrases:[],patterns:[],rules:[]}; cur.prose.rules.push({ text:'', ai:['chapter'] }); cur.rules = cur.prose.rules.slice();
     state.banList=cur; renderBanListPanel(); return true;
   }
   const del=e.target.closest('[data-bl-rule-del]'); if(del){
     const i=+del.dataset.blRuleDel; const cur=normalizeBanList(state.banList)||{enabled:true,chars:[],names:[],phrases:[],rules:[],scopeAi:[]};
-    (cur.rules||[]).splice(i,1); state.banList=cur; renderBanListPanel(); return true;
+    cur.prose = cur.prose || {words:[],phrases:[],patterns:[],rules:[]}; (cur.prose.rules||[]).splice(i,1); cur.rules = cur.prose.rules.slice(); state.banList=cur; renderBanListPanel(); return true;
   }
   const save=e.target.closest('[data-bl-save]'); if(save){
-    const cur=normalizeBanList(state.banList)||{enabled:true,chars:[],names:[],phrases:[],rules:[],scopeAi:BANLIST_DEFAULT.scopeAi.slice()};
+    const prev=normalizeBanList(state.banList)||normalizeBanList(BANLIST_DEFAULT);
+    const cur=normalizeBanList(prev)||normalizeBanList(BANLIST_DEFAULT);
     const gv=el=>m.querySelector(el); const val=el=>{const x=gv(el); return x?x.value.trim():'';};
     cur.enabled = !!(m.querySelector('[data-bl-enabled]')&&m.querySelector('[data-bl-enabled]').checked);
-    cur.chars = val('[data-bl-chars]').split(/[,，]/).map(s=>s.trim()).filter(Boolean);
-    cur.names = val('[data-bl-names]').split(/[,，\n]/).map(s=>s.trim()).filter(Boolean);
-    cur.phrases = val('[data-bl-phrases]').split(/[,，]/).map(s=>s.trim()).filter(Boolean);
-    m.querySelectorAll('[data-bl-rule-text]').forEach(t=>{ const i=+t.dataset.blRuleText; const aiSel=m.querySelector('[data-bl-rule-ai="'+i+'"]'); const ai=aiSel?aiSel.value.split(',') : []; if(cur.rules[i]){ cur.rules[i].text=t.value.trim(); cur.rules[i].ai=ai; } });
-    cur.rules=cur.rules.filter(r=>r&&r.text);
-    const scope=[];
-    if(m.querySelector('[data-bl-scope="chapter"]')&&m.querySelector('[data-bl-scope="chapter"]').checked) scope.push('chapter');
-    if(m.querySelector('[data-bl-scope="planner"]')&&m.querySelector('[data-bl-scope="planner"]').checked) scope.push('planner');
-    if(m.querySelector('[data-bl-scope="outline"]')&&m.querySelector('[data-bl-scope="outline"]').checked) scope.push('outline');
-    if(m.querySelector('[data-bl-scope="title"]')&&m.querySelector('[data-bl-scope="title"]').checked) scope.push('title');
-    cur.scopeAi = scope.length?scope:BANLIST_DEFAULT.scopeAi.slice();
-    state.banList=cur; persist(); renderNarrativeEngineMenu();
-    toast('禁则清单已保存'); return true;
+    const chars=val('[data-bl-chars]').split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+    const names=val('[data-bl-names]').split(/[,，\n]/).map(s=>s.trim()).filter(Boolean);
+    const places=val('[data-bl-places]').split(/[,，\n]/).map(s=>s.trim()).filter(Boolean);
+    const properNouns=val('[data-bl-proper-nouns]').split(/[,，\n]/).map(s=>s.trim()).filter(Boolean);
+    const phrases=val('[data-bl-phrases]').split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+    const proseWords=val('[data-bl-prose-words]').split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+    const prosePatterns=(m.querySelector('[data-bl-prose-patterns]')?.value||'').split(/\n+/).map(s=>s.trim()).filter(Boolean);
+    cur.naming = cur.naming || {chars:[],names:[],places:[],properNouns:[]};
+    cur.prose = cur.prose || {words:[],phrases:[],patterns:[],rules:[]};
+    cur.naming.chars=uniqueTrimList(chars);
+    cur.naming.names=uniqueTrimList(names);
+    cur.naming.places=uniqueTrimList(places);
+    cur.naming.properNouns=uniqueTrimList(properNouns);
+    cur.prose.words=uniqueTrimList(proseWords);
+    cur.prose.phrases=uniqueTrimList(phrases);
+    cur.prose.patterns=uniqueTrimList(prosePatterns);
+    const rules=[];
+    m.querySelectorAll('[data-bl-rule-text]').forEach(t=>{
+      const i=+t.dataset.blRuleText; const aiSel=m.querySelector('[data-bl-rule-ai="'+i+'"]');
+      const ai=aiSel?aiSel.value.split(',').map(x=>x.trim()).filter(Boolean):[];
+      const text=t.value.trim(); if(text) rules.push({text,ai});
+    });
+    cur.prose.rules=rules;
+    const namingScope=[];
+    ['idea','dictmaster','dictEnrich','principal'].forEach(k=>{ const x=m.querySelector('[data-bl-naming-scope="'+k+'"]'); if(x&&x.checked) namingScope.push(k); });
+    const proseScope=[];
+    const ch=m.querySelector('[data-bl-scope="chapter"]'); if(ch&&ch.checked) proseScope.push('chapter');
+    cur.scopeNaming=namingScope.length?namingScope:BANLIST_DEFAULT.scopeNaming.slice();
+    cur.scopeProse=proseScope.length?proseScope:BANLIST_DEFAULT.scopeProse.slice();
+    // legacy mirrors，保证本阶段旧调用点仍与新规则完全一致。
+    cur.chars=cur.naming.chars.slice(); cur.names=cur.naming.names.slice(); cur.phrases=cur.prose.phrases.slice(); cur.rules=cur.prose.rules.slice(); cur.scopeAi=cur.scopeProse.slice();
+    const before=JSON.stringify(prev);
+    cur.updatedAt=Date.now();
+    if(JSON.stringify({...cur,updatedAt:0,version:0})!==JSON.stringify({...prev,updatedAt:0,version:0})) cur.version=Math.max(1,Number(prev.version)||1)+1;
+    else cur.version=Math.max(1,Number(prev.version)||1);
+    state.banList=normalizeBanList(cur);
+    // 先更新 state，再持久化；后续 AI 读取 banListRaw() 时立即拿到最新版本，无需刷新页面。
+    persist(); renderNarrativeEngineMenu();
+    toast(`禁则清单已保存并立即生效 · v${state.banList.version}`); return true;
   }
   const reset=e.target.closest('[data-bl-reset]'); if(reset){
     state.banList=null; persist(); renderNarrativeEngineMenu();
@@ -18836,11 +19089,13 @@ function renderBanListPanel(){
   const chars = banListChars().map(esc).join(', ');
   const names = banListNames().map(esc).join(', ');
   const bRaw = banListRaw();
-  const phrases = (Array.isArray(bRaw.phrases)?bRaw.phrases:[]).map(esc).join(', ');
-  const rules = (Array.isArray(bRaw.rules)?bRaw.rules:[]).map((r,i)=>`
+  const places = banListPlaces().map(esc).join(', ');
+  const properNouns = banListProperNouns().map(esc).join(', ');
+  const phrases = banListProsePhrases().map(esc).join(', ');
+  const rules = (Array.isArray(bRaw.prose?.rules)?bRaw.prose.rules:[]).map((r,i)=>`
     <div class="ne-bl-rule">
-      <label>生效 AI：<select data-bl-rule-ai="${i}">
-        ${['chapter', 'dictmaster', 'dictEnrich', 'principal'].map(r2=>`<option value="${r2}" ${(Array.isArray(r.ai)&&r.ai.indexOf(r2)>=0)?'selected':''}>${r2==='chapter'?'正文':r2==='planner'?'规划师':r2==='outline'?'大纲':'标题'}</option>`).join('')}
+      <label>生效模块：<select data-bl-rule-ai="${i}">
+        ${['chapter','idea','dictmaster','dictEnrich','principal'].map(r2=>`<option value="${r2}" ${(Array.isArray(r.ai)&&r.ai.indexOf(r2)>=0)?'selected':''}>${r2==='chapter'?'正文':r2==='idea'?'优化构想':r2==='dictmaster'?'词典达人':r2==='dictEnrich'?'词典充实':'校长'}</option>`).join('')}
       </select></label>
       <textarea data-bl-rule-text="${i}" rows="2">${esc(r.text||'')}</textarea>
       <button class="btn small ghost" data-bl-rule-del="${i}">删除</button>
@@ -18850,39 +19105,49 @@ function renderBanListPanel(){
     <div class="ne-body ne-bl-body">
       <div class="ne-bl-enable">
         <label class="mini-check"><input type="checkbox" data-bl-enabled ${enabled?'checked':''}> <b>总开关：启用「禁则清单」作为全书长期约束</b></label>
+        <span class="pill ${enabled?'tag-ok':'tag-warn'}" style="margin-left:8px">运行时 v${Number(b.version)||1}</span>
       </div>
-      <div class="bl-note muted">禁用字/禁用姓名属于全书命名红线：凡会创造或使用名字的 AI 阶段自动执行；附加规则可按阶段指定。清单不得超越输出格式红线与既有事实一致性红线。</div>
-      <label class="kv"><span class="k">禁用字</span>
-        <input data-bl-chars value="${chars}" placeholder="逗号分隔，如：晚,砚,秋,檐"/>
-      </label>
-      <label class="kv"><span class="k">禁用姓名</span>
-        <textarea data-bl-names rows="3">${names}</textarea>
-      </label>
-      <label class="kv"><span class="k">禁用短语/模板词（仅正文）</span>
-        <input data-bl-phrases value="${phrases}" placeholder="逗号分隔，如：倏然,眸光"/>
-      </label>
-      <div class="ne-bl-rules-head">附加规则 <button class="btn small" data-bl-rule-add>＋ 新增规则</button></div>
+      <div class="bl-note muted">本阶段已正式建立两个规则域：①命名禁则，约束优化构想、词典达人、词典充实、校长；②正文禁则，约束最终正文。老师不接入禁则清单。保存后先更新运行时 state，再持久化，当前页面无需刷新即可生效。</div>
+      <div class="ne-bl-section" style="margin-top:12px;padding:10px;border:1px solid #ddd;border-radius:8px">
+        <div style="font-weight:700;margin-bottom:6px">① 命名禁则 · 人名 / 地名 / 专名</div>
+        <label class="kv"><span class="k">禁用字</span><input data-bl-chars value="${chars}" placeholder="逗号分隔，如：晚,砚,秋,檐"/></label>
+        <label class="kv"><span class="k">禁用姓名</span><textarea data-bl-names rows="3">${names}</textarea></label>
+        <label class="kv"><span class="k">禁用地名</span><textarea data-bl-places rows="2">${places}</textarea></label>
+        <label class="kv"><span class="k">禁用专名</span><textarea data-bl-proper-nouns rows="2">${properNouns}</textarea></label>
+        <div class="bl-note muted">人名 / 地名 / 专名现在全部由同一个命名禁则运行时统一管理；内置历史禁用字/姓名仍会保留为系统基线。</div>
+        <div class="ne-bl-scope-head"><b>命名禁则生效模块</b></div>
+        <div class="ne-bl-scope">
+          <label class="mini-check"><input type="checkbox" data-bl-naming-scope="idea" ${aiScope.idea?'checked':''}> 优化构想</label>
+          <label class="mini-check"><input type="checkbox" data-bl-naming-scope="dictmaster" ${aiScope.dictmaster?'checked':''}> 词典达人</label>
+          <label class="mini-check"><input type="checkbox" data-bl-naming-scope="dictEnrich" ${aiScope.dictEnrich?'checked':''}> 词典充实</label>
+          <label class="mini-check"><input type="checkbox" data-bl-naming-scope="principal" ${aiScope.principal?'checked':''}> 校长</label>
+        </div>
+      </div>
+      <div class="ne-bl-section" style="margin-top:12px;padding:10px;border:1px solid #ddd;border-radius:8px">
+        <div style="font-weight:700;margin-bottom:6px">② 正文禁则 · 违规用词 / 短语 / 写法</div>
+        <label class="kv"><span class="k">禁用词</span><input data-bl-prose-words value="${(b.prose?.words||[]).map(esc).join(', ')}" placeholder="逗号分隔"/></label>
+        <label class="kv"><span class="k">禁用短语 / 模板词</span><input data-bl-phrases value="${phrases}" placeholder="例如：天刚蒙蒙亮,夜幕悄然降临"/></label>
+        <label class="kv"><span class="k">禁用写法 / 模式</span><textarea data-bl-prose-patterns rows="3">${(b.prose?.patterns||[]).map(esc).join('\n')}</textarea></label>
+        <div class="bl-note muted">模式支持两种写法：普通内容=命中即拦截；以 <code>re:</code> 开头=按正则模式检测，用于覆盖“天刚蒙蒙亮”这类可变体模板。命中后拒绝提交，不自动替换原文。</div>
+        <div class="ne-bl-scope-head"><b>正文禁则生效模块</b></div>
+        <div class="ne-bl-scope"><label class="mini-check"><input type="checkbox" data-bl-scope="chapter" ${aiScope.chapter?'checked':''}> 正文</label></div>
+      </div>
+      <div class="ne-bl-rules-head" style="margin-top:12px">附加规则 <button class="btn small" data-bl-rule-add>＋ 新增规则</button></div>
       ${rules || '<div class="muted">暂无附加规则。</div>'}
-      <div class="ne-bl-scope-head"><b>附加规则生效范围（按 AI）</b></div>
-      <div class="ne-bl-scope">
-        <label class="mini-check"><input type="checkbox" data-bl-scope="chapter" ${aiScope.chapter?'checked':''}> 正文</label>
-        <label class="mini-check"><input type="checkbox" data-bl-scope="dictmaster" ${aiScope.dictmaster ? 'checked' : ''}> 词典达人</label>
-        <label class="mini-check"><input type="checkbox" data-bl-scope="dictEnrich" ${aiScope.dictEnrich ? 'checked' : ''}> 词典充实</label>
-        <label class="mini-check"><input type="checkbox" data-bl-scope="principal" ${aiScope.principal ? 'checked' : ''}> 校长</label>
-      </div>
-      <div class="btn-row">
-        <button class="btn primary" data-bl-save>保存</button>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn primary" data-bl-save>保存并立即生效</button>
         <button class="btn ghost" data-bl-reset>恢复默认</button>
       </div>
     </div>`;
   openNeModal('禁则清单', html);
 }
 function banListAiScopeLabels(){
-  const b=banListRaw(); const sc=Array.isArray(b.scopeAi)?b.scopeAi:(BANLIST_DEFAULT.scopeAi||[]);
-  return { chapter: sc.indexOf('chapter')>=0, dictmaster: sc.indexOf('dictmaster') >= 0,
-    dictEnrich: sc.indexOf('dictEnrich') >= 0,
-    principal: sc.indexOf('principal') >= 0 };
+  const b=banListRaw();
+  const ns=Array.isArray(b.scopeNaming)?b.scopeNaming:(BANLIST_DEFAULT.scopeNaming||[]);
+  const ps=Array.isArray(b.scopeProse)?b.scopeProse:(BANLIST_DEFAULT.scopeProse||[]);
+  return { idea:ns.includes('idea'), dictmaster:ns.includes('dictmaster'), dictEnrich:ns.includes('dictEnrich'), principal:ns.includes('principal'), chapter:ps.includes('chapter') };
 }
+
 
 function renderTitleCandidates(candidates, onSelect){
   if(!Array.isArray(candidates) || candidates.length<2){ onSelect && onSelect(0); return; }
@@ -19298,6 +19563,7 @@ async function init(){
   const btnTheme = $('#btnTheme');
   if(btnTheme) btnTheme.onclick = (e)=>{ e.stopPropagation(); const p=$('#themePanel'); if(p.classList.contains('hidden')) openThemePanel(); else closeThemePanel(); };
   initThemeSoundPanel();
+  initThemeSoundPanelExtended();
   rebindNarrativeEngine();
   const btnTS = $('#btnTempSave');
   if(btnTS) btnTS.onclick = (e)=>{
@@ -19366,7 +19632,7 @@ function filterDictMasterEntry(entry){
     if(n && name.includes(n)) return null; // 命中禁名则拦截抛弃
   }
   for(const c of bChars){
-    if(c && name.includes(c)) name = name.split(c).join(''); // 清洗禁用字
+    if(c && name.includes(c)) return null; // Phase 3：最终闸门优先拒绝，不自动改写名称
   }
   if(!name.trim()) return null;
   return Object.assign({}, entry, { name });
@@ -19382,13 +19648,10 @@ function filterDictEnrichList(list){
     for(const n of bNames){
       if(n && txt.includes(n)) return false;
     }
-    return true;
-  }).map(item => {
-    let txt = String(item.name || item.title || item.entity || '');
     for(const c of bChars){
-      if(c && txt.includes(c)) txt = txt.split(c).join('');
+      if(c && txt.includes(c)) return false;
     }
-    return Object.assign({}, item, { name: txt });
+    return true;
   });
 }
 
