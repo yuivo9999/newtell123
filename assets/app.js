@@ -79,6 +79,7 @@ const state = {
   polishDiagnosis: null,
   polishStrategies: [],
   strategicDimensions: [],
+  strategicDimensionsSelected: [],
   strategicDimensionsConfirmed: false,
   strategicDimensionsStatus: 'empty',
   originalIdeaAnchors: null,
@@ -1207,6 +1208,7 @@ function projectSnapshot(){
     polishDiagnosis: state.polishDiagnosis,
     polishStrategies: state.polishStrategies,
     strategicDimensions: state.strategicDimensions,
+    strategicDimensionsSelected: Array.isArray(state.strategicDimensionsSelected) ? state.strategicDimensionsSelected : [],
     strategicDimensionsConfirmed: !!state.strategicDimensionsConfirmed,
     strategicDimensionsStatus: state.strategicDimensionsStatus,
     originalIdeaAnchors: state.originalIdeaAnchors,
@@ -1292,6 +1294,7 @@ function applyProject(p){
   state.polishDiagnosis = (p.polishDiagnosis && typeof p.polishDiagnosis === 'object') ? p.polishDiagnosis : null;
   state.polishStrategies = Array.isArray(p.polishStrategies) ? p.polishStrategies : [];
   state.strategicDimensions = Array.isArray(p.strategicDimensions) ? p.strategicDimensions : [];
+  state.strategicDimensionsSelected = Array.isArray(p.strategicDimensionsSelected) ? p.strategicDimensionsSelected.map(String) : state.strategicDimensions.map(d=>String(d?.name||d?.title||d?.id||'')).filter(Boolean);
   state.strategicDimensionsConfirmed = !!p.strategicDimensionsConfirmed;
   state.strategicDimensionsStatus = ['empty','generating','ready'].includes(p.strategicDimensionsStatus) ? p.strategicDimensionsStatus : (state.strategicDimensions.length ? 'ready' : 'empty');
   state.originalIdeaAnchors = (p.originalIdeaAnchors && typeof p.originalIdeaAnchors==='object') ? p.originalIdeaAnchors : null;
@@ -3168,11 +3171,12 @@ async function generateStrategicDimensions(btn){
     state.originalIdeaAnchors=parsed.anchors;
     state.strategicDimensions=parsed.dims;
     state.strategicDimensionsStatus='ready';
-    state.strategicDimensionsConfirmed=true;
+    state.strategicDimensionsSelected=parsed.dims.map(d=>String(d?.name||d?.title||d?.id||'')).filter(Boolean);
+    state.strategicDimensionsConfirmed=false;
     state.polishOptions=[]; state.polishAdopted=null; state.polishSelectedId=null; state.polishCanonical=null; state.canonicalStoryStrategy=null;
     persist(); render(); openTwoStagePanel('dimensions');
     toast(`战略维度生成完成，共 ${parsed.dims.length} 个`);
-  }catch(e){ state.strategicDimensionsStatus='empty'; persist(); toast('战略维度生成失败：'+e.message); }
+  }catch(e){ state.strategicDimensionsStatus='empty'; state.strategicDimensionsSelected=[]; state.strategicDimensionsConfirmed=false; persist(); render(); toast('战略维度生成失败：'+e.message); }
   finally{ if(b) busy(b,false); }
 }
 function openTwoStagePanel(kind){
@@ -3183,11 +3187,13 @@ function openTwoStagePanel(kind){
 async function generateOptimizedIdeas(btn, force){
   const idea=(state.idea||'').trim(); const dims=Array.isArray(state.strategicDimensions)?state.strategicDimensions:[];
   if(!idea){toast('请先输入故事构想');return;}
-  if(!state.strategicDimensionsConfirmed || dims.length<6){toast('请先完成第一步「生成战略维度」');openTwoStagePanel('dimensions');return;}
+  const selectedNames=Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected.map(String):[];
+  const selectedDims=dims.filter(d=>selectedNames.includes(String(d?.name||d?.title||d?.id||'')));
+  if(!state.strategicDimensionsConfirmed || selectedDims.length<1){toast('请先在第一阶段选择并确认至少1个战略维度');openTwoStagePanel('dimensions');return;}
   if(state.polishOptions?.length && !force){if(!confirm(`已有 ${state.polishOptions.length} 个优化方案，重新生成将覆盖它们。继续？`))return;}
   state.polishMode=polishMulti?'multi':'single'; state.polishStatus='generating'; state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null; persist(); render();
   const b=$('#btnGenerateOptimized'); if(b) busy(b,true,'正在基于战略维度生成方案…');
-  const dimText=dims.map((d,i)=>`${i+1}. ${d.name}\n${d.description}\n契合：${d.whyFit}`).join('\n');
+  const dimText=selectedDims.map((d,i)=>`${i+1}. ${d.name}\n${d.description}\n契合：${d.whyFit}`).join('\n');
   const sys=`你是一名资深故事策划师。现在执行第二阶段：只能读取第一阶段已经确认的战略维度，并基于它们生成3—5个彼此真正不同的优化构想候选方案。不得回退到旧的一步式“五向”逻辑。严格JSON：{"options":[{"name":"","bookTitle":"","novelSummary":"","fullBookBeat":"","optimizedIdea":"","creativeAdditions":"","originalAnchors":{},"strategicDimensions":[],"strategyFingerprint":{"mainStrategy":"","secondaryStrategy":"","coreConflict":"","storyEngine":"","emotionalPromise":"","pacing":""},"diagnosis":{"strengths":[],"defects":[],"missing":[],"constraints":[]},"optimizationStrategies":[],"navBeacon":{}}]}. 每个方案必须从确认的战略维度组合而来，战略指纹高度相似则重做。`;
   const user=`【原始构想】\n${idea}\n\n【第一阶段已确认战略维度】\n${dimText}\n\n请执行第二阶段，只输出最终3—5个候选优化方案。`;
   try{
@@ -10021,6 +10027,7 @@ function render(){
   else if(currentStep===4) v.innerHTML = viewStoryboard();
   else if(currentStep===5) v.innerHTML = viewExport();
   bindView();
+  if(currentStep===1) renderTwoStagePanel();
   if(currentStep===1) bindFlowSideNav();
   updateWcTotal();
   if(_restY >= 0){ try{ window.scrollTo(0, _restY); }catch(e){} }
@@ -14719,9 +14726,46 @@ function renderTwoStagePanel(){
   const opts=Array.isArray(state.polishOptions)?state.polishOptions:[];
   if(!dims.length&&!opts.length){el.style.display='none';el.innerHTML='';return;}
   el.style.display='block';
-  const dhtml=dims.length?`<div><b>🧭 第一阶段：已生成战略地图</b><span class="muted" style="margin-left:6px">${dims.length} 个维度</span><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px;margin-top:8px">${dims.map(d=>`<div style="padding:8px;border:1px solid var(--line,#ddd);border-radius:9px"><b>${esc(d.name)}</b><div style="font-size:11px;line-height:1.5;margin-top:3px">${esc(d.description)}</div><div style="font-size:10px;color:var(--muted);margin-top:3px">契合：${esc(d.whyFit)}</div></div>`).join('')}</div></div>`:'';
-  const ohtml=opts.length?`<div style="margin-top:14px"><b>✨ 第二阶段：${opts.length} 个优化构想</b><div style="margin-top:7px">${opts.map((o,i)=>`<div style="padding:8px 10px;border:1px solid var(--line,#ddd);border-radius:9px;margin-top:6px"><b>${i+1}. ${esc(o.name||'方案'+(i+1))}</b><div style="font-size:11px;margin-top:3px">${esc(o.novelSummary||o.optimizedIdea||'')}</div></div>`).join('')}</div></div>`:'';
-  el.innerHTML=dhtml+ohtml;
+  const selected=new Set((Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected:[]).map(String));
+  const dimHtml=dims.length?`<section style="padding:14px;border:1px solid var(--line,#ddd);border-radius:12px;background:var(--card,#fff)">
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+      <div><b style="font-size:15px">🧭 第一步：战略维度结果</b><div class="muted" style="margin-top:5px;line-height:1.55">AI 已根据你的故事动态分析出 ${dims.length} 个候选方向。请阅读后勾选你希望下一步重点采用的维度。</div></div>
+      <span class="ts-result-badge">${state.strategicDimensionsConfirmed?'✓ 已确认':'待选择与确认'}</span>
+    </div>
+    <div style="margin:10px 0;padding:10px;border-radius:9px;background:rgba(80,120,180,.08);font-size:12px;line-height:1.6"><b>这一步有什么意义？</b> 战略维度不是最终故事方案，而是下一步“优化构想”的方向盘。你勾选的维度会直接作为第二阶段 AI 的输入约束；未勾选的维度不会作为重点方向。</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:9px;margin-top:10px">
+      ${dims.map((d,i)=>{const name=String(d?.name||d?.title||d?.id||'战略维度'+(i+1));const key=name;const checked=selected.has(key);return `<label class="ts-dim-choice" style="display:block;padding:11px;border:1px solid ${checked?'var(--accent,#4c6fff)':'var(--line,#ddd)'};border-radius:10px;cursor:pointer;background:${checked?'rgba(76,111,255,.07)':'transparent'}"><div style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" data-ts-dim="${esc(key)}" ${checked?'checked':''} style="margin-top:3px"><div><b>${esc(name)}</b><div style="font-size:12px;line-height:1.55;margin-top:4px">${esc(String(d?.description||''))}</div>${String(d?.whyFit||'').trim()?`<div style="font-size:11px;color:var(--muted);margin-top:5px">契合：${esc(String(d.whyFit))}</div>`:''}</div></div></label>`}).join('')}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px">
+      <button type="button" class="btn primary" id="btnConfirmStrategicDimensions">✓ 确认所选战略维度</button>
+      <span class="muted" id="tsDimCount">已选择 ${[...selected].filter(x=>dims.some(d=>String(d?.name||d?.title||d?.id||'')===x)).length} / ${dims.length}</span>
+    </div>
+  </section>`:'';
+  const ohtml=opts.length?`<section style="margin-top:14px;padding:14px;border:1px solid var(--line,#ddd);border-radius:12px;background:var(--card,#fff)">
+    <div><b style="font-size:15px">✨ 第二步：优化构想结果</b><div class="muted" style="margin-top:5px;line-height:1.55">AI 已生成 ${opts.length} 个候选方案。完整内容会同时显示在下面“方案比选”区域，你可以查看、复制并选择采用的方案。</div></div>
+    <div style="margin-top:9px">${opts.map((o,i)=>`<div style="padding:10px;border:1px solid var(--line,#ddd);border-radius:9px;margin-top:7px"><b>${i+1}. ${esc(o.name||'方案'+(i+1))}</b><div style="font-size:12px;line-height:1.55;margin-top:4px;white-space:pre-wrap">${esc(o.optimizedIdea||o.novelSummary||o.text||'')}</div></div>`).join('')}</div>
+    <div style="margin-top:9px;padding:9px;background:rgba(80,120,180,.08);border-radius:8px;font-size:12px;line-height:1.55"><b>这一步有什么意义？</b> 这是把你确认的战略方向转化为可比较的具体故事方案。选择“采用此方案”后，才会成为后续大纲与创作链路的正式战略依据。</div>
+  </section>`:'';
+  el.innerHTML=dimHtml+ohtml;
+  el.querySelectorAll('[data-ts-dim]').forEach(ch=>{
+    ch.onchange=()=>{
+      const key=String(ch.dataset.tsDim||'');
+      const cur=new Set((Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected:[]).map(String));
+      if(ch.checked) cur.add(key); else cur.delete(key);
+      state.strategicDimensionsSelected=[...cur];
+      state.strategicDimensionsConfirmed=false;
+      persist(); renderTwoStagePanel();
+    };
+  });
+  const confirmBtn=el.querySelector('#btnConfirmStrategicDimensions');
+  if(confirmBtn) confirmBtn.onclick=()=>{
+    const valid=dims.filter(d=>(Array.isArray(state.strategicDimensionsSelected)?state.strategicDimensionsSelected:[]).includes(String(d?.name||d?.title||d?.id||'')));
+    if(!valid.length){toast('至少选择1个战略维度后才能确认');return;}
+    state.strategicDimensionsSelected=valid.map(d=>String(d?.name||d?.title||d?.id||''));
+    state.strategicDimensionsConfirmed=true;
+    persist(); render(); openTwoStagePanel('options');
+    toast(`已确认 ${valid.length} 个战略维度，下一步优化构想将只重点依据这些方向生成`);
+  };
 }
 
 function bindView(){
