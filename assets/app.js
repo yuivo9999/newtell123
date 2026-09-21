@@ -699,7 +699,7 @@ async function repairChapterByAudit(i,text,report){
   const banRepair = stateBanEnabled() ? `\n【用户全书禁则】禁用姓名：${banListNames().join('、')}；姓名禁用字：${banListChars().join('、')}；禁用短语：${(Array.isArray(banListRaw().phrases)?banListRaw().phrases:[]).join('、')}` : '';
   const priorLedger = chapterQualityLedger(i);
   const user=`【章节卡】${JSON.stringify(chapterPlanAuthority(i))}\n【正文审核失败分类】${classification.failureCode}\n【可修复性】仅允许局部修复一次\n【定向修复提示】${classification.repairHint}\n【审计FAIL】${JSON.stringify(fails)}${banRepair}\n【本章已确认质量账本】${JSON.stringify(priorLedger||{})}\n【正文】\n${String(text||'').slice(0,50000)}\n只修复最小冲突，优先修改1-3个最小连续片段；保留所有已经合格的正文、事实、人物状态、老师教案与章节边界；不得新增主线事件，不得整章重写。`;
-  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_REPAIR_SYS,user,{maxTokens:3500,temperature:0.15,topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterRepair'})); const j=parseJson(raw)||{}; const old=String(j.replacement||'').trim(), neu=String(j.newText||'').trim(); if(!old||!neu) return {content:String(text||''),attempted:true,classification}; const idx=String(text||'').indexOf(old); if(idx<0) return {content:String(text||''),attempted:true,classification}; const content=String(text).slice(0,idx)+neu+String(text).slice(idx+old.length); return {content,attempted:true,classification}; }catch(e){ return {content:String(text||''),attempted:true,classification,error:String(e&&e.message||e)}; }
+  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_REPAIR_SYS,user,{maxTokens:3500,temperature:0.20,topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterRepair'})); const j=parseJson(raw)||{}; const old=String(j.replacement||'').trim(), neu=String(j.newText||'').trim(); if(!old||!neu) return {content:String(text||''),attempted:true,classification}; const idx=String(text||'').indexOf(old); if(idx<0) return {content:String(text||''),attempted:true,classification}; const content=String(text).slice(0,idx)+neu+String(text).slice(idx+old.length); return {content,attempted:true,classification}; }catch(e){ return {content:String(text||''),attempted:true,classification,error:String(e&&e.message||e)}; }
 }
 async function finalizeChapterState(i,text){
   text = enforceChapterBoundary(i, text);
@@ -1115,20 +1115,20 @@ function resolveActiveSpec(taskKey){
     keyInBody: !!group.keyInBody,
     model: model.name || 'deepseek-v4-pro',
     temperature: (cfg.temperature==null ? 0.6 : cfg.temperature),
-    ideaTemp:    (cfg.ideaTemp==null ? 0.5 : cfg.ideaTemp),
+    ideaTemp:    (cfg.ideaTemp==null ? 0.45 : cfg.ideaTemp),
     principalTemp:(cfg.principalTemp==null ? 0.4 : cfg.principalTemp),
     teacherTemp: (cfg.teacherTemp==null ? 0.4 : cfg.teacherTemp),
     dictmasterTemp: (cfg.dictmasterTemp==null ? 0.4 : cfg.dictmasterTemp),
-    dictEnrichTemp: (cfg.dictEnrichTemp==null ? 0.4 : cfg.dictEnrichTemp),
+    dictEnrichTemp: (cfg.dictEnrichTemp==null ? 0.45 : cfg.dictEnrichTemp),
     assetsTemp:  (cfg.assetsTemp==null ? 0.7 : cfg.assetsTemp),
     titleTemp:   (cfg.titleTemp==null ? 0.5 : cfg.titleTemp),
     chapterTemp: (cfg.chapterTemp==null ? 0.5 : cfg.chapterTemp),
     qcTemp:      (cfg.qcTemp==null ? 0.2 : cfg.qcTemp),              // 分任务温度：词库提取（严谨低温）
-    stripTemp:   (cfg.stripTemp==null ? 1.0 : cfg.stripTemp),
+    stripTemp:   (cfg.stripTemp==null ? 0.8 : cfg.stripTemp),
     subplotTemp: (cfg.subplotTemp==null ? 0.25 : cfg.subplotTemp),    // 分任务温度：支线进度更新（契约类窄采样）
     rollingTemp: (cfg.rollingTemp==null ? 0.3 : cfg.rollingTemp),    // 分任务温度：滚动摘要（忠实压缩）
     contentAdviseTemp: (cfg.contentAdviseTemp==null ? 0.6 : cfg.contentAdviseTemp),  // 分任务温度：内容建议（建议类）
-    aiRecipeTemp:(cfg.aiRecipeTemp==null ? 0.9 : cfg.aiRecipeTemp)
+    aiRecipeTemp:(cfg.aiRecipeTemp==null ? 0.85 : cfg.aiRecipeTemp)
   };
 }
 function currentSpecLabel(){
@@ -4677,7 +4677,7 @@ function dedupeRecipeList(list){
 }
 async function aiRecipeProduce(system, user){
   const cfg=getCfg();
-  const opt = { maxTokens: clampMaxTokens('recipe'), temperature:(cfg.aiRecipeTemp==null?0.55:Math.min(0.75,Math.max(0.25,Number(cfg.aiRecipeTemp)||0.55))), topP:0.45 };
+  const opt = { maxTokens: clampMaxTokens('recipe'), temperature:(cfg.aiRecipeTemp==null?0.85:Math.min(0.90,Math.max(0.25,Number(cfg.aiRecipeTemp)||0.85))), topP:0.45 };
   const FIX = `\n\n【上一轮质量修正】重新检查输入理解：删除仅靠换形容词、换名称、换顺序形成的重复候选；只保留有实际执行差异的方向。gap 必须来自真实且重要的写作方法缺口；现有词库能覆盖就 gap=null。`;
   const FIX_JSON = `\n\n【上一轮格式修正】上一轮输出无法解析。只输出合法 JSON 数组，不要 markdown、解释或额外文字。`;
   let list = null, lastJsonOk = false;
@@ -5156,8 +5156,8 @@ function dynamicChapterParams(idx){
   else if(ratio > 0.35) phase = 'act2';
   const map = {
     act1: { temperature: 0.70, topP: 0.95 },   // 立人设：低温稳
-    act2: { temperature: 0.85, topP: 0.95 },   // 中段铺陈：稍高激发变化
-    act3: { temperature: 0.80, topP: 0.90 }    // 高潮+收束：收紧采样
+    act2: { temperature: 0.80, topP: 0.95 },   // 中段铺陈：保持变化，同时避免过度发散
+    act3: { temperature: 0.75, topP: 0.90 }    // 高潮+收束：表达强度保留，结构采样收紧
   };
   const p = map[phase] || map.act2;
   const t = base + (p.temperature - 0.75);
@@ -19593,19 +19593,19 @@ const TM_GROUPS = [
 ];
 
 const TM_TEMP = {
-  idea:['ideaTemp',0.5],
+  idea:['ideaTemp',0.45],
   principal:['principalTemp',0.4],
   teacher:['teacherTemp',0.4],
   dictmaster:['dictmasterTemp',0.4],
-  dictEnrich:['dictEnrichTemp',0.4],
+  dictEnrich:['dictEnrichTemp',0.45],
   chapter:['chapterTemp',0.5],
-  strip:['stripTemp',1.0],
+  strip:['stripTemp',0.8],
   subplot:['subplotTemp',0.25],
   glossary:['qcTemp',0.2],
   rolling:['rollingTemp',0.3],
   contentAdvice:['contentAdviseTemp',0.6],
   assets:['assetsTemp',0.7],
-  recipe:['aiRecipeTemp',0.9]
+  recipe:['aiRecipeTemp',0.85]
 };
 let editTM = null;          // 面板暂存：保存前绝不落盘（对齐设置弹窗 editCfg 模式）
 let editTemps = {};
