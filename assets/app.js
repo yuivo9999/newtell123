@@ -1876,12 +1876,12 @@ function guardSwitchStep(){
 
 
 
-const CHAPTER_ENDING_CONTRACT_VERSION = 'app25-ending-contract-v1';
+const CHAPTER_ENDING_CONTRACT_VERSION = 'app5-ending-stop-boundary-v3-transition-chain';
 const CHAPTER_ENDING_CONTRACT = Object.freeze({
   version: CHAPTER_ENDING_CONTRACT_VERSION,
-  command: '禁止留钩子的感觉',
+  command: '最后有效事件即终止边界，边界之后不得新增任何叙事功能',
   authority: 'single_source',
-  rule: '章末只在本章最后一个已经发生的有效变化处自然停止；不为下一章制造期待、悬念、希望、前瞻或情绪吊桥。',
+  rule: '章末只在本章最后一个已经发生的有效事件/变化处自然停止。最后有效事件一旦完成，立即视为终止边界；边界之后不得再添加任何作者式总结、未来展望、正能量升华、希望/期待/憧憬/满意/高兴/想象、人生感悟、价值判断、命运判断、意义解释、下一步暗示或读者情绪引导。下一章可以承接，但承接点必须来自终止边界前已经发生并成立的事实、状态、关系、信息、动作、环境或直接后果；不得为了“承接”再另起一个作者式钩子。',
   positive: [
     '事件完成：停在已经发生的结果，例如门锁扣上、文件交出去、伤口被处理完。',
     '决定成立：停在人物已经做出的决定或动作，例如把签好的文件推过去，不补“以后会怎样”。',
@@ -1890,21 +1890,32 @@ const CHAPTER_ENDING_CONTRACT = Object.freeze({
     '直接后果：停在已经发生的后果，例如警报响起、玻璃碎裂、门被推开。',
     '冲突停住：停在当前僵持、拒绝、沉默或动作未完成的事实，不追加“接下来一定会……”的感觉。',
     '物件变化：停在证据、信件、钥匙、药片等具体状态发生变化。',
-    '认识变化：停在人物此刻已经意识到的东西，不把认识包装成“人生从此不同”。'
+    '认识变化：只写人物当下已经发生的意识变化；如果该意识已经完成，不再追加解释其意义。',
+    '情绪可以停在最后一个真实事件内部，但不得在事件结束后另起一句/一段，把情绪包装成未来希望、满足、幸福、憧憬或人生意义。',
+    '如果最后一个有效事件已经结束，最安全的结尾是直接停止；不要为了“文学性”再补一句总结。',
+    '下一章承接不是单一模式：可以承接事件未完、已揭示的新信息、正在进行的动作、关系变化、物件/线索、环境状态、冲突停滞、问题悬置、信息缺口、情绪未决、选择未决、直接后果、时间切换、场景切换、冷收束、平淡状态、不确定状态、失败/损失/危险/僵局等。',
+    '承接方式由本章真实发生的最后状态决定，不要求每章都留下悬念，更不要求每章留下希望、期待、兴奋或正能量。',
+    '“给下一章留下东西”与“制造读者等待感”不是同一件事：前者允许，后者禁止。',
+    '如果本章最后状态本身已经自然提供了下一章的入口，可以保留这个入口；不得在入口之外额外解释“为什么下一章一定值得期待”。'
   ],
   feelingFailures: [
     '为了让读者继续读而故意留下“下一步一定有事”的感觉。',
     '把本章已经结束的事件再包一层“新的开始/命运改变/真正故事开始”的感觉。',
     '即使完全不用“期待、未来、明天、希望、悬念”等词，只要读者读完明显被推向“等下一章”的情绪，也算失败。',
-    '为了形成钩子而额外增加一个本章没有发生的新问题、新承诺、新预告或抽象前瞻。'
+    '为了形成钩子而额外增加一个本章没有发生的新问题、新承诺、新预告或抽象前瞻。',
+    '在最后有效事件之后新增总结性情绪句，即使没有明显未来词，也属于越过终止边界。',
+    '用也许、或许、从此、终于、第一次、总会、终会、未来、以后、明天、将来、命运、人生等抽象词把当前事件升华为正面结论，也属于越界。'
   ],
   counterExamples: [
     '失败：她把信收进抽屉，忽然觉得从这一刻起，一切都会不同。——这是未来指向感觉。',
     '失败：门关上了，真正的故事才刚刚开始。——这是强行下一章钩子。',
     '失败：他没有再说话，只等着接下来会发生什么。——即使没有“未来”二字，仍在要求读者等待。',
-    '失败：她握紧钥匙，命运的齿轮已经转动。——抽象升华替代了具体收束。'
+    '失败：她握紧钥匙，命运的齿轮已经转动。——抽象升华替代了具体收束。',
+    '失败：她把门关上，心里第一次对未来有了期待。——真实动作已经结束，后一句是新增的未来/情绪总结。',
+    '失败：他收好文件，忽然觉得一切都会慢慢好起来。——事件结束后追加正能量结论。',
+    '失败：她看着灯光，嘴角带着满足的笑意，也许明天会更好。——情绪升华加未来展望双重越界。'
   ],
-  audit: '审计只验证正文是否服从本契约；词汇仅作辅助证据，不是主判据。'
+  audit: '审计只验证正文是否服从本契约；词汇仅作辅助证据。核心判据是：最后有效事件之后是否新增叙事功能。只要新增总结/升华/未来/情绪引导，即使换词规避，也判定失败。'
 });
 function chapterEndingContractText(){
   return `【唯一章末口令｜${CHAPTER_ENDING_CONTRACT_VERSION}】\n口令：${CHAPTER_ENDING_CONTRACT.command}\n${CHAPTER_ENDING_CONTRACT.rule}\n正向写法：\n${CHAPTER_ENDING_CONTRACT.positive.map(x=>' - '+x).join('\\n')}\n感觉级失败判定：\n${CHAPTER_ENDING_CONTRACT.feelingFailures.map(x=>' - '+x).join('\\n')}\n反例：\n${CHAPTER_ENDING_CONTRACT.counterExamples.map(x=>' - '+x).join('\\n')}\n唯一职责链：上游生成/选择停止点 → 老师施工最后有效事件 → 正文自然停止 → 审计只验证契约。其他层不得另立章末主口令。`;
@@ -1914,7 +1925,10 @@ function normalizeChapterEndingContract(plan){
   return {version:CHAPTER_ENDING_CONTRACT_VERSION, command:CHAPTER_ENDING_CONTRACT.command,
     lastEffectiveEvent:String(p.lastEffectiveEvent||'').trim(), form:String(p.form||'自然停止').trim(),
     endingFunction:String(p.endingFunction||'completion').trim(), positiveExamples:CHAPTER_ENDING_CONTRACT.positive.slice(),
-    hook:false, forbiddenFeeling:CHAPTER_ENDING_CONTRACT.feelingFailures.slice()};
+    hook:false, transitionModes:CHAPTER_ENDING_TRANSITION_MODES.map(x=>x.key),
+    previousEndingType:String(p.previousEndingType||'').trim(), transitionType:String(p.transitionType||'').trim(), transitionBasis:String(p.transitionBasis||'').trim(),
+    nextTransitionType:String(p.nextTransitionType||'').trim(), nextTransitionBasis:String(p.nextTransitionBasis||'').trim(), allowedTransition:String(p.allowedTransition||'').trim(),
+    forbiddenFeeling:CHAPTER_ENDING_CONTRACT.feelingFailures.slice()};
 }
 
 const CHAPTER_ENDING_WRITER_RULES = `
@@ -2743,18 +2757,25 @@ L5 · 正文AI的文学表达
 - 为了字数继续推进；
 - 制造新的具体悬念事件。
 
-允许留下：
+允许保留：
 
-- 未解决的问题；
-- 未完成目标；
-- 情绪余波；
-- 人物选择；
-- 自然形成的疑问；
+- 最后有效事件本身已经发生的结果；
+- 与最后有效事件同步发生、且属于该事件事实的直接反应；
 - 已经成立但尚未解决的矛盾。
 
-但是：
+严格禁止：
 
-【悬念不是下一章剧情。】
+- 最后有效事件结束后另起一句或一段做情绪总结；
+- 对未来、明天、以后、将来、下一步的期待、希望、憧憬、想象或判断；
+- 会越来越好、一切都会好起来、从此不同等正能量结论；
+- 满意、高兴、欣慰、幸福、释然等作为作者补写的收束情绪；
+- 人生感悟、意义升华、命运总结、价值判断；
+- 用任何同义改写绕过以上规则。
+
+【终止边界规则】
+最后一个有效事件写完之后，默认立即停止。
+不要为了文学性、余韵、完整感或漂亮结尾再补一句。
+如果一句话不能证明它属于最后有效事件本身，就不要写。
 
 ━━━━━━━━━━━━━━━━━━
 【十九、第一章】
@@ -5606,12 +5627,12 @@ function principalFinalContext(baseUser, understanding, blocks){
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Chapter Ending System v1
+// Chapter Ending System v2
 // 叙事功能 × 表现形式 × 强度 × 钩子需求；不是随机池。
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const CHAPTER_ENDING_FUNCTIONS = [
   {key:'completion', label:'正常完成式', desc:'本章任务/事件完成后自然停止，不额外制造钩子。'},
-  {key:'afterglow', label:'情绪余韵式', desc:'事件完成后留下情绪、关系或意义的余波。'},
+  {key:'afterglow', label:'情绪余韵式', desc:'仅允许已经发生的情绪事实作为最后有效事件的一部分；禁止事件完成后再补情绪意义总结。'},
   {key:'relationship_change', label:'关系变化式', desc:'人物关系发生可感知变化，以关系落点结束。'},
   {key:'decision', label:'决定式', desc:'人物完成关键选择，以决定本身作为停止点。'},
   {key:'action_launch', label:'行动启动式', desc:'新的行动已经开始，章末停在行动启动点。'},
@@ -5623,8 +5644,51 @@ const CHAPTER_ENDING_FUNCTIONS = [
   {key:'consequence', label:'后果式', desc:'重大行动后的直接后果成为本章最后落点。'},
   {key:'comic_button', label:'喜剧包袱/反讽式', desc:'以已建立的笑点、反讽或错位作为落点。'},
   {key:'scene_cut', label:'场景切断式', desc:'在自然场景断点结束，不额外解释。'},
-  {key:'explicit_commentary', label:'直言评述式', desc:'以简洁、符合文风的作者/叙事评述正常收束。'}
+  {key:'explicit_commentary', label:'直言评述式', desc:'默认禁用；只有用户/老师明确要求且评述本身属于本章已发生事实时才可使用。'}
 ];
+const CHAPTER_ENDING_TRANSITION_MODES = [
+  {key:'unfinished_event',label:'事件未完型',desc:'停在已经开始但尚未完成的真实动作/事件上，下一章直接接着处理。'},
+  {key:'new_fact',label:'信息揭示型',desc:'停在已经确认的新事实/信息上，不替读者解释其意义。'},
+  {key:'action_continuation',label:'动作延续型',desc:'停在正在进行的动作、移动、操作或对白上，下一章从动作状态继续。'},
+  {key:'relationship_state',label:'关系状态型',desc:'停在已经发生的关系变化、距离、态度或互动状态上。'},
+  {key:'clue_object',label:'物件线索型',desc:'停在已经出现并成立的物件、文件、痕迹、声音、地点等具体线索上。'},
+  {key:'environment_state',label:'环境状态型',desc:'停在天气、空间、时间、现场等已经改变或成立的环境状态上。'},
+  {key:'conflict_hold',label:'冲突停滞型',desc:'停在拒绝、僵持、危险、失败、损失或未解决冲突的现实状态上。'},
+  {key:'question_open',label:'问题悬置型',desc:'留下已经自然产生的实际问题，但不使用期待/希望/兴奋来包装。'},
+  {key:'information_gap',label:'信息缺口型',desc:'保留一个真实存在的信息缺口，不追加“答案即将揭晓”的作者提示。'},
+  {key:'emotion_unresolved',label:'情绪未决型',desc:'停在人物已经发生但尚未被总结的情绪状态上。'},
+  {key:'choice_unresolved',label:'选择未决型',desc:'停在人物面对现实选择的状态上，不预告其未来选择结果。'},
+  {key:'consequence',label:'直接后果型',desc:'停在本章行动已经造成的直接后果上，下一章处理后果。'},
+  {key:'time_shift',label:'时间切换型',desc:'停在自然时间断点，下一章从新的已成立时间状态开始。'},
+  {key:'scene_cut',label:'场景切换型',desc:'在自然场景断点停止，不解释切换后的未来。'},
+  {key:'cold_stop',label:'冷收束型',desc:'用普通、具体、无升华的事实/动作/对白直接停止。'},
+  {key:'flat_stop',label:'平淡收束型',desc:'不制造戏剧性，不制造情绪钩子，只停在本章已经完成的状态。'},
+  {key:'uncertain_state',label:'不确定状态型',desc:'允许局面未知、模糊或不稳定，但不把未知转译成期待。'}
+];
+const CHAPTER_ENDING_TRANSITION_PAIRS = Object.freeze({
+  completion:['consequence','time_shift','scene_cut','flat_stop','relationship_state'],
+  afterglow:['emotion_unresolved','relationship_state','flat_stop'],
+  relationship_change:['relationship_state','emotion_unresolved','choice_unresolved','scene_cut'],
+  decision:['choice_unresolved','action_continuation','consequence','time_shift'],
+  action_launch:['action_continuation','unfinished_event','consequence'],
+  revelation:['new_fact','information_gap','question_open','clue_object'],
+  tension_hold:['conflict_hold','choice_unresolved','information_gap','uncertain_state'],
+  unresolved_conflict:['conflict_hold','unfinished_event','choice_unresolved','consequence'],
+  reversal:['new_fact','information_gap','uncertain_state','consequence'],
+  open:['question_open','information_gap','uncertain_state','flat_stop'],
+  consequence:['consequence','environment_state','relationship_state','time_shift'],
+  comic_button:['flat_stop','relationship_state','scene_cut'],
+  scene_cut:['scene_cut','time_shift','environment_state','flat_stop'],
+  explicit_commentary:['flat_stop','relationship_state']
+});
+function chapterEndingTransitionOptions(endingFunction){
+  const keys=CHAPTER_ENDING_TRANSITION_PAIRS[String(endingFunction||'completion')]||CHAPTER_ENDING_TRANSITION_PAIRS.completion;
+  return keys.map(k=>CHAPTER_ENDING_TRANSITION_MODES.find(x=>x.key===k)).filter(Boolean);
+}
+function chapterEndingTransitionPairText(endingFunction){
+  return chapterEndingTransitionOptions(endingFunction).map(x=>`${x.key}=${x.label}`).join('、');
+}
+
 const CHAPTER_ENDING_FORMS = [
   {key:'action',label:'动作'}, {key:'dialogue',label:'对白'}, {key:'information',label:'信息'},
   {key:'environment',label:'环境'}, {key:'psychology',label:'心理'}, {key:'object',label:'物件'},
@@ -5633,10 +5697,12 @@ const CHAPTER_ENDING_FORMS = [
 ];
 const CHAPTER_ENDING_BANNED_TEMPLATES = [
   '不知道明天会发生什么','期待着明天','期待未来','新的惊喜','夕阳西下','新的一天又将开始',
-  '一切才刚刚开始','未来等待着他们','明天一切都会不同','不知道接下来会有什么惊喜'
+  '一切才刚刚开始','未来等待着他们','明天一切都会不同','不知道接下来会有什么惊喜',
+  '也许会更好','一切会慢慢好起来','以后会更好','未来会更好','对未来充满期待','对未来充满希望','心里多了一份希望','心中充满希望','第一次感到希望','终于看到了希望','露出满意的笑容','感到满足','感到欣慰','也许明天','或许明天','总会好起来','终会好起来','新的旅程','新的征程','新的篇章'
 ];
 function chapterEndingFunctionText(){ return CHAPTER_ENDING_FUNCTIONS.map(x=>`${x.key}=${x.label}：${x.desc}`).join('\n'); }
 function chapterEndingFormText(){ return CHAPTER_ENDING_FORMS.map(x=>`${x.key}=${x.label}`).join('、'); }
+function chapterEndingTransitionText(){ return CHAPTER_ENDING_TRANSITION_MODES.map(x=>`${x.key}=${x.label}：${x.desc}`).join('\n'); }
 function parseChapterEndingPlanFromCard(card, i){
   const text=String(card||'');
   const get=(names)=>{ for(const n of names){ const re=new RegExp(`(?:^|\\n)\\s*[-*]?\\s*${escapeRegExp(n)}\\s*[：:]\\s*([^\\n]+)`,'i'); const m=text.match(re); if(m) return m[1].trim(); } return ''; };
@@ -5649,6 +5715,12 @@ function parseChapterEndingPlanFromCard(card, i){
   const lastEffectiveEvent=get(['最后有效事件','最后有效剧情节点','章末最后有效事件']);
   const diversityNote=get(['重复风险','多样性提示','结尾重复风险']);
   const secondary=get(['次级结尾功能','结尾次级功能']);
+  const prevEndingType=get(['上一章结尾方式','上一章结尾类型','承接上一章结尾类型']);
+  const transitionType=get(['本章承接方式','承接方式','本章承接类型','承接上一章方式']);
+  const transitionBasis=get(['承接依据','承接上一章依据','承接选择依据']);
+  const nextTransitionType=get(['下一章承接方式','下章承接方式','下一章承接类型']);
+  const nextTransitionBasis=get(['下一章承接依据','下章承接依据']);
+  const allowedTransition=transitionType || (prevEndingType ? chapterEndingTransitionOptions(prevEndingType).map(x=>x.key).join('、') : '');
   return {
     version:CHAPTER_ENDING_CONTRACT_VERSION, chapter:Number(i)+1,
     endingFunction:fn || 'completion', secondaryFunction:secondary || '',
@@ -5656,6 +5728,8 @@ function parseChapterEndingPlanFromCard(card, i){
     hook:false, hookRaw:'统一禁用留钩子感觉',
     form:form || '自然停止', reason:reason || '服从本章最后一个有效事件与题材，不额外制造万能收尾。',
     lastEffectiveEvent:lastEffectiveEvent || '',
+    previousEndingType:prevEndingType || '', transitionType:transitionType || '', transitionBasis:transitionBasis || '',
+    nextTransitionType:nextTransitionType || '', nextTransitionBasis:nextTransitionBasis || '', allowedTransition:allowedTransition,
     forbidden:CHAPTER_ENDING_CONTRACT.feelingFailures.slice(),
     diversityNote:diversityNote || '避免与近期章节机械重复；不以“明天/夕阳/期待/惊喜”作为默认结尾。',
     source:'principal_chapter_task', sourceHash:String(text).length
@@ -5673,7 +5747,23 @@ function buildChapterEndingPlansFromPrincipal(raw, chapterCount){
 function chapterEndingPlanFor(i){
   const n=Number(i)+1;
   const stored=state.chapterEndingPlans && state.chapterEndingPlans[n];
-  if(stored && typeof stored==='object') return stored;
+  let base=stored && typeof stored==='object' ? {...stored} : null;
+  // 校长提供战略约束；老师生成教案后，老师对“本章如何承接/如何收束”的施工字段拥有最终执行权。
+  try{
+    const groups=schoolStageGroups();
+    const gi=groups.findIndex(g=>g && n>=g.first && n<=g.last);
+    const t=gi>=0 ? state.school?.teachers?.[gi] : null;
+    if(t && t.raw){
+      const tp=chapterEndingPlanFromTeacherRaw(t.raw,n);
+      if(tp){
+        base=Object.assign(base||{}, tp);
+        base.chapter=n;
+        base.version=CHAPTER_ENDING_CONTRACT_VERSION;
+        base.hook=false;
+      }
+    }
+  }catch(e){ /* 兼容旧数据：老师尚未生成时继续使用校长章级计划 */ }
+  if(base) return base;
   // 仅用于兼容旧项目：首次读取时把既有校长章级卡一次性结构化缓存；不是重新启动校长。
   const raw=state.school?.principal?.raw || scState()?.principal?.raw || '';
   const card=principalChapterTask(i);
@@ -5691,10 +5781,15 @@ function chapterEndingDecisionBlock(i){
 - 本章停止点：${c.lastEffectiveEvent||'本章最后一个已经发生的有效变化'}
 - 表现形式：${c.form}
 - 功能：${c.endingFunction}
+- 上一章结尾方式：${c.previousEndingType||'（首章/未指定）'}
+- 本章承接方式：${c.transitionType||'（由老师依据上一章真实状态选择）'}
+- 承接依据：${c.transitionBasis||'只允许来自上一章/本章已经成立的事实、状态、关系、信息、动作或环境'}
+- 下一章承接方式：${c.nextTransitionType||'（若有自然承接则按本章结尾状态选择；否则允许平淡/冷切）'}
 - hook：false（不存在“为了下一章而留钩子”的授权）
+- 权威链：校长提供战略边界 → 老师教案确定实际承接/收束 → 正文只执行，不得重新选型
 - 正向示范：${c.positiveExamples.join('；')}
 - 感觉级失败：${c.forbiddenFeeling.join('；')}
-执行：正文只把停止点写自然；不要追加任何未来导向情绪、悬念吊桥或读者期待。审计只验证这一契约。`;
+执行：正文只把老师教案规定的承接与停止点自然写出；不得自行改变承接类型，不得追加未来导向情绪、悬念吊桥或读者期待。审计只验证这一契约。`;
 }
 
 function recentChapterEndingHistory(i, count=8){
@@ -6546,8 +6641,17 @@ ${chapterEndingContractText()}
 - 因果边界：……
 - 老师创造空间：……
 - 待确认项：……
+- 结尾功能：……（从既有结尾功能库选择，不得默认全部使用正常完成式）
+- 结尾强度：0-4
+- 最后有效事件：……
+- 具体收尾方式：……
+- 表现形式：……
+- 下一章承接方式：……（必须根据本章真实终止状态选择，可为事件未完、信息揭示、动作延续、关系状态、物件/线索、环境状态、冲突停滞、问题悬置、信息缺口、情绪未决、选择未决、直接后果、时间切换、场景切换、冷收束、平淡收束、不确定状态等；不得默认悬念/期待）
+- 下一章承接依据：……（只写本章已经成立的事实/状态）
+- 禁止追加：……
+- 重复风险：……
 
-要求：只能做章级授权，不得写成完整教案。
+要求：只能做章级授权，不得写成完整教案。结尾与承接字段是老师的上游战略约束，正文不得自行重新选择。
 
 ④ 各组组级框架
 
@@ -6839,6 +6943,7 @@ L3 · 正文作家的文学表达
 
 老师决定：
 “这一章具体发生什么、按照什么节拍推进、人物怎样行动、怎样承接、怎样收束。”
+其中“怎样承接、怎样收束”必须落成教案中的结构化字段；正文只能执行这些字段，不能自行重新选择。
 
 正文决定：
 “把这些内容怎样写得生动。”
@@ -6868,7 +6973,7 @@ L3 · 正文作家的文学表达
 ━━━━━━━━━━━━━━━━━━
 【一B、章节结尾施工权限】
 ${chapterEndingContractText()}
-老师只能施工本章最后一个已经发生的有效事件，并把它自然写到停止点。不得自行决定“留钩子”、不得添加未来期待、前瞻、读者等待感。老师教案中的章末字段只记录：停止点、功能、表现形式、禁止追加项；“是否留钩子”永久为否。
+老师只能施工本章最后一个已经发生的有效事件，并把它自然写到停止点。不得自行制造“期待式钩子”、未来前瞻或读者等待感；但允许根据真实剧情状态形成自然的下一章承接点。承接可以是事件未完、信息已揭示、动作延续、关系状态、物件/线索、环境状态、冲突停滞、问题悬置、信息缺口、情绪未决、选择未决、直接后果、时间/场景切换、冷收束、平淡状态、不确定状态等。老师教案中的章末字段记录：停止点、功能、表现形式、承接类型、禁止追加项；“是否留钩子”仍为否。
 
 【二、教学观】
 ━━━━━━━━━━━━━━━━━━
@@ -6953,7 +7058,7 @@ ${chapterEndingContractText()}
 → 下一拍利用这个条件
 → 再产生新的变化
 → 最终形成阶段性结果
-→ 收束并留下下一章接口。
+→ 在真实状态上自然停止；如存在承接，则承接点来自该状态本身。
 
 禁止：
 
@@ -7060,8 +7165,7 @@ ${chapterEndingContractText()}
 “阶段高潮”必须形成：
 本章前面累积的矛盾、目标或信息，在这一拍得到一次明确回报。
 
-“收束+悬念”必须：
-完成当前阶段结算，同时留下下一章继续行动的理由。
+“收束+悬念”若被章级任务明确授权，才可使用；其承接必须来自已经成立的事实/状态，不得为了“悬念”制造等待感。
 
 ━━━━━━━━━━━━━━━━━━
 【七、时间与节拍的正确组合】
@@ -7345,8 +7449,9 @@ ${chapterEndingContractText()}
 - 还不知道什么；
 - 哪个目标已经完成；
 - 哪个目标未完成；
-- 留下什么新的行动理由；
-- 下一章从什么状态接续。
+- 哪些已成立事实/状态可以被下一章承接；
+- 下一章应从哪一个已成立状态接续；
+- 若没有自然承接点，允许平淡/冷收束，不得强造“继续理由”。
 
 章末状态必须真实可接。
 
@@ -7417,6 +7522,9 @@ ${chapterEndingContractText()}
 - 剧情时间落点：起点=……；终点=……
 - 时间推进安排：……（没有真实跨日时可写“无，本章在同一时间连续推进”）
 - 主要地点：……
+- 承接上一章结尾方式：……（第一章写“无；全书开篇”；其余章节必须明确对应上一章结尾方式）
+- 本章承接方式：……（必须与上一章结尾状态匹配；可自然承接，也可冷切/平切/时间切换，不得固定一种）
+- 承接依据：……（上一章已经成立的事实/状态/关系/信息/动作/环境）
 - 章末状态：……
 
 - 本章推进骨架：
@@ -7436,10 +7544,12 @@ ${chapterEndingContractText()}
 每章都必须额外输出【章末结尾施工】并填写：
 结尾功能：……
 结尾强度：0-4
-是否留钩子：是/否
+是否留钩子：否
 最后有效事件：……
 具体收尾方式：……
 表现形式：……
+下一章承接方式：……（从本章真实结尾状态选择，不得默认悬念/期待）
+下一章承接依据：……（只写已成立事实/状态）
 禁止追加：……
 重复风险：……
 
@@ -7474,6 +7584,23 @@ function principalChapterTask(i){
   const cards=principalChapterTaskCards(raw);
   return String(cards[i+1]||'').trim();
 }
+function chapterEndingPlanFromTeacherRaw(raw, chapter){
+  const text=String(raw||'').replace(/\r\n?/g,'\n');
+  const re=new RegExp(`^第\\s*${Number(chapter)}\\s*章\\b[\\s\\S]*?(?=^第\\s*\\d+\\s*章\\b|^#+\\s*本阶段向下一阶段移交|$)`,'m');
+  const m=text.match(re); if(!m) return null;
+  const block=m[0];
+  const get=(names)=>{ for(const n of names){ const mm=block.match(new RegExp(`(?:^|\\n)\\s*[-*]?\\s*${escapeRegExp(n)}\\s*[：:]\\s*([^\\n]+)`,'i')); if(mm) return mm[1].trim(); } return ''; };
+  return {chapter:Number(chapter), endingFunction:get(['结尾功能','主要结尾功能']), form:get(['具体收尾方式','结尾表现形式','表现形式']), lastEffectiveEvent:get(['最后有效事件']), transitionType:get(['下一章承接方式','下章承接方式']), transitionBasis:get(['下一章承接依据','下章承接依据'])};
+}
+function previousChapterEndingBrief(chapter, gi){
+  const n=Number(chapter); if(n<=1) return '【上一章结尾方式】无；本章为全书开篇。';
+  const principal=chapterEndingPlanFor(n-2);
+  if(principal) return `【上一章结尾方式｜校长已裁决】\n- 结尾功能：${principal.endingFunction||'未指定'}\n- 收尾方式：${principal.form||'自然停止'}\n- 最后有效事件：${principal.lastEffectiveEvent||'未指定'}\n- 上一章原定下一章承接方式：${principal.nextTransitionType||principal.transitionType||'未指定'}\n- 承接依据：${principal.nextTransitionBasis||principal.transitionBasis||'未指定'}\n- 本章先判断：该承接方式是否与上一章真正定格的状态相符；不相符时不得机械照搬。`;
+  const groups=schoolStageGroups(); const prevGroup=groups[Math.max(0,Number(gi)-1)]; const prevTeacher=prevGroup && state.school?.teachers?.[Number(gi)-1];
+  if(prevTeacher){ const plan=chapterEndingPlanFromTeacherRaw(prevTeacher.raw,n-1); if(plan) return `【上一章结尾方式｜上一位老师教案】\n- 结尾功能：${plan.endingFunction||'未指定'}\n- 收尾方式：${plan.form||'自然停止'}\n- 最后有效事件：${plan.lastEffectiveEvent||'未指定'}\n- 下一章承接方式：${plan.transitionType||'未指定'}\n- 承接依据：${plan.transitionBasis||'未指定'}\n- 本章先核对上一章状态，再决定如何承接。`; }
+  return '【上一章结尾方式】暂缺；不得自行假定为“悬念式”或“期待式”。请依据可获得的上一章真实状态与校长授权处理。';
+}
+
 function buildTeacherAuthorizationPack(g, gi){
   const parts=[];
   const p=state.school?.principal || scState()?.principal || {};
@@ -7484,7 +7611,7 @@ function buildTeacherAuthorizationPack(g, gi){
     const card=String(cards[n]||'').trim();
     parts.push(card || `【第${n}章章级授权缺失】\n禁止把缺失内容自行补成校长事实；请先重新生成校长章级任务卡。`);
     const ep=chapterEndingPlanFor(n-1);
-    if(ep) parts.push(`【第${n}章章末计划（结构化）】\n${JSON.stringify(ep,null,2)}\n老师不得改变 endingFunction / intensity / hook 的战略含义；只负责在授权范围内完成最后有效事件与自然收束。`);
+    if(ep) parts.push(`【第${n}章章末计划（结构化）】\n${JSON.stringify(ep,null,2)}\n老师不得突破校长的 endingFunction / intensity / hook 战略边界；在该边界内，老师负责确定本章实际承接方式、最后有效事件与具体收束。`);
   }
   parts.push(`【授权解释】\n- “必须推进”与“终止状态”是本章目标约束。\n- “允许人物/地点/道具/线索”是核心剧情白名单。\n- “信息边界”规定当前章人物可以知道什么。\n- “待确认项”不得被老师直接升级为事实。\n- 老师可以自由设计白名单资源之间的中间事件和节拍，但不得突破以上边界。`);
   return parts.join('\n\n');
@@ -7522,6 +7649,9 @@ function buildTeacherUser(g, gi){
   lines.push(`【本组章节标题】\n${scGroupTitles(g).join('\n')}`);
   const auth = buildTeacherAuthorizationPack(g, gi);
   if(auth) lines.push(auth);
+  const transitionAudit=[];
+  for(let n=g.first;n<=g.last;n++) transitionAudit.push(previousChapterEndingBrief(n, gi));
+  lines.push(`【逐章承接方式核对表】\n${transitionAudit.join('\n\n')}\n要求：本章承接方式必须回应上一章结尾的具体类型与定格状态；不得把所有章节统一写成悬念、期待、积极情绪或“继续行动”。`);
   const _bc = currentBeatCfg ? currentBeatCfg() : null;
   if(_bc && _bc.label) lines.push(`【章节微拍（单源真理·内嵌骨架）】名称=${_bc.label}${_bc.desc?('；说明='+_bc.desc):''}${_bc.types?('；拍=('+_bc.types.map(t=>t.label).join('，')+')'):''}\n要求：将此微拍节奏直接融铸在每章教案的「本章推进骨架」中，形成单一执行标准的超级教案。`);
   lines.push('【当前组执行词典（只供本组施工，不代表可任意调用全部核心剧情资源）】\n' + teacherScopedGlossary(g, gi, 9000));
@@ -7542,7 +7672,7 @@ function prevGroupTailState(gi, g){
   if(gi <= 0 || !groups[gi-1]) return '【上一组末章·收束状态】\n（本组为全书首组：开篇）——首章按本章教案、人物现场与故事自然发展开篇；若用户选择了开篇策略，则仅按所选策略执行。';
   const prev = (state.school && state.school.teachers && state.school.teachers[gi-1]) || null;
   const prevGroup = groups[gi-1];
-  if(!prev || !prev.raw || !prevGroup) return '【上一组末章·收束状态】\n（上一组（老师'+gi+'）尚未备课）：请本组首章按「承上节的钩」自行设计衔接。';
+  if(!prev || !prev.raw || !prevGroup) return '【上一组末章·收束状态】\n（上一组（老师'+gi+'）尚未备课）：请本组首章依据可获得的上一章真实状态自行确定承接；不得默认按“钩子”衔接。';
   const lastCh = prevGroup.last;
   
   const reLastCh = new RegExp(`^第\\s*${lastCh}\\s*章\\b[\\s\\S]*?(?=^第\\s*\\d+\\s*章\\b|^#+\\s*本阶段向下一阶段移交|$)`, 'm');
@@ -7564,7 +7694,7 @@ function prevGroupTailState(gi, g){
   if(batonText){
     parts.push(`◆ 上一组移交的 3 大关键悬念与高潮成果：\n${batonText.slice(0, 800)}`);
   } else {
-    parts.push(`◆ 上一组末章收束重点：请紧扣第 ${lastCh} 章的连续性与未解悬念，无缝推进到本组第 ${g.first} 章。`);
+    parts.push(`◆ 上一组末章收束重点：请紧扣第 ${lastCh} 章已经成立的结尾状态、未完成事件或信息状态（若存在），自然进入本组第 ${g.first} 章；不存在强承接时允许平切/冷切/时间切换。`);
   }
   parts.push(`【交接执行令】本组第 ${g.first} 章教案的「本章推进骨架」第 ① 环节与「连续性」，必须 100% 严密对缝承接第 ${lastCh} 章定格的真实物理处境与上述悬念，严禁凭空跳跃！`);
   return parts.join('\n\n');
@@ -16824,13 +16954,14 @@ function splitChapterOutput(txt){
   return { content: stripSegmentMarkers(txt), strip: '' };
 }
 function chapterEndingFeelingAudit(text){
-  const tail=String(text||'').trim().slice(-900);
+  const tail=String(text||'').trim().slice(-1400);
   const paragraphs=String(text||'').trim().split(/\n\s*\n/).filter(Boolean);
   const last=paragraphs.length?paragraphs[paragraphs.length-1]:tail;
-  const futureFeeling=/(从此|从那以后|这一刻之后|命运|人生|真正的故事|一切都将|一切都会|故事才|新的开始|新的旅程|接下来|等待着|等着|终会|终将|迟早|总有一天|会有一天|将会|注定|尚未结束|远方|未来|明天|期待|希望)/.test(last);
+  const futureFeeling=/(从此|从那以后|这一刻之后|命运|人生|真正的故事|一切都将|一切都会|故事才|新的开始|新的旅程|接下来|等待着|等着|终会|终将|迟早|总有一天|会有一天|将会|注定|尚未结束|远方|未来|明天|以后|将来|期待|希望|憧憬|想象|满意|高兴|欣慰|满足|幸福|庆幸|释然)/.test(last);
   const readerHookFeeling=/(让人无法|不禁期待|令人期待|谁也不知道接下来|没有人知道接下来|等着看|等待着下一|下一章|下一步|会发生什么|究竟会|到底会|还会继续|真正开始|新的篇章)/.test(last);
-  const abstractLift=/(从此不同|命运的齿轮|命运已经|一切才刚刚|新的篇章|新的征程|故事正式开始|未来会|以后会)/.test(last);
-  return {fail:futureFeeling||readerHookFeeling||abstractLift, futureFeeling, readerHookFeeling, abstractLift, last};
+  const abstractLift=/(从此不同|命运的齿轮|命运已经|一切才刚刚|新的篇章|新的征程|故事正式开始|未来会|以后会|也许会更好|一切会慢慢好起来|以后会更好|未来会更好|总会好起来|终会好起来)/.test(last);
+  const positiveWrap=/(心里(多了|有了|充满)|心中(多了|有了|充满)|对未来(充满|有了)|嘴角(不自觉地)?(扬起|带着)|露出.*(笑|满意)|第一次(觉得|感到)|忽然觉得|不由得觉得|她觉得|他觉得|她希望|他希望|她期待|他期待|她相信|他相信)/.test(last);
+  return {fail:futureFeeling||readerHookFeeling||abstractLift||positiveWrap, futureFeeling, readerHookFeeling, abstractLift, positiveWrap, last};
 }
 
 async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride, signal){
@@ -16871,7 +17002,7 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
   if(state.chapters && state.chapters[i]){ state.chapters[i].castOut = _cs.castOut; }
   const _o = state.outline;
   if(_o && Array.isArray(_o.chapters) && _o.chapters[i]){ _o.chapters[i].castOut = _cs.castOut; }
-  // 章末反模板软审计：不做机械替换，避免破坏文学表达；仅在明显以万能句式收尾且校长未授权时回退到上一处自然段。
+  // app3：章末终止边界审计。发现边界后的模式化总结/未来/正能量收束时，删除最后一个完整段落；不改写正文，只回退到上一个已经完成的自然段。
   const _ed=chapterEndingPlanFor(i); const _rawTail=String(content||'').trim();
   const _tail=chapterEndingFeelingAudit(_rawTail);
   if(_tail.fail){
