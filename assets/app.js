@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.347';
+const APP_VERSION = '1.0.348';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.347.js';
+const APP_FILE_VERSION = 'app1.0.348.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -3662,7 +3662,25 @@ function openPolishBox(){
   state.polishCollapsed = false;
   persist();
   box.style.display = 'block';
+  const head = box.querySelector('[data-polish-toggle]');
+  if(head){ head.setAttribute('aria-expanded','true'); const ic=head.querySelector('.pol-head-toggle'); if(ic) ic.textContent='▾'; }
   renderPolishCards(cards);
+}
+
+function togglePolishBox(force){
+  const box = $('#polishBox');
+  if(!box) return;
+  const next = typeof force === 'boolean' ? force : !state.polishCollapsed;
+  state.polishCollapsed = next;
+  box.style.display = next ? 'none' : 'block';
+  const head = box.querySelector('[data-polish-toggle]');
+  if(head){
+    head.setAttribute('aria-expanded', next ? 'false' : 'true');
+    const ic=head.querySelector('.pol-head-toggle');
+    if(ic) ic.textContent = next ? '▸' : '▾';
+  }
+  persist();
+  if(!next){ const cards=$('#polishCards'); if(cards) renderPolishCards(cards); }
 }
 
 function polishIdle(){
@@ -3769,10 +3787,21 @@ function bindPolishIdea(){
     const idea = $('#ideaInput');
     if(idea) idea.oninput = ()=>{ state.idea = idea.value; sync(); syncOrigIdeaCard(); };
   }
+  const polHead = $('[data-polish-toggle]');
+  if(polHead){
+    polHead.onclick = (e)=>{
+      if(e.target.closest('button,input,a,select,textarea')) return;
+      togglePolishBox();
+    };
+    polHead.onkeydown = (e)=>{
+      if(e.key==='Enter' || e.key===' '){ e.preventDefault(); togglePolishBox(); }
+    };
+  }
   const disc = $('#btnPolishDiscard');
-  if(disc) disc.onclick = ()=>{
-    const box = $('#polishBox');
-    if(box) box.style.display = 'none';
+  if(disc) disc.onclick = (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    togglePolishBox(true);
   };
   const hist = $('[data-pol-keep-hist]');
   if(hist) hist.onclick = (e)=>{ e.stopPropagation(); openPolishBatchPanel(); };
@@ -11696,10 +11725,12 @@ function viewStory(){
             <span>${state.strategyStage1Status==='ready'?'✅ 第一阶段：动态战略地图已完成':'① 第一阶段：先根据题材生成6～10个动态战略维度'}</span>
             <span style="margin-left:12px">${state.strategyStage2Status==='ready'?'✅ 第二阶段：候选优化构想已完成':'② 第二阶段：基于第一阶段战略地图生成3～5个方案'}</span>
           </div>
-          <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}">
-            <div class="pol-head"><b>✨ 方案比选</b>
+          <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}" data-polish-collapsible="true">
+            <div class="pol-head" data-polish-toggle role="button" tabindex="0" aria-expanded="${state.polishCollapsed?'false':'true'}" title="点击标题条展开/收起方案比选">
+              <b>✨ 方案比选</b>
+              <span class="pol-head-toggle" aria-hidden="true">${state.polishCollapsed?'▸':'▾'}</span>
               <span class="pol-tools">
-                <button id="btnPolishDiscard" class="btn small ghost">✕ 收起</button>
+                <button id="btnPolishDiscard" type="button" class="btn small ghost" title="收起本次优化构想">✕ 收起</button>
               </span>
             </div>
             <div id="polishCards" class="pol-cards"></div>

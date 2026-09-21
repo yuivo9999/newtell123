@@ -1011,217 +1011,143 @@ input::placeholder {
   color: var(--sub) !important;
 }
 
-/* === Pre-outline generated-content presentation layer v2.2 === */
-/* Scope: UI before "生成大纲" only. No AI/data logic changes. */
-:root {
-  --ui2-text: var(--text-primary, #202124);
-  --ui2-text-soft: var(--text-secondary, #5f6368);
-  --ui2-surface: var(--surface-card, #fff);
-  --ui2-surface-soft: var(--surface, #f7f8fa);
-  --ui2-border: var(--border-subtle, #d9dde3);
-  --ui2-primary: var(--accent, #4f46e5);
-  --ui2-primary-contrast: var(--accent-contrast, #fff);
-}
-
-/* Keep generated strategic/optimization content readable without making the page endless. */
-.strategic-dimensions, .strategic-dimension, .optimization-ideas, .optimization-idea,
-.idea-polish-result, .strategy-result, [data-section="strategic-dimensions"],
-[data-section="optimization-ideas"] {
-  color: var(--ui2-text);
-  background: var(--ui2-surface);
-  border-color: var(--ui2-border);
-  overflow-wrap: anywhere;
-}
-
-/* Long generated results: bounded reading area, with explicit scrolling. */
-.strategic-dimensions .result-content, .optimization-ideas .result-content,
-.idea-polish-result .result-content, .strategy-result .result-content {
-  max-height: min(62vh, 720px);
-  overflow: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Primary generation actions before the outline stage. */
-button[data-action*="strateg"], button[data-action*="optimization"],
-button[data-action*="polish"], .generate-strategy-btn, .generate-optimization-btn {
-  background: var(--ui2-primary);
-  color: var(--ui2-primary-contrast);
-  border-color: color-mix(in srgb, var(--ui2-primary) 82%, #000 18%);
-  font-weight: 650;
-  min-height: 40px;
-}
-button[data-action*="strateg"]:hover, button[data-action*="optimization"]:hover,
-button[data-action*="polish"]:hover, .generate-strategy-btn:hover, .generate-optimization-btn:hover {
-  filter: brightness(.96);
-}
-button[data-action*="strateg"]:disabled, button[data-action*="optimization"]:disabled,
-button[data-action*="polish"]:disabled, .generate-strategy-btn:disabled, .generate-optimization-btn:disabled {
-  opacity: .55;
-  cursor: not-allowed;
-}
-
-/* Clickable section headers: whole bar is the interaction target. */
-[data-collapsible], .collapsible-header, .section-header, .panel-header {
-  color: var(--ui2-text);
-}
-
-/* Generated result hierarchy. */
-.strategic-dimensions .result-title, .optimization-ideas .result-title,
-.idea-polish-result .result-title {
-  color: var(--ui2-text);
-  font-weight: 700;
-}
-.strategic-dimensions .meta, .optimization-ideas .meta,
-.idea-polish-result .meta, .strategy-result .meta {
-  color: var(--ui2-text-soft);
-}
-
-/* Diagnostic/raw response is secondary: visible when requested, never dominant. */
-.ai-raw-response, .generation-diagnostic, .generation-debug {
-  color: var(--ui2-text-soft);
-  background: var(--ui2-surface-soft);
-  border: 1px solid var(--ui2-border);
-  max-height: 420px;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-@media (max-width: 700px) {
-  .strategic-dimensions .result-content, .optimization-ideas .result-content,
-  .idea-polish-result .result-content, .strategy-result .result-content {
-    max-height: 58vh;
-  }
-  button[data-action*="strateg"], button[data-action*="optimization"],
-  button[data-action*="polish"], .generate-strategy-btn, .generate-optimization-btn {
-    min-height: 44px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .strategic-dimensions *, .optimization-ideas *, .idea-polish-result * {
-    scroll-behavior: auto !important;
-    transition: none !important;
-    animation: none !important;
-  }
-}
 
 
-/* =========================================================
- * v2.3 · 优化构想当前批次 UI 归位
- * 仅作用于「生成大纲前」的 #polishBox / #polishCards。
- * 关键原则：本次 3~5 个候选方案 = 当前结果，不是历史版本。
- * 历史版本继续由 .pol-keep / .cv-row 独立承载。
- * 不作用于生成大纲后的 #polishCards2。
- * ========================================================= */
-#polishBox {
+
+/* =====================================================================
+ * v1.0.348 · 生成大纲之前：战略维度 / 优化构想 UI 实际命中层
+ * 说明：这里使用高优先级、明确作用域，修复全局 .btn.ghost / 主题皮肤
+ * 对新增两阶段控件的覆盖问题。只作用于大纲之前的构想卡，不触碰后续 UI。
+ * ===================================================================== */
+
+/* ①② 主操作按钮：避免被全局 ghost 按钮规则洗掉颜色 */
+#app #btnStrategyStage1,
+#app #btnStrategyStage2 {
+  min-height: 42px !important;
+  border-radius: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: .1px;
+  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease !important;
+}
+#app #btnStrategyStage1 {
+  color: var(--txt) !important;
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel2)) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--line)) !important;
+}
+#app #btnStrategyStage1:hover:not(:disabled) {
+  color: var(--accent) !important;
+  background: color-mix(in srgb, var(--accent) 17%, var(--panel2)) !important;
+  border-color: var(--accent) !important;
+  transform: translateY(-1px);
+}
+#app #btnStrategyStage2 {
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 68%, #5b2abf) 100%) !important;
+  border: 1px solid transparent !important;
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--accent) 28%, transparent) !important;
+}
+#app #btnStrategyStage2:hover:not(:disabled) {
+  color: #fff !important;
+  filter: brightness(1.08) saturate(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--accent) 36%, transparent) !important;
+}
+#app #btnStrategyStage1:disabled,
+#app #btnStrategyStage2:disabled {
+  color: var(--muted) !important;
+  background: color-mix(in srgb, var(--panel2) 88%, var(--line)) !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+/* 方案比选标题条：真正可点击的折叠入口 */
+#app #polishBox .pol-head[data-polish-toggle] {
   position: relative;
-  overflow: hidden;
-  border-color: color-mix(in srgb, var(--accent) 28%, var(--line)) !important;
-  background: color-mix(in srgb, var(--panel2) 48%, var(--panel)) !important;
+  min-height: 42px;
+  margin: -10px -12px 10px;
+  padding: 8px 10px 8px 12px;
+  box-sizing: border-box;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--line) !important;
+  border-radius: 10px 10px 0 0;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel2)) !important;
+  color: var(--txt) !important;
+  transition: background .16s ease, border-color .16s ease !important;
 }
-
-#polishBox > .pol-head {
-  padding: 2px 2px 9px;
-  margin-bottom: 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+#app #polishBox .pol-head[data-polish-toggle]:hover {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel2)) !important;
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line)) !important;
 }
-
-#polishBox > .pol-head b {
-  color: var(--txt);
+#app #polishBox .pol-head[data-polish-toggle]:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+#app #polishBox .pol-head[data-polish-toggle] b {
+  color: var(--txt) !important;
   font-size: 14px;
 }
-
-#polishBox > .pol-head b::after {
-  content: ' · 本次生成候选';
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 500;
+#app #polishBox .pol-head-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent) !important;
+  color: var(--accent) !important;
+  font-size: 14px;
+  font-weight: 900;
 }
+#app #polishBox .pol-tools { margin-left: auto; }
+#app #polishBox .pol-tools .btn { position: relative; z-index: 2; }
 
-/* 当前批次方案卡：保持原有成熟 .pol-cand 结构，只强化“当前结果”层级。 */
-#polishBox #polishCards > .pol-cand {
-  margin-bottom: 10px;
+/* 当前生成的候选方案：与历史版本明确分层 */
+#app #polishBox #polishCards {
+  display: block !important;
+  min-width: 0;
+}
+#app #polishBox #polishCards .pol-cand {
   background: var(--panel) !important;
-  color: var(--txt);
-  border-color: var(--line);
+  color: var(--txt) !important;
+  border-color: var(--line) !important;
+  border-left: 4px solid var(--pc, var(--accent)) !important;
 }
-
-#polishBox #polishCards > .pol-cand.on {
-  background: color-mix(in srgb, var(--accent) 6%, var(--panel)) !important;
-  border-color: color-mix(in srgb, var(--pc, var(--accent)) 58%, var(--line));
+#app #polishBox #polishCards .pol-cand.on {
+  border-color: var(--pc, var(--accent)) !important;
+  box-shadow: 0 0 0 1.5px var(--pc, var(--accent)), 0 5px 16px color-mix(in srgb, var(--pc, var(--accent)) 16%, transparent) !important;
 }
-
-#polishBox #polishCards .pol-cand-body {
+#app #polishBox #polishCards .pol-cand-body {
   color: var(--txt) !important;
   background: var(--panel2) !important;
-  border-color: color-mix(in srgb, var(--line) 82%, var(--pc, var(--accent))) !important;
-  max-height: min(46vh, 360px);
-  overflow: auto;
-  overscroll-behavior: contain;
+  border-color: var(--line) !important;
 }
-
-#polishBox #polishCards .pol-cand-title {
-  color: #fff !important;
-  text-shadow: 0 1px 2px rgba(0,0,0,.28);
-}
-
-#polishBox #polishCards .pol-cand-actions,
-#polishBox #polishCards .pol-cand-foot {
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-#polishBox #polishCards .pol-cand-actions .btn,
-#polishBox #polishCards .pol-cand-foot .btn {
-  min-height: 32px;
-  white-space: nowrap;
-}
-
-/* “采用此方案”是当前结果的核心动作；复制/导入属于次级动作。 */
-#polishBox #polishCards .pol-cand-foot .btn.pt-accent {
+#app #polishBox #polishCards .pol-cand-foot .btn[data-pol-use] {
   color: #fff !important;
   border-color: transparent !important;
-  font-weight: 700;
+  font-weight: 800 !important;
+}
+#app #polishBox #polishCards .pol-cand-foot .btn[data-pol-import],
+#app #polishBox #polishCards .pol-cand-head .btn[data-pol-copy] {
+  color: var(--txt) !important;
+  background: var(--panel2) !important;
+  border-color: var(--line) !important;
 }
 
-#polishBox #polishCards .pol-cand-actions .btn:hover,
-#polishBox #polishCards .pol-cand-foot .btn:hover:not(:disabled) {
-  filter: brightness(1.06);
+/* 方案收起后的提示条：保持“当前批次”语义，不伪装成历史列表 */
+#app .pol-keep-collapsed {
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel2)) !important;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line)) !important;
+  color: var(--txt) !important;
 }
-
-/* 当前结果区域和历史区域之间保持明确视觉断层。 */
-#polishBox + .pol-keep,
-#polishBox ~ .pol-keep {
-  margin-top: 10px;
-  border-top-color: color-mix(in srgb, var(--accent) 20%, var(--line));
-}
-
-/* 历史入口只能呈现为“历史操作”，不与当前候选卡混成同一层。 */
-#polishBox ~ .pol-keep [data-pol-keep-hist] {
-  color: var(--sub);
-  border-color: var(--line);
-  background: var(--panel2);
-}
+#app .pol-keep-collapsed .pol-keep-t { color: var(--sub) !important; }
 
 @media (max-width: 520px) {
-  #polishBox #polishCards > .pol-cand {
-    padding: 10px;
-  }
-  #polishBox #polishCards .pol-cand-body {
-    max-height: min(48vh, 320px);
-  }
-  #polishBox #polishCards .pol-cand-head {
-    align-items: flex-start;
-  }
-  #polishBox #polishCards .pol-cand-actions {
-    width: 100%;
-    margin-left: 28px;
-  }
-  #polishBox #polishCards .pol-cand-actions .btn,
-  #polishBox #polishCards .pol-cand-foot .btn {
-    min-height: 38px;
-  }
+  #app #btnStrategyStage1,
+  #app #btnStrategyStage2 { min-height: 44px !important; }
+  #app #polishBox .pol-head[data-polish-toggle] { min-height: 44px; }
+  #app #polishBox .pol-cand-body { max-height: min(42vh, 320px) !important; }
 }
-
