@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.370';
+const APP_VERSION = '1.0.373';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.370.js';
+const APP_FILE_VERSION = 'app1.0.373.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -125,6 +125,7 @@ const state = {
   langLayer: true,
   _narrIron: true,
   banList: null,
+  characterNaming: { locked:false, lockedAt:0, version:0 },
   useChapterPlans: true,
   plannerFinalized: false,
   chapters: [],         // [{title, content, confirmed, editHistory:[]}]
@@ -142,6 +143,9 @@ const state = {
 };
 let currentStep = 1;
 
+state.characterNaming = (state.characterNaming && typeof state.characterNaming === 'object') ? state.characterNaming : {locked:false,lockedAt:0,version:0};
+state.characterNaming.locked = !!state.characterNaming.locked;
+state.characterNaming.version = Number(state.characterNaming.version)||0;
 state.fcCollapsed = (typeof state.fcCollapsed === 'boolean') ? state.fcCollapsed : false;
 state.rsCollapsed = (typeof state.rsCollapsed === 'boolean') ? state.rsCollapsed : false;
 state._fixQueue = state._fixQueue || [];
@@ -9135,8 +9139,9 @@ function openSchoolRawPanel(title, sub, raw){
 const NM_SURNAME_1 = new Set('赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻柏水窦章云苏潘葛奚范彭郎鲁韦昌马苗凤花方俞任袁柳酆鲍史唐费廉岑薛雷贺倪汤滕殷罗毕郝邬安常乐于时傅皮卞齐康伍余元卜顾孟平黄和穆萧尹姚邵湛汪祁毛禹狄米贝明臧计伏成戴谈宋茅庞熊纪舒屈项祝董梁杜阮蓝闵席季麻强贾路娄危江童颜郭梅盛林刁钟徐邱骆高夏蔡田胡凌霍虞万支柯昝管卢莫经房裘缪干解应宗丁宣贲邓郁单杭洪包诸左石崔吉钮龚程嵇邢滑裴陆荣翁荀羊於惠甄曲家封芮羿储靳汲邴糜松井段富巫乌焦巴弓牧隗山谷车侯宓蓬全郗班仰秋仲伊宫宁仇栾暴甘钭厉戎祖武符刘景詹束龙叶幸司韶郜黎蓟薄印宿白怀蒲邰从鄂索咸籍赖卓蔺屠蒙池乔阴鬱胥能苍双闻莘党翟谭贡劳逄姬申扶堵冉宰郦雍郤璩桑桂濮牛寿通边扈燕冀郏浦尚农温别庄晏柴瞿阎充慕连茹习宦艾鱼容向古易慎戈廖庾终暨居衡步都耿满弘匡国文寇广禄阙东欧殳沃利蔚越夔隆师巩厍聂晁勾敖融冷訾辛阚那简饶空曾毋沙乜养鞠须丰巢关蒯相查后荆红游竺权逯盖益桓公'.split(''));
 const NM_SURNAME_2 = new Set(['万俟','司马','上官','欧阳','夏侯','诸葛','闻人','东方','赫连','皇甫','尉迟','公羊','澹台','公冶','宗政','濮阳','淳于','单于','太叔','申屠','公孙','仲孙','轩辕','令狐','钟离','宇文','长孙','慕容','鲜于','闾丘','司徒','司空','亓官','司寇','仉督','子车','颛孙','端木','巫马','公西','漆雕','乐正','壤驷','公良','拓跋','夹谷','宰父','谷梁','段干','百里','东郭','南门','呼延','归海','羊舌','微生','梁丘','左丘','东门','西门']);
 const NM_WEB_BLACKLIST = ['林晚','苏晚','顾沉','云深','顾言','江晚','许墨','陆离','沈舟','苏念','林陌'];
-const NM_BANNED_CHARS = ['晚','砚','秋','檐','林','陈','苏'];   // 姓名中禁止出现这四个汉字（任何位置）
-const NM_BANNED_NAMES = [   // 逐字精确禁用名单（含去空格），命中即判违规
+// 默认姓名/姓氏现在是“提醒”，不是硬禁则。只有用户在清单里明确填写的内容才真正阻止生成。
+const NM_ADVISORY_CHARS = ['晚','砚','秋','檐','林','陈','苏'];
+const NM_ADVISORY_NAMES = [
   '林辰','苏辰','顾夜寒','陆泽','墨渊','叶辰','江亦琛','傅景深','沈辞','萧景琰','凌夜','顾言','裴衍','楚慕言','厉承勋','谢珩','温景然','云烬','宋砚','慕云凡',
   '苏清月','林小满','晚卿','沈知予','顾晚柠','林晚星','慕晚晴','苏沐瑶','温妤','夏晚璃','楚清鸢','叶轻寒','姜知微','云舒','苏念汐','洛清欢','白若曦','顾绾绾','江晚渔','宋知晚','宁疏影'
 ];
@@ -9162,7 +9167,6 @@ function nmNameRuleViolation(nm){
   if(s.length !== exp) return `姓名应为百家姓(${surLen}字姓)+两字名＝${exp}字（当前「${s}」为${s.length}字）`;
   const given = s.slice(surLen);
   if(/([\u4e00-\u9fa5])\1/.test(given)) return `名字不得叠字（「${s}」）`;
-  if(NM_WEB_BLACKLIST.some(w => s.indexOf(w) >= 0)) return `疑似网文高频名（「${s}」）`;
   return '';
 }
 
@@ -9178,8 +9182,18 @@ function normalizeBanList(b){
 }
 function banListRaw(){ return (state.banList && typeof state.banList === 'object') ? state.banList : BANLIST_DEFAULT; }
 function stateBanEnabled(){ const b = banListRaw(); return !(b && b.enabled === false); }
-function banListChars(){ const c = Array.isArray(banListRaw().chars) ? banListRaw().chars : []; return [...new Set([...NM_BANNED_CHARS, ...c.map(x=>String(x||'').trim()).filter(Boolean)])]; }
-function banListNames(){ const n = Array.isArray(banListRaw().names) ? banListRaw().names : []; return [...new Set([...NM_BANNED_NAMES, ...n.map(x=>String(x||'').trim()).filter(Boolean)])]; }
+function banListChars(){ const c = Array.isArray(banListRaw().chars) ? banListRaw().chars : []; return [...new Set(c.map(x=>String(x||'').trim()).filter(Boolean))]; }
+function banListNames(){ const n = Array.isArray(banListRaw().names) ? banListRaw().names : []; return [...new Set(n.map(x=>String(x||'').trim()).filter(Boolean))]; }
+function banListAdvisoryChars(){ return [...new Set([...NM_ADVISORY_CHARS, ...banListChars()])]; }
+function banListAdvisoryNames(){ return [...new Set([...NM_ADVISORY_NAMES, ...banListNames()])]; }
+function characterNameAdvisory(name){
+  const s=String(name||'').trim(); if(!s) return [];
+  const out=[];
+  const hit=NM_ADVISORY_NAMES.find(x=>x===s); if(hit) out.push(`系统高频姓名「${hit}」`);
+  const ch=NM_ADVISORY_CHARS.find(x=>s.indexOf(x)>=0); if(ch) out.push(`含系统高频提醒字「${ch}」`);
+  if(NM_WEB_BLACKLIST.some(w=>s.indexOf(w)>=0)) out.push('疑似网文高频组合');
+  return [...new Set(out)];
+}
 function banListAiActive(role){
   // 优化构想属于全书规划母本生成阶段，必须始终知道当前用户的禁则清单；
   // 不受旧版本 scopeAi 是否包含 ideaOptimization 的影响。
@@ -9194,8 +9208,10 @@ function banListBlockFor(role){
   const b = banListRaw();
   const lines = [];
   const chars = banListChars(), names = banListNames();
-  if(chars.length && banListAiActive(role)) lines.push('人名禁用字：' + chars.join('、') + '（姓名任何位置命中即违规）');
-  if(names.length && banListAiActive(role)) lines.push('禁用姓名（不得逐字原样使用或当作现成名）：' + names.join('、'));
+  if(chars.length && banListAiActive(role)) lines.push('用户硬禁·人名禁用字：' + chars.join('、') + '（姓名任何位置命中即违规）');
+  if(names.length && banListAiActive(role)) lines.push('用户硬禁·禁用姓名（不得逐字原样使用或当作现成名）：' + names.join('、'));
+  const advNames=banListAdvisoryNames(), advChars=banListAdvisoryChars();
+  if((advNames.length||advChars.length) && ['dictmaster','dictEnrich'].indexOf(role)>=0) lines.push('🟡 系统高频姓名提醒（仅提示、不阻断）：高频姓名='+advNames.join('、')+'；高频提醒字='+advChars.join('、')+'。若新人物命中，只需考虑是否在人物定名台修改，不得因此拒绝整次创作。');
   const rules = Array.isArray(b.rules) ? b.rules : [];
   rules.forEach(r => {
     if(!r || !r.text) return;
@@ -14076,7 +14092,7 @@ function glossaryCardHtml(){
     const name = o.name || '';
     const brief = fmt(o, nameKeys);
     const newTag = (o._auto && (o._srcTs||0) > (Number(state._glossSeenTs)||0)) ? `<span class="gs-newtag" title="自动入典：${o._srcCh?('来自第 '+o._srcCh+' 章'):esc(o._srcHow||'批量提取')} · ${new Date(o._srcTs||Date.now()).toLocaleString('zh-CN',{hour12:false})}">🆕${o._srcCh?('·第'+o._srcCh+'章'):''}</span>` : '';
-    const flagTag = (type==='char' && o._nameFlag) ? `<span class="gs-nameflag" title="命名待核：${esc(o._nameFlag)}（仅提示不拦截；改名为合规姓名后自动消除）">⚠命名</span>` : '';
+    const _nameAd = type==='char' ? characterNameAdvisory(o.name) : []; const flagTag = (type==='char' && (o._nameFlag||_nameAd.length)) ? `<span class="gs-nameflag" title="${esc(o._nameFlag||_nameAd.join('；'))}（仅提示不拦截）">⚠命名</span>` : '';
     const relField = (type==='char') ? `<label class="gs-f gs-rel-f"><span>${kLabel('relation')}<span class="muted" style="font-weight:400">（摘要·只读）</span></span><div class="gs-rel-ro"><span class="gs-rel-val">${String(o.relation||'').trim()?esc(String(o.relation).trim()):'<span class="muted">（无摘要）</span>'}</span><button type="button" class="btn ghost gs-tool gs-rel-btn" data-gs-rel-edit title="人物关系的逐条明细统一在「人物关系表」中维护（点击直接打开编辑，正文据此写作）">✏️ 去人物关系表编辑</button></div></label>` : '';
     const tierField = (type==='char') ? `<label class="gs-f"><span>类别</span><select data-gs-set="char" data-gs-idx="${i}" data-gs-key="tier" data-orig="${esc(charTierOf(o))}">
       <option value="main" ${charTierOf(o)==='main'?'selected':''}>主要人物</option>
@@ -14238,6 +14254,15 @@ function bindGlossary(){
       if(newVal === oldVal) return;            // 无实质变化：不记录、不弹窗
       const isName = inp.hasAttribute('data-gs-name');
       const key = isName ? 'name' : inp.dataset.gsKey;
+      if(isName && type==='char'){
+        if(state.characterNaming && state.characterNaming.locked){ inp.value=oldVal; toast('人物姓名已锁定，请先在“人物定名台”解除锁定'); return; }
+        const rr=renameCharacterById(arr[idx].id,newVal);
+        if(!rr.ok){ inp.value=oldVal; toast(rr.msg); return; }
+        glossaryHistoryPush(`修改名称「${type}·${idx}」`);
+        renderGlossaryOnly();
+        toast(rr.msg);
+        return;
+      }
       gsPushUndo();                            // 记录改动前的整本词典（任意模式，供常驻撤销）
       if(type==='sub' && (key==='arcfrom'||key==='arcto')){
         const arcK = key==='arcfrom' ? 'from' : 'to';
@@ -16286,7 +16311,7 @@ const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人�
 
 1. 用户已经明确写出的设定，是最高事实依据。
 2. 蓝本中已经出现的人物、地名、专名必须全部保留。
-3. 固定名称必须逐字原样保留，不得擅自改名。
+3. AI 在本阶段不得擅自修改 Blueprint 已确认名称；用户可在正文生成前通过“人物定名台”主动确认新姓名，这属于用户授权操作。
 4. 不得删除用户明确指定的核心内容。
 5. 不得因为你认为另一种设定更精彩而推翻用户设定。
 6. 不得偷偷改变主角、核心冲突、题材、世界观方向或人物核心立场。
@@ -16304,6 +16329,23 @@ const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人�
 5. 人物集合确定后，再建立人物之间的核心关系。关系表只能引用已经进入 characters 集合的人物；关系表绝不能成为隐形人物生成器。
 6. 完成这一阶段后，形成“完整核心人物集合”。这个集合可能比 Blueprint 人物多，也可能只有 Blueprint 中的一个人物；数量由故事需要决定，不由固定人数决定。
 7. 如果故事确实只需要一个核心人物，relationshipTable 可以为空；绝不能为了填表制造自我关系。
+8. 对于被判断为核心/主要人物的每一人，本次生成就是其 Foundation 正式人物卡的主要定稿机会。后续“词典充实”明确禁止回写 Foundation 人物，因此这里不能故意只生成姓名、身份和一个性格标签，把九项基础人物信息留给不存在的后续 AI。
+9. 当前人物基础九项按程序现有契约理解为：正式姓名 + identity、age、gender、appearance、hobby、relation、trait、catchphrase。主要人物必须在本次输出中全部给出；确实没有客观依据的字段可以明确写“未知/无”，但不能留空，更不能用“待补充”“以后再定”等占位语。
+10. 判断人物是否属于主要人物时，不只看 Blueprint 是否写了“主角”。凡是承担核心冲突、核心目标阻力、关键转折、核心关系、长期阵营职责、导师/关键盟友/关键亲属/关键知情者等长期剧情职责的人，都应按主要人物完成九项基础信息。
+
+【人物创造的两种来源必须区分】
+A. 有依据的创造：从 Blueprint 已明确事实、世界规则、人物目标、冲突、关系、阵营和题材逻辑中推导出的合理补全。
+B. 从无到有的必要创造：Blueprint 没有提供该人物，但通过故事结构反推，缺少该人物会导致核心冲突、目标、关系、转折或世界运行无法成立；此时词典达人应主动创建。
+二者都允许进入 Foundation，但不能混淆：Blueprint 已确认人物不得被改名；推导/新造人物必须明确 origin=blueprint_confirmed 或 dictionary_master_created。
+
+【主要人物的反推检查｜在输出前内部完成，不输出检查过程】
+- 删除测试：如果删除该人物，核心冲突/主角目标/关键转折是否明显断裂？若完全不受影响，不应轻率把其定为主要人物。
+- 关系反推：核心人物为何必须与这些人发生关系？关系变化能否产生剧情作用？没有真实关系就不要凑关系表。
+- 冲突反推：每个核心对立角色的目标、利益或立场是否足以形成真实冲突？不要只给“反派”标签。
+- 目标反推：主要人物自己想要什么、为什么要、阻碍是什么，是否能支撑长期行动？
+- 缺口反推：从结局、核心冲突和主线阶段倒推，现在的人物集合是否缺少必要的执行者、阻碍者、知情者、关系承载者或关键阵营角色。
+- 一致性反推：人物年龄、身份、关系、性格、口头禅、外貌等九项之间是否互相支持，而不是各写各的。
+- 反向场景测试：想象后续校长/老师要连续安排数章使用该人物，如果人物九项基础不足以支持行动、关系、对话和描写，则本次必须补足。
 
 阶段 2｜建立核心世界骨架
 只有完成阶段 1 的人物体系后，才继续建立核心地点、组织/机构、专有名词、世界规则、核心物件、术语、历史和必要生活设定。
@@ -16313,24 +16355,11 @@ const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人�
 
 特别重要：不要因为优化构想通常只写了主角，就误以为核心人物只能有主角一个。优化构想负责提供故事方向和已确认人物种子；词典达人负责把这些种子发展成“小说真正需要的核心人物系统”。
 
-【核心边界】
-- “新增核心人物”是词典达人的正式职责，不是违规行为。
-- “无限增加人物”不是词典达人的职责；只创建对主线长期成立确有必要的人物。
-- 已有蓝本人物不能被删除、改名或改核心身份。
-- 新增人物不能伪装成用户已经确认的事实；但进入 Foundation Dictionary 后，它们即成为词典达人正式定稿的核心世界事实。
-
 【三、工作契约｜先理解职责，再开始创造】
 你不是“抄写员”，也不是“只允许继承、不允许新增”的登记员。
 你是 Foundation Dictionary 的建立者：先完整继承蓝本已经确定的事实，再判断为了让整部小说能够成立，哪些核心人物、核心地点、组织、专名、规则、物件、术语、历史和必要生活基础设施必须存在，并把这些必要内容建立成第一版稳定世界骨架。
 
 必须遵守：准确 > 完整；已确认 > 推断；必要 > 数量；宁可留空 > 为填字段猜测。
-
-【词典达人必须做】
-1. 继承蓝本已经明确的核心人物、名称、身份、核心关系和世界事实。
-2. 如果蓝本人物过少，但故事主线为了成立确实需要其他核心人物，可以新增必要的核心人物。新增人物必须有明确故事职责、稳定 CHAR_xxx ID 和正式姓名；不得为了凑数量新增。
-3. 先建立正式人物集合，再建立人物关系。关系表不是人物来源，不能用关系表偷偷创造人物。
-4. 建立真正支撑长期创作的核心地点、组织、专有名词、世界规则、核心物件、术语、历史和必要生活设定。
-5. 让输出成为后续“词典充实”的唯一 Foundation 基准。
 
 【词典达人绝对不能做】
 1. 不能修改蓝本已经明确的事实。
@@ -16339,68 +16368,6 @@ const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人�
 4. 不能把关系表中的一个名字/CHAR_ID 当成“隐形人物”；人物必须先有正式人物记录。
 5. 不能因为字段缺失而瞎编；无依据就留空/未知。
 6. 不能提前设计章节、场景或正文。
-
-【人物与关系的绝对顺序】
-人物定义集合 → 稳定 ID/正式姓名映射 → 人物关系。
-如果最终只有一个核心人物，而且故事确实不需要其他核心人物，那么 relationshipTable 必须允许为空；绝不制造“张三↔张三”之类的假关系。
-
-【词典充实的权限边界】
-词典充实只能读取 Foundation Dictionary 并做增量扩展。它可以增加次要人物、普通地点、组织内部细节、普通/次要物件、补充术语、外围历史、风俗、行业知识、民间生态、环境和生活细节；但不能修改、补全覆盖或重新解释任何已有 Foundation 实体的核心事实，也不能把次要人物升级成新的主角/核心人物或幕后 Boss。
-
-因此：词典达人负责“建立世界骨架”；词典充实负责“在骨架上长血肉”。两者不是两个都重新造世界的 AI。
-
-【三、核心世界事实准入原则】
-正式进入词典的内容，至少应满足以下之一：
-1. 用户蓝本明确指定的重要内容；
-2. 理解主线不可缺少的核心设定；
-3. 主角长期行动必须依赖的世界事实；
-4. 核心人物长期存在所需要的稳定信息；
-5. 未来多个章节可能反复使用的重要地点；
-6. 世界观运行不可缺少的规则；
-7. 核心专名、装备、体系、能力、组织或机制；
-8. 人物之间长期关系的重要事实；
-9. 能够支撑长期剧情发展的重要世界结构。
-
-如果一个内容只是一次性小物件、普通家具、普通街道、普通天气、普通食物、普通交通工具、普通手机、普通办公室、普通医院、普通商店、普通衣服，并且没有特殊故事价值，不要加入正式词典。
-
-词典不是百科全书，而是小说长期创作的稳定世界资产库。
-
-【四、禁止通用泛词污染】
-严禁把普通泛指事物当成专名、地名或世界观设定。
-
-例如：街道、大门、房间、办公室、医院、学校、汽车、手机、电脑、茶杯、桌子、傍晚、雨天、普通警察局、普通餐厅等，不能仅因为故事中可能出现就进入正式词典。
-
-只有当其具有独立名称、独立身份、独立机制、独立历史、独立势力归属、独立故事功能或明确不可替代性时，才可以进入正式词典。
-
-核心原则：宁缺毋滥。
-
-【五、允许新增设定，但必须有依据】
-你可以创造用户原文没有直接写出的新内容，但新增内容必须与用户蓝本、题材、已有世界观、人物动机、核心冲突一致，并且对长期小说创作具有实际价值。
-
-“用户没有写”不等于“你可以随便写”。
-
-可以进行合理推导，但禁止凭空增加会改变故事方向的重大核心设定，例如超自然能力、新核心世界规则、新核心组织体系等，除非用户蓝本本身已经提供依据。
-
-【六、人物设计原则】
-characters 是最重要的核心资产之一，而且“建立核心人物体系”是本次任务的第一阶段，不是附带工作。
-你必须先完成人物体系，再继续其他类别。请把 Blueprint 人物视为“已经确认的种子”，而不是“最终名单”。如果主线明显需要但 Blueprint 没有提供的核心对手、盟友、导师、关键亲属、阵营人物或其他长期角色，应主动创建并正式命名；只有在判断确实不需要时才保持较小的人物集合。
-每个新增核心人物都要回答一个问题：“没有这个人物，主线是否会失去一个长期不可替代的功能？”如果答案是否定的，就不要新增。
-人物应重点保证 name、identity、age、gender、appearance、hobby、relation、trait、catchphrase 的可用性。
-
-但绝不能为了填满字段而虚构人物信息，尤其禁止机械制造“喜欢咖啡”“喜欢看书”“喜欢散步”或无实际价值的口头禅。
-
-没有依据或没有长期价值时，可以写“未知”或“无”。identity 与 trait 应尽量明确，因为它们直接影响后续人物塑造。
-
-【核心人物可以新增】
-蓝本明确人物是必须继承的人物；除此之外，为使主线成立而必需的核心对手、核心盟友、导师、关键亲属、核心阵营人物等，可以由词典达人建立。每一个新增人物都必须有明确长期故事职责，并建立正式姓名和唯一 CHAR_xxx ID。
-
-新增核心人物的正式姓名由词典达人负责定稿；后续词典充实不得改名。
-
-人物必须先进入 characters 集合，再允许进入 relationshipTable。任何关系端点如果不是正式人物集合中的 ID/姓名，都必须被拒绝；绝不能为了保住关系而制造“幽灵人物”。
-
-如果故事只需要一个核心人物，就只建立一个人物；relationshipTable 可以为空。禁止为了满足“关系表必须有数据”而建立自我关系。
-
-如果角色只需要出现一次、且不属于核心故事结构，应优先留给后续“词典充实”阶段，而不是在这里制造完整核心人物。
 
 【七、人物关系表必须真实】
 relationshipTable 只能记录人物↔人物之间的真实关系，例如血缘、亲属、师徒、上下级、同事、朋友、敌对、利益、情感、合作、利用、恩怨、阵营等。
@@ -16491,7 +16458,7 @@ name 字段只能写实体名称。
 词典达人只负责建立 Foundation Dictionary 的最小可用核心骨架，不负责一次性完成整本小说百科全书。
 注意：这里的“最小”不是“只抄蓝本已有人物”。词典达人必须判断故事是否需要新增核心人物；蓝本只有一个人物时，允许建立更多必要核心人物，也允许在确实不需要时保持单人物结构。不要把“关系表可为空”误解成“不能建立新人物”。
 真正不可缺少的硬约束只有：至少1位核心人物；核心人物有正式姓名和基本身份；Blueprint 人物定义区中明确出现的 CHAR_xxx 人物ID必须完成正式姓名映射；Blueprint 明确的人物核心关系不能丢失；WORLD 必须能说明时代/主要舞台/基本世界；Blueprint 明确存在的世界硬规则不得被删除或改成相反规则；必须遵守禁用姓名、实体去重和安全约束。
-以下均为可选，不得因为缺失而判失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、人物 age/gender/appearance/hobby/relation/catchphrase/trait 等详细字段、地点关联、专名关联、关系详细说明。没有依据可以省略或写“未知/无”。
+以下均为可选，不得因为缺失而判失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、地点关联、专名关联、关系详细说明。人物详细字段只有在该人物属于 support/非主要人物时才可以省略；主要人物的九项基础字段必须在本次输出中逐项出现并有值，确实无依据时才写“未知/无”。
 没有明确世界规则时，RULE 区块可以完全省略。不要为了凑数量创造条目。
 特别注意：RELATIONSHIPS 中出现的 CHAR_xxx 只是引用；只有 PROTAGONIST.personId、KEY_CHARACTERS.personId 等真正的人物定义字段才产生“必须命名”的人物义务。
 如果可选字段缺失，仍应输出一个可解析的结构式词典；不要因为可选字段缺失而拒绝整个结果、要求补齐或自行重复生成。
@@ -16506,12 +16473,15 @@ summary=一句话总结这套词典最重要的世界架构亮点
 [CHARACTER]
 id=CHAR_001
 name=正式人物姓名
+tier=main
+origin=blueprint_confirmed 或 dictionary_master_created
+coreRole=长期故事职责
 identity=身份定位
 age=年龄或未知
 gender=性别或未知
 appearance=外貌或未知
-hobby=爱好或未知
-relation=一句话关系摘要或未知
+hobby=爱好或无
+relation=一句话核心关系摘要
 trait=稳定性格核心
 catchphrase=口头禅或无
 sourceType=dictionary_foundation
@@ -16648,7 +16618,7 @@ properContacts：两端必须是专名；from≠to。
 
 A. 蓝本检查：是否完整尊重用户蓝本；是否保留所有明确指定的重要实体；是否修改名称；是否改变主角、核心冲突、题材、世界观方向或人物核心立场。
 
-B. 人物检查：人物是否值得进入核心词典；identity 与 trait 是否清晰；是否为了填字段虚构爱好或口头禅；是否存在重复人物或同名不同人。
+B. 人物检查：人物是否值得进入核心词典；是否区分 blueprint_confirmed 与 dictionary_master_created；主要人物是否明确 tier=main；主要人物九项基础人物字段是否全部实际完成；identity 与 trait 是否清晰；是否为了填字段虚构爱好或口头禅；是否存在重复人物或同名不同人；主要人物是否经得起删除测试、关系反推、冲突反推和反向场景测试。
 
 C. 地名检查：是否真正具有故事专属性；是否误收普通地点；名称是否纯净；是否重复。
 
@@ -16671,7 +16641,7 @@ J. 下游检查：词典充实是否能在这些设定上继续扩建；校长�
 【二十四、最终输出原则】
 经过全部检查后，只输出符合第二十、二十一、二十二条契约的结构式纯文本。不要输出 JSON，不要输出解释、Markdown、代码围栏、自检过程或任何结构之外的字符。
 
-最终目标不是生成最多的设定，而是建立一套准确、稳定、自洽、可长期使用，并能够成为整部小说世界基准的「万物设定词典」。
+最终目标不是生成最多的设定，而是建立一套准确、稳定、自洽、可长期使用，并能够成为整部小说世界基准的「万物设定词典」。尤其要记住：主要人物的 Foundation 人物卡是一次性正式定稿资产，后续词典充实不得补写它，因此不要把关键九项人物基础留成“以后再补”。
 
 记住：词典达人负责创造世界骨架；词典充实负责在骨架上继续长出血肉；前者必须定得准，后者才能扩得稳。`
 function buildDictMasterUser(ctx){
@@ -16700,8 +16670,8 @@ Blueprint 已确认人物可写 origin=blueprint_confirmed；如果 AI 没有输
 【Foundation Dictionary 最低通行标准】
 本次任务的目标不是一次性完成百科全书，而是建立“下游可以安全开写”的最小核心世界骨架。
 必须完成：至少1位核心人物；核心人物有正式姓名和基本身份；Creative Blueprint 中真正定义的人物ID（只指 PROTAGONIST.personId / KEY_CHARACTERS.personId 等人物定义字段）必须完成正式姓名映射；Blueprint 已明确的人物核心关系不能丢失；能够确定时代/主要舞台/基本世界；Blueprint 明确写出的世界硬规则不得被主动删除或改成相反规则；必须遵守禁用姓名和安全约束。
-可以为空、不得因此失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、人物详细档案字段、关系详细描述、地点关联、专名关联。没有依据就不要硬造；有则收录。
-人物的 age/gender/appearance/hobby/relation/catchphrase/trait 等非最低通行字段没有依据时写“未知/无”，不要为了填满字段而制造事实。
+可以为空、不得因此失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、关系详细描述、地点关联、专名关联。没有依据就不要硬造；有则收录。
+人物详细档案的例外规则：support/非主要人物可以按实际需要简化；但 tier=main 的核心/主要人物必须在本次 Foundation 输出中完成 name + identity、age、gender、appearance、hobby、relation、trait、catchphrase 这九项基础人物字段。确实没有依据时可以写“未知/无”，但不能留空、不能写“待补充/以后再定”。
 只有 Blueprint 明确给出世界规则时才需要输出 RULE；没有明确规则时允许 RULE 区块完全省略。
 不要因为 RELATIONSHIPS 文本中出现一个未在人物定义区声明的 CHAR_xxx，就创建新人物或把它视为必须命名的人物。
 不要为了凑数量生成地点、组织、专名、道具或其他条目。词典充实阶段会继续补全这些内容。
@@ -16834,8 +16804,21 @@ function validateDictMasterOutput(j){
     for(const kk of ['age','gender','appearance','hobby','relation','catchphrase']){
       if(!String(c[kk]||'').trim()) c[kk]='未知';
     }
-    if(!String(c.origin||'').trim()) c.origin='dictionary_master';
-    if(!String(c.coreRole||'').trim()) c.coreRole='核心人物长期故事职责待补充';
+    const tier = String(c.tier||'main').trim().toLowerCase();
+    c.tier = tier==='support' ? 'support' : 'main';
+    const rawOrigin = String(c.origin||'').trim();
+    const rawCoreRole = String(c.coreRole||'').trim();
+    if(!rawOrigin) c.origin='dictionary_master';
+    if(!rawCoreRole) c.coreRole='核心人物长期故事职责待补充';
+    // Foundation 中的主要人物没有可靠的后续 AI 补全步骤，因此九项基础人物字段必须在本次正式入典时完成。
+    if(c.tier==='main'){
+      const missingCore = CHAR_FIELDS.filter(k=>!String(c[k]||'').trim());
+      if(missingCore.length) return `主要人物「${nm}」九项人物基础未完成：缺少 ${missingCore.map(k=>CHAR_FIELD_LABEL[k]||k).join('、')}`;
+      const placeholder = CHAR_FIELDS.filter(k=>{ const v=String(c[k]||'').trim(); return ['待补充','以后再定','待定','未知待定'].includes(v); });
+      if(placeholder.length) return `主要人物「${nm}」存在未完成占位字段：${placeholder.map(k=>CHAR_FIELD_LABEL[k]||k).join('、')}`;
+      if(!rawCoreRole) return `主要人物「${nm}」缺少长期故事职责 coreRole`;
+      if(!rawOrigin) c.origin='dictionary_master';
+    }
     personNames.add(nm);
   }
 
@@ -16952,7 +16935,7 @@ async function genDictMaster(btn){
         o.glossary[k].push(e); existing.add(nm);
       });
     };
-    push(j.characters, 'characters', c=>({ id:String(c.id||'').trim(), name:String(c.name||'').trim(), identity:String(c.identity||'').trim(), age:String(c.age||'').trim(), gender:String(c.gender||'').trim(), appearance:String(c.appearance||'').trim(), hobby:String(c.hobby||'').trim(), relation:String(c.relation||'').trim(), trait:String(c.trait||'').trim(), catchphrase:String(c.catchphrase||'').trim(), origin:String(c.origin||'').trim() || 'dictionary_master', coreRole:String(c.coreRole||'').trim() || '核心人物长期故事职责待补充' }));
+    push(j.characters, 'characters', c=>({ id:String(c.id||'').trim(), name:String(c.name||'').trim(), tier:(String(c.tier||'').trim().toLowerCase()==='support'?'support':'main'), identity:String(c.identity||'').trim(), age:String(c.age||'').trim(), gender:String(c.gender||'').trim(), appearance:String(c.appearance||'').trim(), hobby:String(c.hobby||'').trim(), relation:String(c.relation||'').trim(), trait:String(c.trait||'').trim(), catchphrase:String(c.catchphrase||'').trim(), origin:String(c.origin||'').trim() || 'dictionary_master', coreRole:String(c.coreRole||'').trim() || '核心人物长期故事职责待补充' }));
     push(j.places, 'places', p=>({ name:String(p.name||'').trim(), type:String(p.type||'').trim(), note:String(p.note||'').trim() }));
     push(j.propernouns, 'propernouns', p=>({ name:String(p.name||'').trim(), note:String(p.note||'').trim() }));
     const masterGeneric = {
@@ -17166,17 +17149,7 @@ function cleanEntityName(raw){
 
 const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实师」，负责在已经定稿的「词典达人万物词典」基础上，为整部小说继续扩建细节、生活层、环境层和辅助人物素材。
 
-你不是第二个词典达人。
-
-你没有权力修改词典达人已经定稿的核心事实。
-
-你的核心任务是：
-
-“在已经确定的世界里继续创造。”
-
-而不是：
-
-“重新定义这个世界。”
+你不是第二个词典达人：你只能在已经确定的世界里继续创造，不能重新定义这个世界。
 
 你将获得两份核心素材：
 
@@ -17194,15 +17167,12 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 
 1. 词典达人已经定稿的实体和设定必须视为正式世界事实。
 2. 任何已经存在的人物、地点、专名、世界规则都不得修改。
-3. 不得给已经存在的实体换名。
+3. AI 不得给已经存在的实体换名；用户通过人物定名台主动修改姓名不属于词典充实权限，但词典充实必须读取修改后的当前姓名。
 4. 不得通过新增一个“新版本”偷偷覆盖旧实体。
 5. 不得重复创造同名实体。
 6. 如果发现达人词典与自己的理解存在差异，以达人词典为准。
 7. 你可以创造新的世界素材，但新素材必须与既有词典保持自洽。
 8. 本阶段正式输出并被系统收录的新条目，同样会成为后续正文可以使用的正式创作事实。
-
-【只读基准｜不得回写 Foundation】
-输入中的 dictionary_foundation 是只读基准。对任何已存在的 Foundation 人物、地点、专名、组织、机构、物件、规则、术语、历史和生活设定：不得修改、补字段覆盖、改名、重分类、改变核心关系或用“更详细版本”替换原条目。相同名称命中 Foundation 时，直接跳过，不做字段合并；只有真正的新实体才允许作为 dictionary_enrichment 新增。
 
 【核心使命】
 在不破坏既有世界事实的前提下，主动补足：
@@ -17228,7 +17198,7 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 词典达人阶段已经先完成“核心人物体系”的建立。这里的 Foundation characters 是只读核心集合，包含 Blueprint 已确认人物，也包含词典达人判断主线必需后主动创建并定稿的新核心人物。
 禁止创造新的主角、核心人物、主线关键人物或幕后Boss。你只能在确有生活层、职业层、场景层需要时增加 support/secondary 人物；任何新人物都不得改变或升级 Foundation 核心人物体系。
 
-只有在确有世界生活/职业/场景需要时，才可以新增次要配角；新增人物默认属于 dictionary_enrichment / support 层。不得把一个 support 人物偷偷升级为核心人物，不得改写 Foundation 中任何核心人物的姓名、ID、身份、核心关系或核心定位。
+新增人物默认属于 dictionary_enrichment / support 层，不得把 support 人物升级为核心人物，也不得改写 Foundation 核心人物。
 
 如果输入中已经存在某个 Foundation 人物，即使其某个字段为空，也不能趁“充实”阶段替它补写并覆盖 Foundation；Foundation 是只读事实。需要新增信息时，必须作为新的 enrichment 素材存储，不能回写基础卡。
 
@@ -17746,7 +17716,7 @@ function buildDictEnrichUser(){
     dmSections.push(`【词典达人架构总结】${state.dictmasterLatest.summary}`);
   }
 
-  parts.push('【第三部分：本次词典充实允许做什么】只补世界厚度：次要配角、外围地点、辅助专名、次要/生活道具、补充术语、外围历史事件、生活设定、行业生态、地方习俗、环境细节。禁止重新定义任何 dictionary_foundation 条目；禁止新增主角/核心人物/幕后Boss；禁止修改人物核心关系、核心地点、组织核心身份、核心专名、世界规则。所有新增条目必须标记 sourceType=dictionary_enrichment。');
+  parts.push('【第三部分：本次词典充实允许做什么】只在 dictionary_foundation 之上增加辅助/外围/生活层素材：次要配角、外围地点、次要组织/机构、辅助专名、次要/生活道具、补充术语、外围历史、生活设定、行业生态、地方习俗、环境细节。禁止重新定义、覆盖、改名或升级任何 Foundation 核心事实；禁止新增主角/核心人物/主线关键人物/幕后Boss；关系只能引用已存在实体，不能借关系偷偷创造核心实体。用户后续通过人物定名台主动改名属于用户授权操作，不属于词典充实权限。所有新增条目必须标记 sourceType=dictionary_enrichment。');
   const dictmasterPart = `【第二部分：词典达人所生成的所有内容（只读参照：不得改动、不得重复新增同名）】\n${dmSections.length ? dmSections.join('\n\n') : '（暂无词典达人生成数据）'}`;
   parts.push(dictmasterPart);
 
@@ -20485,6 +20455,7 @@ function renderNarrativeEngineMenu(){
     <button class="ne-menu-item" data-ne-panel="resumesum"><span class="ne-ico">📜</span><span class="ne-lbl">滚动摘要</span></button>
     <button class="ne-menu-item" data-ne-panel="check"><span class="ne-ico">🩺</span><span class="ne-lbl">一致性自检</span></button>
     <button class="ne-menu-item" data-ne-panel="iron"><span class="ne-ico">📌</span><span class="ne-lbl">叙事铁律（写作总纲）</span>${state._narrIron!==false?'<span class="ne-badge ok">ON</span>':'<span class="ne-badge">OFF</span>'}</button>
+    <button class="ne-menu-item" data-ne-panel="naming"><span class="ne-ico">👤</span><span class="ne-lbl">人物定名台</span>${state.characterNaming&&state.characterNaming.locked?'<span class="ne-badge ok">LOCK</span>':''}</button>
     <button class="ne-menu-item" data-ne-panel="banlist"><span class="ne-ico">🚫</span><span class="ne-lbl">禁则清单</span>${stateBanEnabled()?'<span class="ne-badge ok">ON</span>':'<span class="ne-badge">OFF</span>'}</button>
     <!-- v238/反馈①：消息看板入口移入「叙事」面板菜单（第 9 项），带历史消息条数角标；顶栏不加按钮 -->
     <button class="ne-menu-item" data-ne-panel="toastboard"><span class="ne-ico">📋</span><span class="ne-lbl">消息看板</span>${(()=>{const n=toastLogGet().length; return n?`<span class="ne-badge info">${n}</span>`:'';})()}</button>
@@ -20501,6 +20472,7 @@ function rebindNarrativeEngine(){
     if(panel==='resume') renderResumePanel();
     else if(panel==='iron') renderIronPanel();
     else if(panel==='banlist') renderBanListPanel();
+    else if(panel==='naming') renderCharacterNamingPanel();
     else if(panel==='facts') openFactCardModal();
     else if(panel==='resumesum') openRollingSummaryModal();
     else if(panel==='check') openConsistencyCheck();
@@ -20535,6 +20507,7 @@ function renderResumePanel(){
 function handleBanListAction(e){
   const m=$('#neModal'); if(!m || m.style.display==='none' && m.classList&&m.classList.contains('hidden')) return false;
   if(!m.contains(e.target)) return false;
+  const naming=e.target.closest('[data-bl-character-naming]'); if(naming){ renderCharacterNamingPanel(); return true; }
   const en=e.target.closest('[data-bl-enabled]'); if(en){ /* 保存时统一读回，此处仅占位避免误关面板 */ return false; }
   const add=e.target.closest('[data-bl-rule-add]'); if(add){
     const b=banListRaw();
@@ -20557,9 +20530,9 @@ function handleBanListAction(e){
     cur.rules=cur.rules.filter(r=>r&&r.text);
     const scope=[];
     if(m.querySelector('[data-bl-scope="chapter"]')&&m.querySelector('[data-bl-scope="chapter"]').checked) scope.push('chapter');
-    if(m.querySelector('[data-bl-scope="planner"]')&&m.querySelector('[data-bl-scope="planner"]').checked) scope.push('planner');
-    if(m.querySelector('[data-bl-scope="outline"]')&&m.querySelector('[data-bl-scope="outline"]').checked) scope.push('outline');
-    if(m.querySelector('[data-bl-scope="title"]')&&m.querySelector('[data-bl-scope="title"]').checked) scope.push('title');
+    if(m.querySelector('[data-bl-scope="dictmaster"]')&&m.querySelector('[data-bl-scope="dictmaster"]').checked) scope.push('dictmaster');
+    if(m.querySelector('[data-bl-scope="dictEnrich"]')&&m.querySelector('[data-bl-scope="dictEnrich"]').checked) scope.push('dictEnrich');
+    if(m.querySelector('[data-bl-scope="principal"]')&&m.querySelector('[data-bl-scope="principal"]').checked) scope.push('principal');
     cur.scopeAi = scope.length?scope:BANLIST_DEFAULT.scopeAi.slice();
     state.banList=cur; persist(); renderNarrativeEngineMenu();
     toast('禁则清单已保存'); return true;
@@ -20595,11 +20568,63 @@ function renderIronPanel(){
   const lt=$('[data-lang-layer2]'); if(lt) lt.onchange = ()=>{ state.langLayer=lt.checked; persist(); renderIronPanel(); };
 }
 
+function ensureCharacterIdsForNaming(){
+  const g=ensureGlossaryKnowledgeShape((state.outline&&state.outline.glossary)||{});
+  const used=new Set(); let next=1;
+  (g.characters||[]).forEach(c=>{const id=String(c&&c.id||'').trim().toUpperCase(); if(/^CHAR_\d{3,}$/.test(id)) used.add(id);});
+  const alloc=()=>{while(used.has(`CHAR_${String(next).padStart(3,'0')}`)) next++; const id=`CHAR_${String(next).padStart(3,'0')}`; used.add(id); next++; return id;};
+  (g.characters||[]).forEach(c=>{ if(c && !/^CHAR_\d{3,}$/i.test(String(c.id||''))) c.id=alloc(); else if(c) c.id=String(c.id).trim().toUpperCase(); });
+  return g;
+}
+function replaceExactInObject(root, oldName, newName, seen){
+  if(root==null || typeof root!=='object') return 0; seen=seen||new Set(); if(seen.has(root)) return 0; seen.add(root); let n=0;
+  if(Array.isArray(root)){ root.forEach((v,i)=>{ if(typeof v==='string' && v===oldName){root[i]=newName;n++;} else if(v&&typeof v==='object') n+=replaceExactInObject(v,oldName,newName,seen); }); return n; }
+  Object.keys(root).forEach(k=>{ const v=root[k]; if(typeof v==='string' && v===oldName){root[k]=newName;n++;} else if(v&&typeof v==='object') n+=replaceExactInObject(v,oldName,newName,seen); });
+  return n;
+}
+function renameCharacterById(id,newName){
+  const g=ensureCharacterIdsForNaming(); const c=(g.characters||[]).find(x=>String(x&&x.id||'').toUpperCase()===String(id||'').toUpperCase());
+  const nn=String(newName||'').trim(), old=String(c&&c.name||'').trim();
+  if(!c) return {ok:false,msg:'未找到该人物'}; if(!nn) return {ok:false,msg:'姓名不能为空'}; if(old===nn) return {ok:true,msg:'姓名未变化',changed:0};
+  if(state.characterNaming && state.characterNaming.locked) return {ok:false,msg:'人物姓名已经锁定，请先解除姓名锁定'};
+  const custom=banListViolation(nn); if(custom) return {ok:false,msg:`新姓名命中用户硬禁则：${custom}`};
+  const dup=(g.characters||[]).find(x=>x!==c&&String(x&&x.name||'').trim()===nn); if(dup) return {ok:false,msg:`姓名「${nn}」已经被 ${dup.id||'另一人物'} 使用`};
+  if(!Array.isArray(c._alias)) c._alias=[]; if(old&&!c._alias.includes(old)) c._alias.push(old); c.name=nn; c._userName=true; delete c._nameFlag;
+  let changed=0;
+  (g._relationshipTable||[]).forEach(r=>{if(String(r.a||'').trim()===old){r.a=nn;changed++;} if(String(r.b||'').trim()===old){r.b=nn;changed++;}});
+  changed += syncNameEverywhere(old,nn);
+  // 旧版独立人物卡、校长/老师计划、尚未锁定的章节计划也同步；不碰原始创作蓝本和历史快照。
+  if(Array.isArray(state.characters)) state.characters.forEach(x=>{if(x&&String(x.name||'').trim()===old){x.name=nn;changed++;}});
+  if(state.school){ changed += replaceExactInObject(state.school,old,nn); }
+  if(state.outline && Array.isArray(state.outline.chapterPlans)) changed += replaceExactInObject(state.outline.chapterPlans,old,nn);
+  state.characterNaming.version=(Number(state.characterNaming.version)||0)+1;
+  persist();
+  return {ok:true,msg:`已将「${old}」改为「${nn}」`,changed};
+}
+function characterNamingRows(){
+  const g=ensureCharacterIdsForNaming();
+  return (g.characters||[]).map((c,i)=>({id:String(c.id||''),name:String(c.name||'').trim(),identity:String(c.identity||'').trim(),advisory:characterNameAdvisory(c.name),index:i}));
+}
+function renderCharacterNamingPanel(){
+  const rows=characterNamingRows(); const locked=!!(state.characterNaming&&state.characterNaming.locked);
+  const html=`<div class="ne-body"><div class="bl-note muted">这里是<b>正文生成前的人物最终定名台</b>。人物真正的身份是 CHAR_ID，改名不会改变人物关系、人物卡或后续关联。系统高频姓名只提醒，不拦截；用户硬禁则仍然生效。</div>
+  <div style="display:grid;gap:8px;margin-top:10px">${rows.map(r=>`<div style="padding:10px 12px;border:1px solid var(--border,#ddd);border-radius:12px;background:var(--card,#fff)"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>${esc(r.id)}</b><span class="muted">${esc(r.identity||'核心人物')}</span></div><div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:8px"><input data-cn-id="${esc(r.id)}" value="${esc(r.name)}" ${locked?'disabled':''} placeholder="正式姓名"><button class="btn ghost" data-cn-apply="${esc(r.id)}" ${locked?'disabled':''}>修改</button></div>${r.advisory.length?`<div style="margin-top:5px;color:#a16207;font-size:12px">🟡 ${esc(r.advisory.join('；'))}（仅提醒）</div>`:'<div style="margin-top:5px;color:#15803d;font-size:12px">✓ 当前无系统高频提醒</div>'}</div>`).join('')||'<div class="muted">暂无核心人物。请先运行词典达人。</div>'}</div>
+  <div class="btn-row" style="margin-top:12px"><button class="btn primary" data-cn-lock>${locked?'🔓 解除姓名锁定':'🔒 确认并锁定人物姓名'}</button><button class="btn ghost" data-cn-refresh>刷新检查</button></div>
+  <div class="muted" style="margin-top:8px;font-size:12px">锁定后：校长、老师、正文统一读取当前 CHAR_ID → 正式姓名映射。若要重新命名，先解除锁定即可。</div></div>`;
+  openNeModal('👤 人物定名台',html);
+  const m=$('#neModal'); if(!m) return;
+  m.querySelectorAll('[data-cn-apply]').forEach(btn=>btn.onclick=()=>{const id=btn.dataset.cnApply; const inp=m.querySelector(`[data-cn-id="${CSS.escape(id)}"]`); const r=renameCharacterById(id,inp&&inp.value); if(r.ok){toast(r.msg);renderCharacterNamingPanel();}else toast(r.msg);});
+  const lock=m.querySelector('[data-cn-lock]'); if(lock) lock.onclick=()=>{state.characterNaming.locked=!locked;state.characterNaming.lockedAt=state.characterNaming.locked?Date.now():0;persist();toast(state.characterNaming.locked?'人物姓名已锁定，后续阶段统一使用当前姓名':'已解除人物姓名锁定，可以继续改名');renderCharacterNamingPanel();};
+  const refresh=m.querySelector('[data-cn-refresh]'); if(refresh) refresh.onclick=()=>renderCharacterNamingPanel();
+}
+
 function renderBanListPanel(){
   const b = banListRaw();
   const enabled = stateBanEnabled();
   const chars = banListChars().map(esc).join(', ');
   const names = banListNames().map(esc).join(', ');
+  const advisoryChars = banListAdvisoryChars().map(esc).join('、');
+  const advisoryNames = banListAdvisoryNames().map(esc).join('、');
   const bRaw = banListRaw();
   const phrases = (Array.isArray(bRaw.phrases)?bRaw.phrases:[]).map(esc).join(', ');
   const rules = (Array.isArray(bRaw.rules)?bRaw.rules:[]).map((r,i)=>`
@@ -20616,7 +20641,9 @@ function renderBanListPanel(){
       <div class="ne-bl-enable">
         <label class="mini-check"><input type="checkbox" data-bl-enabled ${enabled?'checked':''}> <b>总开关：启用「禁则清单」作为全书长期约束</b></label>
       </div>
-      <div class="bl-note muted">禁用字/禁用姓名用于人物、地名、专名等实体命名；禁用短语用于正文，并同步约束词典达人、词典充实、校长的输出文字。清单不得超越输出格式红线与既有事实一致性红线。</div>
+      <div class="bl-note muted"><b>姓名命名现在分两层：</b>系统默认的高频姓名/姓氏只做提醒，不会卡住词典达人或词典充实；只有用户在下面明确填写的“禁用字/禁用姓名”才是硬禁则。人物正式姓名可在正文生成前统一修改。</div>
+      <div style="margin:10px 0;padding:10px 12px;border-radius:12px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.25)"><b>🟡 系统高频姓名提醒（不拦截）</b><div class="muted" style="margin-top:5px;line-height:1.6">高频姓名：${advisoryNames}<br>高频提醒字：${advisoryChars}<br>命中只提示用户，词典达人/词典充实仍可继续创作。</div></div>
+      <div class="btn-row"><button class="btn primary" data-bl-character-naming>👤 打开人物定名台</button></div>
       <label class="kv"><span class="k">禁用字</span>
         <input data-bl-chars value="${chars}" placeholder="逗号分隔，如：晚,砚,秋,檐"/>
       </label>
