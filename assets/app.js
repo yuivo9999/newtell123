@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.349';
+const APP_VERSION = '1.0.358';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.349.js';
+const APP_FILE_VERSION = 'app1.0.356.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -89,8 +89,7 @@ const state = {
   chapterMiddlePlans: {},
   chapterMiddleAudit: {},
   originalIdeaAnchors: null,
-  polishCanonical: null,
-  // 第三阶段：后续全链路唯一权威故事战略；新流程下游不得直接读取 polishCanonical。
+  // 1.0.358：canonicalStoryStrategy 是唯一权威故事事实，不再维护第二事实源。
   canonicalStoryStrategy: null,
   polishRevision: 0,
   // 优化构想产生的新增实体/设定只能作为待确认建议，绝不直接进入正式词典。
@@ -1210,7 +1209,7 @@ function projectSnapshot(){
     chapterMiddlePlans: state.chapterMiddlePlans,
     chapterMiddleAudit: state.chapterMiddleAudit,
     originalIdeaAnchors: state.originalIdeaAnchors,
-    polishCanonical: state.polishCanonical,
+    // 1.0.358：只持久化 canonicalStoryStrategy；旧 polishCanonical 仅在加载旧存档时读取一次并迁移。
     canonicalStoryStrategy: state.canonicalStoryStrategy,
     polishRevision: state.polishRevision,
     polishHistory: state.polishHistory,
@@ -1299,11 +1298,12 @@ function applyProject(p){
   state.chapterMiddlePlans = (p.chapterMiddlePlans && typeof p.chapterMiddlePlans === 'object') ? p.chapterMiddlePlans : {};
   state.chapterMiddleAudit = (p.chapterMiddleAudit && typeof p.chapterMiddleAudit === 'object') ? p.chapterMiddleAudit : {};
   state.originalIdeaAnchors = (p.originalIdeaAnchors && typeof p.originalIdeaAnchors==='object') ? p.originalIdeaAnchors : null;
-  state.polishCanonical = (p.polishCanonical && typeof p.polishCanonical === 'object') ? p.polishCanonical : null;
+  // 1.0.357：Creative Blueprint → canonicalStoryStrategy 是唯一权威事实源。
+  // 旧版本可能仍带有 polishCanonical；这里只做一次性迁移，运行态不再创建该字段。
+  const legacyPolishCanonical = (p.polishCanonical && typeof p.polishCanonical === 'object') ? p.polishCanonical : null;
   state.canonicalStoryStrategy = (p.canonicalStoryStrategy && typeof p.canonicalStoryStrategy === 'object') ? p.canonicalStoryStrategy : null;
-  // 旧项目迁移：仅在不存在新权威源时，一次性从旧采用蓝本建立兼容 Canonical。
-  if(!state.canonicalStoryStrategy && state.polishCanonical && state.polishCanonical.machineTrace?.status==='adopted'){
-    state.canonicalStoryStrategy = Object.assign({}, state.polishCanonical, { sourceType:'canonical_story_strategy', sourceVersion:'phase3-migrated' });
+  if(!state.canonicalStoryStrategy && legacyPolishCanonical && legacyPolishCanonical.machineTrace?.status==='adopted'){
+    state.canonicalStoryStrategy = Object.assign({}, legacyPolishCanonical, { sourceType:'canonical_story_strategy', sourceVersion:'phase5-migrated', sourceOfTruth:'creativeBlueprint' });
   }
   state.polishPendingSuggestions = (p.polishPendingSuggestions && typeof p.polishPendingSuggestions === 'object') ? p.polishPendingSuggestions : null;
   state.polishRevision = Number.isFinite(+p.polishRevision) ? +p.polishRevision : 0;
@@ -1934,6 +1934,16 @@ function installGlobalGenerationUi(){
     .app-idea-fold[open]>summary::before{transform:rotate(90deg);}
     .app-idea-fold>summary:hover{background:rgba(127,127,127,.06);}
     .app-idea-fold-body{padding:0 10px 10px;}
+
+    /* 1.0.353 优化构想：局部视觉命名空间，避免全局 CSS 覆盖 */
+    .app-idea-ui .app-idea-structured,.app-idea-structured{margin:12px 0;padding:12px;border-radius:20px;background:linear-gradient(145deg,rgba(111,91,255,.09),rgba(64,170,255,.07) 48%,rgba(255,188,92,.07));border:1px solid rgba(112,101,210,.18);box-shadow:0 12px 32px rgba(45,55,100,.08);}
+    .app-idea-structured-head{display:flex;align-items:center;gap:8px;padding:4px 4px 10px;color:#3f4b86}.app-idea-structured-head em{margin-left:auto;font-size:11px;font-style:normal;opacity:.68}
+    .app-idea-section{margin:8px 0;border:1px solid rgba(110,110,160,.15);border-radius:15px;overflow:hidden;background:rgba(255,255,255,.72);box-shadow:0 5px 18px rgba(50,60,90,.05)}
+    .app-idea-section>summary{cursor:pointer;padding:11px 13px;font-weight:800;list-style:none;display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,rgba(255,255,255,.82),rgba(244,246,255,.62))}.app-idea-section>summary::-webkit-details-marker{display:none}.app-idea-section>summary:after{content:'＋';margin-left:auto;opacity:.55}.app-idea-section[open]>summary:after{content:'−'}
+    .app-idea-section-body{padding:11px 13px;line-height:1.75}.app-idea-kv{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:5px 0}.app-idea-kv b{color:#5967a8}.app-idea-chip{display:inline-block;margin:4px 5px 4px 0;padding:5px 9px;border-radius:999px;background:linear-gradient(135deg,rgba(99,102,241,.10),rgba(45,177,199,.10));border:1px solid rgba(99,102,241,.14);font-size:12px}
+    .app-idea-readable{border-radius:15px!important;background:linear-gradient(180deg,rgba(255,255,255,.78),rgba(248,249,253,.72))!important;line-height:1.82!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9)}
+    #btnOptimizationConcept.app-opt-btn{border:0!important;border-radius:15px!important;color:#fff!important;font-weight:900!important;letter-spacing:.2px!important;box-shadow:0 10px 24px rgba(70,90,180,.18)!important;position:relative;overflow:hidden}
+    @media(max-width:640px){.app-idea-structured{padding:9px;border-radius:16px}.app-idea-structured-head{align-items:flex-start;flex-wrap:wrap}.app-idea-structured-head em{width:100%;margin-left:0}.app-idea-kv{grid-template-columns:1fr;gap:2px}.app-idea-kv b{font-size:12px}}
     @media (prefers-reduced-motion:reduce){#btnOptimizationConcept.app-opt-btn,.app-idea-fold>summary::before{animation:none !important;transition:none !important}.app-opt-btn.app-opt-generating::after{animation:none !important}}
     @media (max-width:640px){#btnOptimizationConcept.app-opt-btn{min-height:46px}.app-idea-fold>summary{padding:11px 12px}.app-idea-fold-body{padding:0 8px 9px}}
   `;
@@ -3347,7 +3357,7 @@ async function generateOptimizationConcept(btn, force){
   state.strategyStage1Status='generating';
   state.strategyStage2Status='generating';
   state.polishStatus='generating';
-  state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null;
+  state.polishSelectedId=null; state.polishAdopted=null; state.canonicalStoryStrategy=null;
   state.polishOptions=[]; state.strategicDimensions=[]; state.strategicDiversityProfile=null; state.originalIdeaAnchors=null;
   state.polishDiagnosis=null; state.polishStrategies=[]; state.polishFailureTrace=null; state.polishRawFallback='';
   persist(); render();
@@ -3468,11 +3478,9 @@ function currentCanonicalStoryStrategy(){
   if(!c || c.machineTrace?.status!=='adopted') return null;
   return c;
 }
-// 兼容旧 UI/历史代码：仅用于优化构想界面自身，不作为下游 AI 数据源。
+// 运行态兼容别名：只返回唯一 canonicalStoryStrategy，不维护第二份故事事实。
 function adoptedPolishCanonical(){
-  const c=state.polishCanonical;
-  if(!c || c.machineTrace?.status!=='adopted') return null;
-  return c;
+  return currentCanonicalStoryStrategy() || null;
 }
 function adoptedPolishHumanView(){
   const c=currentCanonicalStoryStrategy() || adoptedPolishCanonical();
@@ -3499,12 +3507,13 @@ function invalidateAfterStoryStrategyChange(){
 }
 function canonicalStoryStrategyBlock(label='当前有效故事战略'){
   const c=currentCanonicalStoryStrategy();
-  if(!c) return `【${label}】尚未建立。禁止从旧的 polishOptions/polishCanonical 推断新的故事战略。`;
+  if(!c) return `【${label}】尚未建立。禁止从旧的 polishOptions 或任何旧版平行字段推断新的故事战略。`;
   const h=c.humanView || c.creationBlueprint || {};
+  const blueprint=c.creativeBlueprint || c.creationBlueprint?.structured || {};
   const fp=c.strategyFingerprint || c.strategy || {};
   const dims = Array.isArray(c.strategicDimensions)?c.strategicDimensions:[];
   const diversity = c.diversityProfile || null;
-  return `【${label}｜唯一权威来源】\n方案：${String(c.candidateName||'').trim()}\n战略指纹：${JSON.stringify(fp)}\n原始构想核心锚点：${JSON.stringify(c.originalAnchors||c.anchors||{})}\n动态战略维度：${JSON.stringify(dims)}\n战略多样性边界：${JSON.stringify(diversity)}\n完整创作蓝本：\n${String(h.optimizedIdea||'').trim()}\n小说简介：${String(h.novelSummary||'').trim()}\n全书节拍：\n${String(h.fullBookBeat||'').trim()}`;
+  return `【${label}｜唯一权威来源·Creative Blueprint】\n方案：${String(c.candidateName||'').trim()}\n战略指纹：${JSON.stringify(fp)}\n原始构想核心锚点：${JSON.stringify(c.originalAnchors||c.anchors||{})}\n动态战略维度：${JSON.stringify(dims)}\n战略多样性边界：${JSON.stringify(diversity)}\n【结构式创作蓝图｜机器事实源】\n${JSON.stringify(blueprint)}\n【人类可读创作蓝本】\n${String(h.optimizedIdea||'').trim()}\n小说简介：${String(h.novelSummary||'').trim()}\n全书节拍：\n${String(h.fullBookBeat||'').trim()}`;
 }
 function buildPolishCanonical(cand, revision){
   const c = cand || {};
@@ -3519,7 +3528,8 @@ function buildPolishCanonical(cand, revision){
   };
   return {
     sourceType:'optimization_concept',
-    sourceVersion:'phase3',
+    sourceVersion:'phase5',
+    sourceOfTruth:'creativeBlueprint',
     revision:Number(revision||0),
     candidateId:String(c._id||''),
     candidateName:String(c.name||''),
@@ -3536,7 +3546,10 @@ function buildPolishCanonical(cand, revision){
     strategicDimensions: Array.isArray(c.strategicDimensions) ? JSON.parse(JSON.stringify(c.strategicDimensions)) : (Array.isArray(v.optimizationStrategies)?JSON.parse(JSON.stringify(v.optimizationStrategies)):[]),
     diversityProfile: c.diversityProfile ? JSON.parse(JSON.stringify(c.diversityProfile)) : (v.diversityProfile ? JSON.parse(JSON.stringify(v.diversityProfile)) : null),
     humanView:human,
+    // 1.0.353：结构式创作蓝图。AI只负责提供事实，JS负责保存唯一结构。
+    creativeBlueprint: JSON.parse(JSON.stringify(c.structuredBlueprint || c.storyBlueprint || {})),
     creationBlueprint:{
+      structured: JSON.parse(JSON.stringify(c.structuredBlueprint || c.storyBlueprint || {})),
       optimizedIdea:human.optimizedIdea,
       fullBookBeat:human.fullBookBeat,
       novelSummary:human.novelSummary,
@@ -3592,7 +3605,8 @@ function normalizePolishCandidate(raw, index){
     novelSummary:summary,
     fullBookBeat:beat,
     optimizedIdea:blueprint,
-    text:blueprint || String(r.rawText||'').trim()
+    text:blueprint || String(r.rawText||'').trim(),
+    structuredBlueprint: r.structuredBlueprint || r.storyBlueprintStructured || {}
   });
 }
 function parsePolishCandidatesFixed(raw, multi){
@@ -3635,8 +3649,10 @@ function showPolishResult(out, multi){
   const rawText=String(out||'').trim();
   state.polishRawFallback = rawText;
   if(!rawText){ toast('优化失败：AI没有返回内容'); return; }
-  const opts=parsePolishCandidatesFixed(out, !!multi);
-  polishDebugTrace('parsed', out, opts, {multi:!!multi, firstKeys:opts[0]?Object.keys(opts[0]).slice(0,20):[]});
+  const parsed=parseOptimizationPlainText(out, !!multi);
+  if(!parsed.ok) throw new Error(`结构式创作蓝图解析失败：${parsed.error||'未知错误'}`);
+  const opts=parsed.options;
+  polishDebugTrace('parsed-structured-blueprint', out, opts, {multi:!!multi, firstKeys:opts[0]?Object.keys(opts[0]).slice(0,20):[]});
   if(!opts.length) throw new Error('第二阶段解析失败：未形成结构化优化方案');
   if(multi && (opts.length<3 || opts.length>5)) throw new Error(`第二阶段解析失败：得到 ${opts.length} 个方案，要求3-5个`);
   state.polishOptions=opts;
@@ -3668,11 +3684,10 @@ function showPolishResult(out, multi){
   state.polishRevision = Number(state.polishRevision||0) + 1;
   if(state.polishMode!=='multi'){
     syncPolishMetaFromCandidate(state.polishOptions[0]);
-    state.polishCanonical=buildPolishCanonical(state.polishOptions[0],state.polishRevision);
-    state.canonicalStoryStrategy=Object.assign({}, state.polishCanonical, { sourceType:'canonical_story_strategy', sourceVersion:'phase3', machineTrace:Object.assign({}, state.polishCanonical.machineTrace||{}, {status:'adopted'}) });
+    state.canonicalStoryStrategy=buildPolishCanonical(state.polishOptions[0],state.polishRevision);
+    state.canonicalStoryStrategy=Object.assign({}, state.canonicalStoryStrategy, { sourceType:'canonical_story_strategy', sourceVersion:'phase5', sourceOfTruth:'creativeBlueprint', machineTrace:Object.assign({}, state.canonicalStoryStrategy.machineTrace||{}, {status:'adopted'}) });
     invalidateAfterStoryStrategyChange();
   }else{
-    state.polishCanonical=null;
     state.canonicalStoryStrategy=null;
     state.polishDiagnosis=null;
     state.polishStrategies=[];
@@ -3731,6 +3746,23 @@ function extractPolishTitle(text){
   if(!ln) return '';
   return String(ln.replace(/^书名\s*[：:]\s*/, '')).trim();
 }
+function renderOptimizationStructuredView(o){
+  const b=o&&o.structuredBlueprint||{};
+  if(!b || !Object.keys(b).length) return '';
+  const escList=(arr)=>Array.isArray(arr)?arr.filter(Boolean).map(x=>`<span class="app-idea-chip">${esc(typeof x==='string'?x:(x.name||x.relation||JSON.stringify(x)))}</span>`).join(''):'';
+  const kv=(obj)=>obj&&Object.entries(obj).filter(([,v])=>String(v||'').trim()).map(([k,v])=>`<div class="app-idea-kv"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join('');
+  return `<div class="app-idea-structured" data-idea-structured>
+    <div class="app-idea-structured-head"><span>✦</span><b>结构化创作蓝图</b><em>用户可读 · 下游 AI 同源</em></div>
+    <details open class="app-idea-section"><summary>🎯 故事核心</summary><div class="app-idea-section-body">${kv(b.storyCore)}</div></details>
+    <details class="app-idea-section"><summary>👤 主角与核心人物</summary><div class="app-idea-section-body">${kv(b.protagonist)}${escList(b.keyCharacters)}</div></details>
+    <details class="app-idea-section"><summary>🌍 世界与规则</summary><div class="app-idea-section-body">${kv(b.world)}${escList(b.worldRules)}</div></details>
+    <details class="app-idea-section"><summary>⚔️ 冲突与故事发展</summary><div class="app-idea-section-body">${kv(b.conflict)}${kv(b.storyArc)}</div></details>
+    <details class="app-idea-section"><summary>📖 全书故事节拍</summary><div class="app-idea-section-body">${escList(b.fullBookBeat)}</div></details>
+    <details class="app-idea-section"><summary>🎬 结局方向</summary><div class="app-idea-section-body">${kv(b.ending)}</div></details>
+    ${b.creativeAdditions&&b.creativeAdditions.length?`<details class="app-idea-section"><summary>💡 AI 创意补充</summary><div class="app-idea-section-body">${escList(b.creativeAdditions)}</div></details>`:''}
+  </div>`;
+}
+
 function renderPolishCards(container){
   if(!container) return;
   const opts = Array.isArray(state.polishOptions) ? state.polishOptions : [];
@@ -3767,7 +3799,8 @@ function renderPolishCards(container){
         </span>
       </div>
       ${pTitle?`<div class="pol-cand-title" style="background:${c}">📖 ${esc(pTitle)}</div>`:''}
-      <div class="pol-cand-body">${esc(pBody ? pBody : String(o.text||''))}</div>
+      ${renderOptimizationStructuredView(o)}
+      <div class="pol-cand-body app-idea-readable">${esc(pBody ? pBody : String(o.text||''))}</div>
       ${String(o.novelSummary||'').trim()?`<div class="pol-cand-body" style="border-top:1px dashed var(--line,#ddd)"><b>📖 小说简介（下游创作材料）</b><br>${esc(String(o.novelSummary).trim())}</div>`:''}
       ${String(o.fullBookBeat||o.bookBeat||'').trim()?`<div class="pol-cand-body" style="border-top:1px dashed var(--line,#ddd)"><b>🎬 全书故事节拍</b><br>${esc(String(o.fullBookBeat||o.bookBeat).trim())}</div>`:''}
       ${defects.length?`<div class="pol-cand-body" style="opacity:.85"><b>⚠️ 构想缺陷清单：</b><br>${defects.map(d=>'· '+esc(String(d))).join('<br>')}</div>`:''}
@@ -3787,9 +3820,9 @@ function renderPolishCards(container){
       state.strategyStage2Status = 'adopted';
       state.polishRevision = Number(state.polishRevision||0) + 1;
       syncPolishMetaFromCandidate(o);
-      state.polishCanonical = buildPolishCanonical(o, state.polishRevision);
-      state.canonicalStoryStrategy = Object.assign({}, state.polishCanonical, { sourceType:'canonical_story_strategy', sourceVersion:'phase3', machineTrace:Object.assign({}, state.polishCanonical.machineTrace||{}, {status:'adopted'}) });
-      invalidateAfterStoryStrategyChange();
+      state.canonicalStoryStrategy = buildPolishCanonical(o, state.polishRevision);
+      state.canonicalStoryStrategy = Object.assign({}, state.canonicalStoryStrategy, { sourceType:'canonical_story_strategy', sourceVersion:'phase5', sourceOfTruth:'creativeBlueprint', machineTrace:Object.assign({}, state.canonicalStoryStrategy.machineTrace||{}, {status:'adopted'}) });
+        invalidateAfterStoryStrategyChange();
       persist(); render();
       toast('已选中：'+(o.name||('方案'+(+b.dataset.polUse+1)))+'（不覆盖原始构想；可点「生成大纲」搬入书名/简介/全书节拍）');
     };
@@ -3824,7 +3857,7 @@ function bindPolishIdea(){
       chk.disabled = false;
     };
     sync();
-    chk.onchange = ()=>{ polishMulti = !!chk.checked; state.polishMode = polishMulti?'multi':'single'; if(Array.isArray(state.polishOptions)&&state.polishOptions.length){ state.polishStatus='empty'; state.strategyStage2Status='empty'; state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null; state.polishDiagnosis=null; state.polishStrategies=[]; } persist(); render(); };
+    chk.onchange = ()=>{ polishMulti = !!chk.checked; state.polishMode = polishMulti?'multi':'single'; if(Array.isArray(state.polishOptions)&&state.polishOptions.length){ state.polishStatus='empty'; state.strategyStage2Status='empty'; state.polishSelectedId=null; state.polishAdopted=null; state.canonicalStoryStrategy=null; state.polishDiagnosis=null; state.polishStrategies=[]; } persist(); render(); };
     const idea = $('#ideaInput');
     if(idea) idea.oninput = ()=>{ state.idea = idea.value; sync(); syncOrigIdeaCard(); };
   }
@@ -3898,7 +3931,7 @@ function applyPolishBatch(idx){
   state.polishSelectedId = state.polishAdopted ? (state.polishOptions.find(o=>o.name===state.polishAdopted)?._id || null) : null;
   state.polishMode = state.polishOptions.length>1 ? 'multi' : 'single';
   state.polishStatus = state.polishAdopted ? 'adopted' : (state.polishOptions.length>1 ? 'waiting_selection' : 'ready_single');
-  if(state.polishAdopted){ const _hit=state.polishOptions.find(o=>o.name===state.polishAdopted); if(_hit){ state.polishRevision=Number(state.polishRevision||0)+1; state.polishCanonical=buildPolishCanonical(_hit,state.polishRevision); state.canonicalStoryStrategy=Object.assign({}, state.polishCanonical,{sourceType:'canonical_story_strategy',sourceVersion:'phase3'}); } }
+  if(state.polishAdopted){ const _hit=state.polishOptions.find(o=>o.name===state.polishAdopted); if(_hit){ state.polishRevision=Number(state.polishRevision||0)+1; state.canonicalStoryStrategy=buildPolishCanonical(_hit,state.polishRevision); state.canonicalStoryStrategy=Object.assign({}, state.canonicalStoryStrategy,{sourceType:'canonical_story_strategy',sourceVersion:'phase5',sourceOfTruth:'creativeBlueprint'}); } }
   persist(); closePolishBatchPanel(); render();
   const box = $('#polishBox'); if(box){ box.style.display='block'; openPolishBox(); }
   toast(`已整批应用该优化版本（${state.polishOptions.length} 个方案）`);
@@ -7117,7 +7150,7 @@ ${chapterEndingContractText()}
 老师定章节施工方案，
 正文AI把方案写成小说。
 
-任何一级都不得偷偷替代另一级。`
+任何一级都不得偷偷替代另一级。`;
 
 const PRINCIPAL_FOLDED_SYS = `【已废弃】不得启用校长兼任老师模式。无论章节数多少，校长只负责全校统筹，老师必须独立生成机器教案。`;
 
@@ -7148,13 +7181,219 @@ ${JSON.stringify(state.strategicDiversityProfile || currentCanonicalStoryStrateg
   return lines.join('\n\n');
 }
 
+
+/* ================================================================
+ * 1.0.352 · 词典充实结构式纯文本协议
+ * 原则：AI负责创作智能；JS负责结构确定性。
+ * 协议失败不等于创作失败：轻微格式问题由JS兼容处理，只有核心内容缺失才触发重试。
+ * ================================================================ */
+function parseMachineBlocks(text, tag){
+  const src=String(text||'').replace(/\r\n?/g,'\n');
+  const re=new RegExp('\\[\\s*'+escapeRegExp(tag)+'\\s*\\]([\\s\\S]*?)\\[\\s*\\/\\s*'+escapeRegExp(tag)+'\\s*\\]','gi');
+  const out=[]; let m;
+  while((m=re.exec(src))){
+    const fields={};
+    String(m[1]||'').split('\n').forEach(line=>{
+      const x=line.match(/^\s*([A-Za-z][A-Za-z0-9_.-]*)\s*[=:：]\s*(.*)\s*$/);
+      if(x) fields[x[1]]=String(x[2]||'').trim();
+    });
+    if(Object.keys(fields).length) out.push(fields);
+  }
+  return out;
+}
+function machineField(o, ...names){
+  for(const n of names){ const v=o && o[n]; if(v!=null && String(v).trim()) return String(v).trim(); }
+  return '';
+}
+function machineList(v){
+  return String(v||'').split(/[|｜,，、;；]+/).map(x=>x.trim()).filter(Boolean);
+}
+function parsePrincipalMachine(text, total){
+  const rows=parseMachineBlocks(text,'PRINCIPAL_CHAPTER');
+  if(!rows.length) return null;
+  const by={};
+  rows.forEach(r=>{ const n=parseInt(machineField(r,'chapter','no','number'),10); if(Number.isFinite(n)) by[n]=r; });
+  const missing=[];
+  for(let n=1;n<=Number(total||0);n++){
+    const r=by[n];
+    if(!r) { missing.push(n); continue; }
+    const core=[machineField(r,'function','goal','coreEvent','midChange','midDriver','endingFunction','lastEffectiveEvent','form','nextTransitionType','nextTransitionBasis')];
+    const intensity=parseInt(machineField(r,'endingIntensity','intensity'),10);
+    if(!machineField(r,'function','chapterFunction') || !machineField(r,'goal','chapterGoal') || !machineField(r,'coreEvent','core') ||
+       !machineField(r,'midChange','middleChange') || !machineField(r,'midDriver','middleDriver') ||
+       !machineField(r,'endingFunction','endFunction') || !machineField(r,'lastEffectiveEvent','lastEvent') ||
+       !machineField(r,'form','endingForm') || !machineField(r,'nextTransitionType','nextTransition') ||
+       !machineField(r,'nextTransitionBasis','transitionBasis') || !Number.isFinite(intensity) || intensity<0 || intensity>4) missing.push(n);
+  }
+  return {rows:by, missing};
+}
+function compilePrincipalMachineCards(parsed){
+  if(!parsed || !parsed.rows) return '';
+  const nums=Object.keys(parsed.rows).map(Number).sort((a,b)=>a-b);
+  return nums.map(n=>{
+    const r=parsed.rows[n];
+    const title=machineField(r,'title','chapterTitle');
+    const chars=machineField(r,'characterActions','characters','allowedCharacters');
+    const lines=[
+      `## 第${n}章章级导演/授权任务卡`,
+      `- 章节功能：${machineField(r,'function','chapterFunction')}`,
+      `- 本章目标：${machineField(r,'goal','chapterGoal')}`,
+      `- 核心事件：${machineField(r,'coreEvent','core')}`,
+      `- 允许人物/资源：${chars||'未指定'}`,
+      `- 中段主推进方式：${machineField(r,'midMode','middleMode','primaryMode')}`,
+      `- 中段次推进方式：${machineField(r,'midSecondary','secondaryMode')||'无'}`,
+      `- 中段核心状态变化：${machineField(r,'midChange','middleChange')}`,
+      `- 中段驱动力：${machineField(r,'midDriver','middleDriver')}`,
+      `- 与最近章节的差异：${machineField(r,'midDifference','difference')||'按真实剧情状态决定'}`,
+      `- 人物行动方向：${chars||machineField(r,'characterDirection','actions')||'按授权目标行动'}`,
+      `- 章末功能：${machineField(r,'endingFunction','endFunction')}`,
+      `- 结尾强度：${machineField(r,'endingIntensity','intensity')}`,
+      `- 最后有效事件：${machineField(r,'lastEffectiveEvent','lastEvent')}`,
+      `- 具体收尾方式：${machineField(r,'form','endingForm')}`,
+      `- 下一章承接方式：${machineField(r,'nextTransitionType','nextTransition')}`,
+      `- 下一章承接依据：${machineField(r,'nextTransitionBasis','transitionBasis')}`,
+      `- 重复风险：${machineField(r,'diversityNote','repeatRisk')||'无'}`,
+      title ? `- 标题：${title}` : ''
+    ];
+    return lines.filter(Boolean).join('\n');
+  }).join('\n\n');
+}
+function parseTeacherMachine(text, first, last){
+  const rows=parseMachineBlocks(text,'TEACHER_CHAPTER');
+  if(!rows.length) return null;
+  const by={}; rows.forEach(r=>{const n=parseInt(machineField(r,'chapter','no','number'),10);if(Number.isFinite(n))by[n]=r;});
+  const missing=[];
+  for(let n=Number(first);n<=Number(last);n++){
+    const r=by[n];
+    if(!r){missing.push(n);continue;}
+    const scenes=parseMachineBlocks(String(text||''),'SCENE').filter(x=>parseInt(machineField(x,'chapter','chapterNo'),10)===n || !machineField(x,'chapter','chapterNo'));
+    const hasScene=machineField(r,'sceneCount','scenes') || scenes.length;
+    if(!machineField(r,'title','chapterTitle') || !machineField(r,'goal','chapterGoal') || !machineField(r,'coreEvent','core') ||
+       !machineField(r,'midMode','middleMode','primaryMode') || !machineField(r,'midChange','middleChange','coreChange') || !machineField(r,'midDriver','middleDriver','driver') ||
+       !machineField(r,'endingFunction','endFunction') || !machineField(r,'lastEffectiveEvent','lastEvent') ||
+       !machineField(r,'endingForm','form') || !machineField(r,'nextTransition','nextTransitionType') || !machineField(r,'transitionBasis','nextTransitionBasis') || !hasScene) missing.push(n);
+  }
+  return {rows:by, missing};
+}
+function compileTeacherMachine(parsed, originalText=''){
+  if(!parsed || !parsed.rows) return '';
+  const allScenes=parseMachineBlocks(originalText,'SCENE');
+  const nums=Object.keys(parsed.rows).map(Number).sort((a,b)=>a-b);
+  return nums.map(n=>{
+    const r=parsed.rows[n];
+    const lines=[
+      `第${n}章《${machineField(r,'title','chapterTitle')||'未定标题'}》`,
+      `- 本章目标：${machineField(r,'goal','chapterGoal')}`,
+      `- 核心事件：${machineField(r,'coreEvent','core')}`,
+      `- 本章出场名单：${machineField(r,'characters','cast','allowedCharacters')||'按校长授权'}`,
+      `- 承接上一章结尾方式：${machineField(r,'previousTransition','prevTransition')||'依据上一章真实状态'}`,
+      `- 本章推进方式：${machineField(r,'progression','how')||'按事件因果推进'}`,
+      `- 中段主推进方式：${machineField(r,'midMode','middleMode','primaryMode')}`,
+      `- 中段次推进方式：${machineField(r,'midSecondary','secondaryMode')||'无'}`,
+      `- 中段核心状态变化：${machineField(r,'midChange','middleChange','coreChange')}`,
+      `- 中段驱动力：${machineField(r,'midDriver','middleDriver','driver')}`,
+      `- 与最近章节的差异：${machineField(r,'midDifference','difference')||'按真实状态形成差异'}`,
+      `- 本章推进骨架：${machineField(r,'beats','beatPlan','skeleton')}`,
+      `- 结尾功能：${machineField(r,'endingFunction','endFunction')}`,
+      `- 结尾强度：${machineField(r,'endingIntensity','intensity')||'0'}`,
+      `- 最后有效事件：${machineField(r,'lastEffectiveEvent','lastEvent')}`,
+      `- 具体收尾方式：${machineField(r,'endingForm','form')}`,
+      `- 下一章承接方式：${machineField(r,'nextTransition','nextTransitionType')}`,
+      `- 下一章承接依据：${machineField(r,'transitionBasis','nextTransitionBasis')}`,
+      `- 禁止追加：${machineField(r,'forbiddenAfter','banAfter')||'不得追加未来剧情/期待式前瞻'}`
+    ];
+    const sc=allScenes.filter(x=>parseInt(machineField(x,'chapter','chapterNo'),10)===n);
+    if(sc.length){
+      lines.push('【本章场景施工卡】');
+      sc.forEach((x,idx)=>{
+        lines.push(`场景${machineField(x,'scene','no')||idx+1}｜地点：${machineField(x,'location','place')}｜人物：${machineField(x,'characters','cast')}｜目的：${machineField(x,'purpose','goal')}｜事件：${machineField(x,'event','coreEvent')}｜变化：${machineField(x,'change','stateChange')}｜情绪：${machineField(x,'emotion','tone')}｜必须保留：${machineField(x,'mustKeep','must')}`);
+      });
+    }
+    return lines.join('\n');
+  }).join('\n\n');
+}
+function teacherMachineScenesFor(i){
+  const gi=chapterOfPlan(i); const t=gi>=0 ? state.school?.teachers?.[gi] : null;
+  if(!t?.machineText) return '';
+  const n=i+1; const scenes=parseMachineBlocks(t.machineText,'SCENE').filter(x=>{
+    const c=machineField(x,'chapter','chapterNo'); return !c || parseInt(c,10)===n;
+  });
+  if(!scenes.length) return '';
+  return scenes.map((x,idx)=>`场景${machineField(x,'scene','no')||idx+1}：地点=${machineField(x,'location','place')||'未指定'}；人物=${machineField(x,'characters','cast')||'按教案'}；目的=${machineField(x,'purpose','goal')||'推进本场'}；事件=${machineField(x,'event','coreEvent')||'按教案'}；状态变化=${machineField(x,'change','stateChange')||'未指定'}；情绪=${machineField(x,'emotion','tone')||'按正文自然表现'}；必须保留=${machineField(x,'mustKeep','must')||'核心因果与人物选择'}`).join('\n');
+}
+const STRUCTURED_PRINCIPAL_PROTOCOL = `
+
+【机器协议｜结构式纯文本（优先于格式美观）】
+除必要的全书战略说明外，每章章级任务必须额外输出一个机器块，严格使用以下字段名；不要JSON，不要Markdown表格，不要项目符号装饰。JS会自动解析并组装，不因标点、空格、中文/英文冒号、换行差异判错。
+[PRINCIPAL_CHAPTER]
+chapter=1
+title=章节标题
+function=章节功能
+goal=本章战略目标
+coreEvent=本章必须实现的核心事件
+characterActions=允许人物/资源及行动方向
+midMode=中段主推进方式
+midSecondary=中段次推进方式
+midChange=中段核心状态变化
+midDriver=中段驱动力
+midDifference=与最近章节的真实差异
+endingFunction=章末功能
+endingIntensity=0-4
+lastEffectiveEvent=最后有效事件
+form=具体收尾方式
+nextTransitionType=下一章承接方式
+nextTransitionBasis=下一章承接依据
+diversityNote=重复风险或多样性说明
+[/PRINCIPAL_CHAPTER]
+必须为全书每章各输出一次。内容字段优先于格式；字段值允许自然中文。`;
+const STRUCTURED_TEACHER_PROTOCOL = `
+
+【机器协议｜结构式纯文本（优先于格式美观）】
+每章输出一个TEACHER_CHAPTER块；每个章节至少输出1个SCENE块。JS负责组装教案，不因标点、空格、Markdown、字段顺序、中文/英文冒号差异触发重试。
+[TEACHER_CHAPTER]
+chapter=1
+title=章节标题
+goal=本章施工目标
+coreEvent=本章核心事件
+characters=本章核心人物/出场名单
+previousTransition=承接上一章方式
+progression=本章施工推进方式
+midMode=中段主推进方式
+midSecondary=中段次推进方式
+midChange=中段核心状态变化
+midDriver=中段驱动力
+midDifference=与最近章节差异
+beats=本章推进骨架
+endingFunction=结尾功能
+endingIntensity=0-4
+lastEffectiveEvent=最后有效事件
+endingForm=具体收尾方式
+nextTransition=下一章承接方式
+transitionBasis=下一章承接依据
+forbiddenAfter=章末后禁止追加内容
+[/TEACHER_CHAPTER]
+[SCENE]
+chapter=1
+scene=1
+location=地点
+characters=人物
+purpose=场景目的
+event=发生事件
+change=状态变化
+emotion=情绪方向
+mustKeep=必须保留的因果/信息
+[/SCENE]
+只输出已经成立或被上游授权的事实；不要用结构块偷偷新增主线人物、核心秘密或世界规则。`;
+
+const PRINCIPAL_SYS_STRUCTURED = PRINCIPAL_SYS + STRUCTURED_PRINCIPAL_PROTOCOL;
 async function genPrincipal(btn, opts){
   if(!isLong()){ toast('仅长篇小说模式支持校长统筹'); return false; }
   const groups = schoolStageGroups(); if(!groups.length){ toast('请先填写章节数，才能分组'); return false; }
   if(!scDone('dictEnrich')){ toast('校长必须接收完整词典后再统筹，请先完成“词典充实”'); return false; }
   invalidateSchoolDownstream('principal');
   scState();
-  const sys = PRINCIPAL_SYS;
+  const sys = PRINCIPAL_SYS_STRUCTURED;
+  let lastPrincipalError = null;
   markAIRunning('principal'); if(btn) busy(btn, true, '校长统筹中…'); if(btn && btn.parentNode) showStopBtn(btn.parentNode);
   try{
     const spec = resolveActiveSpec('principal');
@@ -7171,11 +7410,23 @@ async function genPrincipal(btn, opts){
           throw new Error('校长输出命中禁用姓名：'+principalViolations.map(x=>x.value).join('、'));
         }
         const sc = scState();
-        const principalTxt = sanitizePrincipalText(txt);
-        const _middleMissing = validatePrincipalMiddlePlans(principalTxt, state.chapterCount || state.outline?.chapters?.length || 0);
-        if(_middleMissing.length) throw new Error('校长缺少本章中段推进战略卡：第'+_middleMissing.join('、')+'章');
-        const _endingCheck = validatePrincipalEndingPlans(principalTxt, state.chapterCount || state.outline?.chapters?.length || 0);
-        if(_endingCheck.missing.length) throw new Error('校长缺少完整章末战略字段：第'+_endingCheck.missing.join('、')+'章');
+        const principalMachine = parsePrincipalMachine(txt, state.chapterCount || state.outline?.chapters?.length || 0);
+        let principalTxt = sanitizePrincipalText(txt);
+        let _middleMissing, _endingCheck;
+        if(principalMachine){
+          if(principalMachine.missing.length) throw new Error('校长结构化章卡缺少核心字段：第'+principalMachine.missing.join('、')+'章');
+          const compiled = compilePrincipalMachineCards(principalMachine);
+          // 保留原始全书战略说明，同时追加JS标准化章卡；下游统一读取标准化结构。
+          principalTxt = principalTxt + '\n\n' + compiled;
+          _middleMissing = [];
+          const plans={}; Object.keys(principalMachine.rows).forEach(n=>{ const r=principalMachine.rows[n]; plans[n]={endingFunction:machineField(r,'endingFunction','endFunction'),intensity:machineField(r,'endingIntensity','intensity'),lastEffectiveEvent:machineField(r,'lastEffectiveEvent','lastEvent'),form:machineField(r,'form','endingForm'),nextTransitionType:machineField(r,'nextTransitionType','nextTransition'),nextTransitionBasis:machineField(r,'nextTransitionBasis','transitionBasis')}; });
+          _endingCheck = {missing:[],audit:buildEndingDiversityAudit(plans)};
+        }else{
+          _middleMissing = validatePrincipalMiddlePlans(principalTxt, state.chapterCount || state.outline?.chapters?.length || 0);
+          if(_middleMissing.length) throw new Error('校长缺少本章中段推进战略卡：第'+_middleMissing.join('、')+'章');
+          _endingCheck = validatePrincipalEndingPlans(principalTxt, state.chapterCount || state.outline?.chapters?.length || 0);
+          if(_endingCheck.missing.length) throw new Error('校长缺少完整章末战略字段：第'+_endingCheck.missing.join('、')+'章');
+        }
         if(_endingCheck.audit.risk==='high') throw new Error('校长章末结尾功能重复风险过高：最长连续'+_endingCheck.audit.maxConsecutive+'章；请在不改变主线的前提下重新分配收束形态');
         const titles = parsePrincipalTitles(principalTxt).map(sanitizePrincipalChapter);
         if(titles && titles.length){
@@ -7184,7 +7435,7 @@ async function genPrincipal(btn, opts){
         storyState().canon.principalAt=Date.now(); storyState().versions.principal=Number(storyState().versions.principal||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1;
         delete sc.stale.principal;
         const _principalEndingPlans = buildChapterEndingPlansFromPrincipal(principalTxt, state.chapterCount || state.outline?.chapters?.length || 0);
-        sc.principal = { ts:Date.now(), folded:false, groups: groups.map((g,gi)=>({ gi, stage:g.stage, first:g.first, last:g.last })), raw:principalTxt, titles, chapterTasks: principalChapterTaskCards(principalTxt), chapterEndingPlans: _principalEndingPlans, chapterEndingAudit: _endingCheck.audit };
+        sc.principal = { machine: !!principalMachine, machineRows: principalMachine?.rows || null, ts:Date.now(), folded:false, groups: groups.map((g,gi)=>({ gi, stage:g.stage, first:g.first, last:g.last })), raw:principalTxt, titles, chapterTasks: principalChapterTaskCards(principalTxt), chapterEndingPlans: _principalEndingPlans, chapterEndingAudit: _endingCheck.audit };
         state.chapterEndingPlans = JSON.parse(JSON.stringify(sc.principal.chapterEndingPlans || {}));
         state.chapterEndingAudit = JSON.parse(JSON.stringify(sc.principal.chapterEndingAudit || {})); storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={version:storyState().versions.principal,source:'principal',ts:Date.now(),groups:sc.principal.groups,titles,chapterTasks:sc.principal.chapterTasks};
         state.outline._principalChapterTasks = sc.principal.chapterTasks || {};
@@ -7195,12 +7446,15 @@ async function genPrincipal(btn, opts){
         playDoneSound('single');
         return true;
       }catch(e){
+        lastPrincipalError = e instanceof Error ? e : new Error(String(e || '未知错误'));
+        console.error('[genPrincipal] 第'+attempt+'次校长流程失败：', lastPrincipalError);
         if(e && e.name === 'AbortError'){ setScRetry('principal', attempt); toast('已停止校长统筹'); return false; }
         setScRetry('principal', attempt); scRefreshBadge(btn,'principal');
         if(attempt < SCHOOL_RETRY_MAX) await new Promise(r=>setTimeout(r,1500));
       }
     }
-    toast(`校长统筹失败（已自动重试 ${SCHOOL_RETRY_MAX} 次）`);
+    const reason = lastPrincipalError && String(lastPrincipalError.message || '').trim();
+    toast(reason ? `校长统筹失败：${reason}（已自动重试 ${SCHOOL_RETRY_MAX} 次）` : `校长统筹失败（已自动重试 ${SCHOOL_RETRY_MAX} 次）`);
     return false;
   }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='principal');
@@ -8149,6 +8403,10 @@ function prevGroupTailState(gi, g){
   return parts.join('\n\n');
 }
 
+// 结构协议附加在系统提示尾部，保持旧版语义兼容。
+
+
+const TEACHER_SYS_STRUCTURED = TEACHER_SYS + STRUCTURED_TEACHER_PROTOCOL;
 async function genTeacher(btn, gi){
   if(!isLong()){ toast('仅长篇小说模式支持老师施教'); return false; }
   const groups = schoolStageGroups(); const g = groups[gi];
@@ -8165,16 +8423,27 @@ async function genTeacher(btn, gi){
     const temp = (spec && spec.teacherTemp != null) ? spec.teacherTemp : 0.4;
     for(let attempt=1; attempt<=SCHOOL_RETRY_MAX; attempt++){
       try{
-        const txt = await callAIGuarded('teacher', TEACHER_SYS, buildTeacherUser(g, gi), {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
+        const txt = await callAIGuarded('teacher', TEACHER_SYS_STRUCTURED, buildTeacherUser(g, gi), {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
         if(!txt || !String(txt||'').trim()){ setScRetry(key, attempt); scRefreshBadge(btn,key); throw new Error('老师返回空'); }
-        const teacherRaw = String(txt);
-        const _teacherMiddleMissing = validateTeacherMiddlePlans(teacherRaw, g.first, g.last);
-        if(_teacherMiddleMissing.length) throw new Error('老师'+(gi+1)+'缺少本章中段施工卡：第'+_teacherMiddleMissing.join('、')+'章');
-        const _teacherEndingCheck = validateTeacherEndingPlans(teacherRaw, g.first, g.last);
+        const teacherMachine = parseTeacherMachine(String(txt), g.first, g.last);
+        let teacherRaw = String(txt);
+        let _teacherMiddleMissing, _teacherEndingCheck;
+        if(teacherMachine){
+          if(teacherMachine.missing.length) throw new Error('老师'+(gi+1)+'结构化教案缺少核心字段：第'+teacherMachine.missing.join('、')+'章');
+          const compiled = compileTeacherMachine(teacherMachine, teacherRaw);
+          teacherRaw = teacherRaw + '\n\n' + compiled;
+          _teacherMiddleMissing = [];
+          _teacherEndingCheck = validateTeacherEndingPlans(teacherRaw, g.first, g.last);
+        }else{
+          _teacherMiddleMissing = validateTeacherMiddlePlans(teacherRaw, g.first, g.last);
+          if(_teacherMiddleMissing.length) throw new Error('老师'+(gi+1)+'缺少本章中段施工卡：第'+_teacherMiddleMissing.join('、')+'章');
+          _teacherEndingCheck = validateTeacherEndingPlans(teacherRaw, g.first, g.last);
+          if(_teacherEndingCheck.missing.length) throw new Error('老师'+(gi+1)+'缺少完整章末结尾施工：第'+_teacherEndingCheck.missing.join('、')+'章');
+        }
         if(_teacherEndingCheck.missing.length) throw new Error('老师'+(gi+1)+'缺少完整章末结尾施工：第'+_teacherEndingCheck.missing.join('、')+'章');
         if(_teacherEndingCheck.audit.risk==='high') throw new Error('老师'+(gi+1)+'章末结尾功能重复风险过高：最长连续'+_teacherEndingCheck.audit.maxConsecutive+'章；请调整收束施工形态但不得改变章末状态');
         const sc = scState(); delete sc.stale['t'+gi];
-        sc.teachers[gi] = { gi, ts:Date.now(), raw:teacherRaw };
+        sc.teachers[gi] = { gi, ts:Date.now(), raw:teacherRaw, machine:!!teacherMachine, machineText: teacherMachine ? String(txt) : '' };
         state.chapterMiddlePlans = state.chapterMiddlePlans || {};
         const _newMiddlePlans = extractAllChapterMiddlePlansFromTeacher(teacherRaw, g.first, g.last);
         Object.assign(state.chapterMiddlePlans, _newMiddlePlans);
@@ -8191,6 +8460,7 @@ async function genTeacher(btn, gi){
         playDoneSound('single');
         return true;
       }catch(e){
+        console.error('[genTeacher] 第'+attempt+'次老师'+(gi+1)+'流程失败：', e);
         if(e && e.name === 'AbortError'){ setScRetry(key, attempt); toast('已停止备课'); return false; }
         setScRetry(key, attempt); scRefreshBadge(btn,key);
         if(attempt < SCHOOL_RETRY_MAX) await new Promise(r=>setTimeout(r,1500));
@@ -8868,6 +9138,9 @@ function stateBanEnabled(){ const b = banListRaw(); return !(b && b.enabled === 
 function banListChars(){ const c = banListRaw().chars; return (Array.isArray(c) && c.length) ? c : NM_BANNED_CHARS; }
 function banListNames(){ const n = banListRaw().names; return (Array.isArray(n) && n.length) ? n : NM_BANNED_NAMES; }
 function banListAiActive(role){
+  // 优化构想属于全书规划母本生成阶段，必须始终知道当前用户的禁则清单；
+  // 不受旧版本 scopeAi 是否包含 ideaOptimization 的影响。
+  if(role === 'ideaOptimization') return true;
   const sc = banListRaw().scopeAi;
   if(!Array.isArray(sc) || !sc.length) return true;
   return sc.indexOf(role) >= 0;
@@ -9208,6 +9481,33 @@ function validateIdeaProOutput(j, ctx){
   return err ? {ok:false, code:'SCHEMA', details:err} : {ok:true};
 }
 
+function parseOptimizationStructuredBlock(body){
+  const src=String(body||'').replace(/\r/g,'');
+  const block=(label)=>{
+    const re=new RegExp(`(?:^|\\n)\\s*\\[${label}\]\\s*\\n([\\s\\S]*?)(?=\\n\\s*\\[[A-Z_]+\]\\s*\\n|$)`,'i');
+    const m=src.match(re);
+    if(!m) return '';
+    return String(m[1]||'').replace(new RegExp(`\\n?\\s*\\[\\/${label}\\]\\s*$`,'i'),'').trim();
+  };
+  const lines=(x)=>String(x||'').split('\n').map(v=>v.trim()).filter(Boolean);
+  const kvBlock=(x)=>{ const o={}; lines(x).forEach(l=>{ const m=l.match(/^([^=：:]+)\s*(?:=|：|:)\s*(.*)$/); if(m)o[m[1].trim()]=m[2].trim(); }); return o; };
+  const listBlock=(x)=>lines(x).map(v=>{const m=v.match(/^[-*•·]\s*(.*)$/); return m?m[1].trim():v;}).filter(v=>!/^\[\/[A-Z_]+\]$/i.test(v));
+  const splitPipe=(x)=>String(x||'').split(/\s*[｜|]\s*/).map(v=>v.trim());
+  const optionMeta=kvBlock(block('OPTION_META'));
+  const storyCore=kvBlock(block('STORY_CORE'));
+  const protagonist=kvBlock(block('PROTAGONIST'));
+  const world=kvBlock(block('WORLD'));
+  const conflict=kvBlock(block('CONFLICT'));
+  const ending=kvBlock(block('ENDING'));
+  const storyArc=kvBlock(block('STORY_ARC'));
+  const keyCharacters=listBlock(block('KEY_CHARACTERS')).map(x=>{const m=splitPipe(x);return {name:m[0]||'',identity:m[1]||'',role:m[2]||'',relation:m[3]||''};});
+  const relationships=listBlock(block('RELATIONSHIPS')).map(x=>{const m=splitPipe(x);return {from:m[0]||'',to:m[1]||'',relation:m.slice(2).join('｜')||''};});
+  const worldRules=listBlock(block('WORLD_RULES'));
+  const creativeAdditions=listBlock(block('CREATIVE_ADDITIONS'));
+  const fullBookBeat=listBlock(block('FULL_BOOK_BEAT'));
+  return {optionMeta,storyCore,protagonist,keyCharacters,relationships,world,worldRules,conflict,storyArc,fullBookBeat,ending,creativeAdditions};
+}
+
 function parseOptimizationPlainText(raw, multi){
   const text=String(raw||'').replace(/\r/g,'').trim();
   if(!text) return {ok:false,error:'AI未返回内容',options:[],analysis:null};
@@ -9224,27 +9524,66 @@ function parseOptimizationPlainText(raw, multi){
   const optionBlocks=optionMatches.map(m=>({num:m[1],title:String(m[2]||'').trim(),body:m[3].trim()}));
   const expected=multi?3:1;
   if((multi && (optionBlocks.length<3||optionBlocks.length>5)) || (!multi && optionBlocks.length!==1)) return {ok:false,error:`纯文本解析得到 ${optionBlocks.length} 个方案（${multi?'要求3—5个':'要求1个'}）`,options:[],analysis};
-  const field=(body,label)=>{ const labels=['书名','小说简介','核心优化方向','完整优化构想','全书故事节拍','战略维度','战略指纹','创意补充','导航灯塔','缺陷','种子人物','种子地点']; const idx=labels.indexOf(label); const next=labels.slice(idx+1).map(x=>x.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')).join('|'); const re=new RegExp(`(?:^|\\n)\\s*(?:【|\\[)?${label.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')}(?:】|\\])?\\s*[：:]\\s*([\\s\\S]*?)(?=\\n\\s*(?:【|\\[)?(?:${next})(?:】|\\])?\\s*[：:]|$)`,'i'); const m=String(body||'').match(re); return m?m[1].trim():''; };
   const options=optionBlocks.map((sec,idx)=>{
-    const strategyText=field(sec.body,'战略维度');
-    const dims=list(strategyText).map(x=>{const m=x.match(/^([^｜|：:]+)(?:\s*[｜|：:]\s*(.*))?$/); const name=(m?m[1]:x).trim(); const src=analysis.strategicDimensions.find(d=>strategicDimensionKey(d)===strategicDimensionKey(name)); return src?JSON.parse(JSON.stringify(src)):{name,description:m&&m[2]?m[2].trim():'',whyFit:''};});
-    const fpText=field(sec.body,'战略指纹'), nbText=field(sec.body,'导航灯塔');
-    const strategyFingerprint={mainStrategy:kv(fpText,'主战略'),secondaryStrategy:kv(fpText,'次战略'),coreConflict:kv(fpText,'核心冲突')||analysis.originalAnchors.coreConflict||'',storyEngine:kv(fpText,'故事发动机'),emotionalPromise:kv(fpText,'情绪承诺'),pacing:kv(fpText,'节奏')};
-    const navBeacon={genre:kv(nbText,'题材'),protagonist:kv(nbText,'主角'),coreConflict:kv(nbText,'核心冲突')||analysis.originalAnchors.coreConflict||'',tone:kv(nbText,'基调')};
-    const optimizedIdea=field(sec.body,'完整优化构想')||field(sec.body,'核心优化方向');
-    const summary=field(sec.body,'小说简介'), beat=field(sec.body,'全书故事节拍'), creative=field(sec.body,'创意补充');
-    const defects=list(field(sec.body,'缺陷'));
-    const seedCharacters=list(field(sec.body,'种子人物')).map(x=>{const m=x.match(/^([^｜|：:]+)\s*[｜|：:]\s*(.*)$/);return {name:(m?m[1]:x).trim(),identity:m?m[2].trim():'未知',age:'未知',gender:'未知',appearance:'未知',hobby:'未知',catchphrase:'无',relation:'未知',trait:'未知'};});
-    const seedPlaces=list(field(sec.body,'种子地点')).map(x=>{const m=x.match(/^([^｜|：:]+)\s*[｜|：:]\s*(.*)$/);return {name:(m?m[1]:x).trim(),type:m?m[2].trim():'未知',note:m?m[2].trim():'未知'};});
-    return {name:`方案${sec.num}${sec.title?'｜'+sec.title:''}`,bookTitle:field(sec.body,'书名'),novelSummary:summary||optimizedIdea.slice(0,500),optimizedIdea,fullBookBeat:beat,creativeAdditions:creative,navBeacon,defects,seedCharacters,seedPlaces,strategicDimensions:dims.length?dims:analysis.strategicDimensions.slice(0,3),strategyFingerprint,originalAnchors:JSON.parse(JSON.stringify(analysis.originalAnchors)),diversityProfile:JSON.parse(JSON.stringify(analysis.diversityProfile)),optimizationStrategies:[],diagnosis:null,text:[summary,optimizedIdea,beat,creative].filter(Boolean).join('\n\n')};
+    const sb=parseOptimizationStructuredBlock(sec.body);
+    if(sb.fullBookBeat.length) sb.fullBookBeatText=sb.fullBookBeat.join('\n');
+    const humanFromBlueprint={
+      bookTitle:String(sb.optionMeta?.bookTitle||'').trim(),
+      name:String(sb.optionMeta?.name||'').trim(),
+      novelSummary:[sb.storyCore?.genre,sb.storyCore?.tone,sb.storyCore?.core_promise,sb.storyCore?.story_question].filter(Boolean).join('；'),
+      optimizedIdea:[sb.protagonist?.name?`主角：${sb.protagonist.name}`:'',sb.protagonist?.goal?`目标：${sb.protagonist.goal}`:'',sb.protagonist?.growth?`成长：${sb.protagonist.growth}`:'',sb.conflict?.surface?`表层冲突：${sb.conflict.surface}`:'',sb.conflict?.deep?`深层冲突：${sb.conflict.deep}`:'',sb.world?.world_summary?`世界：${sb.world.world_summary}`:''].filter(Boolean).join('\n'),
+      fullBookBeat:sb.fullBookBeatText||'',
+      creativeAdditions:sb.creativeAdditions.join('\n'),
+      navBeacon:{genre:sb.storyCore?.genre||'',protagonist:sb.protagonist?.name||'',coreConflict:sb.conflict?.surface||sb.conflict?.deep||'',tone:sb.storyCore?.tone||''},
+      strategyFingerprint:{mainStrategy:sb.conflict?.character||sb.conflict?.surface||'',secondaryStrategy:sb.storyArc?.phase_2||'',coreConflict:sb.conflict?.surface||sb.conflict?.deep||'',storyEngine:sb.conflict?.deep||'',emotionalPromise:sb.storyCore?.core_promise||'',pacing:sb.storyArc?.phase_3||''}
+    };
+    const optimizedIdea=humanFromBlueprint.optimizedIdea;
+    const summary=humanFromBlueprint.novelSummary, beat=humanFromBlueprint.fullBookBeat, creative=humanFromBlueprint.creativeAdditions;
+    const defects=[], seedCharacters=sb.keyCharacters.map(x=>({name:x.name,identity:x.identity||'未知',age:'未知',gender:'未知',appearance:'未知',hobby:'未知',catchphrase:'无',relation:x.relation||'未知',trait:x.role||'未知'}));
+    const seedPlaces=[];
+    const dims=analysis.strategicDimensions.slice(0,10);
+    return {name:humanFromBlueprint.name||`方案${sec.num}`,bookTitle:humanFromBlueprint.bookTitle,novelSummary:summary,optimizedIdea,fullBookBeat:beat,creativeAdditions:creative,navBeacon:humanFromBlueprint.navBeacon,defects,seedCharacters,seedPlaces,strategicDimensions:dims,strategyFingerprint:humanFromBlueprint.strategyFingerprint,originalAnchors:JSON.parse(JSON.stringify(analysis.originalAnchors)),diversityProfile:JSON.parse(JSON.stringify(analysis.diversityProfile)),structuredBlueprint:sb,optimizationStrategies:[],diagnosis:null,text:optimizedIdea};
   });
   for(const o of options){ if(!o.bookTitle) o.bookTitle=''; if(!o.navBeacon.genre)o.navBeacon.genre='未明确'; if(!o.navBeacon.protagonist)o.navBeacon.protagonist='未明确'; if(!o.navBeacon.tone)o.navBeacon.tone='遵循用户已选风格'; if(!o.strategyFingerprint.mainStrategy)o.strategyFingerprint.mainStrategy=o.strategicDimensions[0]?.name||'当前故事主线'; if(!o.strategyFingerprint.secondaryStrategy)o.strategyFingerprint.secondaryStrategy=o.strategicDimensions[1]?.name||'辅助推进'; if(!o.strategyFingerprint.storyEngine)o.strategyFingerprint.storyEngine='由核心冲突持续驱动'; if(!o.strategyFingerprint.emotionalPromise)o.strategyFingerprint.emotionalPromise='持续兑现核心冲突带来的情绪推进'; if(!o.strategyFingerprint.pacing)o.strategyFingerprint.pacing='遵循用户已选全书拍子'; }
   if(analysis.strategicDimensions.length<6||analysis.strategicDimensions.length>10) return {ok:false,error:`动态战略维度解析得到 ${analysis.strategicDimensions.length} 项（要求6—10项）`,options,analysis};
+  // 1.0.358：生成阶段只接受结构式蓝图，不允许结构块之外再出现平行故事版本。
+  const allowed = ['OPTION_META','STORY_CORE','PROTAGONIST','KEY_CHARACTERS','RELATIONSHIPS','WORLD','WORLD_RULES','CONFLICT','STORY_ARC','FULL_BOOK_BEAT','ENDING','CREATIVE_ADDITIONS'];
+  for(const [i,sec] of optionBlocks.entries()){
+    let rest=String(sec.body||'');
+    for(const tag of allowed){
+      const re=new RegExp(`\\[${tag}\\]\\s*[\\s\\S]*?\\[\\/${tag}\\]`,'gi');
+      rest=rest.replace(re,'');
+    }
+    if(String(rest||'').trim()) return {ok:false,error:`方案${i+1}包含结构式协议之外的平行内容，禁止生成第二版本`,options,analysis};
+  }
   return {ok:true,options,analysis};
 }
 function validateIdeaOptimizationTextOutput(raw, ctx){
+  const rawText=String(raw||'').replace(/\r/g,'');
+  // 结构式蓝图是唯一AI事实源：若AI又输出旧版“小说简介/完整优化构想/全书节拍”等平行字段，直接拒绝，避免一次生成两套版本。
+  const duplicateHeaders=[...rawText.matchAll(/(?:^|\n)\s*[【\[]\s*(小说简介|核心优化方向|完整优化构想|全书故事节拍|战略维度|战略指纹|创意补充|导航灯塔|缺陷|种子人物|种子地点)\s*[】\]]\s*[：:]/g)];
+  if(duplicateHeaders.length) return {ok:false,code:'DUPLICATE_VERSION_CONTENT',details:`检测到旧版平行字段：${duplicateHeaders.slice(0,5).map(m=>m[1]).join('、')}。本阶段AI只允许生成一份结构式创作蓝图，由JS派生用户视图和下游字段。`};
   const parsed=parseOptimizationPlainText(raw,!!ctx?.multi);
-  return parsed.ok ? {ok:true} : {ok:false,code:'PLAIN_TEXT_CONTRACT',details:parsed.error||'纯文本结构不符合要求'};
+  if(!parsed.ok) return {ok:false,code:'PLAIN_TEXT_CONTRACT',details:parsed.error||'纯文本结构不符合要求'};
+  const required=['storyCore','protagonist','world','conflict','storyArc','ending'];
+  const blueprintErrors=[];
+  for(const [i,o] of parsed.options.entries()){
+    const b=o.structuredBlueprint||{};
+    for(const k of required){
+      if(!b[k] || typeof b[k]!=='object' || !Object.keys(b[k]).some(x=>String(b[k][x]||'').trim())) blueprintErrors.push(`方案${i+1}缺少${k}结构块有效内容`);
+    }
+    if(!String(b.protagonist?.name||'').trim()) blueprintErrors.push(`方案${i+1}的PROTAGONIST缺少name`);
+    if(!String(b.protagonist?.goal||'').trim()) blueprintErrors.push(`方案${i+1}的PROTAGONIST缺少goal`);
+    if(!String(b.storyCore?.core_promise||'').trim() && !String(b.storyCore?.story_question||'').trim()) blueprintErrors.push(`方案${i+1}的STORY_CORE缺少core_promise/story_question`);
+    if(!Array.isArray(b.fullBookBeat) || b.fullBookBeat.length<3) blueprintErrors.push(`方案${i+1}的FULL_BOOK_BEAT至少需要3项`);
+    if(!Array.isArray(b.worldRules)) blueprintErrors.push(`方案${i+1}的WORLD_RULES结构无效`);
+    if(!b.optionMeta || typeof b.optionMeta!=='object' || !String(b.optionMeta.name||'').trim()) blueprintErrors.push(`方案${i+1}缺少OPTION_META.name`);
+    if(!Array.isArray(b.keyCharacters)) blueprintErrors.push(`方案${i+1}的KEY_CHARACTERS结构无效`);
+    if(!Array.isArray(b.relationships)) blueprintErrors.push(`方案${i+1}的RELATIONSHIPS结构无效`);
+    if(!Array.isArray(b.creativeAdditions)) blueprintErrors.push(`方案${i+1}的CREATIVE_ADDITIONS结构无效`);
+  }
+  if(blueprintErrors.length) return {ok:false,code:'STRUCTURED_BLUEPRINT_CONTRACT',details:blueprintErrors.join('；')};
+  return {ok:true};
 }
 
 function validateAIOutput(kind, raw, ctx){
@@ -9558,8 +9897,8 @@ const NARRATIVE_IRON_PLANNING = `【全书叙事铁律·规划层】这是用户
 · 以上只约束叙事方式与剧情设计，不限制题材、人物、世界观的正常创造，也不剥夺 AI 的创造自由。`;
 
 function globalCreativeConstraintBlock(kind){
-  const creative = ['idea','principal','teacher','chapter','planner','outline'];
-  const banRoles = ['idea','titles','dictmaster','dictEnrich','principal','teacher'];
+  const creative = ['idea','ideaOptimization','principal','teacher','chapter','planner','outline'];
+  const banRoles = ['idea','ideaOptimization','titles','dictmaster','dictEnrich','principal','teacher'];
   const parts=[];
   if(banRoles.indexOf(kind)>=0 && stateBanEnabled()){
     const b=banListRaw();
@@ -9567,7 +9906,7 @@ function globalCreativeConstraintBlock(kind){
     if(chars.length) parts.push('【用户禁则清单·全书姓名禁用字】以下字不得用于新人物/地点/专名命名：'+chars.join('、'));
     if(names.length) parts.push('【用户禁则清单·全书禁用姓名】以下姓名不得被新创作、复用、建议或写入本阶段成果：'+names.join('、'));
     const phrases=Array.isArray(b.phrases)?b.phrases:[];
-    if(['chapter','dictmaster','dictEnrich','principal'].indexOf(kind)>=0 && phrases.length){
+    if(['chapter','dictmaster','dictEnrich','principal','ideaOptimization'].indexOf(kind)>=0 && phrases.length){
       parts.push('【用户禁则·禁用词汇/短语】以下词汇/短语不得出现在本阶段任何正文、说明文字、总结、标题或示例文本中：'+phrases.join('、'));
       parts.push('输出前必须逐字自检；命中时改写整句，不能简单删除造成病句。');
     }
@@ -9812,7 +10151,9 @@ const IDEA_OPTIMIZATION_SYS = `你是本项目的“优化构想引擎”。你�
 - 禁止固定“五向”模板。
 - 禁止把AI新增内容伪装成用户事实。
 
-【纯文本硬格式】
+【唯一标准输出协议】
+AI只需要生成一种事实源：每个方案的“结构式创作蓝图”。不得让旧字段与结构蓝图形成两套独立事实。
+
 必须先输出：
 【原始构想锚点】
 人物：...
@@ -9833,33 +10174,79 @@ const IDEA_OPTIMIZATION_SYS = `你是本项目的“优化构想引擎”。你�
 避免重复：...
 推荐组合：...
 
-随后输出最终方案。单方案时只输出一个“方案一”，多方案时必须输出3—5个方案，每个方案严格以“【方案一｜名称】”这种形式开始，并包含：
-书名：...
-小说简介：...
-核心优化方向：...
-完整优化构想：...
-全书故事节拍：...
-战略维度：
-- 维度名｜说明
-战略指纹：
-主战略：...
-次战略：...
-核心冲突：...
-故事发动机：...
-情绪承诺：...
-节奏：...
-创意补充：...
-导航灯塔：
-题材：...
-主角：...
-核心冲突：...
-基调：...
-缺陷：
-- ...
-种子人物：
-- 人物名｜身份
-种子地点：
-- 地点名｜类型
+随后输出最终方案。单方案时只输出一个“方案一”，多方案时必须输出3—5个方案。每个方案必须以“【方案一｜名称】”这种形式开始。除方案标题外，禁止再生成“Human View版”“机器版”“旧字段版”“兼容版”或第二套等价故事内容。每个方案只允许存在一份结构式创作蓝图，所有用户可读内容和程序字段都由JS从这份蓝图派生。
+
+【结构式创作蓝图｜唯一且唯一输出的事实源】
+每个方案必须完整输出以下区块。标签必须完全保留；字段使用“字段=内容”，列表使用“- 内容”。
+[OPTION_META]
+name=方案名称
+bookTitle=书名
+[/OPTION_META]
+[STORY_CORE]
+genre=...
+tone=...
+core_promise=...
+story_question=...
+[/STORY_CORE]
+[PROTAGONIST]
+name=...
+identity=...
+goal=...
+motivation=...
+flaw=...
+growth=...
+[/PROTAGONIST]
+[KEY_CHARACTERS]
+- 姓名｜身份｜作用｜与主角关系
+[/KEY_CHARACTERS]
+[RELATIONSHIPS]
+- 人物A｜人物B｜关系与变化方向
+[/RELATIONSHIPS]
+[WORLD]
+time=...
+setting=...
+world_summary=...
+[/WORLD]
+[WORLD_RULES]
+- 规则或不可轻易改变的事实
+[/WORLD_RULES]
+[CONFLICT]
+surface=...
+deep=...
+character=...
+final=...
+[/CONFLICT]
+[STORY_ARC]
+phase_1=...
+phase_2=...
+phase_3=...
+phase_4=...
+phase_5=...
+[/STORY_ARC]
+[FULL_BOOK_BEAT]
+- 阶段一：...
+- 阶段二：...
+- 阶段三：...
+- 阶段四：...
+- 阶段五：...
+[/FULL_BOOK_BEAT]
+[ENDING]
+direction=...
+resolution=...
+emotional_landing=...
+[/ENDING]
+[CREATIVE_ADDITIONS]
+- AI新增创意，但不能伪装成用户已确认事实
+[/CREATIVE_ADDITIONS]
+
+【一致性原则】
+- 结构式创作蓝图内部不得自相矛盾。
+- Human View、canonicalStoryStrategy以及后续章节/场景流程都必须由这套蓝图派生。
+- AI不得同时生成Human View和Machine View两份内容；只生成这一份结构蓝图。
+- AI不得在同一方案中重复写“完整优化构想/小说简介/全书节拍”等第二套平行版本。
+- 不得再输出旧字段版或兼容字段版的第二套故事事实。
+- 原始构想锚点只能记录用户明确给出的事实；AI新增内容只能进入CREATIVE_ADDITIONS。
+- 不得输出JSON，不得输出Markdown代码块。
 
 【质量要求】
 - originalAnchors只记录用户明确事实或可直接确认的事实。
@@ -9867,7 +10254,7 @@ const IDEA_OPTIMIZATION_SYS = `你是本项目的“优化构想引擎”。你�
 - 多方案之间必须有真实战略差异，不得只是换名字。
 - 固定核心不能被方案差异破坏；可变轴要形成有意义的组合。
 - fullBookBeat是全书故事节拍/阶段推进蓝本，不是逐章教案。
-- novelSummary和optimizedIdea都服务后续创作，不写营销卖点、核心词、推荐理由。
+- 不单独输出novelSummary、optimizedIdea等旧版平行字段；需要这些内容时由JS从结构蓝图派生。
 - 严格服从用户已锁定的写作风格和叙事结构。
 - 只输出上述纯文本，不要解释过程，不要输出JSON。`;
 
@@ -9894,9 +10281,8 @@ const POLISH_MULTI_MODE = `
 【多方案执行层】
 本次必须按用户输入的真实需求进行受控分叉。先理解，再扩展；先锁定共同事实底盘，再产生不同故事发展路线。
 默认保留3—5个高质量方案；明显不适配的方向不要硬凑。
-所有方案必须提供 bookTitle、novelSummary、fullBookBeat、optimizedIdea、creativeAdditions、navBeacon、defects、seedCharacters、seedPlaces。
 
-【重要】fullBookBeat 是“全书故事节拍/阶段推进蓝本”，不是营销节拍，也不是逐章教案；novelSummary 是给后续AI看的创作材料。二者都不得包含“核心卖点、核心词、推荐理由”。
+【重要】所有方案只允许输出同一份结构式创作蓝图；bookTitle、小说简介、全书节拍、导航灯塔等用户视图/程序字段一律由JS从蓝图派生，不得在AI输出中另写一份。
 【重要】如果用户输入包含多个想法、人物、设定或要求，必须先整合它们之间的关系，再输出真正能写成小说的方案，而不是只改写原句。
 【重要】如果输入很短，允许主动补齐合理的主角动机、阻力、阶段目标、关系张力、长期悬念和结局方向，但这些新增内容必须放在创意补充/方案蓝本中，不得伪装成用户已经确认的事实。
 `;
@@ -10565,6 +10951,7 @@ function chapterSysBase(){
   - 授权纪律：允许现场自然拟定称谓或名字，写一两句动作或对话即止，只作环境气氛烘托；
   - 边界红线：此类路人龙套只在当前场景出现一次，绝不推动主线，后续剧情不会再次登场，亦不计入词典，点到即收；严禁喧宾夺主或抢占主角/教案核心人物戏份。
 · 【成篇写法与自然收束】：按教案推进骨架顺序自然流淌推进，相邻环节自然过渡融合；剧情完整并抵达章末状态后自然收束，不按数字机械收尾，严禁逐拍写标签或写散装提纲。
+· 【结构职责】：校长/老师的结构字段只作为执行约束，不要求正文AI输出结构标签；正文始终输出自然小说文本。标点、空格、Markdown、段落格式均不是剧情审核条件。
 `;
   return closedGate + base;
 }
@@ -15763,6 +16150,7 @@ function buildOutlineFromPolishCanonical(){
   }
   const adopted = currentCanonicalStoryStrategy();
   const human = adopted.humanView || adopted.creationBlueprint || {};
+  const structured = adopted.creativeBlueprint || adopted.creationBlueprint?.structured || {};
   const txt = String(human.optimizedIdea || '').trim();
   const d = {
     summary:String(human.novelSummary||'').trim(),
@@ -15779,6 +16167,8 @@ function buildOutlineFromPolishCanonical(){
     logline: d.summary || stripStructureFromIntro(txt) || (o && o.logline) || '',
     // 供词典达人/校长/老师继续创作的完整故事蓝本；营销分析不进入此字段。
     storyBlueprint: d.blueprint,
+    // 1.0.353：结构式创作蓝图作为下游唯一机器事实源的快照。
+    creativeBlueprint: JSON.parse(JSON.stringify(structured)),
     // 优化构想生成的全书宏观节拍，作为当前预设节拍的“剧情内容层”。
     aiBookBeat: d.beat,
     polishSourceName: String(adopted.candidateName || '').trim(),
@@ -16692,26 +17082,39 @@ name 字段只能填写纯实体名称。
 
 名称字段中不得再次使用“｜”。
 
-【输出格式】
+【输出格式｜结构式纯文本协议 v2】
+
+只输出纯文本，不输出 JSON，不输出 Markdown 代码块，不解释过程。每条新增内容独占一行，统一使用：类别｜名称｜字段：值；字段：值
 
 【新增主要人物】
-
 主要人物｜姓名｜身份：…；关系：…；外貌：…；性格：…；口头禅：…；描写标签：…
 
 【新增次要配角】
-
 次要配角｜姓名｜身份：…；关系：…；外貌：…；性格：…；口头禅：…；描写标签：…
 
 【新增地名】
-
 地名｜名称｜类型：…；氛围特征：…；说明：…；描写标签：…
 
-【新增专名】
+【新增组织/势力】
+组织｜名称｜类型：…；立场：…；核心职能：…；关系：…；说明：…
 
-专名｜名称｜类型：…；功能特效：…；使用禁忌：…；说明：…；描写标签：…
+【新增职业/机构】
+机构｜名称｜类型：…；行业/职能：…；服务对象：…；地点：…；说明：…
+
+【新增物品/道具】
+物品｜名称｜类型：…；功能：…；来源：…；使用限制：…；说明：…
+
+【新增世界规则/术语】
+规则｜名称｜类别：…；适用范围：…；规则内容：…；代价/限制：…；说明：…
+术语｜名称｜类别：…；含义：…；使用场景：…；说明：…
+
+【新增历史事件】
+事件｜名称｜时间/时代：…；参与方：…；经过：…；影响：…；与主线关系：…
+
+【新增生活设定】
+生活设定｜名称｜类别：…；适用地区/群体：…；内容：…；描写价值：…
 
 【新增路人/龙套】
-
 路人｜姓名｜身份：…；登场：…；台词：…；描写标签：…
 
 【最终自检】
@@ -16846,7 +17249,19 @@ function buildDictEnrichUser(){
     dmSections.push(`【7. 世界观运转规则系统（共 ${wrLines.length} 条）】\n${wrLines.join('\n')}`);
   }
 
-  // (8) 现有路人/龙套（若有）
+  // (8) 已有扩展世界素材（只读参照）
+  const extended = [
+    ['组织/势力', g.organizations, x=>`- ${x.name} | 类型:${x.type||''} | 立场:${x.stance||''} | 核心职能:${x.function||''} | 关系:${x.relation||''} | 说明:${x.note||''}`],
+    ['职业/机构', g.institutions, x=>`- ${x.name} | 类型:${x.type||''} | 行业/职能:${x.function||''} | 服务对象:${x.audience||''} | 地点:${x.location||''} | 说明:${x.note||''}`],
+    ['物品/道具', g.items, x=>`- ${x.name} | 类型:${x.type||''} | 功能:${x.function||''} | 来源:${x.source||''} | 使用限制:${x.limit||''} | 说明:${x.note||''}`],
+    ['世界规则', g.rules, x=>`- ${x.name} | 类别:${x.category||''} | 范围:${x.scope||''} | 规则:${x.rule||''} | 代价/限制:${x.limit||''}`],
+    ['术语', g.terms, x=>`- ${x.name} | 类别:${x.category||''} | 含义:${x.meaning||''} | 使用场景:${x.usage||''} | 说明:${x.note||''}`],
+    ['历史事件', g.events, x=>`- ${x.name} | 时间/时代:${x.era||''} | 参与方:${x.participants||''} | 经过:${x.course||''} | 影响:${x.impact||''} | 主线关系:${x.relation||''}`],
+    ['生活设定', g.lifeSettings, x=>`- ${x.name} | 类别:${x.category||''} | 适用范围:${x.scope||''} | 内容:${x.content||''} | 描写价值:${x.value||''}`]
+  ];
+  extended.forEach(([label,list,fmt])=>{ const arr=Array.isArray(list)?list.filter(x=>x&&String(x.name||'').trim()):[]; if(arr.length) dmSections.push(`【${label}（共 ${arr.length} 项）】\n${arr.map(fmt).join('\n')}`); });
+
+  // (9) 现有路人/龙套（若有）
   const walkonList = g.walkons || [];
   if(walkonList.length){
     const walkonLines = walkonList.map(w => {
@@ -16890,7 +17305,7 @@ function sanitizePersonCollections(res){
 }
 
 function parseDictEnrichText(txt){
-  const res = { characters:[], places:[], propernouns:[], walkons:[] };
+  const res = { characters:[], places:[], propernouns:[], walkons:[], organizations:[], institutions:[], items:[], rules:[], terms:[], events:[], lifeSettings:[] };
   if(!txt) return res;
   
   let cleaned = String(txt).trim()
@@ -16939,7 +17354,23 @@ function parseDictEnrichText(txt){
           if(cleanName) res.walkons.push({ name: cleanName, note: (extraNote ? extraNote + '；' : '') + (w.note || w.说明 || ''), _auto:true, tier:'walkon' });
         }
       });
-      if(res.characters.length || res.places.length || res.propernouns.length || res.walkons.length) return sanitizePersonCollections(res);
+      const addGeneric = (src, out, aliases) => (src || []).forEach(x => {
+        if(!x || !x.name) return;
+        const [name, extra] = cleanEntityName(x.name);
+        if(!name) return;
+        const copy = Object.assign({}, x); delete copy.name;
+        copy.name = name;
+        if(extra && !copy.note && !copy.说明) copy.note = extra;
+        out.push(copy);
+      });
+      addGeneric(j.organizations || j.组织 || j.势力, res.organizations);
+      addGeneric(j.institutions || j.机构 || j.职业, res.institutions);
+      addGeneric(j.items || j.物品 || j.道具, res.items);
+      addGeneric(j.rules || j.规则 || j.世界规则, res.rules);
+      addGeneric(j.terms || j.术语, res.terms);
+      addGeneric(j.events || j.事件 || j.历史事件, res.events);
+      addGeneric(j.lifeSettings || j.生活设定 || j.生活, res.lifeSettings);
+      if(res.characters.length || res.places.length || res.propernouns.length || res.walkons.length || res.organizations.length || res.institutions.length || res.items.length || res.rules.length || res.terms.length || res.events.length || res.lifeSettings.length) return sanitizePersonCollections(res);
     } catch(e){}
   }
 
@@ -16967,7 +17398,7 @@ function parseDictEnrichText(txt){
     if(ln.startsWith('【') && ln.endsWith('】') && /新增|分类|类别|人物|地名|专名|路人|设定/.test(ln)) continue;
 
     let cat = '';
-    const m_cat_prefix = ln.match(/^[【\[\(（]?(主要人物|次要配角|重要角色|配角|地名|专名|路人|龙套|闲人)[】\]\)）]?[：:·\s|｜│┆丨]+(.*)$/);
+    const m_cat_prefix = ln.match(/^[【\[\(（]?(主要人物|次要配角|重要角色|配角|地名|专名|路人|龙套|闲人|组织|势力|机构|职业|物品|道具|规则|世界规则|术语|事件|历史事件|生活设定|生活)[】\]\)）]?[：:·\s|｜│┆丨]+(.*)$/);
     let rest = ln;
     if(m_cat_prefix){
       cat = m_cat_prefix[1];
@@ -16976,7 +17407,7 @@ function parseDictEnrichText(txt){
 
     let seg = rest.split(/[｜|│┆丨]/).map(s=>String(s||'').trim()).filter(Boolean);
     if(!cat){
-      if(seg.length && /^(主要人物|次要配角|重要角色|配角|地名|专名|路人|龙套|闲人)$/.test(seg[0])){
+      if(seg.length && /^(主要人物|次要配角|重要角色|配角|地名|专名|路人|龙套|闲人|组织|势力|机构|职业|物品|道具|规则|世界规则|术语|事件|历史事件|生活设定|生活)$/.test(seg[0])){
         cat = seg[0];
         seg = seg.slice(1);
       } else {
@@ -17016,6 +17447,27 @@ function parseDictEnrichText(txt){
       detail = (extraFromClean + '；' + detail).replace(/^；+|；+$/g, '');
     }
 
+    if(/组织|势力/.test(cat)){
+      const m=parsePairs(detail); res.organizations.push({name, type:m['类型']||m['类别']||'', stance:m['立场']||'', function:m['核心职能']||m['职能']||m['功能']||'', relation:m['关系']||'', note:m['说明']||m['备注']||detail}); continue;
+    }
+    if(/机构|职业/.test(cat)){
+      const m=parsePairs(detail); res.institutions.push({name, type:m['类型']||m['类别']||'', function:m['行业/职能']||m['职能']||m['行业']||'', audience:m['服务对象']||'', location:m['地点']||'', note:m['说明']||m['备注']||detail}); continue;
+    }
+    if(/物品|道具/.test(cat)){
+      const m=parsePairs(detail); res.items.push({name, type:m['类型']||m['类别']||'', function:m['功能']||m['用途']||'', source:m['来源']||'', limit:m['使用限制']||m['限制']||'', note:m['说明']||m['备注']||detail}); continue;
+    }
+    if(/规则|世界规则/.test(cat)){
+      const m=parsePairs(detail); res.rules.push({name, category:m['类别']||m['类型']||'', scope:m['适用范围']||m['范围']||'', rule:m['规则内容']||m['规则']||m['内容']||detail, limit:m['代价/限制']||m['限制']||m['代价']||''}); continue;
+    }
+    if(/术语/.test(cat)){
+      const m=parsePairs(detail); res.terms.push({name, category:m['类别']||m['类型']||'', meaning:m['含义']||m['解释']||m['定义']||detail, usage:m['使用场景']||m['场景']||'', note:m['说明']||m['备注']||''}); continue;
+    }
+    if(/事件|历史事件/.test(cat)){
+      const m=parsePairs(detail); res.events.push({name, era:m['时间/时代']||m['时间']||m['时代']||'', participants:m['参与方']||'', course:m['经过']||m['过程']||'', impact:m['影响']||'', relation:m['与主线关系']||m['主线关系']||'', note:m['说明']||''}); continue;
+    }
+    if(/生活设定|生活/.test(cat)){
+      const m=parsePairs(detail); res.lifeSettings.push({name, category:m['类别']||m['类型']||'', scope:m['适用地区/群体']||m['适用范围']||'', content:m['内容']||m['设定']||detail, value:m['描写价值']||m['价值']||'', note:m['说明']||''}); continue;
+    }
     if(/路人|龙套|闲人/.test(cat)){
       res.walkons.push({ name, note: detail, _auto:true, tier:'walkon' });
       continue;
@@ -17066,7 +17518,7 @@ function parseDictEnrichText(txt){
   }
 
   // 3. Ultra-resilient fallback if strict line matching produced 0 entries
-  if(!(res.characters.length || res.places.length || res.propernouns.length || res.walkons.length)){
+  if(!(res.characters.length || res.places.length || res.propernouns.length || res.walkons.length || res.organizations.length || res.institutions.length || res.items.length || res.rules.length || res.terms.length || res.events.length || res.lifeSettings.length)){
     for(const raw of lines){
       let ln = String(raw||'').trim();
       if(!ln || (ln.startsWith('【') && ln.endsWith('】'))) continue;
@@ -17092,7 +17544,7 @@ function mergeDictEnrich(res){
   if(!o.glossary) o.glossary = { characters:[], places:[], propernouns:[] };
   if(!Array.isArray(o.glossary.walkons)) o.glossary.walkons = [];
   const g = o.glossary;
-  const n = { c:0, w:0, p:0, k:0, main:0, support:0 };
+  const n = { c:0, w:0, p:0, k:0, main:0, support:0, organizations:0, institutions:0, items:0, rules:0, terms:0, events:0, lifeSettings:0 };
   const findExisting = (list, targetName) => {
     const cleanT = cleanEntityName(targetName)[0];
     return (list||[]).find(x => {
@@ -17172,7 +17624,14 @@ function mergeDictEnrich(res){
     n.w++;
   });
 
-  n.total = n.c + n.w + n.p + n.k;
+  const ensureArr = key => { if(!Array.isArray(g[key])) g[key]=[]; return g[key]; };
+  const mergeGeneric = (key, list) => {
+    const arr=ensureArr(key); const names=new Set(arr.map(x=>String(x&&x.name||'').trim()).filter(Boolean));
+    (list||[]).forEach(it=>{ const nm=String(it&&it.name||'').trim(); if(!nm || names.has(nm)) return; it._enrich=true; it._srcHow='词典充实'; it._srcTs=Date.now(); arr.push(it); names.add(nm); n[key]=(n[key]||0)+1; });
+  };
+  mergeGeneric('organizations',res.organizations); mergeGeneric('institutions',res.institutions); mergeGeneric('items',res.items);
+  mergeGeneric('rules',res.rules); mergeGeneric('terms',res.terms); mergeGeneric('events',res.events); mergeGeneric('lifeSettings',res.lifeSettings);
+  n.total = n.c + n.w + n.p + n.k + n.organizations + n.institutions + n.items + n.rules + n.terms + n.events + n.lifeSettings;
   return n;
 }
 
@@ -17371,15 +17830,22 @@ async function genDictEnrich(btn, opts){
       parsed.walkons = filterDictEnrichList(parsed.walkons);
       parsed.places = filterDictEnrichList(parsed.places);
       parsed.propernouns = filterDictEnrichList(parsed.propernouns);
+      parsed.organizations = filterDictEnrichList(parsed.organizations);
+      parsed.institutions = filterDictEnrichList(parsed.institutions);
+      parsed.items = filterDictEnrichList(parsed.items);
+      parsed.rules = filterDictEnrichList(parsed.rules);
+      parsed.terms = filterDictEnrichList(parsed.terms);
+      parsed.events = filterDictEnrichList(parsed.events);
+      parsed.lifeSettings = filterDictEnrichList(parsed.lifeSettings);
     }
-    if(!(parsed.characters.length || parsed.walkons.length || parsed.places.length || parsed.propernouns.length)) throw new Error('未识别到有效条目（人物/路人/地名/专名），请重试');
+    if(!(parsed.characters.length || parsed.walkons.length || parsed.places.length || parsed.propernouns.length || parsed.organizations.length || parsed.institutions.length || parsed.items.length || parsed.rules.length || parsed.terms.length || parsed.events.length || parsed.lifeSettings.length)) throw new Error('未识别到有效条目，请重试');
     const n = mergeDictEnrich(parsed); ssProtectMasterCanon(); storyState().canon.dictEnrichAt=Date.now(); storyState().versions.dictEnrich=Number(storyState().versions.dictEnrich||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldExpansion={version:storyState().versions.dictEnrich,source:'dictEnrich',ts:Date.now(),added:n};
     state.outline._dictEnrichText = isScopeBanned('dictEnrich') ? scrubBannedPhrases(txt) : txt;   // 仅存档（导入/导出时仍保留原文兜底），UI 不再直接渲染
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
-    state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, ts:Date.now() };
+    state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, organizations:n.organizations||0, institutions:n.institutions||0, items:n.items||0, rules:n.rules||0, terms:n.terms||0, events:n.events||0, lifeSettings:n.lifeSettings||0, ts:Date.now() };
     persist(); render(); markAIDone('dictEnrich');
     if(stream) stream.style.display='none';
-    toast(`词典已充实：主要人物 ${n.main||0} · 次要配角 ${n.support||0} · 路人 ${n.w||0} · 地名 ${n.p} · 专名 ${n.k}（已并入万物词典，正文可直接选用）`);
+    toast(`词典已充实：人物 ${n.main||0}/${n.support||0} · 路人 ${n.w||0} · 地名 ${n.p} · 专名 ${n.k} · 世界素材 ${[n.organizations,n.institutions,n.items,n.rules,n.terms,n.events,n.lifeSettings].reduce((a,v)=>a+(Number(v)||0),0)}（已并入万物词典，正文可直接选用）`);
     playEventSound('dictEnrich_done');
     return true;
   }catch(e){
@@ -17402,6 +17868,7 @@ function buildDictEnrichSummary(parsed){
     walkons: (parsed.walkons||[]).map(w=>({ name:pk(w), brief:wbrief(w) })),
     nPlaces: (parsed.places||[]).length,
     nProps:  (parsed.propernouns||[]).length,
+    organizations:(parsed.organizations||[]).length, institutions:(parsed.institutions||[]).length, items:(parsed.items||[]).length, rules:(parsed.rules||[]).length, terms:(parsed.terms||[]).length, events:(parsed.events||[]).length, lifeSettings:(parsed.lifeSettings||[]).length,
   };
 }
 function dictEnrichBlockHtml(){
@@ -17419,6 +17886,13 @@ function dictEnrichBlockHtml(){
     c.w>0 ? `路人 ${c.w}` : (sum&&sum.walkons&&sum.walkons.length ? `路人 ${sum.walkons.length}` : null),
     sum&&sum.nPlaces ? `地名 ${sum.nPlaces}` : (c.p>0 ? `地名 ${c.p}` : null),
     sum&&sum.nProps ? `专名 ${sum.nProps}` : (c.k>0 ? `专名 ${c.k}` : null),
+    c.organizations>0 ? `组织 ${c.organizations}` : null,
+    c.institutions>0 ? `机构 ${c.institutions}` : null,
+    c.items>0 ? `道具 ${c.items}` : null,
+    c.rules>0 ? `规则 ${c.rules}` : null,
+    c.terms>0 ? `术语 ${c.terms}` : null,
+    c.events>0 ? `事件 ${c.events}` : null,
+    c.lifeSettings>0 ? `生活 ${c.lifeSettings}` : null,
   ].filter(Boolean).join(' · ') : '';
   const foldBtn = `<span class="de-carrow">${deCollapsed?'▸':'▾'}</span>`;
   const g = (o && o.glossary) || {};
@@ -17482,6 +17956,7 @@ function dictEnrichBlockHtml(){
       ${stream}
       ${status}
       ${t ? `<div class="dm-tables" style="margin-top:10px">
+        ${(()=>{ const ext=[['🏛️ 组织/势力',g.organizations,'organizations'],['🏢 职业/机构',g.institutions,'institutions'],['🧰 物品/道具',g.items,'items'],['📜 世界规则',g.rules,'rules'],['🔤 术语',g.terms,'terms'],['🕰️ 历史事件',g.events,'events'],['🍜 生活设定',g.lifeSettings,'lifeSettings']]; return ext.map(([lab,arr])=>{ const a=Array.isArray(arr)?arr:[]; if(!a.length) return ''; const body=a.map(x=>{const nm=String(x&&x.name||'').trim(); if(!nm) return ''; const vals=[x.type,x.category,x.function,x.stance,x.meaning,x.rule,x.content,x.note,x.impact].map(v=>String(v||'').trim()).filter(Boolean); return `<div class="de-item new"><span class="de-chip">✦ ${esc(nm)}</span><span class="de-brief-desc dm-rel-txt">${esc(vals.join(' · ')||'（暂无详细简介）')}</span></div>`;}).join(''); return `<details class="dm-fold" open><summary>${lab}（${a.length}）</summary><div class="de-grid">${body}</div></details>`; }).join(''); })()}
         ${deCat('👤 主要人物', liveMain, 'grid')}
         ${deCat('🤝 次要配角', liveSupport, 'grid')}
         ${deCat('🚶 路人龙套', liveWalkons, 'grid')}
@@ -17889,6 +18364,11 @@ ${pStyle}
     parts.push(`【第一层附录 · 因果闭环锁（决定事件能否这样发生）】
 ${pCausal}
 执行原则：本层不改变老师教案规定的核心剧情，但会审查事件发生资格。教案中的结果必须通过已建立的前置状态、线索/信息来源、人物行动、能力/资源与场景触发自然抵达；若教案本身存在因果缺口，正文不得凭空发明关键理由，应优先采用教案允许的铺垫空间补足最小必要中间步骤。`);
+    }
+
+    const _structuredScenes = teacherMachineScenesFor(i);
+    if(_structuredScenes){
+      parts.push(`【老师结构化场景施工卡｜JS解析结果（只决定怎么施工，不改变校长授权）】\n${_structuredScenes}\n执行锁：逐场落实目的、事件、状态变化和必须保留项；正文可自由文学化表达，但不得改变这些核心内容。`);
     }
 
     parts.push(`【第二层 · 中观层（静态指导 · 单源真理超级教案）】
