@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.346';
+const APP_VERSION = '1.0.347';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.js';
+const APP_FILE_VERSION = 'app1.0.347.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -80,6 +80,7 @@ const state = {
   strategyStage2Status: 'empty',
   polishSelectedId: null,
   polishDiagnosis: null,
+  polishFailureTrace: null,
   polishStrategies: [],
   strategicDimensions: [],
   strategicDiversityProfile: null,
@@ -1201,6 +1202,7 @@ function projectSnapshot(){
     strategyStage2Status: state.strategyStage2Status,
     polishSelectedId: state.polishSelectedId,
     polishDiagnosis: state.polishDiagnosis,
+    polishFailureTrace: state.polishFailureTrace || null,
     polishStrategies: state.polishStrategies,
     strategicDimensions: state.strategicDimensions,
     strategicDiversityProfile: state.strategicDiversityProfile,
@@ -1289,6 +1291,7 @@ function applyProject(p){
   state.polishMode = p.polishMode === 'multi' ? 'multi' : 'single';
   state.polishSelectedId = (typeof p.polishSelectedId === 'string') ? p.polishSelectedId : null;
   state.polishDiagnosis = (p.polishDiagnosis && typeof p.polishDiagnosis === 'object') ? p.polishDiagnosis : null;
+  state.polishFailureTrace = (p.polishFailureTrace && typeof p.polishFailureTrace === 'object') ? p.polishFailureTrace : null;
   state.polishStrategies = Array.isArray(p.polishStrategies) ? p.polishStrategies : [];
   state.strategicDimensions = Array.isArray(p.strategicDimensions) ? p.strategicDimensions : [];
   state.strategicDiversityProfile = (p.strategicDiversityProfile && typeof p.strategicDiversityProfile === 'object') ? p.strategicDiversityProfile : null;
@@ -1578,15 +1581,15 @@ function openAiLogPanel(){
       <div class="ailog-head">
         <span class="ailog-time">${fmtTs(r.ts)}</span>
         <span class="ailog-task">${esc(task||'（无任务名）')}</span>
-        <span class="ailog-meta">${r.temp!=null?('🌡 '+r.temp):''} · ${r.ms!=null?(r.ms+'ms'):''} · <b class="${r.ok?'ok':'err'}">${r.ok?'✓':'✗'}</b>${r.tmo?` · 🎯${esc(String(r.tm||''))}（分任务覆盖）`:''}</span>
+        <span class="ailog-meta">${r.temp!=null?('🌡 '+r.temp):''} · ${r.ms!=null?(r.ms+'ms'):''}${r.finishReason?(' · 结束:'+esc(String(r.finishReason))):''} · <b class="${r.ok?'ok':'err'}">${r.ok?'✓':'✗'}</b>${r.tmo?` · 🎯${esc(String(r.tm||''))}（分任务覆盖）`:''}</span>
         <button type="button" class="btn small ghost" data-ailog-toggle="${ri}">展开</button>
       </div>
       <div class="ailog-body hidden" data-ailog-body="${ri}">
         ${r.err?`<div class="ailog-sec"><b>错误：</b><span class="err">${esc(r.err)}</span></div>`:''}
         <div class="ailog-sec"><b>System · 前500字 / 共 ${(r.sysLen||r.sys.length).toLocaleString('en-US')} 字：</b><div class="ailog-pre">${esc(String(r.sys||''))}</div></div>
         <div class="ailog-sec"><b>User · 前500字 / 共 ${(r.userLen||r.user.length).toLocaleString('en-US')} 字：</b><div class="ailog-pre">${esc(String(r.user||''))}</div></div>
-        <div class="ailog-sec"><b>响应 · 前500字 / 共 ${(r.respLen||0).toLocaleString('en-US')} 字：</b><div class="ailog-pre">${esc(String(r.resp||''))}</div></div>
-        <p class="muted" style="font-size:11px">50000 字仅为日志预览上限，实际发送/接收为全量，不影响请求。</p>
+        <div class="ailog-sec"><b>响应 · 前500字 / 共 ${(r.respLen||0).toLocaleString('en-US')} 字${r.finishReason==='length'?' · ⚠️ 截断':''}：</b><div class="ailog-pre">${esc(String(r.resp||''))}</div></div>
+        <p class="muted" style="font-size:11px">日志只展示前500字正文；长度字段记录实际请求/响应规模。若结束原因=length，表示AI输出触及上限。旧日志没有结束原因时不代表没有返回。</p>
       </div>
     </div>`;
   }).join('') : '<p class="muted">暂无请求记录。每次调用 AI 都会记录（最近 50 0条，仅存本机）。</p>';
@@ -1636,7 +1639,7 @@ async function callDeepSeek(system, user, {temperature=null, topP=null, signal=n
     sysLen: String(system||'').length,
     userLen: String(user||'').length,
     respLen: 0,
-    resp: '', ms: null, ok: false, err: '', tm: taskKey || '', tmo: false
+    resp: '', ms: null, ok: false, err: '', finishReason:'', usage:null, tm: taskKey || '', tmo: false
   };
   let lastErr;
   for(let attempt=0; attempt<=retry; attempt++){
@@ -1696,7 +1699,7 @@ async function callDeepSeek(system, user, {temperature=null, topP=null, signal=n
         }
         const finishReason = (data.choices && data.choices[0] && data.choices[0].finish_reason) || '';
         const usage = data.usage || null;
-        _rec.resp = String(out).slice(0,50000); _rec.respLen = String(out).length; _rec.ms = Date.now()-_t0; _rec.ok = true;
+        _rec.resp = String(out).slice(0,50000); _rec.respLen = String(out).length; _rec.finishReason = finishReason; _rec.usage = usage; _rec.ms = Date.now()-_t0; _rec.ok = true;
         aiLogPush(_rec);
         return { text: out, finishReason, usage };
       }
@@ -1730,7 +1733,7 @@ async function callDeepSeek(system, user, {temperature=null, topP=null, signal=n
       if(!String(full).trim()){
         throw new Error('响应异常（流式全程无有效内容）');
       }
-      _rec.resp = String(full).slice(0,50000); _rec.respLen = String(full).length; _rec.ms = Date.now()-_t0; _rec.ok = true;
+      _rec.resp = String(full).slice(0,50000); _rec.respLen = String(full).length; _rec.finishReason = finishReason; _rec.usage = null; _rec.ms = Date.now()-_t0; _rec.ok = true;
       aiLogPush(_rec);
       return { text: full, finishReason, usage: null };
     }catch(e){
@@ -3157,30 +3160,72 @@ function recordValidationAttempt(kind, attempt, failure, passed){
   state.aiValidationHistory.push({kind,attempt,passed:!!passed,category:failure?.category||null,code:failure?.code||null,field:failure?.field||null,details:String(failure?.details||'').slice(0,500),ts:Date.now()});
   state.aiValidationHistory=state.aiValidationHistory.slice(-20);
 }
+function compactTextForAI(v, max=6000){
+  const t=String(v||'').trim();
+  if(t.length<=max) return t;
+  const head=Math.max(0,Math.floor(max*0.72));
+  const tail=Math.max(0,max-head);
+  return t.slice(0,head)+'\n…（中间内容已省略，仅用于控制上下文体积）…\n'+t.slice(-tail);
+}
+function estimateAITokens(v){ return Math.max(0,Math.ceil(String(v||'').length/2)); }
+function rememberPolishFailure(raw, failure, meta){
+  const text=String(raw||'');
+  state.polishRawFallback=text;
+  state.polishFailureTrace={
+    kind:'ideaPolishStage2',
+    category:failure?.category||'MODEL_ERROR',
+    code:failure?.code||'UNKNOWN',
+    field:failure?.field||'output',
+    details:String(failure?.details||'').slice(0,800),
+    repairHint:String(failure?.repairHint||'').slice(0,500),
+    responseChars:text.length,
+    responseTokenEstimate:estimateAITokens(text),
+    truncated:meta?.finishReason==='length' || /截断|truncated/i.test(String(failure?.details||'')),
+    attempt:Number(meta?.attempt||0)+1,
+    requestChars:Number(meta?.requestChars||0),
+    requestTokenEstimate:Number(meta?.requestTokenEstimate||0),
+    ts:Date.now()
+  };
+}
 function buildTargetedRepairPrompt(kind, originalUser, raw, failure, ctx){
   const source=kind==='ideaPolishStage2' ? `\n【第一阶段权威战略源（只读）】\n${JSON.stringify({originalAnchors:ctx?.originalAnchors||null,strategicDimensions:ctx?.strategicDimensions||[],diversityProfile:ctx?.diversityProfile||null})}` : '';
-  return `${originalUser}\n\n【定向修复任务】\n上一版输出未通过严格校验。你现在只允许修复失败项，不得降低任何验收标准，也不得静默省略字段。\n失败分类：${failure.category}\n失败代码：${failure.code}\n失败字段：${failure.field}\n失败详情：${failure.details}\n修复建议：${failure.repairHint}${source}\n\n【上一版输出】\n${String(raw||'').slice(0,90000)}\n\n【硬性要求】\n1. 保留上一版已经有效的内容；只修复失败字段或与其直接相关的部分。\n2. 必须重新输出完整、可解析的最终结果，不要输出解释、诊断、道歉或“已修复”。\n3. 不得通过降低数量、删字段、改成占位文本、换名字/措辞来规避校验。\n4. 第二阶段不得修改第一阶段 strategicDimensions；候选方案只能引用第一阶段维度，新增创意必须进入 creativeAdditions。`;
+  const prev=String(raw||'');
+  const prevCompact=prev.length>30000 ? prev.slice(0,24000)+'\n…（上一版过长，已裁剪）…\n'+prev.slice(-6000) : prev;
+  return `${originalUser}\n\n【定向修复任务】\n上一版输出未通过严格校验。你现在只允许修复失败项，不得降低任何验收标准，也不得静默省略字段。\n失败分类：${failure.category}\n失败代码：${failure.code}\n失败字段：${failure.field}\n失败详情：${failure.details}\n修复建议：${failure.repairHint}${source}\n\n【上一版输出（受控长度）】\n${prevCompact}\n\n【硬性要求】\n1. 保留上一版已经有效的内容；只修复失败字段或与其直接相关的部分。\n2. 必须重新输出完整、可解析的最终结果，不要输出解释、诊断、道歉或“已修复”。\n3. 不得通过降低数量、删字段、改成占位文本、换名字/措辞来规避校验。\n4. 第二阶段不得修改第一阶段 strategicDimensions；候选方案只能引用第一阶段维度，新增创意必须进入 creativeAdditions。`;
 }
 async function callValidatedWithRepair(kind, extra, callOpts, ctx, maxRepair=VALIDATION_RETRY_MAX){
   const system=getSystemPrompt(kind,extra)+globalCreativeConstraintBlock(kind);
   let user=buildAIPrompt(kind,extra);
+  const initialUser=user;
   let raw=''; let lastFailure=null;
   for(let attempt=0; attempt<=maxRepair; attempt++){
     try{
-      raw=String(unwrapAIResult(await callDeepSeek(system,user,Object.assign({},callOpts||{}, {taskKey:kind})))||'').trim();
+      const result=await callDeepSeek(system,user,Object.assign({},callOpts||{}, {taskKey:kind, retry: kind==='ideaPolishStage2' ? 1 : undefined}));
+      raw=String(unwrapAIResult(result)||'').trim();
+      const requestChars=String(user||'').length + String(system||'').length;
+      const requestTokenEstimate=estimateAITokens(user)+estimateAITokens(system);
       if(!raw){
         lastFailure=structuredValidationFailure({ok:false,code:'EMPTY_OUTPUT',details:'AI未返回内容'},null);
+      }else if(result?.finishReason==='length'){
+        lastFailure=structuredValidationFailure({ok:false,code:'OUTPUT_TRUNCATED',details:`AI返回在输出上限处被截断；响应约 ${raw.length.toLocaleString()} 字`},null);
       }else{
         const report=validateAIOutput(kind,raw,ctx);
-        if(report && report.ok){ recordValidationAttempt(kind,attempt, null,true); return {raw,attempts:attempt}; }
+        if(report && report.ok){
+          recordValidationAttempt(kind,attempt, null,true);
+          if(kind==='ideaPolishStage2'){ state.polishRawFallback=''; state.polishFailureTrace={kind,category:null,code:null,field:null,details:'生成并通过严格校验',responseChars:raw.length,responseTokenEstimate:estimateAITokens(raw),truncated:false,attempt:attempt+1,requestChars,requestTokenEstimate,ts:Date.now()}; }
+          return {raw,attempts:attempt};
+        }
         lastFailure=structuredValidationFailure(report,null);
       }
+      if(kind==='ideaPolishStage2') rememberPolishFailure(raw,lastFailure,{attempt,requestChars,requestTokenEstimate,finishReason:result?.finishReason});
     }catch(e){
       lastFailure=structuredValidationFailure({ok:false,code:'CALL_FAILED',details:e?.message||String(e)},e);
+      if(kind==='ideaPolishStage2') rememberPolishFailure(raw,lastFailure,{attempt,requestChars:String(user||'').length + String(system||'').length,requestTokenEstimate:estimateAITokens(user)+estimateAITokens(system)});
     }
     recordValidationAttempt(kind,attempt,lastFailure,false);
     if(attempt>=maxRepair) break;
-    user=buildTargetedRepairPrompt(kind,user,raw,lastFailure,ctx);
+    // 修复请求只复用最初的紧凑任务上下文；不再把“上一轮修复Prompt”套娃进下一轮。
+    user=buildTargetedRepairPrompt(kind,initialUser,raw,lastFailure,ctx);
   }
   const e=new Error(`${kind} 严格校验最终失败 [${lastFailure?.category||'MODEL_ERROR'}/${lastFailure?.code||'UNKNOWN'}]：${lastFailure?.details||'未知错误'}。${lastFailure?.repairHint||''}`);
   e.validationFailure=lastFailure; e.attempts=maxRepair+1;
@@ -3247,7 +3292,7 @@ async function generatePolishStage(btn, force){
   state.strategyStage2Status = 'generating';
   state.polishStatus = 'generating'; state.polishSelectedId = null; state.polishAdopted = null;
   state.polishCanonical = null; state.canonicalStoryStrategy = null;
-  state.polishDiagnosis = null; state.polishStrategies = [];
+  state.polishDiagnosis = null; state.polishFailureTrace = null; state.polishRawFallback = ''; state.polishStrategies = [];
   // 同样先 render 出“第二阶段生成中”状态，再对当前 DOM 按钮加 loading。
   persist();
   render();
@@ -3259,6 +3304,8 @@ async function generatePolishStage(btn, force){
     const v = await callValidatedWithRepair('ideaPolishStage2', stage2Ctx, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')}, stage2Ctx);
     const out = String(v.raw||'').trim();
     showPolishResult(out, multi);
+    state.polishFailureTrace = null;
+    state.polishRawFallback = '';
     state.strategyStage2Status = 'ready';
     markAIDone('ideaPolishStage2');
     markAIDone('idea');
@@ -3636,7 +3683,10 @@ function renderPolishCards(container){
     container.style.display = 'block';
     const dims = Array.isArray(state.strategicDimensions) ? state.strategicDimensions : [];
     const dimHtml = dims.length ? `<div class="strategy-map" style="margin-bottom:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff)"><div style="font-weight:700;margin-bottom:8px">🧭 AI动态战略地图 <span style="font-size:11px;font-weight:400;color:var(--muted)">${dims.length} 个候选维度</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px">${dims.map((d,i)=>{const n=String(d?.name||d?.title||d?.id||'战略维度'+(i+1));const de=String(d?.description||'');const why=String(d?.whyFit||'');return `<div style="padding:8px;border:1px solid var(--line,#ddd);border-radius:8px"><b>${esc(n)}</b><div style="font-size:12px;margin-top:4px;line-height:1.5">${esc(de)}</div>${why?`<div style="font-size:11px;color:var(--muted);margin-top:4px">契合：${esc(why)}</div>`:''}</div>`}).join('')}</div></div>` : '';
-    container.innerHTML = dimHtml + (state.polishRawFallback ? `<div class="pol-cand-body" style="white-space:pre-wrap">${esc(state.polishRawFallback)}</div>` : `<p class="muted" style="margin:8px 0 0">第一阶段完成后，点击上方「② 生成优化构想」生成3～5个候选方案。</p>`);
+    const fail = state.polishFailureTrace;
+    const diagHtml = fail ? `<div class="pol-cand-body" style="margin-bottom:10px;border:1px solid var(--danger,#d64545);border-radius:8px;background:var(--card,#fff)"><b>⚠️ 第二阶段本次未通过验收</b><div style="margin-top:6px;line-height:1.7">阶段：${esc(fail.kind||'ideaPolishStage2')} · 分类：${esc(fail.category||'MODEL_ERROR')} · 代码：${esc(fail.code||'UNKNOWN')}<br>请求约 ${Number(fail.requestChars||0).toLocaleString()} 字（≈${Number(fail.requestTokenEstimate||0).toLocaleString()} tokens） · AI响应约 ${Number(fail.responseChars||0).toLocaleString()} 字（≈${Number(fail.responseTokenEstimate||0).toLocaleString()} tokens）${fail.truncated?' · ⚠️ 可能被输出上限截断':''}<br>${esc(fail.details||'')}</div><div style="margin-top:8px;font-size:12px;color:var(--muted)">下面保留的是AI实际返回内容（受控展示），不是“AI没有返回”。</div></div>` : '';
+    const rawHtml = state.polishRawFallback ? `<div class="pol-cand-body" style="white-space:pre-wrap;max-height:520px;overflow:auto"><b>AI原始返回（本次验收失败，未丢弃）</b><div style="margin-top:6px">${esc(state.polishRawFallback)}</div></div>` : '';
+    container.innerHTML = dimHtml + diagHtml + (rawHtml || `<p class="muted" style="margin:8px 0 0">第一阶段完成后，点击上方「② 生成优化构想」生成3～5个候选方案。</p>`);
     return;
   }
   container.style.display = 'block';
@@ -9227,10 +9277,19 @@ function buildIdeaStrategyUser(ctx){
 }
 
 function buildIdeaPolishStage2User(ctx){
-  const base = buildIdeaPolishUserFixed(ctx);
   const anchors = ctx.originalAnchors || {};
   const dims = Array.isArray(ctx.strategicDimensions) ? ctx.strategicDimensions : [];
-  return base + `\n\n【第一阶段战略分析结果·权威输入】\n原始构想核心锚点：\n${JSON.stringify(anchors)}\n\n动态战略维度（只能从这里组合）：\n${JSON.stringify(dims)}\n\n战略多样性边界：\n${JSON.stringify(ctx.diversityProfile || null)}\n\n【第二阶段任务】\n现在基于以上第一阶段结果，生成最终3—5个优化构想方案。不要再次生成战略地图；不要使用固定五向。每个方案必须体现不同的战略组合和独立战略指纹。`;
+  const dp = ctx.diversityProfile || null;
+  // 第二阶段不再重复发送3万字级原始构想；第一阶段已经把原始事实压缩成只读锚点。
+  const wsItems = wsGroupStyleTags(null);
+  const style = wsItems && wsItems.length ? wsItems.map(s=>`${s.name}：${s.note||''}${Array.isArray(s.tips)&&s.tips.length?`（写法：${s.tips.join('；')}）`:''}`).join('\n') : '（未额外锁定写作风格）';
+  const bb=currentBookBeatCfg(), mb=currentBeatCfg(), cc=chapterCountVal();
+  const structure = [
+    bb ? `全书拍子：${bb.label}（${bb.subtitle}），阶段：${((bb.ai&&bb.ai.stages)||[]).join(' → ')}` : '',
+    mb ? `章节微拍：${mb.label}${mb.wc?`（${mb.wc}）`:''}` : '',
+    cc ? `全书章节数：${cc}` : ''
+  ].filter(Boolean).join('\n');
+  return `【第二阶段专用紧凑输入包】\n本阶段只读取第一阶段已经确认的权威事实，不重新读取原始长文本。\n\n【原始构想核心锚点·只读】\n${JSON.stringify(anchors)}\n\n【动态战略维度·只读】\n${JSON.stringify(dims)}\n\n【战略多样性边界·只读】\n${JSON.stringify(dp)}\n\n【用户锁定写作风格】\n${style}\n\n【已选叙事结构】\n${structure||'（无额外结构）'}\n\n【第二阶段任务】\n基于以上第一阶段权威输入，生成最终${ctx.multi?'3—5个':'1个'}优化构想方案。不要重新生成战略地图；不要使用固定五向。每个方案必须体现不同的战略组合和独立战略指纹；所有新增创意只能进入 creativeAdditions，不能伪装成用户已确认事实。`;
 }
 
 function buildIdeaPolishUserFixed(ctx){
