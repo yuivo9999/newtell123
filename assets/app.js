@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.362';
+const APP_VERSION = '1.0.364';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.362.js';
+const APP_FILE_VERSION = 'app1.0.364.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -16572,7 +16572,7 @@ properContacts：两端必须是专名；from≠to。
 禁止把属性、功能、说明、子项或空字符串当作另一端凑数。
 
 【二十三、输出前最终自检】
-在输出 JSON 之前必须内部完成以下检查：
+在输出结构式纯文本之前必须内部完成以下检查：
 
 A. 蓝本检查：是否完整尊重用户蓝本；是否保留所有明确指定的重要实体；是否修改名称；是否改变主角、核心冲突、题材、世界观方向或人物核心立场。
 
@@ -16597,7 +16597,7 @@ J. 下游检查：词典充实是否能在这些设定上继续扩建；校长�
 如果某个设定会给后续 AI 制造歧义，优先修正，而不是保留。
 
 【二十四、最终输出原则】
-经过全部检查后，只输出最终 JSON。不要输出任何解释、Markdown、代码围栏、自检过程或 JSON 之外的字符。
+经过全部检查后，只输出符合第二十、二十一、二十二条契约的结构式纯文本。不要输出 JSON，不要输出解释、Markdown、代码围栏、自检过程或任何结构之外的字符。
 
 最终目标不是生成最多的设定，而是建立一套准确、稳定、自洽、可长期使用，并能够成为整部小说世界基准的「万物设定词典」。
 
@@ -16701,7 +16701,11 @@ async function genDictMaster(btn){
     const temp = (spec && spec.dictmasterTemp != null) ? spec.dictmasterTemp : 0.4;
     const txt = await callAIGuarded('dictmaster', {}, {temperature: temp, maxTokens: 16384, signal: _abortCtl?.signal});
     const j = parseDictMasterPlainText(txt);
-    if(!j){ throw new Error('AI 未返回可用的词典结构式纯文本'); }
+    if(!j){
+      const rawTrim=String(txt||'').trim();
+      const looksJson=/^[\[{]/.test(rawTrim);
+      throw new Error(looksJson ? 'AI 返回了 JSON，但词典达人当前契约只接受结构式纯文本；请重试' : 'AI 未返回可用的词典结构式纯文本');
+    }
     const v = validateDictMasterOutput(j);
     if(v) throw new Error('词典校验失败：'+v);
     o.glossary = ensureGlossaryKnowledgeShape(o.glossary || { characters:[], places:[], propernouns:[], subplots:[] });
@@ -17560,67 +17564,6 @@ function parseDictEnrichText(txt){
     .replace(/^```[a-zA-Z]*\s*/i, '')
     .replace(/\s*```$/i, '')
     .trim();
-
-  // 1. JSON Fallback
-  if(cleaned.startsWith('{') || cleaned.startsWith('[')){
-    try {
-      const j = JSON.parse(cleaned);
-      const addChar = c => {
-        if(c && c.name){
-          const [cleanName, extraNote] = cleanEntityName(c.name);
-          if(!cleanName) return;
-          res.characters.push(completeCharFields({
-            name: cleanName,
-            tier: (c.tier === 'main' || c.tier === '主要人物' || c.tier === '主要') ? 'main' : 'support',
-            identity: c.identity || c.身份 || extraNote || '',
-            age: c.age || c.年龄 || '',
-            gender: c.gender || c.性别 || '',
-            appearance: c.appearance || c.外貌 || '',
-            hobby: c.hobby || c.爱好 || '',
-            relation: c.relation || c.关系 || '',
-            trait: c.trait || c.性格 || '',
-            catchphrase: c.catchphrase || c.口头禅 || ''
-          }));
-        }
-      };
-      (j.characters || j.人物 || []).forEach(addChar);
-      (j.places || j.地名 || []).forEach(p => {
-        if(p && p.name){
-          const [cleanName, extraNote] = cleanEntityName(p.name);
-          if(cleanName) res.places.push({ name: cleanName, type: p.type || p.类型 || '地名', note: (extraNote ? extraNote + '；' : '') + (p.note || p.说明 || '') });
-        }
-      });
-      (j.propernouns || j.专名 || []).forEach(x => {
-        if(x && x.name){
-          const [cleanName, extraNote] = cleanEntityName(x.name);
-          if(cleanName) res.propernouns.push({ name: cleanName, note: (extraNote ? extraNote + '；' : '') + (x.note || x.说明 || '') });
-        }
-      });
-      (j.walkons || j.路人 || j.龙套 || []).forEach(w => {
-        if(w && w.name){
-          const [cleanName, extraNote] = cleanEntityName(w.name);
-          if(cleanName) res.walkons.push({ name: cleanName, note: (extraNote ? extraNote + '；' : '') + (w.note || w.说明 || ''), _auto:true, tier:'walkon' });
-        }
-      });
-      const addGeneric = (src, out, aliases) => (src || []).forEach(x => {
-        if(!x || !x.name) return;
-        const [name, extra] = cleanEntityName(x.name);
-        if(!name) return;
-        const copy = Object.assign({}, x); delete copy.name;
-        copy.name = name;
-        if(extra && !copy.note && !copy.说明) copy.note = extra;
-        out.push(copy);
-      });
-      addGeneric(j.organizations || j.组织 || j.势力, res.organizations);
-      addGeneric(j.institutions || j.机构 || j.职业, res.institutions);
-      addGeneric(j.items || j.物品 || j.道具, res.items);
-      addGeneric(j.rules || j.规则 || j.世界规则, res.rules);
-      addGeneric(j.terms || j.术语, res.terms);
-      addGeneric(j.events || j.事件 || j.历史事件, res.events);
-      addGeneric(j.lifeSettings || j.生活设定 || j.生活, res.lifeSettings);
-      if(res.characters.length || res.places.length || res.propernouns.length || res.walkons.length || res.organizations.length || res.institutions.length || res.items.length || res.rules.length || res.terms.length || res.events.length || res.lifeSettings.length) return sanitizePersonCollections(res);
-    } catch(e){}
-  }
 
   // 2. Line-by-line flexible parser
   const parsePairs = detail => {
