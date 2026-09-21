@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.364';
+const APP_VERSION = '1.0.367';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.364.js';
+const APP_FILE_VERSION = 'app1.0.367.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -7323,7 +7323,7 @@ function compileTeacherMachine(parsed, originalText=''){
       `- 中段核心状态变化：${machineField(r,'midChange','middleChange','coreChange')}`,
       `- 中段驱动力：${machineField(r,'midDriver','middleDriver','driver')}`,
       `- 与最近章节的差异：${machineField(r,'midDifference','difference')||'按真实状态形成差异'}`,
-      `- 本章推进骨架：${machineField(r,'beats','beatPlan','skeleton')}`,
+      `- 本章推进骨架：${machineField(r,'beats','beatPlan','skeleton')||'按本章目标与核心事件形成因果推进骨架'}`,
       `- 结尾功能：${machineField(r,'endingFunction','endFunction')}`,
       `- 结尾强度：${machineField(r,'endingIntensity','intensity')||'0'}`,
       `- 最后有效事件：${machineField(r,'lastEffectiveEvent','lastEvent')}`,
@@ -8197,8 +8197,8 @@ function extractLabeledField(text, names){
 }
 function endingPlanFromCardStrict(card, chapter){
   const text=String(card||'');
-  const intensity=extractLabeledField(text,['结尾强度','章末强度']);
-  return {chapter:Number(chapter),endingFunction:extractLabeledField(text,['主要结尾功能','结尾主要功能','本章结尾功能']),intensity,lastEffectiveEvent:extractLabeledField(text,['最后有效事件','最后有效剧情节点','章末最后有效事件']),form:extractLabeledField(text,['具体收尾方式','结尾表现形式','表现形式','推荐表现形式']),nextTransitionType:extractLabeledField(text,['下一章承接方式','下章承接方式','下一章承接类型']),nextTransitionBasis:extractLabeledField(text,['下一章承接依据','下章承接依据']),diversityNote:extractLabeledField(text,['重复风险','多样性提示','结尾重复风险'])};
+  const intensity=extractLabeledField(text,['结尾强度','章末强度']) || '2';
+  return {chapter:Number(chapter),endingFunction:extractLabeledField(text,['主要结尾功能','结尾主要功能','本章结尾功能']),intensity,lastEffectiveEvent:extractLabeledField(text,['最后有效事件','最后有效剧情节点','章末最后有效事件']),form:extractLabeledField(text,['具体收尾方式','结尾表现形式','表现形式','推荐表现形式']),nextTransitionType:extractLabeledField(text,['下一章承接方式','下章承接方式','下一章承接类型']),nextTransitionBasis:extractLabeledField(text,['下一章承接依据','下章承接依据']) || '依据本章真实终止状态承接',diversityNote:extractLabeledField(text,['重复风险','多样性提示','结尾重复风险'])};
 }
 function endingPlanQualityMissing(p){
   if(!p) return true;
@@ -8473,8 +8473,11 @@ async function genTeacher(btn, gi){
           _teacherEndingCheck = validateTeacherEndingPlans(teacherRaw, g.first, g.last);
           if(_teacherEndingCheck.missing.length) throw new Error('老师'+(gi+1)+'缺少完整章末结尾施工：第'+_teacherEndingCheck.missing.join('、')+'章');
         }
-        if(_teacherEndingCheck.missing.length) throw new Error('老师'+(gi+1)+'缺少完整章末结尾施工：第'+_teacherEndingCheck.missing.join('、')+'章');
-        if(_teacherEndingCheck.audit.risk==='high') throw new Error('老师'+(gi+1)+'章末结尾功能重复风险过高：最长连续'+_teacherEndingCheck.audit.maxConsecutive+'章；请调整收束施工形态但不得改变章末状态');
+        // 结尾完整性只校验一次；多样性审计属于提示信息，不应因“重复风险”单独否决已经满足剧情契约的教案。
+        const _teacherEndingWarning = _teacherEndingCheck.audit.risk==='high' ? {
+          risk:'high', maxConsecutive:_teacherEndingCheck.audit.maxConsecutive,
+          repeatedFunctions:_teacherEndingCheck.audit.repeatedFunctions||[]
+        } : null;
         const sc = scState(); delete sc.stale['t'+gi];
         sc.teachers[gi] = { gi, ts:Date.now(), raw:teacherRaw, machine:!!teacherMachine, machineText: teacherMachine ? String(txt) : '' };
         state.chapterMiddlePlans = state.chapterMiddlePlans || {};
@@ -8484,6 +8487,9 @@ async function genTeacher(btn, gi){
         state.chapterMiddleAudit[gi] = buildMiddleDiversityAudit(state.chapterMiddlePlans);
         state.chapterEndingAudit = state.chapterEndingAudit || {};
         state.chapterEndingAudit[gi] = _teacherEndingCheck.audit;
+        state.chapterEndingAuditWarnings = state.chapterEndingAuditWarnings || {};
+        if(_teacherEndingWarning) state.chapterEndingAuditWarnings[gi] = _teacherEndingWarning;
+        else delete state.chapterEndingAuditWarnings[gi];
         // v1.0.362：结构式纯文本词典达人；老师成功的唯一落点必须同时完成“组状态 + AI状态 + UI刷新”。
         // 先写入实际教案，再立即清除该组 stale；随后统一刷新学校管线和全景步骤，避免 AI 已返回而 UI 仍停在“老师”。
         markAIDone(key, false);
@@ -9374,8 +9380,7 @@ const AIValidators = {
   titles: validateTitleOutput,
   subplot: validateSubplotOutput,
     glossary: validateGlossaryExtract,
-    strip: validateStripLen,
-    dictmaster: validateDictMasterOutput
+    strip: validateStripLen
 };
 
 function normalizeStrategyToken(v){
@@ -16657,11 +16662,9 @@ function validateDictMasterOutput(j){
   const props = Array.isArray(j.propernouns)?j.propernouns:[];
   for(const e of (j.placeContacts||[])){ const a=String(e&&e.from||'').trim(), b=String(e&&e.to||'').trim(); if(a&&b && (!placeNames.has(a)||!placeNames.has(b))) return `地名关联表引用了未定义地名：「${a}」或「${b}」`; }
   for(const e of (j.properContacts||[])){ const a=String(e&&e.from||'').trim(), b=String(e&&e.to||'').trim(); if(a&&b && (!properNames.has(a)||!properNames.has(b))) return `专名关联表引用了未定义专名：「${a}」或「${b}」`; }
-  if(!places.length && !props.length) return '缺少 places 或 propernouns';
   for(const p of places){ if(p && (!String(p.name||'').trim()||!String(p.type||'').trim()||!String(p.note||'').trim())) return `地名「${String(p&&p.name||'').trim()||'?'}」信息不全（需 type+note）`; }
   for(const p of props){ if(p && (!String(p.name||'').trim()||!String(p.note||'').trim())) return `专名「${String(p&&p.name||'').trim()||'?'}」缺 note`; }
   const wr = Array.isArray(j.worldRules)?j.worldRules:[];
-  if(!wr.length) return '缺少 worldRules（世界观规则，应 ≥1 条）';
   for(const r of wr){ if(r && (!String(r.cat||'').trim()||!String(r.rule||'').trim())) return `世界观规则「${String(r&&r.cat||'').trim()||'?'}」缺失 cat 或 rule`; }
   const genericReq = { organizations:['name'], institutions:['name'], items:['name'], terms:['name'], events:['name'], lifeSettings:['name'] };
   for(const [key,fields] of Object.entries(genericReq)){ const arr=Array.isArray(j[key])?j[key]:[]; for(const e of arr){ if(e && fields.some(f=>!String(e[f]||'').trim())) return `基础词典 ${key} 存在缺少名称的条目`; } }
@@ -16762,10 +16765,14 @@ async function genDictMaster(btn){
     if(state.dictmasterHistory.length > 6) state.dictmasterHistory = state.dictmasterHistory.slice(0, 6);   // 第 7 次最旧被挤出
     state.dictmasterRan = true;
     storyState().canon.dictmasterAt=Date.now(); ssEnsureCanonEntities(); ssCaptureMasterSnapshot(); storyState().versions.dictMaster=Number(storyState().versions.dictMaster||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldCanon={version:storyState().versions.dictMaster,source:'dictmaster',ts:Date.now(),counts:{characters:(o.glossary.characters||[]).length,places:(o.glossary.places||[]).length,propernouns:(o.glossary.propernouns||[]).length,worldRules:(o.glossary._worldRules||[]).length,organizations:(o.glossary.organizations||[]).length,institutions:(o.glossary.institutions||[]).length,items:(o.glossary.items||[]).length,terms:(o.glossary.terms||[]).length,events:(o.glossary.events||[]).length,lifeSettings:(o.glossary.lifeSettings||[]).length}};
-    persist(); render();
+    // 词典数据已经成功写入后，立即提交“完成”状态。
+    // 不再让折叠/渲染等非核心 UI 操作位于完成标记之前，避免“AI 已返回、数据已落地，但界面仍卡在生成中”。
+    markAIDone('dictmaster');
+    scMark('dictMaster', true);
+    persist();
     collapseGlossaryAfterDictionaryGeneration();
     render();
-    markAIDone('dictmaster');
+    refreshSchoolProgressUi();
     toast(`万物词典已生成：人物 ${result.nChar} · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系 ${result.nRel} · 规则 ${result.nWR} · 组织 ${result.nOrg} · 机构 ${result.nInst} · 道具 ${result.nItem} · 术语 ${result.nTerm} · 历史 ${result.nEvent} · 生活 ${result.nLife}（世界基底已建立）`);
     playEventSound('dictmaster_done');
     return true;
@@ -16970,6 +16977,10 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 
 【最高权限原则】
 
+本阶段的目标是“增量充实”，不是让每一次生成都完成一份完整词典。输出中只要存在一个或多个合法、可收录的新素材，就应允许系统收录；不要因为可选字段缺失、某一类别没有生成、数量没有达到预期或描述不够丰富而放弃整次结果。
+
+只有以下情况属于真正的拒绝边界：无法识别任何有效条目、明确违反达人词典核心事实、命中系统禁用名称/名称禁则，或数据无法安全写入词典。其余问题优先通过已有解析器和合并逻辑容错处理，而不是要求 AI 反复自检或重新生成。
+
 1. 词典达人已经定稿的实体和设定必须视为正式世界事实。
 2. 任何已经存在的人物、地点、专名、世界规则都不得修改。
 3. 不得给已经存在的实体换名。
@@ -17004,15 +17015,13 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 
 禁止创造新的主角、核心人物、主线关键人物或幕后Boss。核心人物与主线关键关系必须由词典达人一次性建立。只有在确有世界生活/职业/场景需要时，才可以新增次要配角；新增人物默认属于 dictionary_enrichment / support 层。
 
-但必须满足：
+新增人物应尽量满足：
 
-* 对主线或核心人物关系确实有价值。
-* 有明确身份。
-* 有存在理由。
-* 有可持续使用的性格或行为特征。
+* 对主线、生活层或世界展示有价值。
+* 有基本明确的身份。
 * 能够自然进入既有世界。
 
-不要为了数量制造人物。
+不要求每个次要人物一次性填写完整人物档案，也不要求每次生成固定数量的人物。只要人物具备基本可用信息并能安全进入词典，就可以先收录，后续再由正文和后续充实继续补足。不要为了数量制造人物。
 
 一个没有任何剧情价值、生活价值或世界展示价值的人物，不应该进入词典。
 
@@ -17127,9 +17136,9 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 
 但是：
 
-这些内容只有在能够长期帮助正文表现世界时才值得收录。
+这些内容以“对后续正文有描写价值”为主要标准即可，不要求每条素材都具备复杂背景或长期主线作用。
 
-不要把所有普通生活物件都变成词典实体。
+不要把所有普通生活物件都变成词典实体，但对有明确描写价值的生活素材可以正常收录。
 
 【六、路人/氛围龙套】
 
@@ -17937,9 +17946,12 @@ async function genDictHarvest(btn, opts){
     const parsed = parseDictEnrichText(txt);
     const n = mergeDictHarvest(parsed);
     state.outline._dictHarvestText = txt;
-    persist(); render();
+    // 收编结果写入成功后立即结束任务状态；折叠/刷新属于非核心 UI 操作，不应阻断完成状态。
+    persist();
+    markAIDone('dictEnrich');
+    render();
     collapseGlossaryAfterDictionaryGeneration();
-    render(); markAIDone('dictEnrich');
+    render();
     if(stream) stream.style.display='none';
     toast(`正文收编完成：主要人物 ${n.main||0} · 次要配角 ${n.support||0} · 路人 ${n.w} · 地名 ${n.p} · 专名 ${n.k} 已入词典${n.up?`，${n.up} 个路人升级为主/配角`:''}`);
     return true;
@@ -18024,7 +18036,10 @@ async function genDictEnrich(btn, opts){
     state.outline._dictEnrichText = isScopeBanned('dictEnrich') ? scrubBannedPhrases(txt) : txt;   // 仅存档（导入/导出时仍保留原文兜底），UI 不再直接渲染
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, organizations:n.organizations||0, institutions:n.institutions||0, items:n.items||0, rules:n.rules||0, terms:n.terms||0, events:n.events||0, lifeSettings:n.lifeSettings||0, ts:Date.now() };
-    persist(); render(); markAIDone('dictEnrich');
+    // 数据已经安全写入词典后，先完成 AI 状态，再做非核心 UI 刷新；避免 render 异常导致“内容已入库但 UI 仍显示未完成”。
+    persist();
+    markAIDone('dictEnrich');
+    render();
     if(stream) stream.style.display='none';
     toast(`词典已充实：人物 ${n.main||0}/${n.support||0} · 路人 ${n.w||0} · 地名 ${n.p} · 专名 ${n.k} · 世界素材 ${[n.organizations,n.institutions,n.items,n.rules,n.terms,n.events,n.lifeSettings].reduce((a,v)=>a+(Number(v)||0),0)}（已并入万物词典，正文可直接选用）`);
     playEventSound('dictEnrich_done');
