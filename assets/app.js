@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.367';
+const APP_VERSION = '1.0.368';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.367.js';
+const APP_FILE_VERSION = 'app1.0.368.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -16428,6 +16428,13 @@ name 字段只能写实体名称。
 
 因此任何进入正式词典的内容，都必须经得起长期正文使用。
 
+【十九A、最低通行标准｜硬约束与可选内容必须严格分离】
+词典达人只负责建立 Foundation Dictionary 的最小可用核心骨架，不负责一次性完成整本小说百科全书。
+真正不可缺少的硬约束只有：至少1位核心人物；核心人物有正式姓名和基本身份；Blueprint 人物定义区中明确出现的 CHAR_xxx 人物ID必须完成正式姓名映射；Blueprint 明确的人物核心关系不能丢失；WORLD 必须能说明时代/主要舞台/基本世界；Blueprint 明确存在的世界硬规则不得被删除或改成相反规则；必须遵守禁用姓名、实体去重和安全约束。
+以下均为可选，不得因为缺失而判失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、人物 age/gender/appearance/hobby/relation/catchphrase/trait 等详细字段、地点关联、专名关联、关系详细说明。没有依据可以省略或写“未知/无”。
+没有明确世界规则时，RULE 区块可以完全省略。不要为了凑数量创造条目。
+特别注意：RELATIONSHIPS 中出现的 CHAR_xxx 只是引用；只有 PROTAGONIST.personId、KEY_CHARACTERS.personId 等真正的人物定义字段才产生“必须命名”的人物义务。
+如果可选字段缺失，仍应输出一个可解析的结构式词典；不要因为可选字段缺失而拒绝整个结果、要求补齐或自行重复生成。
 【二十、输出格式｜结构式纯文本绝对契约】
 严格只输出结构式纯文本，不要输出 JSON、Markdown 代码围栏、解释、前言、后记或任何结构之外的文字。
 使用以下区块标签，标签必须独占一行；每个字段一行，格式为“字段名=值”。值必须保持单行；数组中的多个值使用“；”分隔。没有内容的可写“无”。
@@ -16565,7 +16572,7 @@ propernouns：name 必须为纯专名；note 说明来源、机制、功能、�
 
 worldRules：必须含 cat、scope、rule；规则必须贴合题材社会性质，可执行、可校验，并尽可能写清运作规则与违反后果/代价。
 
-summary：只用一句话总结词典架构亮点。
+summary：只用一句话说明时代、主要舞台或基本世界框架，让下游知道故事发生在哪里、属于什么世界。
 
 【二十二、关联表严格要求】
 三种关联表全部宁缺毋滥。
@@ -16608,24 +16615,76 @@ J. 下游检查：词典充实是否能在这些设定上继续扩建；校长�
 
 记住：词典达人负责创造世界骨架；词典充实负责在骨架上继续长出血肉；前者必须定得准，后者才能扩得稳。`
 function buildDictMasterUser(ctx){
-  const canonical = currentCanonicalStoryStrategy();
-  const human = (canonical && (canonical.humanView || canonical.creationBlueprint)) || {};
-  const txt = String(human.optimizedIdea || '').trim();
-  const parts = [];
-  parts.push(canonicalStoryStrategyBlock('当前有效故事战略（词典达人唯一输入蓝本）'));
-  parts.push('【战略维度的下游使用要求】词典达人必须把战略维度当作“世界设定取舍依据”而不是重复生成剧情方案：固定核心进入稳定Canon；变量轴只在确有世界依据时转化为人物、组织、地点、规则或专名差异。禁止为了追求多样化而制造互相冲突的世界设定。');
-  parts.push(('【采用蓝本完整内容（唯一下游故事来源；已有角色/地名/专名不可擅自改动）】\n' + txt) || '（采用蓝本为空）');
-  parts.push(`【第一版完整世界基底要求】本次一次性建立闭环：核心人物 + 人物关系 + 核心地点 + 地点关联 + 核心组织/机构 + 核心专名 + 世界规则 + 已由故事蓝本明确出现的核心物品/道具 + 核心术语 + 核心历史事件。不要把这些核心事实拆给后续第二次AI重新定义。
-【来源层级】本批所有正式条目必须标记 sourceType=dictionary_foundation；后续词典充实只能新增 dictionary_enrichment，不得覆盖本层。
-【人物命名硬约束】禁则中的禁用字/禁用姓名是硬约束，不是建议；尤其姓名含“林”“陈”“苏”等禁用字的任何新人物均不得输出。优化构想中的 CHAR_001、CHAR_002……是尚未正式命名的人物ID：词典达人必须把这些ID映射到正式姓名，并在人物条目中保留稳定 id 字段。用户蓝本已经明确的正式姓名必须原样继承，不得改名。人物关系表应使用最终正式姓名；同一个人物ID只能对应一个正式姓名，严禁一人多名。`);
-  const ban = banListBlockFor('dictmaster');
+  const c=currentCanonicalStoryStrategy() || {};
+  const blueprint=c.creativeBlueprint || c.creationBlueprint?.structured || {};
+  const anchors=c.originalAnchors || c.anchors || {};
+  const dims=Array.isArray(c.strategicDimensions)?c.strategicDimensions:[];
+  const parts=[];
+  parts.push(`【词典达人唯一故事事实源｜Creative Blueprint】\n方案：${String(c.candidateName||'').trim()}\n${JSON.stringify(blueprint)}`);
+  if(Object.keys(anchors||{}).length) parts.push(`【用户原始构想锚点｜仅用于保护用户明确事实】\n${JSON.stringify(anchors)}`);
+  if(dims.length) parts.push(`【战略维度｜仅用于取舍，不是第二套故事事实】\n${JSON.stringify(dims)}`);
+  parts.push(`【Foundation Dictionary 最低通行标准】
+本次任务的目标不是一次性完成百科全书，而是建立“下游可以安全开写”的最小核心世界骨架。
+必须完成：至少1位核心人物；核心人物有正式姓名和基本身份；Creative Blueprint 中真正定义的人物ID（只指 PROTAGONIST.personId / KEY_CHARACTERS.personId 等人物定义字段）必须完成正式姓名映射；Blueprint 已明确的人物核心关系不能丢失；能够确定时代/主要舞台/基本世界；Blueprint 明确写出的世界硬规则不得被主动删除或改成相反规则；必须遵守禁用姓名和安全约束。
+可以为空、不得因此失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、人物详细档案字段、关系详细描述、地点关联、专名关联。没有依据就不要硬造；有则收录。
+人物的 age/gender/appearance/hobby/relation/catchphrase/trait 等非最低通行字段没有依据时写“未知/无”，不要为了填满字段而制造事实。
+只有 Blueprint 明确给出世界规则时才需要输出 RULE；没有明确规则时允许 RULE 区块完全省略。
+不要因为 RELATIONSHIPS 文本中出现一个未在人物定义区声明的 CHAR_xxx，就创建新人物或把它视为必须命名的人物。
+不要为了凑数量生成地点、组织、专名、道具或其他条目。词典充实阶段会继续补全这些内容。
+【输入层规则】Creative Blueprint 是唯一故事事实源；不要把 Human View、optimizedIdea、小说简介、全书节拍作为第二套等价事实重复理解。战略维度只用于取舍，不得覆盖 Blueprint。`);
+  const ban=banListBlockFor('dictmaster');
   if(ban) parts.push(ban);
   return parts.join('\n\n');
 }
+function canonicalPersonDefinitions(){
+  const c=currentCanonicalStoryStrategy() || {};
+  const b=c.creativeBlueprint || c.creationBlueprint?.structured || {};
+  const out=[];
+  const add=(personId,name,where)=>{
+    const id=String(personId||'').trim().toUpperCase();
+    const nm=String(name||'').trim();
+    if(id && /^CHAR_\d{3,}$/i.test(id)) out.push({id,name:nm,where});
+  };
+  const p=b.protagonist || {};
+  add(p.personId, p.name, 'PROTAGONIST');
+  (Array.isArray(b.keyCharacters)?b.keyCharacters:[]).forEach((x,i)=>{
+    // 新人物必须带稳定 CHAR_xxx；已有正式姓名的人物可能没有占位 ID，因此只登记真正存在的 ID。
+    add(x?.personId, x?.name, `KEY_CHARACTERS[${i+1}]`);
+  });
+  const seen=new Set();
+  return out.filter(x=>{ if(seen.has(x.id)) return false; seen.add(x.id); return true; });
+}
 function canonicalPersonPlaceholderIds(){
-  const c=currentCanonicalStoryStrategy();
-  const raw=JSON.stringify(c?.creativeBlueprint || c?.creationBlueprint?.structured || {});
-  return [...new Set((raw.match(/CHAR_\d{3,}/gi)||[]).map(x=>x.toUpperCase()))];
+  return canonicalPersonDefinitions().map(x=>x.id);
+}
+function canonicalCoreRelationships(){
+  const c=currentCanonicalStoryStrategy() || {};
+  const b=c.creativeBlueprint || c.creationBlueprint?.structured || {};
+  const defs=canonicalPersonDefinitions();
+  const nameById=new Map(defs.map(x=>[x.id,x.name||x.id]));
+  const protagonist=String(b.protagonist?.personId||'').trim().toUpperCase();
+  const knownNames=new Set(defs.map(x=>String(x.name||'').trim()).filter(Boolean));
+  const resolve=v=>{
+    const x=String(v||'').trim();
+    const u=x.toUpperCase();
+    return nameById.get(u) || (knownNames.has(x) ? x : x);
+  };
+  const rels=[];
+  (Array.isArray(b.relationships)?b.relationships:[]).forEach(r=>{
+    const a=resolve(r?.from), b2=resolve(r?.to), rel=String(r?.relation||'').trim();
+    if(a && b2 && rel) rels.push({a,b:b2,relation:rel});
+  });
+  (Array.isArray(b.keyCharacters)?b.keyCharacters:[]).forEach(x=>{
+    const n=resolve(x?.personId || x?.name);
+    if(protagonist && n && String(x?.relation||'').trim()) rels.push({a:resolve(protagonist),b:n,relation:String(x.relation).trim()});
+  });
+  const seen=new Set();
+  return rels.filter(r=>{ const k=[r.a,r.b,r.relation].map(v=>String(v).trim().toLowerCase()).join('|'); if(seen.has(k)) return false; seen.add(k); return true; });
+}
+function canonicalWorldRules(){
+  const c=currentCanonicalStoryStrategy() || {};
+  const b=c.creativeBlueprint || c.creationBlueprint?.structured || {};
+  return Array.isArray(b.worldRules) ? b.worldRules.map(x=>String(x||'').trim()).filter(Boolean) : [];
 }
 function parseDictMasterPlainText(raw){
   let text=String(raw||'').replace(/^```(?:text|plaintext)?\s*/i,'').replace(/\s*```$/,'').trim();
@@ -16640,43 +16699,77 @@ function parseDictMasterPlainText(raw){
 
 function validateDictMasterOutput(j){
   if(!j || typeof j !== 'object') return '返回不是对象';
-  if(!Array.isArray(j.characters) || !j.characters.length) return '人物卡 characters 为空（应至少 1 位）';
+  if(!Array.isArray(j.characters) || !j.characters.length) return '词典达人至少需要 1 位核心人物';
+
   const personIds=new Set();
+  const personNames=new Set();
   for(const c of j.characters){
-    if(!c || !String(c.name||'').trim()) return '存在人物缺少 name';
-    if(c.id){ const cid=String(c.id).trim(); if(!/^CHAR_\d{3,}$/i.test(cid)) return `人物「${String(c.name).trim()}」id 必须是 CHAR_001 形式`; if(personIds.has(cid)) return `人物ID「${cid}」重复`; personIds.add(cid); }
-    const banReason=banListViolation(String(c.name||'').trim()); if(stateBanEnabled() && banReason) return `人物「${String(c.name).trim()}」命中禁则：${banReason}`;
-    const must = {identity:c.identity, trait:c.trait};
-    for(const [kk,vv] of Object.entries(must)){ if(!String(vv||'').trim()) return `人物「${String(c.name).trim()||'?'}」缺字段 ${kk}`; }
-    for(const kk of ['age','gender','appearance','hobby','relation','catchphrase']){ if(!String(c[kk]||'').trim()) c[kk]='未知'; }
-    if(String(c.relation||'').trim().length > 40) return `人物「${String(c.name).trim()||'?'}」relation 超过 40 字，疑似把多组关系堆进摘要：只写 ≤20字 的一句话（如「主角的青梅」），多组关系的逐条明细放 relationshipTable`;
-  }
-  const requiredPersonIds=canonicalPersonPlaceholderIds();
-  for(const rid of requiredPersonIds){ if(!personIds.has(rid)) return `词典达人未为优化构想人物ID「${rid}」建立正式姓名映射`; }
-  if(!Array.isArray(j.relationshipTable)) return '缺少 relationshipTable 数组';
-  const personNames=new Set((j.characters||[]).map(x=>String(x&&x.name||'').trim()).filter(Boolean));
-  const placeNames=new Set((j.places||[]).map(x=>String(x&&x.name||'').trim()).filter(Boolean));
-  const properNames=new Set((j.propernouns||[]).map(x=>String(x&&x.name||'').trim()).filter(Boolean));
-  for(const e of (j.relationshipTable||[])){ const a=String(e&&e.a||'').trim(), b=String(e&&e.b||'').trim(); if(a&&b && (!personNames.has(a)||!personNames.has(b))) return `人物关系表引用了未定义人物：「${a}」或「${b}」`; }
-  const places = Array.isArray(j.places)?j.places:[];
-  const props = Array.isArray(j.propernouns)?j.propernouns:[];
-  for(const e of (j.placeContacts||[])){ const a=String(e&&e.from||'').trim(), b=String(e&&e.to||'').trim(); if(a&&b && (!placeNames.has(a)||!placeNames.has(b))) return `地名关联表引用了未定义地名：「${a}」或「${b}」`; }
-  for(const e of (j.properContacts||[])){ const a=String(e&&e.from||'').trim(), b=String(e&&e.to||'').trim(); if(a&&b && (!properNames.has(a)||!properNames.has(b))) return `专名关联表引用了未定义专名：「${a}」或「${b}」`; }
-  for(const p of places){ if(p && (!String(p.name||'').trim()||!String(p.type||'').trim()||!String(p.note||'').trim())) return `地名「${String(p&&p.name||'').trim()||'?'}」信息不全（需 type+note）`; }
-  for(const p of props){ if(p && (!String(p.name||'').trim()||!String(p.note||'').trim())) return `专名「${String(p&&p.name||'').trim()||'?'}」缺 note`; }
-  const wr = Array.isArray(j.worldRules)?j.worldRules:[];
-  for(const r of wr){ if(r && (!String(r.cat||'').trim()||!String(r.rule||'').trim())) return `世界观规则「${String(r&&r.cat||'').trim()||'?'}」缺失 cat 或 rule`; }
-  const genericReq = { organizations:['name'], institutions:['name'], items:['name'], terms:['name'], events:['name'], lifeSettings:['name'] };
-  for(const [key,fields] of Object.entries(genericReq)){ const arr=Array.isArray(j[key])?j[key]:[]; for(const e of arr){ if(e && fields.some(f=>!String(e[f]||'').trim())) return `基础词典 ${key} 存在缺少名称的条目`; } }
-  for(const [key,aa,bb,lab] of [['relationshipTable','a','b','人物关系表'],['placeContacts','from','to','地名关联表'],['properContacts','from','to','专名关联表']]){
-    const arr = Array.isArray(j[key]) ? j[key] : [];
-    for(const e of arr){
-      if(!e || typeof e !== 'object') continue;
-      const A=String(e[aa]||'').trim(), B=String(e[bb]||'').trim();
-      const hasRest = String(e.relation||'').trim() || String(e.note||'').trim();
-      if(hasRest && (!A || !B)) return `${lab}存在端名不全的条目（${lab}每条必须两端都填真实名称，禁止把功能/属性/子项当作另一端凑数）`;
-      if(A && B && A===B) return `${lab}「${A}」两端相同（自身对自身无意义）`;
+    if(!c || !String(c.name||'').trim()) return '存在核心人物缺少正式姓名';
+    const nm=String(c.name).trim();
+    const cid=String(c.id||'').trim().toUpperCase();
+    if(cid){
+      if(!/^CHAR_\d{3,}$/.test(cid)) return `人物「${nm}」id 必须是 CHAR_001 形式`;
+      if(personIds.has(cid)) return `人物ID「${cid}」重复`;
+      personIds.add(cid);
     }
+    const banReason=banListViolation(nm);
+    if(stateBanEnabled() && banReason) return `人物「${nm}」命中禁则：${banReason}`;
+    if(!String(c.identity||'').trim()) c.identity='未知';
+    if(!String(c.trait||'').trim()) c.trait='未知';
+    for(const kk of ['age','gender','appearance','hobby','relation','catchphrase']){
+      if(!String(c[kk]||'').trim()) c[kk]='未知';
+    }
+    personNames.add(nm);
+  }
+
+  // 只要求 Blueprint 真正定义的人物 ID 完成正式姓名映射；禁止扫描整份 Blueprint 文本。
+  for(const def of canonicalPersonDefinitions()){
+    if(!personIds.has(def.id)) return `词典达人未为优化构想人物ID「${def.id}」建立正式姓名映射${def.where?'（来源：'+def.where+'）':''}`;
+  }
+
+  if(!Array.isArray(j.relationshipTable)) return '缺少 relationshipTable 数组';
+  const rels=j.relationshipTable||[];
+  for(const e of rels){
+    const a=String(e&&e.a||'').trim(), b=String(e&&e.b||'').trim();
+    if(a&&b && (!personNames.has(a)||!personNames.has(b))) return `人物关系表引用了未定义人物：「${a}」或「${b}」`;
+    if(a&&b&&a===b) return `人物关系表「${a}」两端相同`;
+  }
+
+  // Blueprint 明确给出的核心关系必须至少在关系表中保留；关系文字允许自然改写。
+  const norm=x=>String(x||'').replace(/[\s，。！？；：:,.!?、]/g,'').toLowerCase();
+  for(const need of canonicalCoreRelationships()){
+    const na=norm(need.a), nb=norm(need.b), nr=norm(need.relation);
+    const found=rels.some(e=>{
+      const a=norm(e?.a), b=norm(e?.b), r=norm(e?.relation);
+      const samePair=(a===na&&b===nb)||(a===nb&&b===na);
+      return samePair && (!nr || r.includes(nr) || nr.includes(r));
+    });
+    if(!found) return `词典达人丢失了蓝本明确的核心人物关系：「${need.a} ↔ ${need.b}｜${need.relation}」`;
+  }
+
+  // 基本世界/舞台必须可用，但不要求地点卡、组织、专名等必须存在。
+  if(!String(j.summary||'').trim()) return '词典达人缺少基本世界/故事舞台摘要（WORLD.summary）';
+
+  // Blueprint 明确写过世界规则时，至少必须保留世界规则层；没有明确规则则允许为空。
+  const sourceRules=canonicalWorldRules();
+  const outRules=Array.isArray(j.worldRules)?j.worldRules:[];
+  if(sourceRules.length && !outRules.length) return '词典达人丢失了蓝本明确的世界规则';
+  for(const r of outRules){
+    if(!r || !String(r.cat||'').trim()) r.cat='通用规则';
+    if(!String(r.rule||'').trim()) r.rule='未进一步细化；以后续蓝本与正文事实为准';
+  }
+
+  // 其他类别全部是可选 Foundation 资产：有则收录，缺失不阻断整次生成。
+  for(const arr of ['places','propernouns','organizations','institutions','items','terms','events','lifeSettings']){
+    if(!Array.isArray(j[arr])) j[arr]=[];
+  }
+  for(const e of (j.placeContacts||[])){
+    const a=String(e?.from||'').trim(), b=String(e?.to||'').trim();
+    if(a&&b && (!new Set(j.places.map(x=>String(x?.name||'').trim())).has(a)||!new Set(j.places.map(x=>String(x?.name||'').trim())).has(b))) return `地名关联表引用了未定义地名：「${a}」或「${b}」`;
+  }
+  for(const e of (j.properContacts||[])){
+    const a=String(e?.from||'').trim(), b=String(e?.to||'').trim();
+    if(a&&b && (!new Set(j.propernouns.map(x=>String(x?.name||'').trim())).has(a)||!new Set(j.propernouns.map(x=>String(x?.name||'').trim())).has(b))) return `专名关联表引用了未定义专名：「${a}」或「${b}」`;
   }
   return '';
 }
