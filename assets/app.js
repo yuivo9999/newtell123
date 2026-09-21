@@ -3089,6 +3089,7 @@ async function generateStrategyStage(btn, force){
     if(!check.ok) throw new Error(`第一阶段战略分析校验失败：${check.code} ${check.details||''}`);
     state.originalIdeaAnchors = strategy.originalAnchors;
     state.strategicDimensions = strategy.strategicDimensions;
+    state.strategicDiversityProfile = strategy.diversityProfile || null;
     state.polishStrategyTrace = {ts:Date.now(), originalAnchors:strategy.originalAnchors, strategicDimensions:strategy.strategicDimensions};
     state.strategyStage1Status = 'ready';
     state.strategyStage2Status = 'empty';
@@ -3133,7 +3134,8 @@ async function generatePolishStage(btn, force){
     const txt = await callAIGuarded('ideaPolishStage2', {
       multi,
       originalAnchors: state.originalIdeaAnchors,
-      strategicDimensions: state.strategicDimensions
+      strategicDimensions: state.strategicDimensions,
+      diversityProfile: state.strategicDiversityProfile || null
     }, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')});
     const out = String(txt||'').trim();
     if(!out) throw new Error('第二阶段没有返回内容');
@@ -3280,7 +3282,8 @@ function canonicalStoryStrategyBlock(label='当前有效故事战略'){
   const h=c.humanView || c.creationBlueprint || {};
   const fp=c.strategyFingerprint || c.strategy || {};
   const dims = Array.isArray(c.strategicDimensions)?c.strategicDimensions:[];
-  return `【${label}｜唯一权威来源】\n方案：${String(c.candidateName||'').trim()}\n战略指纹：${JSON.stringify(fp)}\n原始构想核心锚点：${JSON.stringify(c.originalAnchors||c.anchors||{})}\n动态战略维度：${JSON.stringify(dims)}\n完整创作蓝本：\n${String(h.optimizedIdea||'').trim()}\n小说简介：${String(h.novelSummary||'').trim()}\n全书节拍：\n${String(h.fullBookBeat||'').trim()}`;
+  const diversity = c.diversityProfile || null;
+  return `【${label}｜唯一权威来源】\n方案：${String(c.candidateName||'').trim()}\n战略指纹：${JSON.stringify(fp)}\n原始构想核心锚点：${JSON.stringify(c.originalAnchors||c.anchors||{})}\n动态战略维度：${JSON.stringify(dims)}\n战略多样性边界：${JSON.stringify(diversity)}\n完整创作蓝本：\n${String(h.optimizedIdea||'').trim()}\n小说简介：${String(h.novelSummary||'').trim()}\n全书节拍：\n${String(h.fullBookBeat||'').trim()}`;
 }
 function buildPolishCanonical(cand, revision){
   const c = cand || {};
@@ -3310,6 +3313,7 @@ function buildPolishCanonical(cand, revision){
     })),
     originalAnchors: JSON.parse(JSON.stringify(c.originalAnchors || c.coreAnchors || c.anchorPoints || state.originalIdeaAnchors || {})),
     strategicDimensions: Array.isArray(c.strategicDimensions) ? JSON.parse(JSON.stringify(c.strategicDimensions)) : (Array.isArray(v.optimizationStrategies)?JSON.parse(JSON.stringify(v.optimizationStrategies)):[]),
+    diversityProfile: c.diversityProfile ? JSON.parse(JSON.stringify(c.diversityProfile)) : (v.diversityProfile ? JSON.parse(JSON.stringify(v.diversityProfile)) : null),
     humanView:human,
     creationBlueprint:{
       optimizedIdea:human.optimizedIdea,
@@ -3333,11 +3337,12 @@ function syncPolishMetaFromCandidate(c){
   state.polishDiagnosis = (c&&c.diagnosis) || v.diagnosis || null;
   state.polishStrategies = Array.isArray(c&&c.optimizationStrategies) ? JSON.parse(JSON.stringify(c.optimizationStrategies)) : [];
   state.strategicDimensions = Array.isArray(c&&c.strategicDimensions) ? JSON.parse(JSON.stringify(c.strategicDimensions)) : state.strategicDimensions;
+  state.strategicDiversityProfile = c&&c.diversityProfile ? JSON.parse(JSON.stringify(c.diversityProfile)) : state.strategicDiversityProfile;
   state.originalIdeaAnchors = (c&&c.originalAnchors) ? JSON.parse(JSON.stringify(c.originalAnchors)) : state.originalIdeaAnchors;
 }
 
 function polishObjectFromAny(raw){
-  // APP26: 统一“优化构想”响应入口。允许对象、JSON字符串、代码围栏JSON、旧版纯文本。
+  // APP27: 统一“优化构想”响应入口。允许对象、JSON字符串、代码围栏JSON、旧版纯文本。
   if(raw && typeof raw === 'object') return raw;
   const text = String(raw||'').trim();
   if(!text) return {};
@@ -5576,7 +5581,9 @@ function principalSourceBlocks(groups){
   _ppAddSource(out,'nav_beacon','导航灯塔 / 用户锚点',o.navBeacon,'highest','user');
   _ppAddSource(out,'outline_core','现有全书大纲核心资料',{title:o.title,logline:o.logline,tone:o.tone,chapters:o.chapters},'highest','outline');
   const canonical=currentCanonicalStoryStrategy();
-  if(canonical){ _ppAddSource(out,'canonical_story_strategy','当前有效故事战略·唯一权威',canonical,'highest','canonical_story_strategy'); }
+  if(canonical){ _ppAddSource(out,'canonical_story_strategy','当前有效故事战略·唯一权威',canonical,'highest','canonical_story_strategy');
+    _ppAddSource(out,'strategic_diversity','战略多样性边界·固定核心与变量轴',canonical.diversityProfile || null,'high','canonical_story_strategy');
+  }
   _ppAddSource(out,'chapter_plans','既有《全书节拍》/章节规划',o.chapterPlans,'high','planning');
   _ppAddSource(out,'global_timeline','全书时间线 / 时间锚点',{
     timeline:o.globalTimeline || o.timeline || null,
@@ -8801,7 +8808,7 @@ function buildIdeaPolishStage2User(ctx){
   const base = buildIdeaPolishUserFixed(ctx);
   const anchors = ctx.originalAnchors || {};
   const dims = Array.isArray(ctx.strategicDimensions) ? ctx.strategicDimensions : [];
-  return base + `\n\n【第一阶段战略分析结果·权威输入】\n原始构想核心锚点：\n${JSON.stringify(anchors)}\n\n动态战略维度（只能从这里组合）：\n${JSON.stringify(dims)}\n\n【第二阶段任务】\n现在基于以上第一阶段结果，生成最终3—5个优化构想方案。不要再次生成战略地图；不要使用固定五向。每个方案必须体现不同的战略组合和独立战略指纹。`;
+  return base + `\n\n【第一阶段战略分析结果·权威输入】\n原始构想核心锚点：\n${JSON.stringify(anchors)}\n\n动态战略维度（只能从这里组合）：\n${JSON.stringify(dims)}\n\n战略多样性边界：\n${JSON.stringify(ctx.diversityProfile || null)}\n\n【第二阶段任务】\n现在基于以上第一阶段结果，生成最终3—5个优化构想方案。不要再次生成战略地图；不要使用固定五向。每个方案必须体现不同的战略组合和独立战略指纹。`;
 }
 
 function buildIdeaPolishUserFixed(ctx){
@@ -9111,6 +9118,7 @@ AI不得无依据地把新人物、新势力、新能力、新世界规则当成
       "creativeAdditions":"仅列AI为了让故事可写而新增的关键创意；没有则写无",
       "originalAnchors":{"characters":[],"relationships":[],"goals":[],"coreConflict":"","worldRules":[],"fixedFacts":[]},
       "strategicDimensions":[{"name":"动态战略维度名称","description":"该维度如何展开故事","whyFit":"为什么适合当前故事"}],
+      "diversityProfile":{"fixedCore":[],"variableAxes":[],"avoidRepetition":[],"recommendedMix":""},
       "strategyFingerprint":{"mainStrategy":"","secondaryStrategy":"","coreConflict":"","storyEngine":"","emotionalPromise":"","pacing":""},
       "diagnosis":{"strengths":[],"defects":[],"missing":[],"constraints":[]},
       "optimizationStrategies":[],
@@ -9174,12 +9182,16 @@ const IDEA_STRATEGY_SYS = `你是本项目的“故事战略分析引擎”。�
 只输出JSON，不要Markdown，不要解释：
 {
   "originalAnchors":{"characters":[],"relationships":[],"goals":[],"coreConflict":"","worldRules":[],"fixedFacts":[]},
-  "strategicDimensions":[{"name":"","description":"","whyFit":""}]
+  "strategicDimensions":[{"name":"","description":"","whyFit":""}],
+  "diversityProfile":{"fixedCore":[],"variableAxes":[],"avoidRepetition":[],"recommendedMix":""}
 }
 
 【质量要求】
 - strategicDimensions必须为6—10个。
+- diversityProfile必须明确区分“不能变的核心”和“可以变化的轴”，并指出应避免的重复模式。
 - 每个维度必须真正不同，并说明如何展开故事以及为什么适合当前故事。
+- 必须额外判断哪些内容属于全书不能轻易改变的核心，哪些属于可在后续方案中变化的战略轴，并输出diversityProfile。
+- diversityProfile不是鼓励随机，而是防止长期创作被单一战略、单一冲突模式、单一节奏或单一人物功能绑死；固定核心必须保护，变化轴必须允许组合和轮换。
 - originalAnchors只记录用户已经明确给出或可以从其构想直接确认的核心事实；不要把AI新增创意伪装成用户事实。`;
 
 const IDEA_POLISH_STAGE2_SYS = IDEA_POLISH_SYS_PRO + `
@@ -9191,6 +9203,7 @@ const IDEA_POLISH_STAGE2_SYS = IDEA_POLISH_SYS_PRO + `
 - 必须从提供的6—10个战略维度中组合、取舍、交叉，生成3—5个真正不同的最终方案。
 - 每个方案的strategicDimensions必须来自或明确组合第一阶段提供的维度。
 - 所有方案共享第一阶段originalAnchors中的用户事实底盘。
+- 必须使用第一阶段diversityProfile：固定核心不得被多样化破坏；变量轴应在3—5个方案之间形成有意义的组合差异，避免所有方案只是换名字。
 - 第一阶段没有确认的新增内容，只能作为方案创意/creativeAdditions出现。
 - 本阶段唯一产物是最终options，不再输出独立的战略分析步骤。`;
 
@@ -15320,6 +15333,7 @@ function buildDictMasterUser(ctx){
   const txt = String(human.optimizedIdea || '').trim();
   const parts = [];
   parts.push(canonicalStoryStrategyBlock('当前有效故事战略（词典达人唯一输入蓝本）'));
+  parts.push('【战略维度的下游使用要求】词典达人必须把战略维度当作“世界设定取舍依据”而不是重复生成剧情方案：固定核心进入稳定Canon；变量轴只在确有世界依据时转化为人物、组织、地点、规则或专名差异。禁止为了追求多样化而制造互相冲突的世界设定。');
   parts.push(('【采用蓝本完整内容（唯一下游故事来源；已有角色/地名/专名不可擅自改动）】\n' + txt) || '（采用蓝本为空）');
   const ban = banListBlockFor('dictmaster');
   if(ban) parts.push(ban);
