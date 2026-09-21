@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.348';
+const APP_VERSION = '1.0.349';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.348.js';
+const APP_FILE_VERSION = 'app1.0.349.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -1894,10 +1894,115 @@ function salvageOutlineFromText(txt){
   return { o, salvaged: true };
 }
 
-function busy(btn, on, label, cls){
-  if(on){ btn._txt = btn.innerHTML; btn.disabled = true; btn.classList.add('is-busy'); if(cls) btn.classList.add(cls); btn.innerHTML = '<span class="spinner"></span>'+(label||'生成中…'); }
-  else { btn.disabled = false; btn.classList.remove('is-busy'); if(cls) btn.classList.remove(cls); btn.innerHTML = btn._txt; }
+/* ===== 1.0.349 全局生成结果定位 + 优化构想按钮状态 ===== */
+let _generationFocusPending = null;
+let _generationFocusTimer = null;
+function installGlobalGenerationUi(){
+  if(document.getElementById('app-global-generation-ui-10349')) return;
+  const st=document.createElement('style');
+  st.id='app-global-generation-ui-10349';
+  st.textContent=`
+    /* 全主题统一：优化构想按钮三态。使用 !important，避免 style.css / 主题覆盖。 */
+    #btnOptimizationConcept.app-opt-btn,
+    #btnOptimizationConcept.app-opt-btn.app-opt-idle,
+    #btnOptimizationConcept.app-opt-btn.app-opt-ready,
+    #btnOptimizationConcept.app-opt-btn.app-opt-generating,
+    #btnOptimizationConcept.app-opt-btn.app-opt-error{
+      border:1px solid rgba(255,255,255,.22) !important;
+      color:#fff !important;
+      font-weight:800 !important;
+      text-shadow:0 1px 2px rgba(0,0,0,.22) !important;
+      box-shadow:0 7px 18px rgba(0,0,0,.12) !important;
+      transition:background .22s ease,box-shadow .22s ease,transform .12s ease,filter .22s ease !important;
+      position:relative !important;
+      overflow:hidden !important;
+    }
+    #btnOptimizationConcept.app-opt-btn.app-opt-idle{background:linear-gradient(135deg,#ffb52e 0%,#f28a18 52%,#ffd45a 100%) !important;}
+    #btnOptimizationConcept.app-opt-btn.app-opt-ready{background:linear-gradient(135deg,#3f8cff 0%,#3159d7 55%,#65b8ff 100%) !important;}
+    #btnOptimizationConcept.app-opt-btn.app-opt-error{background:linear-gradient(135deg,#e06a45 0%,#c93d3d 55%,#ee8b52 100%) !important;}
+    #btnOptimizationConcept.app-opt-btn.app-opt-generating{background:linear-gradient(135deg,#ff5a5a 0%,#c91f2d 52%,#ff7770 100%) !important;animation:app10349GeneratingPulse 1.05s ease-in-out infinite !important;}
+    #btnOptimizationConcept.app-opt-btn.app-opt-pressed{animation:app10349Press .28s ease-out !important;}
+    #btnOptimizationConcept.app-opt-btn.app-opt-generating::after{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 20%,rgba(255,255,255,.25) 48%,transparent 72%);transform:translateX(-120%);animation:app10349Sweep 1.35s linear infinite;pointer-events:none;}
+    @keyframes app10349Press{0%{transform:scale(1)}35%{transform:scale(.965)}70%{transform:scale(1.015)}100%{transform:scale(1)}}
+    @keyframes app10349GeneratingPulse{0%,100%{box-shadow:0 7px 18px rgba(180,25,35,.22),0 0 0 0 rgba(255,65,65,.20)}50%{box-shadow:0 9px 24px rgba(180,25,35,.34),0 0 0 7px rgba(255,65,65,.06)}}
+    @keyframes app10349Sweep{to{transform:translateX(120%)}}
+    /* 三个基础设置折叠卡片 */
+    .app-idea-fold{border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff);margin:10px 0;overflow:hidden;}
+    .app-idea-fold>summary{list-style:none;cursor:pointer;padding:10px 12px;font-weight:800;display:flex;align-items:center;gap:8px;user-select:none;}
+    .app-idea-fold>summary::-webkit-details-marker{display:none;}
+    .app-idea-fold>summary::before{content:'▶';font-size:11px;opacity:.7;transition:transform .16s ease;}
+    .app-idea-fold[open]>summary::before{transform:rotate(90deg);}
+    .app-idea-fold>summary:hover{background:rgba(127,127,127,.06);}
+    .app-idea-fold-body{padding:0 10px 10px;}
+    @media (prefers-reduced-motion:reduce){#btnOptimizationConcept.app-opt-btn,.app-idea-fold>summary::before{animation:none !important;transition:none !important}.app-opt-btn.app-opt-generating::after{animation:none !important}}
+    @media (max-width:640px){#btnOptimizationConcept.app-opt-btn{min-height:46px}.app-idea-fold>summary{padding:11px 12px}.app-idea-fold-body{padding:0 8px 9px}}
+  `;
+  document.head.appendChild(st);
 }
+function focusGeneratedContent(target, opts={}){
+  if(!target) return false;
+  const el=typeof target==='string' ? document.querySelector(target) : target;
+  if(!el) return false;
+  const block=opts.block||'center';
+  try{ el.scrollIntoView({behavior:'smooth',block,inline:'nearest'}); }
+  catch(_){ try{el.scrollIntoView(true);}catch(e){} }
+  if(opts.flash!==false){ el.classList.add('gs-flash'); setTimeout(()=>el.classList.remove('gs-flash'),1600); }
+  return true;
+}
+function queueGenerationFocus(target, delay=70){
+  _generationFocusPending=target;
+  clearTimeout(_generationFocusTimer);
+  _generationFocusTimer=setTimeout(()=>{
+    const t=_generationFocusPending; _generationFocusPending=null;
+    focusGeneratedContent(t,{block:'center'});
+  },Math.max(0,delay));
+}
+function inferGenerationFocusTarget(btn){
+  if(!btn) return null;
+  if(btn.dataset && btn.dataset.generationFocus) return btn.dataset.generationFocus;
+  const sec=btn.closest('.flow-sec');
+  if(sec){
+    const n=sec.dataset && sec.dataset.flow;
+    /* 返回稳定选择器，而不是旧 DOM 节点；render() 重建页面后仍能准确定位。 */
+    if(n) return `.flow-sec[data-flow="${CSS.escape ? CSS.escape(String(n)) : String(n)}"]`;
+    return sec;
+  }
+  return btn.id ? `#${CSS.escape ? CSS.escape(btn.id) : btn.id}` : btn;
+}
+function optButtonStateClass(){
+  const b=$('#btnOptimizationConcept');
+  if(!b) return;
+  b.classList.add('app-opt-btn');
+  b.classList.remove('app-opt-btn-legacy','app-opt-btn');
+  b.classList.add('app-opt-btn');
+  const generating=state.polishStatus==='generating'||state.strategyStage1Status==='generating'||state.strategyStage2Status==='generating';
+  const error=state.polishStatus==='error'||state.strategyStage1Status==='error'||state.strategyStage2Status==='error';
+  const ready=state.polishOptions?.length && (state.polishStatus==='adopted'||state.polishStatus==='ready_single'||state.polishStatus==='waiting_selection'||state.strategyStage2Status==='ready'||state.strategyStage2Status==='adopted');
+  b.classList.toggle('app-opt-idle',!generating&&!error&&!ready);
+  b.classList.toggle('app-opt-generating',!!generating);
+  b.classList.toggle('app-opt-ready',!!ready&&!generating&&!error);
+  b.classList.toggle('app-opt-error',!!error&&!generating&&!ready);
+}
+function busy(btn, on, label, cls){
+  if(!btn) return;
+  installGlobalGenerationUi();
+  if(on){
+    btn._txt = btn.innerHTML; btn._generationFocusTarget = inferGenerationFocusTarget(btn); btn.disabled = true;
+    btn.classList.add('is-busy'); if(cls) btn.classList.add(cls);
+    btn.innerHTML = '<span class="spinner"></span>'+(label||'生成中…');
+    if(btn.id==='btnOptimizationConcept'){
+      btn.classList.add('app-opt-btn','app-opt-generating');
+      btn.classList.remove('app-opt-idle','app-opt-ready','app-opt-error');
+      btn.classList.add('app-opt-pressed');
+      setTimeout(()=>btn.classList.remove('app-opt-pressed'),320);
+    }
+  } else {
+    btn.disabled = false; btn.classList.remove('is-busy'); if(cls) btn.classList.remove(cls); if(btn._txt!=null) btn.innerHTML = btn._txt;
+    if(btn.id==='btnOptimizationConcept') optButtonStateClass();
+    if(btn._generationFocusTarget) queueGenerationFocus(btn._generationFocusTarget,90);
+  }
+}
+installGlobalGenerationUi();
 
 let _abortCtl = null;           // 当前 AbortController
 let _abortBtn = null;           // 当前可见的停止按钮 DOM
@@ -3168,11 +3273,11 @@ function compactTextForAI(v, max=6000){
   return t.slice(0,head)+'\n…（中间内容已省略，仅用于控制上下文体积）…\n'+t.slice(-tail);
 }
 function estimateAITokens(v){ return Math.max(0,Math.ceil(String(v||'').length/2)); }
-function rememberPolishFailure(raw, failure, meta){
+function rememberPolishFailure(raw, failure, meta, kind='ideaOptimization'){
   const text=String(raw||'');
   state.polishRawFallback=text;
   state.polishFailureTrace={
-    kind:'ideaPolishStage2',
+    kind:kind||'ideaOptimization',
     category:failure?.category||'MODEL_ERROR',
     code:failure?.code||'UNKNOWN',
     field:failure?.field||'output',
@@ -3188,10 +3293,10 @@ function rememberPolishFailure(raw, failure, meta){
   };
 }
 function buildTargetedRepairPrompt(kind, originalUser, raw, failure, ctx){
-  const source=kind==='ideaPolishStage2' ? `\n【第一阶段权威战略源（只读）】\n${JSON.stringify({originalAnchors:ctx?.originalAnchors||null,strategicDimensions:ctx?.strategicDimensions||[],diversityProfile:ctx?.diversityProfile||null})}` : '';
+  const source=(kind==='ideaPolishStage2' || kind==='ideaOptimization') ? `\n【当前生成上下文】\n${JSON.stringify({originalAnchors:ctx?.originalAnchors||null,strategicDimensions:ctx?.strategicDimensions||[],diversityProfile:ctx?.diversityProfile||null,multi:!!ctx?.multi})}` : '';
   const prev=String(raw||'');
   const prevCompact=prev.length>30000 ? prev.slice(0,24000)+'\n…（上一版过长，已裁剪）…\n'+prev.slice(-6000) : prev;
-  return `${originalUser}\n\n【定向修复任务】\n上一版输出未通过严格校验。你现在只允许修复失败项，不得降低任何验收标准，也不得静默省略字段。\n失败分类：${failure.category}\n失败代码：${failure.code}\n失败字段：${failure.field}\n失败详情：${failure.details}\n修复建议：${failure.repairHint}${source}\n\n【上一版输出（受控长度）】\n${prevCompact}\n\n【硬性要求】\n1. 保留上一版已经有效的内容；只修复失败字段或与其直接相关的部分。\n2. 必须重新输出完整、可解析的最终结果，不要输出解释、诊断、道歉或“已修复”。\n3. 不得通过降低数量、删字段、改成占位文本、换名字/措辞来规避校验。\n4. 第二阶段不得修改第一阶段 strategicDimensions；候选方案只能引用第一阶段维度，新增创意必须进入 creativeAdditions。`;
+  return `${originalUser}\n\n【定向修复任务】\n上一版输出未通过严格校验。你现在只允许修复失败项，不得降低任何验收标准，也不得静默省略字段。\n失败分类：${failure.category}\n失败代码：${failure.code}\n失败字段：${failure.field}\n失败详情：${failure.details}\n修复建议：${failure.repairHint}${source}\n\n【上一版输出（受控长度）】\n${prevCompact}\n\n【硬性要求】\n1. 保留上一版已经有效的内容；只修复失败字段或与其直接相关的部分。\n2. 必须重新输出完整、可解析的最终结果，不要输出解释、诊断、道歉或“已修复”。\n3. 不得通过降低数量、删字段、改成占位文本、换名字/措辞来规避校验。\n4. 不得伪造用户事实；战略维度必须动态且与方案一致；若为 ideaOptimization，必须严格按纯文本合同重新完整输出，不得输出JSON。`;
 }
 async function callValidatedWithRepair(kind, extra, callOpts, ctx, maxRepair=VALIDATION_RETRY_MAX){
   const system=getSystemPrompt(kind,extra)+globalCreativeConstraintBlock(kind);
@@ -3212,15 +3317,15 @@ async function callValidatedWithRepair(kind, extra, callOpts, ctx, maxRepair=VAL
         const report=validateAIOutput(kind,raw,ctx);
         if(report && report.ok){
           recordValidationAttempt(kind,attempt, null,true);
-          if(kind==='ideaPolishStage2'){ state.polishRawFallback=''; state.polishFailureTrace={kind,category:null,code:null,field:null,details:'生成并通过严格校验',responseChars:raw.length,responseTokenEstimate:estimateAITokens(raw),truncated:false,attempt:attempt+1,requestChars,requestTokenEstimate,ts:Date.now()}; }
+          if(kind==='ideaPolishStage2' || kind==='ideaOptimization'){ state.polishRawFallback=''; state.polishFailureTrace={kind,category:null,code:null,field:null,details:'生成并通过严格校验',responseChars:raw.length,responseTokenEstimate:estimateAITokens(raw),truncated:false,attempt:attempt+1,requestChars,requestTokenEstimate,ts:Date.now()}; }
           return {raw,attempts:attempt};
         }
         lastFailure=structuredValidationFailure(report,null);
       }
-      if(kind==='ideaPolishStage2') rememberPolishFailure(raw,lastFailure,{attempt,requestChars,requestTokenEstimate,finishReason:result?.finishReason});
+      if(kind==='ideaPolishStage2' || kind==='ideaOptimization') rememberPolishFailure(raw,lastFailure,{attempt,requestChars,requestTokenEstimate,finishReason:result?.finishReason},kind);
     }catch(e){
       lastFailure=structuredValidationFailure({ok:false,code:'CALL_FAILED',details:e?.message||String(e)},e);
-      if(kind==='ideaPolishStage2') rememberPolishFailure(raw,lastFailure,{attempt,requestChars:String(user||'').length + String(system||'').length,requestTokenEstimate:estimateAITokens(user)+estimateAITokens(system)});
+      if(kind==='ideaPolishStage2' || kind==='ideaOptimization') rememberPolishFailure(raw,lastFailure,{attempt,requestChars:String(user||'').length + String(system||'').length,requestTokenEstimate:estimateAITokens(user)+estimateAITokens(system)},kind);
     }
     recordValidationAttempt(kind,attempt,lastFailure,false);
     if(attempt>=maxRepair) break;
@@ -3232,105 +3337,55 @@ async function callValidatedWithRepair(kind, extra, callOpts, ctx, maxRepair=VAL
   throw e;
 }
 
-async function generateStrategyStage(btn, force){
-  const idea = (state.idea || '').trim();
+async function generateOptimizationConcept(btn, force){
+  const idea=(state.idea||'').trim();
   if(!idea){ toast('请先输入故事构想'); return false; }
-  const hasStage1 = state.strategyStage1Status === 'ready' && Array.isArray(state.strategicDimensions) && state.strategicDimensions.length;
-  if(hasStage1 && !force){ toast('第一阶段战略地图已经生成；如需重新生成，请点击「① 重新生成战略维度」'); return false; }
-  state.strategyStage1Status = 'generating';
-  state.strategyStage2Status = 'empty';
-  state.polishStatus = 'empty';
-  state.polishSelectedId = null; state.polishAdopted = null; state.polishCanonical = null; state.canonicalStoryStrategy = null;
-  state.polishOptions = [];
-  state.strategicDimensions = []; state.strategicDiversityProfile = null; state.originalIdeaAnchors = null; state.polishDiagnosis = null; state.polishStrategies = [];
-  // 先进入生成态并把可见按钮切换为 loading；不能在 busy 前 render，否则旧按钮会被替换成脱离 DOM 的节点。
-  persist();
-  render();
-  const liveBtn1 = $('#btnStrategyStage1');
-  if(liveBtn1) busy(liveBtn1,true,'① 正在生成战略维度…');
-  markAIRunning('ideaStrategy');
+  const kept=Array.isArray(state.polishOptions)&&state.polishOptions.length;
+  if(kept && !force){ if(!confirm(`已有 ${kept} 个优化方案，重新生成将覆盖当前批次。继续？`)) return false; }
+  const multi=polishMulti===true;
+  state.polishMode=multi?'multi':'single';
+  state.strategyStage1Status='generating';
+  state.strategyStage2Status='generating';
+  state.polishStatus='generating';
+  state.polishSelectedId=null; state.polishAdopted=null; state.polishCanonical=null; state.canonicalStoryStrategy=null;
+  state.polishOptions=[]; state.strategicDimensions=[]; state.strategicDiversityProfile=null; state.originalIdeaAnchors=null;
+  state.polishDiagnosis=null; state.polishStrategies=[]; state.polishFailureTrace=null; state.polishRawFallback='';
+  persist(); render();
+  const live=$('#btnOptimizationConcept'); if(live) busy(live,true,multi?'✨ 正在生成3—5个优化构想…':'✨ 正在生成优化构想…');
+  markAIRunning('ideaOptimization'); markAIRunning('idea');
   try{
-    const vctx = {rawIdea: state.idea || ''};
-    const v = await callValidatedWithRepair('ideaStrategy', {}, {temperature: resolveActiveSpec().ideaTemp, maxTokens: Math.max(2500, Math.min(5000, clampMaxTokens('polish')))}, vctx);
-    const raw = v.raw;
-    const strategy = extractJsonObject(raw);
-    const check = validateIdeaStrategyOutput(strategy);
-    if(!check.ok) throw new Error(`第一阶段战略分析校验失败：${check.code} ${check.details||''}`);
-    state.originalIdeaAnchors = strategy.originalAnchors;
-    state.strategicDimensions = strategy.strategicDimensions;
-    state.strategicDiversityProfile = strategy.diversityProfile || null;
-    state.polishStrategyTrace = {ts:Date.now(), originalAnchors:strategy.originalAnchors, strategicDimensions:strategy.strategicDimensions};
-    state.strategyStage1Status = 'ready';
-    state.strategyStage2Status = 'empty';
+    const ctx={multi};
+    const v=await callValidatedWithRepair('ideaOptimization',ctx,{temperature:resolveActiveSpec().ideaTemp,maxTokens:Math.max(4500,clampMaxTokens('polish'))},ctx);
+    const parsed=parseOptimizationPlainText(v.raw,multi);
+    if(!parsed.ok) throw new Error(parsed.error||'优化构想纯文本解析失败');
+    state.originalIdeaAnchors=parsed.analysis.originalAnchors;
+    state.strategicDimensions=parsed.analysis.strategicDimensions;
+    state.strategicDiversityProfile=parsed.analysis.diversityProfile;
+    state.polishStrategyTrace={ts:Date.now(),originalAnchors:state.originalIdeaAnchors,strategicDimensions:state.strategicDimensions};
+    showPolishResult(v.raw,multi);
+    state.strategyStage1Status='ready';
+    state.strategyStage2Status='ready';
+    state.polishFailureTrace=null; state.polishRawFallback='';
+    markAIDone('ideaOptimization'); markAIDone('idea');
     persist();
-    markAIDone('ideaStrategy');
-    toast(`第一阶段完成：已生成 ${strategy.strategicDimensions.length} 个动态战略维度`);
-    render();
+    toast(multi?`优化构想完成：已生成 ${state.polishOptions.length} 个方案`:'优化构想完成：已生成最终方案');
+    playEventSound('polish_done'); render();
+    queueGenerationFocus('#polishBox',120);
     return true;
   }catch(e){
-    state.strategyStage1Status = 'error';
-    addToFixQueue({kind:'ideaStrategy', error:e.message});
-    toast('战略维度生成失败：'+e.message);
-    reportSoundError('polish', e);
-    persist(); render();
-    return false;
+    state.strategyStage1Status='error'; state.strategyStage2Status='error';
+    addToFixQueue({kind:'ideaOptimization',error:e.message});
+    toast('优化构想生成失败：'+e.message); reportSoundError('polish',e); persist(); render(); queueGenerationFocus('#polishBox',120); return false;
   }finally{
-    state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='ideaStrategy');
+    state.aiNetwork.running=(state.aiNetwork.running||[]).filter(k=>!['ideaOptimization','ideaStrategy','ideaPolishStage2','idea'].includes(k));
   }
 }
 
-async function generatePolishStage(btn, force){
-  const idea = (state.idea || '').trim();
-  if(!idea){ toast('请先输入故事构想'); return false; }
-  if(state.strategyStage1Status !== 'ready' || !state.originalIdeaAnchors || !Array.isArray(state.strategicDimensions) || !state.strategicDimensions.length){
-    toast('请先完成「① 生成战略维度」，再进入第二阶段'); return false;
-  }
-  const kept = Array.isArray(state.polishOptions) && state.polishOptions.length;
-  if(kept && !force){ if(!confirm(`已有 ${kept} 个优化方案，重新生成将覆盖它们。继续？`)) return false; }
-  const multi = polishMulti === true;
-  state.polishMode = multi ? 'multi' : 'single';
-  state.strategyStage2Status = 'generating';
-  state.polishStatus = 'generating'; state.polishSelectedId = null; state.polishAdopted = null;
-  state.polishCanonical = null; state.canonicalStoryStrategy = null;
-  state.polishDiagnosis = null; state.polishFailureTrace = null; state.polishRawFallback = ''; state.polishStrategies = [];
-  // 同样先 render 出“第二阶段生成中”状态，再对当前 DOM 按钮加 loading。
-  persist();
-  render();
-  const liveBtn2 = $('#btnStrategyStage2');
-  if(liveBtn2) busy(liveBtn2,true,multi ? '② 正在生成3～5个优化构想…' : '② 正在生成最终优化构想…');
-  markAIRunning('ideaPolishStage2'); markAIRunning('idea');
-  try{
-    const stage2Ctx = { multi, originalAnchors: state.originalIdeaAnchors, strategicDimensions: state.strategicDimensions, diversityProfile: state.strategicDiversityProfile || null };
-    const v = await callValidatedWithRepair('ideaPolishStage2', stage2Ctx, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')}, stage2Ctx);
-    const out = String(v.raw||'').trim();
-    showPolishResult(out, multi);
-    state.polishFailureTrace = null;
-    state.polishRawFallback = '';
-    state.strategyStage2Status = 'ready';
-    markAIDone('ideaPolishStage2');
-    markAIDone('idea');
-    persist();
-    toast('第二阶段完成：3～5个优化构想已生成，请选择并采用方案');
-    playEventSound('polish_done');
-    render();
-    return true;
-  }catch(e){
-    state.strategyStage2Status = 'error';
-    addToFixQueue({kind:'ideaPolishStage2', error:e.message});
-    toast('优化构想生成失败：'+e.message);
-    reportSoundError('polish', e);
-    persist(); render();
-    return false;
-  }finally{
-    state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='ideaPolishStage2' && k!=='idea');
-  }
-}
+// 兼容旧入口：旧代码/旧存档仍可调用，但内部统一走新的单步骤生成器。
+async function generateStrategyStage(btn, force){ return generateOptimizationConcept(btn, !!force); }
+async function generatePolishStage(btn, force){ return generateOptimizationConcept(btn, !!force); }
+async function polishIdea(btn, force){ return generateOptimizationConcept(btn, !!force); }
 
-// 兼容历史入口：旧代码/历史按钮若仍调用 polishIdea，严格执行完整两阶段，但 UI 新入口不再直接绑定它。
-async function polishIdea(btn, force){
-  const ok = await generateStrategyStage($('#btnStrategyStage1') || btn, !!force);
-  if(ok) await generatePolishStage($('#btnStrategyStage2'), true);
-}
 
 function formatIdeaBrief(b){
   return [
@@ -3606,7 +3661,7 @@ function showPolishResult(out, multi){
   // 第一阶段战略地图是只读权威源：第二阶段候选方案只能引用/组合它，绝不反写 state.strategicDimensions。
   // 方案自身采用的战略维度只保存在 candidate.strategicDimensions，并在采用后进入 canonicalStoryStrategy。
   // 第一阶段 originalIdeaAnchors 是只读权威源；第二阶段解析不得反向覆盖它。
-  snapshotPolishBatch('重新优化前');
+  // 当前生成批次只属于本次优化构想，不自动写入历史；历史仅在用户明确执行清除/切换等操作时建立快照。
   state.polishSelectedId = state.polishMode==='multi' ? null : state.polishOptions[0]._id;
   state.polishAdopted = state.polishMode==='multi' ? null : (state.polishOptions[0].name||'方案1');
   state.polishStatus = state.polishMode==='multi' ? 'waiting_selection' : 'adopted';
@@ -3662,25 +3717,7 @@ function openPolishBox(){
   state.polishCollapsed = false;
   persist();
   box.style.display = 'block';
-  const head = box.querySelector('[data-polish-toggle]');
-  if(head){ head.setAttribute('aria-expanded','true'); const ic=head.querySelector('.pol-head-toggle'); if(ic) ic.textContent='▾'; }
   renderPolishCards(cards);
-}
-
-function togglePolishBox(force){
-  const box = $('#polishBox');
-  if(!box) return;
-  const next = typeof force === 'boolean' ? force : !state.polishCollapsed;
-  state.polishCollapsed = next;
-  box.style.display = next ? 'none' : 'block';
-  const head = box.querySelector('[data-polish-toggle]');
-  if(head){
-    head.setAttribute('aria-expanded', next ? 'false' : 'true');
-    const ic=head.querySelector('.pol-head-toggle');
-    if(ic) ic.textContent = next ? '▸' : '▾';
-  }
-  persist();
-  if(!next){ const cards=$('#polishCards'); if(cards) renderPolishCards(cards); }
 }
 
 function polishIdle(){
@@ -3700,16 +3737,16 @@ function renderPolishCards(container){
   if(!opts.length){
     container.style.display = 'block';
     const dims = Array.isArray(state.strategicDimensions) ? state.strategicDimensions : [];
-    const dimHtml = dims.length ? `<div class="strategy-map" style="margin-bottom:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff)"><div style="font-weight:700;margin-bottom:8px">🧭 AI动态战略地图 <span style="font-size:11px;font-weight:400;color:var(--muted)">${dims.length} 个候选维度</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px">${dims.map((d,i)=>{const n=String(d?.name||d?.title||d?.id||'战略维度'+(i+1));const de=String(d?.description||'');const why=String(d?.whyFit||'');return `<div style="padding:8px;border:1px solid var(--line,#ddd);border-radius:8px"><b>${esc(n)}</b><div style="font-size:12px;margin-top:4px;line-height:1.5">${esc(de)}</div>${why?`<div style="font-size:11px;color:var(--muted);margin-top:4px">契合：${esc(why)}</div>`:''}</div>`}).join('')}</div></div>` : '';
+    const dimHtml = ''; // 战略维度已降级为内部分析层，不再作为独立用户步骤展示。
     const fail = state.polishFailureTrace;
-    const diagHtml = fail ? `<div class="pol-cand-body" style="margin-bottom:10px;border:1px solid var(--danger,#d64545);border-radius:8px;background:var(--card,#fff)"><b>⚠️ 第二阶段本次未通过验收</b><div style="margin-top:6px;line-height:1.7">阶段：${esc(fail.kind||'ideaPolishStage2')} · 分类：${esc(fail.category||'MODEL_ERROR')} · 代码：${esc(fail.code||'UNKNOWN')}<br>请求约 ${Number(fail.requestChars||0).toLocaleString()} 字（≈${Number(fail.requestTokenEstimate||0).toLocaleString()} tokens） · AI响应约 ${Number(fail.responseChars||0).toLocaleString()} 字（≈${Number(fail.responseTokenEstimate||0).toLocaleString()} tokens）${fail.truncated?' · ⚠️ 可能被输出上限截断':''}<br>${esc(fail.details||'')}</div><div style="margin-top:8px;font-size:12px;color:var(--muted)">下面保留的是AI实际返回内容（受控展示），不是“AI没有返回”。</div></div>` : '';
+    const diagHtml = fail ? `<div class="pol-cand-body" style="margin-bottom:10px;border:1px solid var(--danger,#d64545);border-radius:8px;background:var(--card,#fff)"><b>⚠️ 本次优化构想未通过验收</b><div style="margin-top:6px;line-height:1.7">阶段：${esc(fail.kind||'ideaOptimization')} · 分类：${esc(fail.category||'MODEL_ERROR')} · 代码：${esc(fail.code||'UNKNOWN')}<br>请求约 ${Number(fail.requestChars||0).toLocaleString()} 字（≈${Number(fail.requestTokenEstimate||0).toLocaleString()} tokens） · AI响应约 ${Number(fail.responseChars||0).toLocaleString()} 字（≈${Number(fail.responseTokenEstimate||0).toLocaleString()} tokens）${fail.truncated?' · ⚠️ 可能被输出上限截断':''}<br>${esc(fail.details||'')}</div><div style="margin-top:8px;font-size:12px;color:var(--muted)">下面保留的是AI实际返回内容（受控展示），不是“AI没有返回”。</div></div>` : '';
     const rawHtml = state.polishRawFallback ? `<div class="pol-cand-body" style="white-space:pre-wrap;max-height:520px;overflow:auto"><b>AI原始返回（本次验收失败，未丢弃）</b><div style="margin-top:6px">${esc(state.polishRawFallback)}</div></div>` : '';
-    container.innerHTML = dimHtml + diagHtml + (rawHtml || `<p class="muted" style="margin:8px 0 0">第一阶段完成后，点击上方「② 生成优化构想」生成3～5个候选方案。</p>`);
+    container.innerHTML = dimHtml + diagHtml + (rawHtml || `<p class="muted" style="margin:8px 0 0">点击上方「✨ 生成优化构想」；系统会先在内部完成战略分析，再直接生成候选方案。</p>`);
     return;
   }
   container.style.display = 'block';
   const dims = Array.isArray(state.strategicDimensions) ? state.strategicDimensions : [];
-  const dimHtml = dims.length ? `<div class="strategy-map" style="margin-bottom:12px;padding:12px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff)"><div style="font-weight:700;margin-bottom:8px">🧭 AI动态战略地图 <span style="font-size:11px;font-weight:400;color:var(--muted)">${dims.length} 个候选维度</span></div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:7px">${dims.map((d,i)=>{const n=String(d?.name||d?.title||d?.id||'战略维度'+(i+1));const de=String(d?.description||'');const why=String(d?.whyFit||'');return `<div style="padding:8px;border:1px solid var(--line,#ddd);border-radius:8px"><b>${esc(n)}</b><div style="font-size:12px;margin-top:4px;line-height:1.5">${esc(de)}</div>${why?`<div style="font-size:11px;color:var(--muted);margin-top:4px">契合：${esc(why)}</div>`:''}</div>`}).join('')}</div><div style="margin-top:8px;font-size:11px;color:var(--muted)">以上是AI针对当前故事动态生成的战略地图，不是固定模板。下面的3～5个方案会从这些维度组合生成。</div></div>` : '';
+  const dimHtml = ''; // 战略维度已降级为内部分析层，不再作为独立用户步骤展示。
   const adopted = state.polishAdopted;
   container.innerHTML = dimHtml + opts.map((o,i)=>{
     const c = POLISH_PALETTE[i % POLISH_PALETTE.length];
@@ -3743,7 +3780,7 @@ function renderPolishCards(container){
   container.querySelectorAll('[data-pol-use]').forEach(b=>{
     b.onclick = (e)=>{ e.preventDefault();
       const o = (state.polishOptions||[])[+b.dataset.polUse]; if(!o) return;
-      if(dictmasterLocked()){ toast('词典达人已产出万物词典，②方案已锁定，不可更换'); return; }
+      if(dictmasterLocked()){ toast('词典达人已产出万物词典，优化构想已锁定，不可更换'); return; }
       state.polishAdopted = o.name || null;
       state.polishSelectedId = o._id || null;
       state.polishStatus = 'adopted';
@@ -3772,10 +3809,14 @@ function renderPolishCards(container){
 }
 
 function bindPolishIdea(){
-  const b1 = $('#btnStrategyStage1');
-  if(b1) b1.onclick = ()=> generateStrategyStage(b1, true);
-  const b2 = $('#btnStrategyStage2');
-  if(b2) b2.onclick = ()=> generatePolishStage(b2, false);
+  const b = $('#btnOptimizationConcept');
+  if(b) b.onclick = async ()=>{
+    b.classList.remove('app-opt-btn-pressed');
+    void b.offsetWidth;
+    b.classList.add('app-opt-btn-pressed');
+    setTimeout(()=>b.classList.remove('app-opt-btn-pressed'),320);
+    await generateOptimizationConcept(b, true);
+  };
   const chk = $('#chkPolishMulti');
   if(chk){
     const sync = ()=>{
@@ -3787,28 +3828,17 @@ function bindPolishIdea(){
     const idea = $('#ideaInput');
     if(idea) idea.oninput = ()=>{ state.idea = idea.value; sync(); syncOrigIdeaCard(); };
   }
-  const polHead = $('[data-polish-toggle]');
-  if(polHead){
-    polHead.onclick = (e)=>{
-      if(e.target.closest('button,input,a,select,textarea')) return;
-      togglePolishBox();
-    };
-    polHead.onkeydown = (e)=>{
-      if(e.key==='Enter' || e.key===' '){ e.preventDefault(); togglePolishBox(); }
-    };
-  }
   const disc = $('#btnPolishDiscard');
-  if(disc) disc.onclick = (e)=>{
-    e.preventDefault();
-    e.stopPropagation();
-    togglePolishBox(true);
+  if(disc) disc.onclick = ()=>{
+    const box = $('#polishBox');
+    if(box) box.style.display = 'none';
   };
   const hist = $('[data-pol-keep-hist]');
   if(hist) hist.onclick = (e)=>{ e.stopPropagation(); openPolishBatchPanel(); };
   const view = $('[data-pol-keep-view]');
   if(view) view.onclick = (e)=>{ e.stopPropagation(); openPolishBox(); };
   const again = $('[data-pol-keep-again]');
-  if(again) again.onclick = async (e)=>{ e.stopPropagation(); const ok=await generateStrategyStage($('#btnStrategyStage1'), true); if(ok) await generatePolishStage($('#btnStrategyStage2'), true); };
+  if(again) again.onclick = async (e)=>{ e.stopPropagation(); await generateOptimizationConcept($('#btnOptimizationConcept'), true); };
   const clear = $('[data-pol-keep-clear]');
   if(clear) clear.onclick = (e)=>{
     e.stopPropagation();
@@ -3882,7 +3912,7 @@ function deletePolishBatch(idx){
 }
 function openPolishBatchPanel(){
   closePolishBatchPanel();
-  const hist = polishHistory(); if(!hist.length){ toast('暂无历史优化版本，运行「✨ 优化构想」后自动记录'); return; }
+  const hist = polishHistory(); if(!hist.length){ toast('暂无历史优化版本；当前生成批次不会自动写入历史'); return; }
   const fmtTs = ts=>{ const d=new Date(ts); return (d.getMonth()+1)+'-'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
   const rows = hist.map((b,idx)=>`
     <div class="cv-row">
@@ -4372,7 +4402,7 @@ L6 正文AI：根据上游已经锁定的故事事实、结构和写作配方生
 
 【输入优先级】
 当输入存在冲突时，按以下优先级判断：
-1. ②优化构想所选方案及其已经明确的小说事实
+1. 优化构想所选方案及其已经明确的小说事实
 2. 用户当前明确提出的写作风格/表达要求
 3. 当前已有写作风格词库
 4. 你的专业判断
@@ -5110,10 +5140,18 @@ function openingStrategyBrief(){
   return `【开篇策略·仅首章生效】全书${n||'未定'}章。用户主动选择：${selected.label}。${selected.desc}\n权限边界：本策略只决定第1章如何开笔；第2章起不得继续套用“开篇策略”，必须以各章自己的教案与已提供动态状态为唯一开笔依据。\n执行：第1章将所选策略融入实际事件、人物现场和本章教案，不得把策略标签本身写进正文。`;
 }
 function openingStrategyHtml(){
-  if(!isLong()) return '';
-  const cur=currentOpeningStrategyId();
-  return `<div class="tw-panel" style="margin-bottom:10px"><div class="poly-head"><span class="poly-ic">🚪</span><b>开篇策略</b><span class="poly-rule">可选，不选择也可以</span></div><div class="book-beat-options" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px">${OPENING_STRATEGIES.map(x=>`<label class="book-beat-card ${x.id===cur?'selected':''}" style="border:2px solid ${x.id===cur?'var(--accent,#4a90e2)':'var(--line,#e0e0e0)'};border-radius:8px;padding:10px;cursor:pointer"><input type="radio" name="openingStrategy" value="${x.id}" ${x.id===cur?'checked':''} style="display:none"><b>${esc(x.label)}</b><div class="muted" style="font-size:12px;line-height:1.5;margin-top:4px">${esc(x.desc)}</div></label>`).join('')}</div><div class="muted" style="font-size:12px;line-height:1.6;margin-top:8px">选择具体策略后，策略仅作用于第1章；选择“不选择开篇策略”时，不启用任何额外开篇策略，也不会由AI自动推荐或替用户决定。</div></div>`;
+  const cur = String(state.openingStrategy || 'none');
+  return `<details class="app-idea-fold" data-fold-key="openingStrategy">
+    <summary><span>🚪</span><b>开篇策略</b><span class="poly-rule">可选，不选择也可以 · 点击展开</span></summary>
+    <div class="app-idea-fold-body">
+      <div class="book-beat-options" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px">
+        ${OPENING_STRATEGIES.map(x=>`<label class="book-beat-card ${x.id===cur?'selected':''}" style="border:2px solid ${x.id===cur?'var(--accent,#4a90e2)':'var(--line,#e0e0e0)'};border-radius:8px;padding:10px;cursor:pointer"><input type="radio" name="openingStrategy" value="${x.id}" ${x.id===cur?'checked':''} style="display:none"><b>${esc(x.label)}</b><div class="muted" style="font-size:12px;line-height:1.5;margin-top:4px">${esc(x.desc)}</div></label>`).join('')}
+      </div>
+      <div class="muted" style="font-size:12px;line-height:1.6;margin-top:8px">选择具体策略后，策略仅作用于第1章；选择“不选择开篇策略”时，不启用任何额外开篇策略，也不会由AI自动推荐或替用户决定。</div>
+    </div>
+  </details>`;
 }
+
 function realChapterCount(){
   const n = (state.outline && Array.isArray(state.outline.chapters)) ? state.outline.chapters.length : 0;
   if(n>0) return n;
@@ -8894,21 +8932,23 @@ function currentBookBeatId(){ return state.bookBeat ? Number(state.bookBeat) : B
 function currentBookBeatCfg(){ return BOOK_BEAT_OPTIONS.find(b=>b.id===currentBookBeatId()) || BOOK_BEAT_OPTIONS[0]; }
 function bookBeatHtml(){
   const cur = currentBookBeatId();
-  return `<div class="book-beat-panel" style="margin:10px 0">
-    <div class="poly-head"><span class="poly-ic">🥁</span><b>全书拍子</b><span class="poly-rule">生成大纲前选择</span></div>
-    <div class="book-beat-options" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px">
-      ${BOOK_BEAT_OPTIONS.map(b=>`
-        <label class="book-beat-card ${b.id===cur?'selected':''}" style="border:2px solid ${b.id===cur?'var(--accent,#4a90e2)':'var(--line,#e0e0e0)'};border-radius:8px;padding:10px;cursor:pointer;transition:.15s">
-          <input type="radio" name="bookBeat" value="${b.id}" ${b.id===cur?'checked':''} style="display:none">
-          <div style="font-size:18px;margin-bottom:4px">${b.emoji} ${b.label}</div>
-          <div style="font-weight:600;font-size:13px;margin-bottom:4px">${b.subtitle}</div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.4">${b.desc}</div>
-          ${b.pro?`<div class="book-beat-pc pro"><span class="pc-k">优点</span>${b.pro}</div>`:''}
-          ${b.con?`<div class="book-beat-pc con"><span class="pc-k">缺点</span>${b.con}</div>`:''}
-        </label>
-      `).join('')}
+  return `<details class="app-idea-fold book-beat-panel" data-fold-key="bookBeat">
+    <summary><span>🥁</span><b>全书拍子</b><span class="poly-rule">生成大纲前选择 · 点击展开</span></summary>
+    <div class="app-idea-fold-body">
+      <div class="book-beat-options" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:8px">
+        ${BOOK_BEAT_OPTIONS.map(b=>`
+          <label class="book-beat-card ${b.id===cur?'selected':''}" style="border:2px solid ${b.id===cur?'var(--accent,#4a90e2)':'var(--line,#e0e0e0)'};border-radius:8px;padding:10px;cursor:pointer;transition:.15s">
+            <input type="radio" name="bookBeat" value="${b.id}" ${b.id===cur?'checked':''} style="display:none">
+            <div style="font-size:18px;margin-bottom:4px">${b.emoji} ${b.label}</div>
+            <div style="font-weight:600;font-size:13px;margin-bottom:4px">${b.subtitle}</div>
+            <div style="font-size:12px;color:var(--muted);line-height:1.4">${b.desc}</div>
+            ${b.pro?`<div class="book-beat-pc pro"><span class="pc-k">优点</span>${b.pro}</div>`:''}
+            ${b.con?`<div class="book-beat-pc con"><span class="pc-k">缺点</span>${b.con}</div>`:''}
+          </label>
+        `).join('')}
+      </div>
     </div>
-  </div>`;
+  </details>`;
 }
 
 function bookBeatBriefHtml(){
@@ -9020,6 +9060,7 @@ const AIValidators = {
   idea: validateIdeaProOutput,
   ideaStrategy: validateIdeaStrategyOutput,
   ideaPolishStage2: validateIdeaPolishStage2Output,
+  ideaOptimization: validateIdeaOptimizationTextOutput,
   titles: validateTitleOutput,
   subplot: validateSubplotOutput,
     glossary: validateGlossaryExtract,
@@ -9167,12 +9208,51 @@ function validateIdeaProOutput(j, ctx){
   return err ? {ok:false, code:'SCHEMA', details:err} : {ok:true};
 }
 
+function parseOptimizationPlainText(raw, multi){
+  const text=String(raw||'').replace(/\r/g,'').trim();
+  if(!text) return {ok:false,error:'AI未返回内容',options:[],analysis:null};
+  const section=(label,src)=>{ const re=new RegExp(`【${label}】\\s*([\\s\\S]*?)(?=\\n【(?:原始构想锚点|动态战略维度|战略多样性|方案[一二三四五六七八九十\\d]+)】|$)`, 'i'); const m=String(src).match(re); return m?m[1].trim():''; };
+  const list=v=>String(v||'').split('\n').map(x=>x.replace(/^\s*(?:[-*•·]|\d+[.)])\s*/,'').trim()).filter(Boolean);
+  const kv=(block,key)=>{ const re=new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')}\\s*[：:]\\s*(.*)$`,'im'); const m=String(block||'').match(re); return m?m[1].trim():''; };
+  const linesToList=block=>list(block);
+  const anchorBlock=section('原始构想锚点',text);
+  const dimBlock=section('动态战略维度',text);
+  const divBlock=section('战略多样性',text);
+  const analysis={originalAnchors:{characters:linesToList(kv(anchorBlock,'人物')),relationships:linesToList(kv(anchorBlock,'关系')),goals:linesToList(kv(anchorBlock,'目标')),coreConflict:kv(anchorBlock,'核心冲突'),worldRules:linesToList(kv(anchorBlock,'世界规则')),fixedFacts:linesToList(kv(anchorBlock,'固定事实'))},strategicDimensions:[],diversityProfile:{fixedCore:linesToList(kv(divBlock,'固定核心')),variableAxes:linesToList(kv(divBlock,'可变轴')),avoidRepetition:linesToList(kv(divBlock,'避免重复')),recommendedMix:kv(divBlock,'推荐组合')}};
+  dimBlock.split('\n').forEach(l=>{ const m=l.match(/^\s*(?:[-*•·]|\d+[.)])\s*([^｜|：:]+)\s*[｜|：:]\s*([^｜|]+?)(?:\s*[｜|]\s*(?:契合\s*[：:]\s*)?(.*))?\s*$/); if(m) analysis.strategicDimensions.push({name:m[1].trim(),description:m[2].trim(),whyFit:String(m[3]||'').trim()}); });
+  const optionMatches=[...text.matchAll(/(?:^|\n)【方案([一二三四五六七八九十\d]+)(?:\s*[｜|：:]\s*([^】\n]+))?】\s*([\s\S]*?)(?=\n【方案[一二三四五六七八九十\d]+(?:\s*[｜|：:])?|$)/g)];
+  const optionBlocks=optionMatches.map(m=>({num:m[1],title:String(m[2]||'').trim(),body:m[3].trim()}));
+  const expected=multi?3:1;
+  if((multi && (optionBlocks.length<3||optionBlocks.length>5)) || (!multi && optionBlocks.length!==1)) return {ok:false,error:`纯文本解析得到 ${optionBlocks.length} 个方案（${multi?'要求3—5个':'要求1个'}）`,options:[],analysis};
+  const field=(body,label)=>{ const labels=['书名','小说简介','核心优化方向','完整优化构想','全书故事节拍','战略维度','战略指纹','创意补充','导航灯塔','缺陷','种子人物','种子地点']; const idx=labels.indexOf(label); const next=labels.slice(idx+1).map(x=>x.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')).join('|'); const re=new RegExp(`(?:^|\\n)\\s*(?:【|\\[)?${label.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')}(?:】|\\])?\\s*[：:]\\s*([\\s\\S]*?)(?=\\n\\s*(?:【|\\[)?(?:${next})(?:】|\\])?\\s*[：:]|$)`,'i'); const m=String(body||'').match(re); return m?m[1].trim():''; };
+  const options=optionBlocks.map((sec,idx)=>{
+    const strategyText=field(sec.body,'战略维度');
+    const dims=list(strategyText).map(x=>{const m=x.match(/^([^｜|：:]+)(?:\s*[｜|：:]\s*(.*))?$/); const name=(m?m[1]:x).trim(); const src=analysis.strategicDimensions.find(d=>strategicDimensionKey(d)===strategicDimensionKey(name)); return src?JSON.parse(JSON.stringify(src)):{name,description:m&&m[2]?m[2].trim():'',whyFit:''};});
+    const fpText=field(sec.body,'战略指纹'), nbText=field(sec.body,'导航灯塔');
+    const strategyFingerprint={mainStrategy:kv(fpText,'主战略'),secondaryStrategy:kv(fpText,'次战略'),coreConflict:kv(fpText,'核心冲突')||analysis.originalAnchors.coreConflict||'',storyEngine:kv(fpText,'故事发动机'),emotionalPromise:kv(fpText,'情绪承诺'),pacing:kv(fpText,'节奏')};
+    const navBeacon={genre:kv(nbText,'题材'),protagonist:kv(nbText,'主角'),coreConflict:kv(nbText,'核心冲突')||analysis.originalAnchors.coreConflict||'',tone:kv(nbText,'基调')};
+    const optimizedIdea=field(sec.body,'完整优化构想')||field(sec.body,'核心优化方向');
+    const summary=field(sec.body,'小说简介'), beat=field(sec.body,'全书故事节拍'), creative=field(sec.body,'创意补充');
+    const defects=list(field(sec.body,'缺陷'));
+    const seedCharacters=list(field(sec.body,'种子人物')).map(x=>{const m=x.match(/^([^｜|：:]+)\s*[｜|：:]\s*(.*)$/);return {name:(m?m[1]:x).trim(),identity:m?m[2].trim():'未知',age:'未知',gender:'未知',appearance:'未知',hobby:'未知',catchphrase:'无',relation:'未知',trait:'未知'};});
+    const seedPlaces=list(field(sec.body,'种子地点')).map(x=>{const m=x.match(/^([^｜|：:]+)\s*[｜|：:]\s*(.*)$/);return {name:(m?m[1]:x).trim(),type:m?m[2].trim():'未知',note:m?m[2].trim():'未知'};});
+    return {name:`方案${sec.num}${sec.title?'｜'+sec.title:''}`,bookTitle:field(sec.body,'书名'),novelSummary:summary||optimizedIdea.slice(0,500),optimizedIdea,fullBookBeat:beat,creativeAdditions:creative,navBeacon,defects,seedCharacters,seedPlaces,strategicDimensions:dims.length?dims:analysis.strategicDimensions.slice(0,3),strategyFingerprint,originalAnchors:JSON.parse(JSON.stringify(analysis.originalAnchors)),diversityProfile:JSON.parse(JSON.stringify(analysis.diversityProfile)),optimizationStrategies:[],diagnosis:null,text:[summary,optimizedIdea,beat,creative].filter(Boolean).join('\n\n')};
+  });
+  for(const o of options){ if(!o.bookTitle) o.bookTitle=''; if(!o.navBeacon.genre)o.navBeacon.genre='未明确'; if(!o.navBeacon.protagonist)o.navBeacon.protagonist='未明确'; if(!o.navBeacon.tone)o.navBeacon.tone='遵循用户已选风格'; if(!o.strategyFingerprint.mainStrategy)o.strategyFingerprint.mainStrategy=o.strategicDimensions[0]?.name||'当前故事主线'; if(!o.strategyFingerprint.secondaryStrategy)o.strategyFingerprint.secondaryStrategy=o.strategicDimensions[1]?.name||'辅助推进'; if(!o.strategyFingerprint.storyEngine)o.strategyFingerprint.storyEngine='由核心冲突持续驱动'; if(!o.strategyFingerprint.emotionalPromise)o.strategyFingerprint.emotionalPromise='持续兑现核心冲突带来的情绪推进'; if(!o.strategyFingerprint.pacing)o.strategyFingerprint.pacing='遵循用户已选全书拍子'; }
+  if(analysis.strategicDimensions.length<6||analysis.strategicDimensions.length>10) return {ok:false,error:`动态战略维度解析得到 ${analysis.strategicDimensions.length} 项（要求6—10项）`,options,analysis};
+  return {ok:true,options,analysis};
+}
+function validateIdeaOptimizationTextOutput(raw, ctx){
+  const parsed=parseOptimizationPlainText(raw,!!ctx?.multi);
+  return parsed.ok ? {ok:true} : {ok:false,code:'PLAIN_TEXT_CONTRACT',details:parsed.error||'纯文本结构不符合要求'};
+}
+
 function validateAIOutput(kind, raw, ctx){
   const j = extractJsonObject(raw);
   if(j && j.error) return {ok:false, code:'AI_ERROR', details:j.error};
   const fn = AIValidators[kind];
   if(!fn) return {ok:true};
-  const arg = (kind === 'chapter' || kind === 'strip') ? raw : j;
+  const arg = (kind === 'chapter' || kind === 'strip' || kind === 'ideaOptimization') ? raw : j;
   const r = fn(arg, ctx);
   if(r && typeof r === 'object' && 'ok' in r) return r;                       // {ok} 对象约定
   if(typeof r === 'string') return r ? {ok:false, code:'SCHEMA', details:r} : {ok:true};
@@ -9223,6 +9303,7 @@ const AIBus = {
     switch(kind){
       case 'ideaStrategy': return { ...base, rawIdea: state.idea || '' };
       case 'ideaPolishStage2': return { ...base, rawIdea: state.idea || '', multi: !!extra?.multi, originalAnchors: extra?.originalAnchors || state.originalIdeaAnchors || null, strategicDimensions: extra?.strategicDimensions || state.strategicDimensions || [], diversityProfile: extra?.diversityProfile || state.strategicDiversityProfile || null };
+      case 'ideaOptimization': return { ...base, rawIdea: state.idea || '', multi: !!extra?.multi, originalAnchors: state.originalIdeaAnchors || null, strategicDimensions: state.strategicDimensions || [], diversityProfile: state.strategicDiversityProfile || null };
       case 'idea': return { ...base, rawIdea: state.idea || '' };
       case 'titles': return { ...base, outline: o, glossary: o.glossary, expectedN: extra?.n || (o.chapters||[]).length };
       case 'chapter': return this._chapterCtx(extra?.idx);
@@ -9255,6 +9336,7 @@ function getSystemPrompt(kind, extra){
   switch(kind){
     case 'ideaStrategy': return IDEA_STRATEGY_SYS;
     case 'ideaPolishStage2': return IDEA_POLISH_STAGE2_SYS + (extra && extra.multi ? POLISH_MULTI_MODE : POLISH_SINGLE_MODE);
+    case 'ideaOptimization': return IDEA_OPTIMIZATION_SYS + (extra && extra.multi ? POLISH_MULTI_MODE : POLISH_SINGLE_MODE);
     case 'idea': return IDEA_POLISH_SYS + (extra && extra.multi ? POLISH_MULTI_MODE : POLISH_SINGLE_MODE);
     case 'titles': return REGEN_TITLES_SYS;
     case 'chapter': return longChapterSys();
@@ -9276,6 +9358,7 @@ function buildAIPrompt(kind, extra){
   switch(kind){
     case 'ideaStrategy': return buildIdeaStrategyUser(ctx);
     case 'ideaPolishStage2': return buildIdeaPolishStage2User(ctx);
+    case 'ideaOptimization': return buildIdeaOptimizationUser(ctx);
     case 'idea': return buildIdeaPolishUserFixed(ctx);
     case 'titles': return titlesGenUser(extra);
     case 'chapter': return buildChapterUser(extra?.idx, extra);
@@ -9305,6 +9388,17 @@ function buildIdeaStrategyUser(ctx){
   return lines.join('\n\n');
 }
 
+function buildIdeaOptimizationUser(ctx){
+  const wsItems=wsGroupStyleTags(null);
+  const style=wsItems&&wsItems.length?wsItems.map(s=>`${s.name}：${s.note||''}${Array.isArray(s.tips)&&s.tips.length?`（写法：${s.tips.join('；')}）`:''}`).join('\n'):'（未额外锁定写作风格）';
+  const bb=currentBookBeatCfg(), mb=currentBeatCfg(), cc=chapterCountVal();
+  const parts=[];
+  if(bb) parts.push(`全书拍子：${bb.label}（${bb.subtitle}），阶段：${((bb.ai&&bb.ai.stages)||[]).join(' → ')}`);
+  if(mb) parts.push(`章节微拍：${mb.label}${mb.wc?`（${mb.wc}）`:''}`);
+  if(cc) parts.push(`全书章节数：${cc}`);
+  if(cc){ const plan=bookStagePlan(cc); if(plan&&plan.length){let cur=0; const seg=[]; plan.forEach(x=>{const a=cur+1;cur+=x.n;seg.push(`第${a}—${cur}章「${x.name}」`);}); parts.push(`章节↔全书拍子落位：${seg.join('；')}`);} }
+  return `【原始用户构想】\n${String(ctx.rawIdea||'').trim()}\n\n【用户锁定写作风格】\n${style}\n\n【已有叙事结构】\n${parts.join('\n')||'（无额外结构）'}\n\n【输出模式】\n${ctx.multi?'多方案：3—5个真正不同的优化构想。':'单方案：只生成1个最终优化构想。'}\n\n【核心任务】\n一次完成“原始构想提炼 → 动态战略分析 → 优化构想生成”。战略分析是内部中间层，不要把它写成独立操作步骤；但必须按纯文本格式输出动态战略维度，供方案形成差异化依据。`;
+}
 function buildIdeaPolishStage2User(ctx){
   const anchors = ctx.originalAnchors || {};
   const dims = Array.isArray(ctx.strategicDimensions) ? ctx.strategicDimensions : [];
@@ -9703,6 +9797,79 @@ const IDEA_STRATEGY_SYS = `你是本项目的“故事战略分析引擎”。�
 - 必须额外判断哪些内容属于全书不能轻易改变的核心，哪些属于可在后续方案中变化的战略轴，并输出diversityProfile。
 - diversityProfile不是鼓励随机，而是防止长期创作被单一战略、单一冲突模式、单一节奏或单一人物功能绑死；固定核心必须保护，变化轴必须允许组合和轮换。
 - originalAnchors只记录用户已经明确给出或可以从其构想直接确认的核心事实；不要把AI新增创意伪装成用户事实。`;
+
+const IDEA_OPTIMIZATION_SYS = `你是本项目的“优化构想引擎”。你必须在一次生成中完成过去两个阶段的全部工作，但对用户只呈现“优化构想”，不要把“战略维度”做成独立步骤。
+
+【内部流程】
+1. 先从用户原始构想中提取原始构想核心锚点；
+2. 再动态分析6—10个最契合当前故事的战略维度；
+3. 再利用这些战略维度和多样性边界生成最终优化构想；
+4. 战略维度只是内部分析层，最终必须与方案一起输出为可读的纯文本。
+
+【禁止】
+- 禁止JSON、Markdown代码块、表格JSON或任何机器对象格式。
+- 禁止把战略分析单独当成一个用户步骤。
+- 禁止固定“五向”模板。
+- 禁止把AI新增内容伪装成用户事实。
+
+【纯文本硬格式】
+必须先输出：
+【原始构想锚点】
+人物：...
+关系：...
+目标：...
+核心冲突：...
+世界规则：...
+固定事实：...
+
+【动态战略维度】
+1. 维度名｜维度描述｜契合：为什么适合
+2. ...
+至少6项，最多10项。
+
+【战略多样性】
+固定核心：...
+可变轴：...
+避免重复：...
+推荐组合：...
+
+随后输出最终方案。单方案时只输出一个“方案一”，多方案时必须输出3—5个方案，每个方案严格以“【方案一｜名称】”这种形式开始，并包含：
+书名：...
+小说简介：...
+核心优化方向：...
+完整优化构想：...
+全书故事节拍：...
+战略维度：
+- 维度名｜说明
+战略指纹：
+主战略：...
+次战略：...
+核心冲突：...
+故事发动机：...
+情绪承诺：...
+节奏：...
+创意补充：...
+导航灯塔：
+题材：...
+主角：...
+核心冲突：...
+基调：...
+缺陷：
+- ...
+种子人物：
+- 人物名｜身份
+种子地点：
+- 地点名｜类型
+
+【质量要求】
+- originalAnchors只记录用户明确事实或可直接确认的事实。
+- strategicDimensions必须动态、具体、彼此有明显区别。
+- 多方案之间必须有真实战略差异，不得只是换名字。
+- 固定核心不能被方案差异破坏；可变轴要形成有意义的组合。
+- fullBookBeat是全书故事节拍/阶段推进蓝本，不是逐章教案。
+- novelSummary和optimizedIdea都服务后续创作，不写营销卖点、核心词、推荐理由。
+- 严格服从用户已锁定的写作风格和叙事结构。
+- 只输出上述纯文本，不要解释过程，不要输出JSON。`;
 
 const IDEA_POLISH_STAGE2_SYS = IDEA_POLISH_SYS_PRO + `
 
@@ -10457,8 +10624,9 @@ function render(){
   else if(currentStep===4) v.innerHTML = viewStoryboard();
   else if(currentStep===5) v.innerHTML = viewExport();
   bindView();
+  if(currentStep===1) optButtonStateClass();
   // 主故事页的 #polishCards 是两阶段流水线的可见结果区：
-  // 第一阶段完成后立即显示战略地图；第二阶段完成后显示3～5个候选方案。
+  // 合并后：战略地图仅作为内部分析状态保存；用户界面直接展示3～5个优化构想方案。
   if(currentStep===1){
     const _pc = $('#polishCards');
     if(_pc) renderPolishCards(_pc);
@@ -11717,20 +11885,16 @@ function viewStory(){
           <div class="idea-row">
             <textarea id="ideaInput" placeholder="描述你的故事点子（世界观、主角、核心冲突等）…">${esc(state.idea)}</textarea>
           </div>
-          <div class="btn-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <button id="btnStrategyStage1" class="btn ghost ${polishIdle()?'first':''}">${state.strategyStage1Status==='ready'?'🔄 ① 重新生成战略维度':'① 生成战略维度'}</button>
-            <button id="btnStrategyStage2" class="btn ghost" ${state.strategyStage1Status!=='ready'?'disabled title="请先完成第一阶段战略维度生成"':''}>${state.strategyStage2Status==='ready'?'🔄 ② 重新生成优化构想':'② 生成优化构想'}</button>
+          <div class="btn-row" style="display:grid;grid-template-columns:1fr;gap:10px">
+            <button id="btnOptimizationConcept" class="btn ghost ${polishIdle()?'first':''}">${(state.strategyStage1Status==='ready'&&state.strategyStage2Status==='ready')?'🔄 重新生成优化构想':'✨ 生成优化构想'}</button>
           </div>
           <div style="margin:7px 0 10px;font-size:12px;line-height:1.7;color:var(--muted)">
-            <span>${state.strategyStage1Status==='ready'?'✅ 第一阶段：动态战略地图已完成':'① 第一阶段：先根据题材生成6～10个动态战略维度'}</span>
-            <span style="margin-left:12px">${state.strategyStage2Status==='ready'?'✅ 第二阶段：候选优化构想已完成':'② 第二阶段：基于第一阶段战略地图生成3～5个方案'}</span>
+            <span>${(state.strategyStage1Status==='ready'&&state.strategyStage2Status==='ready')?'✅ 已完成：战略分析已融入优化构想生成':'AI会先在内部分析动态战略维度，再直接生成最终优化构想；战略分析不会作为独立操作步骤。'}</span>
           </div>
-          <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}" data-polish-collapsible="true">
-            <div class="pol-head" data-polish-toggle role="button" tabindex="0" aria-expanded="${state.polishCollapsed?'false':'true'}" title="点击标题条展开/收起方案比选">
-              <b>✨ 方案比选</b>
-              <span class="pol-head-toggle" aria-hidden="true">${state.polishCollapsed?'▸':'▾'}</span>
+          <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}">
+            <div class="pol-head"><b>✨ 方案比选</b>
               <span class="pol-tools">
-                <button id="btnPolishDiscard" type="button" class="btn small ghost" title="收起本次优化构想">✕ 收起</button>
+                <button id="btnPolishDiscard" class="btn small ghost">✕ 收起</button>
               </span>
             </div>
             <div id="polishCards" class="pol-cards"></div>
@@ -11770,15 +11934,19 @@ function viewStory(){
     ${bookBeatHtml()}
     ${openingStrategyHtml()}
     ` : ''}
-    <h4 style="margin:18px 0 6px">叙事视角</h4>
-    <div class="team-pick" id="teamPick">
-      ${TEAM_OPTIONS.map(o=>`
-      <label class="team-item ${o.id===currentTeamShape().id?'sel':''}" data-team="${o.id}" title="${esc(o.desc)}">
-        <span class="team-ic">${o.id==='solo'?'👤':o.id==='dual'?'👫':o.id==='trio'?'🤝':o.id==='quad'?'👥':'🧑‍🤝‍🧑'}</span>
-        <span class="team-txt"><b>${esc(o.label)}</b><i>${esc(o.desc)}</i></span>
-        <input type="radio" name="teamShape" value="${o.id}" style="display:none" ${o.id===currentTeamShape().id?'checked':''}>
-      </label>`).join('')}
-    </div>
+    <details class="app-idea-fold" data-fold-key="narrativePerspective">
+      <summary><span>👁️</span><b>叙事视角</b><span class="poly-rule">点击展开</span></summary>
+      <div class="app-idea-fold-body">
+        <div class="team-pick" id="teamPick">
+          ${TEAM_OPTIONS.map(o=>`
+          <label class="team-item ${o.id===currentTeamShape().id?'sel':''}" data-team="${o.id}" title="${esc(o.desc)}">
+            <span class="team-ic">${o.id==='solo'?'👤':o.id==='dual'?'👫':o.id==='trio'?'🤝':o.id==='quad'?'👥':'🧑‍🤝‍🧑'}</span>
+            <span class="team-txt"><b>${esc(o.label)}</b><i>${esc(o.desc)}</i></span>
+            <input type="radio" name="teamShape" value="${o.id}" style="display:none" ${o.id===currentTeamShape().id?'checked':''}>
+          </label>`).join('')}
+        </div>
+      </div>
+    </details>
   </div>
 </section>
 <section class="flow-sec flow-action-sec" data-flow="3">
@@ -11878,13 +12046,13 @@ ${longNovelMemoryRepoHtml()}
             <span class="ch-subtag ch-subtag-idea">${(state.polishOptions&&state.polishOptions.length)?`${state.polishOptions.length} 个方案可选`:'动态战略'}</span>
           </div>
           <div class="ch-right">
-            ${dictmasterLocked()?'<span class="muted" style="font-size:12px">②方案已锁定</span>':''}
+            ${dictmasterLocked()?'<span class="muted" style="font-size:12px">优化构想已锁定</span>':''}
           </div>
         </div>
         <div id="polishCards2" class="pol-box" style="display:block"></div>
         ${ polishKeepBar() }   <!-- v1.0.205 阶段5.5 后悔药：生成大纲后仍可 查看历史优化版本 / 重新优化 / 重新选候选后点下方「生成大纲」重搬（词典达人产出前可反悔） -->
         <div class="btn-row" style="margin-top:8px">
-          <button data-gen-outline class="btn primary block" ${dictmasterLocked()?'disabled title="词典达人已产出，②方案已锁定"':''}>📚 生成大纲（搬入书名 / 简介 / 节拍）${dictmasterLocked()?'（②已锁定）':''}</button>
+          <button data-gen-outline class="btn primary block" ${dictmasterLocked()?'disabled title="词典达人已产出，优化构想已锁定"':''}>📚 生成大纲（搬入书名 / 简介 / 节拍）${dictmasterLocked()?'（优化构想已锁定）':''}</button>
         </div>
       </div>
     <div class="card card-theme-idea">
@@ -15493,8 +15661,8 @@ const genOutline = async function(){
   if(st){ st.className='status'; st.textContent=''; }
   if(!canRunAI('outline')){ toast('请先完成上游步骤：优化构想'); if(btn) busy(btn,false); return; }
   const adopted = currentCanonicalStoryStrategy();
-  if(!adopted){ toast('请先在②优化构想中明确采用一个方案，建立唯一故事战略后再生成大纲'); if(btn) busy(btn,false); return; }
-  if(dictmasterLocked()){ toast('词典达人已产出万物词典，②方案已锁定，不可再换选重搬'); if(btn) busy(btn,false); return; }
+  if(!adopted){ toast('请先在“优化构想”中明确采用一个方案，建立唯一故事战略后再生成大纲'); if(btn) busy(btn,false); return; }
+  if(dictmasterLocked()){ toast('词典达人已产出万物词典，优化构想已锁定，不可再换选重搬'); if(btn) busy(btn,false); return; }
   if(!confirmOutlineContentGuard()){ if(btn) busy(btn,false); return; }
   markAIRunning('outline');
   if(btn) busy(btn,true,'搬运大纲中…');
@@ -15634,7 +15802,7 @@ const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人�
 因此：你可以大胆创造，但必须谨慎定稿。一旦内容进入正式词典，就会成为后续创作可以依赖的正式世界事实。
 
 【一、最高原则｜用户蓝本优先】
-你将获得②优化构想所选方案的完整原文，其中包含书名、题材、主角、核心冲突、世界观、对手、动机、风格、结构、核心词，以及用户明确指定的人物、地点、专名、势力、规则等。
+你将获得优化构想所选方案的完整原文，其中包含书名、题材、主角、核心冲突、世界观、对手、动机、风格、结构、核心词，以及用户明确指定的人物、地点、专名、势力、规则等。
 
 这份内容是本次创作的唯一蓝本。
 
@@ -15894,7 +16062,7 @@ async function genDictMaster(btn){
   const o = state.outline;
   const st = $('#dictmasterStatus');
   if(st){ st.className='status'; st.textContent=''; }
-  if(!canRunAI('dictmaster')){ toast('请先完成上游：②优化构想并选中一个方案'); return false; }
+  if(!canRunAI('dictmaster')){ toast('请先完成上游“优化构想”并选中一个方案'); return false; }
   invalidateSchoolDownstream('dictMaster');
   if(!currentCanonicalStoryStrategy()){ toast('先在优化构想中采用一个方案，建立唯一故事战略'); return false; }
   state.originalIdeaSnapshot = String(state.idea || '').trim() || state.originalIdeaSnapshot;
@@ -16153,7 +16321,7 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 
 你将获得两份核心素材：
 
-第一部分：②优化构想所选方案的完整内容。
+第一部分：优化构想所选方案的完整内容。
 
 第二部分：词典达人已经生成并正式定稿的全部词典内容。
 
