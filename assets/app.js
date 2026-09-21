@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '1.0.358';
+const APP_VERSION = '1.0.360';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
 const APP_FILE_VERSION = 'app1.0.356.js';
 const KEY_CFG = nsKey('cfg');
@@ -255,6 +255,7 @@ function normalizeOutline(o){
   // app21：章节内部质量账本。它只记录审计后已经写成的事实/信息与人物认知，
   // 不拥有创作权；下一章仅把它作为“已知状态”参考，不能覆盖词典/教案。
   o._chapterQualityLedger = o._chapterQualityLedger || {};
+  if(o.glossary) ensureGlossaryKnowledgeShape(o.glossary);
   if(Array.isArray(o.chapterPlans)){
     o.chapterPlans = o.chapterPlans.map(p => {
       if(typeof p === 'string') return { beatsText:'', emotionalArc:'', requiredEntities:[] };   // 旧字符串形态（原主线简述）视为旧数据，直接丢弃
@@ -340,33 +341,62 @@ function ssEntityId(prefix,name){
   const raw=String(name||'').trim(); let h=0; for(let i=0;i<raw.length;i++) h=((h<<5)-h+raw.charCodeAt(i))|0;
   return `${prefix}_${Math.abs(h).toString(36)}`;
 }
+function ensureGlossaryKnowledgeShape(g){
+  g = g || {};
+  ['characters','places','propernouns','walkons','organizations','institutions','items','rules','terms','events','lifeSettings'].forEach(k=>{ if(!Array.isArray(g[k])) g[k]=[]; });
+  g._relationshipTable = Array.isArray(g._relationshipTable) ? g._relationshipTable : [];
+  g._placeContacts = Array.isArray(g._placeContacts) ? g._placeContacts : [];
+  g._properContacts = Array.isArray(g._properContacts) ? g._properContacts : [];
+  g._worldRules = Array.isArray(g._worldRules) ? g._worldRules : [];
+  return g;
+}
 function ssEnsureCanonEntities(){
-  const g=(state.outline&&state.outline.glossary)||{};
-  [['characters','ch'],['places','pl'],['propernouns','pn']].forEach(([k,p])=>{
-    (g[k]||[]).forEach(x=>{ if(!x||!String(x.name||'').trim()) return; x.id=x.id||ssEntityId(p,x.name); x.source=x.source|| (x._dictmaster?'dictmaster':x._enrich?'dictEnrich':'legacy'); x.createdBy=x.createdBy||x.source; x.createdAt=x.createdAt||x._srcTs||Date.now(); });
+  const g=ensureGlossaryKnowledgeShape((state.outline&&state.outline.glossary)||{});
+  const meta={characters:'ch',places:'pl',propernouns:'pn',walkons:'wo',organizations:'org',institutions:'inst',items:'item',rules:'rule',terms:'term',events:'evt',lifeSettings:'life'};
+  Object.entries(meta).forEach(([k,p])=>{
+    (g[k]||[]).forEach(x=>{
+      if(!x||!String(x.name||'').trim()) return;
+      x.id=x.id||ssEntityId(p,x.name);
+      x.sourceType=x.sourceType|| (x._dictmaster?'dictionary_foundation':x._enrich?'dictionary_enrichment':x._auto?'story_runtime':'legacy');
+      x.source=x.source|| (x.sourceType==='dictionary_foundation'?'dictmaster':x.sourceType==='dictionary_enrichment'?'dictEnrich':x._auto?'runtime':'legacy');
+      x.createdBy=x.createdBy||x.source;
+      x.createdAt=x.createdAt||x._srcTs||Date.now();
+    });
   });
+  [['relationshipTable','_relationshipTable','dictionary_foundation'],['placeContacts','_placeContacts','dictionary_foundation'],['properContacts','_properContacts','dictionary_foundation'],['worldRules','_worldRules','dictionary_foundation']].forEach(([publicKey,key,src])=>{
+    (g[key]||[]).forEach(x=>{ if(x) x.sourceType=x.sourceType||src; });
+  });
+  return g;
 }
 function ssCaptureMasterSnapshot(){
-  const g=(state.outline&&state.outline.glossary)||{}; const ss=storyState();
-  const pick=(k,fields)=> (g[k]||[]).filter(Boolean).map(x=>{const o={}; fields.forEach(f=>o[f]=x[f]==null?'':x[f]); o.id=x.id||ssEntityId(k.slice(0,2),x.name); return o;});
+  const g=ensureGlossaryKnowledgeShape((state.outline&&state.outline.glossary)||{}); const ss=storyState();
+  const pick=(k,fields)=> (g[k]||[]).filter(Boolean).map(x=>{const o={}; fields.forEach(f=>o[f]=x[f]==null?'':x[f]); o.id=x.id||ssEntityId(k.slice(0,2),x.name); o.sourceType='dictionary_foundation'; return o;});
+  const genericKeys=['organizations','institutions','items','rules','terms','events','lifeSettings'];
+  const genericSnapshot={};
+  genericKeys.forEach(k=>{ genericSnapshot[k]=(g[k]||[]).filter(Boolean).map(x=>({...x,sourceType:'dictionary_foundation'})); });
   ss.canon=ss.canon||{};
   ss.canon.masterSnapshot={
     characters:pick('characters',['id','name','identity','age','gender','appearance','hobby','relation','trait','catchphrase']),
     places:pick('places',['id','name','type','note']),
     propernouns:pick('propernouns',['id','name','note']),
-    relationshipTable:(g._relationshipTable||[]).map(x=>({...x})), placeContacts:(g._placeContacts||[]).map(x=>({...x})), properContacts:(g._properContacts||[]).map(x=>({...x})), worldRules:(g._worldRules||[]).map(x=>({...x}))
+    generic:genericSnapshot,
+    relationshipTable:(g._relationshipTable||[]).map(x=>({...x,sourceType:'dictionary_foundation'})), placeContacts:(g._placeContacts||[]).map(x=>({...x,sourceType:'dictionary_foundation'})), properContacts:(g._properContacts||[]).map(x=>({...x,sourceType:'dictionary_foundation'})), worldRules:(g._worldRules||[]).map(x=>({...x,sourceType:'dictionary_foundation'}))
   };
 }
 function ssProtectMasterCanon(){
-  const ss=storyState(), snap=ss.canon&&ss.canon.masterSnapshot; const g=(state.outline&&state.outline.glossary); if(!snap||!g) return;
+  const ss=storyState(), snap=ss.canon&&ss.canon.masterSnapshot, g=ensureGlossaryKnowledgeShape((state.outline&&state.outline.glossary)); if(!snap||!g) return;
   const restore=(k,fields)=>{
     const by=new Map((snap[k]||[]).map(x=>[x.name,x]));
-    (g[k]||[]).forEach(x=>{const old=by.get(x&&x.name); if(!old) return; fields.forEach(f=>x[f]=old[f]); x.id=old.id; x._dictmaster=true; x.source='dictmaster'; x.createdBy='dictmaster'; x.createdAt=x.createdAt||Date.now();});
+    (g[k]||[]).forEach(x=>{const old=by.get(x&&x.name); if(!old) return; fields.forEach(f=>x[f]=old[f]); x.id=old.id; x._dictmaster=true; x.sourceType='dictionary_foundation'; x.source='dictmaster'; x.createdBy='dictmaster'; x.createdAt=x.createdAt||Date.now();});
   };
   restore('characters',['name','identity','age','gender','appearance','hobby','relation','trait','catchphrase']);
   restore('places',['name','type','note']); restore('propernouns',['name','note']);
-  g._relationshipTable=snap.relationshipTable.map(x=>({...x}));
-  g._placeContacts=snap.placeContacts.map(x=>({...x})); g._properContacts=snap.properContacts.map(x=>({...x})); g._worldRules=snap.worldRules.map(x=>({...x}));
+  const generic=snap.generic||{}; Object.keys(generic).forEach(k=>{
+    const by=new Map((generic[k]||[]).map(x=>[String(x&&x.name||''),x]));
+    (g[k]||[]).forEach(x=>{const old=by.get(String(x&&x.name||'')); if(!old) return; Object.keys(old).forEach(f=>x[f]=old[f]); x.sourceType='dictionary_foundation'; x.source='dictmaster'; x.createdBy='dictmaster'; x._dictmaster=true;});
+  });
+  g._relationshipTable=(snap.relationshipTable||[]).map(x=>({...x}));
+  g._placeContacts=(snap.placeContacts||[]).map(x=>({...x})); g._properContacts=(snap.properContacts||[]).map(x=>({...x})); g._worldRules=(snap.worldRules||[]).map(x=>({...x}));
   ssEnsureCanonEntities();
 }
 function parseTeacherChapterCards(raw, g, gi){
@@ -8327,6 +8357,9 @@ function teacherScopedGlossary(g, gi, maxChar){
   if(chars.length) out.push('人物：'+chars.map(c=>fmtCharFullFields(c).join('，')).join('\n· '));
   if(places.length) out.push('地点：'+places.map(c=>`${c.name}${c.note?`：${c.note}`:''}`).join('、'));
   if(props.length) out.push('专名/道具：'+props.map(c=>`${c.name}${c.note?`：${c.note}`:''}`).join('、'));
+  const matchGeneric=(arr)=> (Array.isArray(arr)?arr:[]).filter(x=>{const nm=String(x&&x.name||'').trim();return nm && [...names].some(q=>nm===q||nm.includes(q)||q.includes(nm));});
+  const genericSets=[['组织/势力',gl.organizations],['职业/机构',gl.institutions],['物品/道具',gl.items],['补充术语',gl.terms],['历史事件',gl.events],['生活设定',gl.lifeSettings]];
+  genericSets.forEach(([label,arr])=>{ const hits=matchGeneric(arr); if(hits.length) out.push(label+'：'+hits.map(x=>{const vals=[x.name,x.type,x.category,x.function,x.meaning,x.content,x.note,x.impact].map(v=>String(v||'').trim()).filter(Boolean);return vals.join('｜');}).join('\n· ')); });
   const rules=(gl._worldRules||[]).map(fmtWR).filter(Boolean);
   if(rules.length) out.push('世界观规则（执行必守）：\n'+rules.slice(0,20).map(x=>'- '+x).join('\n'));
   let text=out.join('\n\n');
@@ -8451,11 +8484,15 @@ async function genTeacher(btn, gi){
         state.chapterMiddleAudit[gi] = buildMiddleDiversityAudit(state.chapterMiddlePlans);
         state.chapterEndingAudit = state.chapterEndingAudit || {};
         state.chapterEndingAudit[gi] = _teacherEndingCheck.audit;
-        // 老师 AI 已成功返回完整教案，到这里就算老师阶段完成。
-        // 机器章节卡改为下游按需读取时再建立，不再阻塞老师完成，也不再在这里做整组校验。
+        // v1.0.360：老师成功的唯一落点必须同时完成“组状态 + AI状态 + UI刷新”。
+        // 先写入实际教案，再立即清除该组 stale；随后统一刷新学校管线和全景步骤，避免 AI 已返回而 UI 仍停在“老师”。
         markAIDone(key, false);
         scMark(key, true);
+        scState();
+        refreshSchoolProgressUi();
         render();
+        // render() 后 DOM 已换新，再补一次进度刷新，确保新节点拿到 done 状态。
+        refreshSchoolProgressUi();
         toast(`老师${gi+1}备课完成：第 ${g.first}-${g.last} 章已按校长章级授权施工`);
         playDoneSound('single');
         return true;
@@ -9135,8 +9172,8 @@ function normalizeBanList(b){
 }
 function banListRaw(){ return (state.banList && typeof state.banList === 'object') ? state.banList : BANLIST_DEFAULT; }
 function stateBanEnabled(){ const b = banListRaw(); return !(b && b.enabled === false); }
-function banListChars(){ const c = banListRaw().chars; return (Array.isArray(c) && c.length) ? c : NM_BANNED_CHARS; }
-function banListNames(){ const n = banListRaw().names; return (Array.isArray(n) && n.length) ? n : NM_BANNED_NAMES; }
+function banListChars(){ const c = Array.isArray(banListRaw().chars) ? banListRaw().chars : []; return [...new Set([...NM_BANNED_CHARS, ...c.map(x=>String(x||'').trim()).filter(Boolean)])]; }
+function banListNames(){ const n = Array.isArray(banListRaw().names) ? banListRaw().names : []; return [...new Set([...NM_BANNED_NAMES, ...n.map(x=>String(x||'').trim()).filter(Boolean)])]; }
 function banListAiActive(role){
   // 优化构想属于全书规划母本生成阶段，必须始终知道当前用户的禁则清单；
   // 不受旧版本 scopeAi 是否包含 ideaOptimization 的影响。
@@ -11998,7 +12035,10 @@ function getDeckStepStatus(){
   const s3_done = !!(state.outlineConfirmed && o && chs.length > 0);
   const s4_done = !!(scDone('dictMaster') || state.dictmasterRan || (o && o.glossary && ((o.glossary.characters||[]).length > 0)));
   const s5_done = scDone('principal');
-  const s6_done = (groups.length > 0 && groups.every((g,i)=>scDone('t'+i)));
+  // v1.0.360：老师完成状态统一读取“实际已落地教案”判定，不再依赖可能出现短暂不同步的 finished.tN 快照。
+  // 学校管线与这里必须使用同一完成事实源：AI 已返回并成功写入 state.school.teachers 后，UI 立即视为老师完成。
+  const s6_done = (groups.length > 0 && groups.every((g,i)=>scTeacherGroupComplete(i)));
+  // 正文完成同样只看真实落库的章节正文；生成函数成功后会主动刷新当前 UI，避免“正文已写入但步骤仍停留”的旧状态。
   const s7_done = (total > 0 && written >= total);
 
   const steps = [
@@ -16344,7 +16384,7 @@ name 字段只能写实体名称。
 严格只输出 JSON，不要输出解释、前言、后记、分析、Markdown、代码围栏或任何 JSON 之外的文字。
 
 必须严格使用以下字段，字段名绝对不能修改：
-{"characters":[{"name":"","identity":"","age":"","gender":"","appearance":"","hobby":"","relation":"","trait":"","catchphrase":""}],"relationshipTable":[{"a":"人物名称","b":"人物名称","relation":"关系","note":"一句话说明"}],"places":[{"name":"","type":"","note":""}],"placeContacts":[{"from":"地名","to":"地名","relation":"联系","note":""}],"propernouns":[{"name":"","note":""}],"properContacts":[{"from":"专名","to":"专名","relation":"联系","note":""}],"worldRules":[{"cat":"规则类别","scope":"适用对象/范围","rule":"具体运转规则及违反后果/代价"}],"summary":"一句话总结这套词典最重要的世界架构亮点"}
+{"characters":[{"name":"","identity":"","age":"","gender":"","appearance":"","hobby":"","relation":"","trait":"","catchphrase":"","sourceType":"dictionary_foundation"}],"relationshipTable":[{"a":"人物名称","b":"人物名称","relation":"关系","note":"一句话说明","sourceType":"dictionary_foundation"}],"places":[{"name":"","type":"","note":"","sourceType":"dictionary_foundation"}],"placeContacts":[{"from":"地名","to":"地名","relation":"联系","note":"","sourceType":"dictionary_foundation"}],"propernouns":[{"name":"","note":"","sourceType":"dictionary_foundation"}],"properContacts":[{"from":"专名","to":"专名","relation":"联系","note":"","sourceType":"dictionary_foundation"}],"worldRules":[{"cat":"规则类别","scope":"适用对象/范围","rule":"具体运转规则及违反后果/代价","sourceType":"dictionary_foundation"}],"organizations":[{"name":"","type":"","stance":"","function":"","relation":"","note":"","sourceType":"dictionary_foundation"}],"institutions":[{"name":"","type":"","function":"","audience":"","location":"","note":"","sourceType":"dictionary_foundation"}],"items":[{"name":"","type":"","function":"","source":"","limit":"","note":"","sourceType":"dictionary_foundation"}],"terms":[{"name":"","category":"","meaning":"","usage":"","note":"","sourceType":"dictionary_foundation"}],"events":[{"name":"","era":"","participants":"","course":"","impact":"","relation":"","sourceType":"dictionary_foundation"}],"lifeSettings":[{"name":"","category":"","scope":"","content":"","value":"","note":"","sourceType":"dictionary_foundation"}],"summary":"一句话总结这套词典最重要的世界架构亮点"}
 
 【二十一、字段契约】
 characters：name 必须是纯人物姓名；identity 为身份定位；age/gender/appearance/hobby/relation/catchphrase 没有依据或没有实际价值时可以写“未知/无”；trait 必须尽量明确。relation 简洁说明即可，不要把多组关系堆进人物卡，多组关系放 relationshipTable。
@@ -16405,6 +16445,9 @@ function buildDictMasterUser(ctx){
   parts.push(canonicalStoryStrategyBlock('当前有效故事战略（词典达人唯一输入蓝本）'));
   parts.push('【战略维度的下游使用要求】词典达人必须把战略维度当作“世界设定取舍依据”而不是重复生成剧情方案：固定核心进入稳定Canon；变量轴只在确有世界依据时转化为人物、组织、地点、规则或专名差异。禁止为了追求多样化而制造互相冲突的世界设定。');
   parts.push(('【采用蓝本完整内容（唯一下游故事来源；已有角色/地名/专名不可擅自改动）】\n' + txt) || '（采用蓝本为空）');
+  parts.push(`【第一版完整世界基底要求】本次一次性建立闭环：核心人物 + 人物关系 + 核心地点 + 地点关联 + 核心组织/机构 + 核心专名 + 世界规则 + 已由故事蓝本明确出现的核心物品/道具 + 核心术语 + 核心历史事件。不要把这些核心事实拆给后续第二次AI重新定义。
+【来源层级】本批所有正式条目必须标记 sourceType=dictionary_foundation；后续词典充实只能新增 dictionary_enrichment，不得覆盖本层。
+【人物命名硬约束】禁则中的禁用字/禁用姓名是硬约束，不是建议；尤其姓名含“林”“陈”“苏”等禁用字的任何新人物均不得输出。`);
   const ban = banListBlockFor('dictmaster');
   if(ban) parts.push(ban);
   return parts.join('\n\n');
@@ -16420,14 +16463,22 @@ function validateDictMasterOutput(j){
     if(String(c.relation||'').trim().length > 40) return `人物「${String(c.name).trim()||'?'}」relation 超过 40 字，疑似把多组关系堆进摘要：只写 ≤20字 的一句话（如「主角的青梅」），多组关系的逐条明细放 relationshipTable`;
   }
   if(!Array.isArray(j.relationshipTable)) return '缺少 relationshipTable 数组';
+  const personNames=new Set((j.characters||[]).map(x=>String(x&&x.name||'').trim()).filter(Boolean));
+  const placeNames=new Set((j.places||[]).map(x=>String(x&&x.name||'').trim()).filter(Boolean));
+  const properNames=new Set((j.propernouns||[]).map(x=>String(x&&x.name||'').trim()).filter(Boolean));
+  for(const e of (j.relationshipTable||[])){ const a=String(e&&e.a||'').trim(), b=String(e&&e.b||'').trim(); if(a&&b && (!personNames.has(a)||!personNames.has(b))) return `人物关系表引用了未定义人物：「${a}」或「${b}」`; }
   const places = Array.isArray(j.places)?j.places:[];
   const props = Array.isArray(j.propernouns)?j.propernouns:[];
+  for(const e of (j.placeContacts||[])){ const a=String(e&&e.from||'').trim(), b=String(e&&e.to||'').trim(); if(a&&b && (!placeNames.has(a)||!placeNames.has(b))) return `地名关联表引用了未定义地名：「${a}」或「${b}」`; }
+  for(const e of (j.properContacts||[])){ const a=String(e&&e.from||'').trim(), b=String(e&&e.to||'').trim(); if(a&&b && (!properNames.has(a)||!properNames.has(b))) return `专名关联表引用了未定义专名：「${a}」或「${b}」`; }
   if(!places.length && !props.length) return '缺少 places 或 propernouns';
   for(const p of places){ if(p && (!String(p.name||'').trim()||!String(p.type||'').trim()||!String(p.note||'').trim())) return `地名「${String(p&&p.name||'').trim()||'?'}」信息不全（需 type+note）`; }
   for(const p of props){ if(p && (!String(p.name||'').trim()||!String(p.note||'').trim())) return `专名「${String(p&&p.name||'').trim()||'?'}」缺 note`; }
   const wr = Array.isArray(j.worldRules)?j.worldRules:[];
   if(!wr.length) return '缺少 worldRules（世界观规则，应 ≥1 条）';
   for(const r of wr){ if(r && (!String(r.cat||'').trim()||!String(r.rule||'').trim())) return `世界观规则「${String(r&&r.cat||'').trim()||'?'}」缺失 cat 或 rule`; }
+  const genericReq = { organizations:['name'], institutions:['name'], items:['name'], terms:['name'], events:['name'], lifeSettings:['name'] };
+  for(const [key,fields] of Object.entries(genericReq)){ const arr=Array.isArray(j[key])?j[key]:[]; for(const e of arr){ if(e && fields.some(f=>!String(e[f]||'').trim())) return `基础词典 ${key} 存在缺少名称的条目`; } }
   for(const [key,aa,bb,lab] of [['relationshipTable','a','b','人物关系表'],['placeContacts','from','to','地名关联表'],['properContacts','from','to','专名关联表']]){
     const arr = Array.isArray(j[key]) ? j[key] : [];
     for(const e of arr){
@@ -16467,7 +16518,7 @@ async function genDictMaster(btn){
     if(!j){ throw new Error('AI 未返回可用的词典 JSON'); }
     const v = validateDictMasterOutput(j);
     if(v) throw new Error('词典校验失败：'+v);
-    o.glossary = o.glossary || { characters:[], places:[], propernouns:[], subplots:[] };
+    o.glossary = ensureGlossaryKnowledgeShape(o.glossary || { characters:[], places:[], propernouns:[], subplots:[] });
     const snapKeys = { characters:['name','identity','age','gender','appearance','hobby','relation','trait','catchphrase'], places:['name','type','note'], propernouns:['name','note'] };
     const entryJson = (x,k)=>{ const o2={}; (snapKeys[k]||[]).forEach(f=> o2[f]=String((x && x[f])!=null ? x[f] : '').trim()); try{ return JSON.stringify(o2); }catch(e){ return ''; } };
     ['characters','places','propernouns'].forEach(k=>{
@@ -16487,11 +16538,12 @@ async function genDictMaster(btn){
     const push = (list,k,mapper)=>{
       const existing = new Set((o.glossary[k]||[]).map(x=>x && String(x.name||'').trim()).filter(Boolean));
       (list||[]).forEach(it=>{
-        if((k==='characters'||k==='places'||k==='propernouns') && isScopeBanned('dictmaster') && !filterDictMasterEntry(it)) return;
+        if((k==='characters'||k==='places'||k==='propernouns') && isScopeBanned('dictmaster') && !filterDictMasterEntry(it)) throw new Error(`词典达人命中禁则姓名：${String(it&&it.name||'').trim()}；已拒绝本次词典生成，请按现有重试机制重新生成`);
         const nm=String((it && it.name)||'').trim(); if(!nm) return;
         if(existing.has(nm)) return;   // 同名让位
         o.glossary[k]=o.glossary[k]||[];
         const e = (mapper?mapper(it):{ name:nm, note:String(it.note||'').trim() });
+        e.sourceType='dictionary_foundation'; e.source='dictmaster'; e.createdBy='dictmaster'; e.createdAt=Date.now();
         e._dictmaster=true; e._srcSnapshot=entryJson(e,k);
         o.glossary[k].push(e); existing.add(nm);
       });
@@ -16499,23 +16551,32 @@ async function genDictMaster(btn){
     push(j.characters, 'characters', c=>({ name:String(c.name||'').trim(), identity:String(c.identity||'').trim(), age:String(c.age||'').trim(), gender:String(c.gender||'').trim(), appearance:String(c.appearance||'').trim(), hobby:String(c.hobby||'').trim(), relation:String(c.relation||'').trim(), trait:String(c.trait||'').trim(), catchphrase:String(c.catchphrase||'').trim() }));
     push(j.places, 'places', p=>({ name:String(p.name||'').trim(), type:String(p.type||'').trim(), note:String(p.note||'').trim() }));
     push(j.propernouns, 'propernouns', p=>({ name:String(p.name||'').trim(), note:String(p.note||'').trim() }));
-    o.glossary._relationshipTable = (j.relationshipTable||[]).map(x=>({ a:String(x.a||'').trim(), b:String(x.b||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim() }));
-    o.glossary._placeContacts = (j.placeContacts||[]).map(x=>({ from:String(x.from||'').trim(), to:String(x.to||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim() }));
-    o.glossary._properContacts = (j.properContacts||[]).map(x=>({ from:String(x.from||'').trim(), to:String(x.to||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim() }));
-    o.glossary._worldRules = (j.worldRules||[]).map(x=>({ cat:String(x.cat||'').trim(), scope:String(x.scope||'').trim(), rule:String(x.rule||'').trim() }));
+    const masterGeneric = {
+      organizations: x=>({name:String(x.name||'').trim(), type:String(x.type||'').trim(), stance:String(x.stance||'').trim(), function:String(x.function||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim()}),
+      institutions: x=>({name:String(x.name||'').trim(), type:String(x.type||'').trim(), function:String(x.function||'').trim(), audience:String(x.audience||'').trim(), location:String(x.location||'').trim(), note:String(x.note||'').trim()}),
+      items: x=>({name:String(x.name||'').trim(), type:String(x.type||'').trim(), function:String(x.function||'').trim(), source:String(x.source||'').trim(), limit:String(x.limit||'').trim(), note:String(x.note||'').trim()}),
+      terms: x=>({name:String(x.name||'').trim(), category:String(x.category||'').trim(), meaning:String(x.meaning||'').trim(), usage:String(x.usage||'').trim(), note:String(x.note||'').trim()}),
+      events: x=>({name:String(x.name||'').trim(), era:String(x.era||'').trim(), participants:String(x.participants||'').trim(), course:String(x.course||'').trim(), impact:String(x.impact||'').trim(), relation:String(x.relation||'').trim()}),
+      lifeSettings: x=>({name:String(x.name||'').trim(), category:String(x.category||'').trim(), scope:String(x.scope||'').trim(), content:String(x.content||'').trim(), value:String(x.value||'').trim(), note:String(x.note||'').trim()})
+    };
+    Object.entries(masterGeneric).forEach(([k,mapper])=>push(j[k]||[],k,mapper));
+    o.glossary._relationshipTable = (j.relationshipTable||[]).map(x=>({ a:String(x.a||'').trim(), b:String(x.b||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim(), sourceType:'dictionary_foundation' }));
+    o.glossary._placeContacts = (j.placeContacts||[]).map(x=>({ from:String(x.from||'').trim(), to:String(x.to||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim(), sourceType:'dictionary_foundation' }));
+    o.glossary._properContacts = (j.properContacts||[]).map(x=>({ from:String(x.from||'').trim(), to:String(x.to||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim(), sourceType:'dictionary_foundation' }));
+    o.glossary._worldRules = (j.worldRules||[]).map(x=>({ cat:String(x.cat||'').trim(), scope:String(x.scope||'').trim(), rule:String(x.rule||'').trim(), sourceType:'dictionary_foundation' }));
     const dmText = x => isScopeBanned('dictmaster') ? scrubBannedPhrases(String(x||'')) : String(x||'');
-    const result = { ts: Date.now(), book: (o.title)||'', summary:dmText(j.summary), nChar:(j.characters||[]).length, nPlace:(j.places||[]).length, nProp:(j.propernouns||[]).length, nRel:(j.relationshipTable||[]).length, nPC:(j.placeContacts||[]).length, nPRC:(j.properContacts||[]).length, nWR:(j.worldRules||[]).length, characters:j.characters||[], rel:j.relationshipTable||[], places:j.places||[], pc:j.placeContacts||[], props:j.propernouns||[], prc:j.properContacts||[], wr:j.worldRules||[] };
+    const result = { ts: Date.now(), book: (o.title)||'', summary:dmText(j.summary), nChar:(j.characters||[]).length, nPlace:(j.places||[]).length, nProp:(j.propernouns||[]).length, nRel:(j.relationshipTable||[]).length, nPC:(j.placeContacts||[]).length, nPRC:(j.properContacts||[]).length, nWR:(j.worldRules||[]).length, nOrg:(j.organizations||[]).length, nInst:(j.institutions||[]).length, nItem:(j.items||[]).length, nTerm:(j.terms||[]).length, nEvent:(j.events||[]).length, nLife:(j.lifeSettings||[]).length, characters:j.characters||[], rel:j.relationshipTable||[], places:j.places||[], pc:j.placeContacts||[], props:j.propernouns||[], prc:j.properContacts||[], wr:j.worldRules||[], organizations:j.organizations||[], institutions:j.institutions||[], items:j.items||[], terms:j.terms||[], events:j.events||[], lifeSettings:j.lifeSettings||[] };
     state.dictmasterLatest = result;
     state.dictmasterHistory = Array.isArray(state.dictmasterHistory) ? state.dictmasterHistory : [];
     state.dictmasterHistory.unshift(result);
     if(state.dictmasterHistory.length > 6) state.dictmasterHistory = state.dictmasterHistory.slice(0, 6);   // 第 7 次最旧被挤出
     state.dictmasterRan = true;
-    storyState().canon.dictmasterAt=Date.now(); ssEnsureCanonEntities(); ssCaptureMasterSnapshot(); storyState().versions.dictMaster=Number(storyState().versions.dictMaster||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldCanon={version:storyState().versions.dictMaster,source:'dictmaster',ts:Date.now(),counts:{characters:(o.glossary.characters||[]).length,places:(o.glossary.places||[]).length,propernouns:(o.glossary.propernouns||[]).length,worldRules:(o.glossary._worldRules||[]).length}};
+    storyState().canon.dictmasterAt=Date.now(); ssEnsureCanonEntities(); ssCaptureMasterSnapshot(); storyState().versions.dictMaster=Number(storyState().versions.dictMaster||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldCanon={version:storyState().versions.dictMaster,source:'dictmaster',ts:Date.now(),counts:{characters:(o.glossary.characters||[]).length,places:(o.glossary.places||[]).length,propernouns:(o.glossary.propernouns||[]).length,worldRules:(o.glossary._worldRules||[]).length,organizations:(o.glossary.organizations||[]).length,institutions:(o.glossary.institutions||[]).length,items:(o.glossary.items||[]).length,terms:(o.glossary.terms||[]).length,events:(o.glossary.events||[]).length,lifeSettings:(o.glossary.lifeSettings||[]).length}};
     persist(); render();
     collapseGlossaryAfterDictionaryGeneration();
     render();
     markAIDone('dictmaster');
-    toast(`万物词典已生成：人物 ${result.nChar} 位 · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系表 ${result.nRel} 条 · 世界观规则 ${result.nWR} 条（已并入万物词典）`);
+    toast(`万物词典已生成：人物 ${result.nChar} · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系 ${result.nRel} · 规则 ${result.nWR} · 组织 ${result.nOrg} · 机构 ${result.nInst} · 道具 ${result.nItem} · 术语 ${result.nTerm} · 历史 ${result.nEvent} · 生活 ${result.nLife}（世界基底已建立）`);
     playEventSound('dictmaster_done');
     return true;
   }catch(e){
@@ -16749,9 +16810,9 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 
 让后续正文拥有足够丰富的“可写素材”。
 
-【一、核心人物扩建】
+【一、人物扩建｜只补外围，不重建核心】
 
-当现有词典确实存在人物缺口时，可以创造新的主要人物或关键配角。
+禁止创造新的主角、核心人物、主线关键人物或幕后Boss。核心人物与主线关键关系必须由词典达人一次性建立。只有在确有世界生活/职业/场景需要时，才可以新增次要配角；新增人物默认属于 dictionary_enrichment / support 层。
 
 但必须满足：
 
@@ -17149,7 +17210,7 @@ name 字段只能填写纯实体名称。
 
 你可以扩建词典，但不能建立第二套世界。
 
-你的新增内容一旦正式收录，也会成为后续正文可以使用的正式创作事实。
+你的新增内容一旦正式收录，也会成为后续正文可以使用的正式创作事实；但 sourceType 必须是 dictionary_enrichment，权威级别低于 Creative Blueprint 与 dictionary_foundation，不得覆盖上游事实。
 `;
 function buildDictEnrichUser(){
   const o = state.outline || {};
@@ -17277,6 +17338,7 @@ function buildDictEnrichUser(){
     dmSections.push(`【词典达人架构总结】${state.dictmasterLatest.summary}`);
   }
 
+  parts.push('【第三部分：本次词典充实允许做什么】只补世界厚度：次要配角、外围地点、辅助专名、次要/生活道具、补充术语、外围历史事件、生活设定、行业生态、地方习俗、环境细节。禁止重新定义任何 dictionary_foundation 条目；禁止新增主角/核心人物/幕后Boss；禁止修改人物核心关系、核心地点、组织核心身份、核心专名、世界规则。所有新增条目必须标记 sourceType=dictionary_enrichment。');
   const dictmasterPart = `【第二部分：词典达人所生成的所有内容（只读参照：不得改动、不得重复新增同名）】\n${dmSections.length ? dmSections.join('\n\n') : '（暂无词典达人生成数据）'}`;
   parts.push(dictmasterPart);
 
@@ -17541,9 +17603,7 @@ function parseDictEnrichText(txt){
 }
 function mergeDictEnrich(res){
   const o = state.outline; if(!o) return {c:0,w:0,p:0,k:0,total:0};
-  if(!o.glossary) o.glossary = { characters:[], places:[], propernouns:[] };
-  if(!Array.isArray(o.glossary.walkons)) o.glossary.walkons = [];
-  const g = o.glossary;
+  const g = ensureGlossaryKnowledgeShape(o.glossary || { characters:[], places:[], propernouns:[] });
   const n = { c:0, w:0, p:0, k:0, main:0, support:0, organizations:0, institutions:0, items:0, rules:0, terms:0, events:0, lifeSettings:0 };
   const findExisting = (list, targetName) => {
     const cleanT = cleanEntityName(targetName)[0];
@@ -17568,8 +17628,8 @@ function mergeDictEnrich(res){
       existing._srcTs = Date.now();
       return;
     }
-    if(it.tier!=='main'&&it.tier!=='support') it.tier='support';
-    it._enrich=true; it._srcHow='词典充实'; it._srcTs=Date.now();
+    it.tier='support';
+    it._enrich=true; it._srcHow='词典充实'; it.sourceType='dictionary_enrichment'; it.source='dictEnrich'; it.createdBy='dictEnrich'; it._srcTs=Date.now();
     g.characters.push(it);
     n.c++;
     if(it.tier==='main') n.main++; else n.support++;
@@ -17587,7 +17647,7 @@ function mergeDictEnrich(res){
       existing._enrich = true; existing._srcTs = Date.now();
       return;
     }
-    it._enrich=true; it._srcTs=Date.now();
+    it._enrich=true; it.sourceType='dictionary_enrichment'; it.source='dictEnrich'; it.createdBy='dictEnrich'; it._srcTs=Date.now();
     g.places.push(it);
     n.p++;
   });
@@ -17603,7 +17663,7 @@ function mergeDictEnrich(res){
       existing._enrich = true; existing._srcTs = Date.now();
       return;
     }
-    it._enrich=true; it._srcTs=Date.now();
+    it._enrich=true; it.sourceType='dictionary_enrichment'; it.source='dictEnrich'; it.createdBy='dictEnrich'; it._srcTs=Date.now();
     g.propernouns.push(it);
     n.k++;
   });
@@ -17619,7 +17679,7 @@ function mergeDictEnrich(res){
       existing._enrich = true; existing._srcTs = Date.now();
       return;
     }
-    it._enrich=true; it._srcTs=Date.now();
+    it._enrich=true; it.sourceType='dictionary_enrichment'; it.source='dictEnrich'; it.createdBy='dictEnrich'; it._srcTs=Date.now();
     g.walkons.push(it);
     n.w++;
   });
@@ -17627,7 +17687,7 @@ function mergeDictEnrich(res){
   const ensureArr = key => { if(!Array.isArray(g[key])) g[key]=[]; return g[key]; };
   const mergeGeneric = (key, list) => {
     const arr=ensureArr(key); const names=new Set(arr.map(x=>String(x&&x.name||'').trim()).filter(Boolean));
-    (list||[]).forEach(it=>{ const nm=String(it&&it.name||'').trim(); if(!nm || names.has(nm)) return; it._enrich=true; it._srcHow='词典充实'; it._srcTs=Date.now(); arr.push(it); names.add(nm); n[key]=(n[key]||0)+1; });
+    (list||[]).forEach(it=>{ const nm=String(it&&it.name||'').trim(); if(!nm || names.has(nm)) return; it._enrich=true; it._srcHow='词典充实'; it.sourceType='dictionary_enrichment'; it.source='dictEnrich'; it.createdBy='dictEnrich'; it._srcTs=Date.now(); arr.push(it); names.add(nm); n[key]=(n[key]||0)+1; });
   };
   mergeGeneric('organizations',res.organizations); mergeGeneric('institutions',res.institutions); mergeGeneric('items',res.items);
   mergeGeneric('rules',res.rules); mergeGeneric('terms',res.terms); mergeGeneric('events',res.events); mergeGeneric('lifeSettings',res.lifeSettings);
@@ -17826,17 +17886,9 @@ async function genDictEnrich(btn, opts){
     if(!txt) throw new Error('未返回词典充实内容');
     const parsed = parseDictEnrichText(txt);
     if(isScopeBanned('dictEnrich')){
-      parsed.characters = filterDictEnrichList(parsed.characters);
-      parsed.walkons = filterDictEnrichList(parsed.walkons);
-      parsed.places = filterDictEnrichList(parsed.places);
-      parsed.propernouns = filterDictEnrichList(parsed.propernouns);
-      parsed.organizations = filterDictEnrichList(parsed.organizations);
-      parsed.institutions = filterDictEnrichList(parsed.institutions);
-      parsed.items = filterDictEnrichList(parsed.items);
-      parsed.rules = filterDictEnrichList(parsed.rules);
-      parsed.terms = filterDictEnrichList(parsed.terms);
-      parsed.events = filterDictEnrichList(parsed.events);
-      parsed.lifeSettings = filterDictEnrichList(parsed.lifeSettings);
+      const allNamed = [parsed.characters,parsed.walkons,parsed.places,parsed.propernouns,parsed.organizations,parsed.institutions,parsed.items,parsed.rules,parsed.terms,parsed.events,parsed.lifeSettings];
+      const bad = allNamed.flatMap(arr=>(arr||[]).map(x=>({name:String(x&&x.name||'').trim(),bad:bannedEntityName(x&&x.name)}))).find(x=>x.bad);
+      if(bad) throw new Error(`词典充实命中禁则姓名/名称「${bad.name}」：${bad.bad}；已拒绝本次扩充，请按现有重试机制重新生成`);
     }
     if(!(parsed.characters.length || parsed.walkons.length || parsed.places.length || parsed.propernouns.length || parsed.organizations.length || parsed.institutions.length || parsed.items.length || parsed.rules.length || parsed.terms.length || parsed.events.length || parsed.lifeSettings.length)) throw new Error('未识别到有效条目，请重试');
     const n = mergeDictEnrich(parsed); ssProtectMasterCanon(); storyState().canon.dictEnrichAt=Date.now(); storyState().versions.dictEnrich=Number(storyState().versions.dictEnrich||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldExpansion={version:storyState().versions.dictEnrich,source:'dictEnrich',ts:Date.now(),added:n};
@@ -17896,6 +17948,7 @@ function dictEnrichBlockHtml(){
   ].filter(Boolean).join(' · ') : '';
   const foldBtn = `<span class="de-carrow">${deCollapsed?'▸':'▾'}</span>`;
   const g = (o && o.glossary) || {};
+  const hasWorldKnowledge = ['organizations','institutions','items','rules','terms','events','lifeSettings'].some(k=>Array.isArray(g[k])&&g[k].length);
   const hue = s=>{ let h=0; for(const ch of String(s||'')) h=(h*31+ch.codePointAt(0))%360; return h; };
   const liveBrief = c => {
     if(!c) return '';
@@ -17955,12 +18008,12 @@ function dictEnrichBlockHtml(){
       <!-- v1.0.29x：词典充实入口收归「规划师④词典充实」，本卡不再放点击按钮，仅供展示生成内容 -->
       ${stream}
       ${status}
-      ${t ? `<div class="dm-tables" style="margin-top:10px">
-        ${(()=>{ const ext=[['🏛️ 组织/势力',g.organizations,'organizations'],['🏢 职业/机构',g.institutions,'institutions'],['🧰 物品/道具',g.items,'items'],['📜 世界规则',g.rules,'rules'],['🔤 术语',g.terms,'terms'],['🕰️ 历史事件',g.events,'events'],['🍜 生活设定',g.lifeSettings,'lifeSettings']]; return ext.map(([lab,arr])=>{ const a=Array.isArray(arr)?arr:[]; if(!a.length) return ''; const body=a.map(x=>{const nm=String(x&&x.name||'').trim(); if(!nm) return ''; const vals=[x.type,x.category,x.function,x.stance,x.meaning,x.rule,x.content,x.note,x.impact].map(v=>String(v||'').trim()).filter(Boolean); return `<div class="de-item new"><span class="de-chip">✦ ${esc(nm)}</span><span class="de-brief-desc dm-rel-txt">${esc(vals.join(' · ')||'（暂无详细简介）')}</span></div>`;}).join(''); return `<details class="dm-fold" open><summary>${lab}（${a.length}）</summary><div class="de-grid">${body}</div></details>`; }).join(''); })()}
+      ${(t || hasWorldKnowledge) ? `<div class="dm-tables" style="margin-top:10px">
+        ${(()=>{ const ext=[['🏛️ 组织/势力',g.organizations,'organizations'],['🏢 职业/机构',g.institutions,'institutions'],['🧰 物品/道具',g.items,'items'],['📜 世界规则',g.rules,'rules'],['🔤 术语',g.terms,'terms'],['🕰️ 历史事件',g.events,'events'],['🍜 生活设定',g.lifeSettings,'lifeSettings']]; return ext.map(([lab,arr])=>{ const a=Array.isArray(arr)?arr:[]; if(!a.length) return ''; const body=a.map(x=>{const nm=String(x&&x.name||'').trim(); if(!nm) return ''; const vals=[x.type,x.category,x.function,x.stance,x.meaning,x.rule,x.content,x.note,x.impact].map(v=>String(v||'').trim()).filter(Boolean); const src=String(x&&x.sourceType||'').trim()==='dictionary_foundation'?'基底':'扩充'; return `<div class="de-item${x&&x._enrich?' new':''}"><span class="de-chip">${x&&x._enrich?'✦ ':''}${esc(nm)}</span><span class="de-brief-desc dm-rel-txt">[${src}] ${esc(vals.join(' · ')||'（暂无详细简介）')}</span></div>`;}).join(''); return `<details class="dm-fold" open><summary>${lab}（${a.length}）</summary><div class="de-grid">${body}</div></details>`; }).join(''); })()}
         ${deCat('👤 主要人物', liveMain, 'grid')}
         ${deCat('🤝 次要配角', liveSupport, 'grid')}
         ${deCat('🚶 路人龙套', liveWalkons, 'grid')}
-      </div>` : `<p class="muted" style="margin-top:4px">尚未充实词典。</p>`}
+      </div>` : `<p class="muted" style="margin-top:4px">已有世界基底；词典充实尚未生成新的扩充内容。</p>`}
     </div>
   </div>`;
 }
@@ -19516,6 +19569,9 @@ async function genManyChapters(count, fromStart){
       const targetPage = Math.floor(start / CH_PAGE_SIZE);
       if(Math.abs(chPage - targetPage) >= 1){ chPage = targetPage; renderChapters(); }
     }
+    // v1.0.360：正文 AI 已成功落库后，必须主动刷新全局步骤状态。
+    // 之前正文生成只 patch 章节卡，没有重绘“创作进度/步骤”视图，导致正文已完成但步骤仍停在“正文”。
+    render();
   }catch(e){
     for(let k=0;k<n;k++){ if(chState[start+k] === 'generating'){ chState[start+k]='error'; } patchChapter(start+k); }
     if(st){ st.className='status err'; st.textContent = `第${start+1}~${start+n}章生成失败（${e.message}）。已停止本批，请修复后重试。`; }
