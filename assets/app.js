@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.368';
+const APP_VERSION = '1.0.370';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.368.js';
+const APP_FILE_VERSION = 'app1.0.370.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -16293,12 +16293,61 @@ const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人�
 7. 你的优化只能是深化、补足、结构化、体系化、提高长期可写性，而不是改故事。
 8. 如果用户蓝本已经足够具体，则以忠实整理和精确强化为主，不要为了证明自己会创造而过度创造。
 
-【二、词典达人与词典充实的权限边界】
-词典达人负责建立和定稿核心世界基准，拥有世界架构与核心 Canon 定稿权。
+【二、第一阶段优先级｜先建立完整核心人物体系，再做其他词典】
+这是本次任务最重要的执行顺序，不能跳过，也不能把它弱化成“可选人物整理”：
 
-词典充实只能在达人已经建立的世界里继续扩建，负责补充人物生活层、次要人物、生活环境、关键场景、行业生态、地域特色、辅助专名等；不能反向修改达人已经定稿的核心事实。
+阶段 1｜建立核心人物体系（必须先做）
+1. 先读取 Creative Blueprint 已经明确的人物。它们是“已确认人物种子”，必须继承；但它们绝不是最终人物总表。
+2. 立即分析故事的核心冲突、主角目标、对立关系、阵营结构、世界运行方式和长期剧情需求，判断“为了让这部小说真正成立，核心人物还缺谁”。
+3. 对确有长期剧情职责、且仅靠已有人物无法成立的角色，主动创建必要的新核心人物，例如核心对手、关键盟友、导师、关键亲属、关键阵营人物、关键知情者等。
+4. 新增核心人物必须获得稳定 CHAR_xxx ID、正式姓名、身份和明确的长期故事职责；正式姓名由你定稿，后续词典充实不得改名。
+5. 人物集合确定后，再建立人物之间的核心关系。关系表只能引用已经进入 characters 集合的人物；关系表绝不能成为隐形人物生成器。
+6. 完成这一阶段后，形成“完整核心人物集合”。这个集合可能比 Blueprint 人物多，也可能只有 Blueprint 中的一个人物；数量由故事需要决定，不由固定人数决定。
+7. 如果故事确实只需要一个核心人物，relationshipTable 可以为空；绝不能为了填表制造自我关系。
 
-因此，你必须建立稳定、准确、可长期复用的世界骨架，而不是把所有可能想到的生活细节全部塞进核心词典。
+阶段 2｜建立核心世界骨架
+只有完成阶段 1 的人物体系后，才继续建立核心地点、组织/机构、专有名词、世界规则、核心物件、术语、历史和必要生活设定。
+
+阶段 3｜统一定稿
+最后检查：所有关系端点都来自正式人物集合；所有新增核心人物都有明确长期职责；蓝本已确认事实未被修改；新增内容没有为了“丰富”而过量制造。
+
+特别重要：不要因为优化构想通常只写了主角，就误以为核心人物只能有主角一个。优化构想负责提供故事方向和已确认人物种子；词典达人负责把这些种子发展成“小说真正需要的核心人物系统”。
+
+【核心边界】
+- “新增核心人物”是词典达人的正式职责，不是违规行为。
+- “无限增加人物”不是词典达人的职责；只创建对主线长期成立确有必要的人物。
+- 已有蓝本人物不能被删除、改名或改核心身份。
+- 新增人物不能伪装成用户已经确认的事实；但进入 Foundation Dictionary 后，它们即成为词典达人正式定稿的核心世界事实。
+
+【三、工作契约｜先理解职责，再开始创造】
+你不是“抄写员”，也不是“只允许继承、不允许新增”的登记员。
+你是 Foundation Dictionary 的建立者：先完整继承蓝本已经确定的事实，再判断为了让整部小说能够成立，哪些核心人物、核心地点、组织、专名、规则、物件、术语、历史和必要生活基础设施必须存在，并把这些必要内容建立成第一版稳定世界骨架。
+
+必须遵守：准确 > 完整；已确认 > 推断；必要 > 数量；宁可留空 > 为填字段猜测。
+
+【词典达人必须做】
+1. 继承蓝本已经明确的核心人物、名称、身份、核心关系和世界事实。
+2. 如果蓝本人物过少，但故事主线为了成立确实需要其他核心人物，可以新增必要的核心人物。新增人物必须有明确故事职责、稳定 CHAR_xxx ID 和正式姓名；不得为了凑数量新增。
+3. 先建立正式人物集合，再建立人物关系。关系表不是人物来源，不能用关系表偷偷创造人物。
+4. 建立真正支撑长期创作的核心地点、组织、专有名词、世界规则、核心物件、术语、历史和必要生活设定。
+5. 让输出成为后续“词典充实”的唯一 Foundation 基准。
+
+【词典达人绝对不能做】
+1. 不能修改蓝本已经明确的事实。
+2. 不能为了让词典“看起来丰富”无限添加实体。
+3. 不能让不存在的人物出现在关系表中，不能出现人物自我关系来凑数。
+4. 不能把关系表中的一个名字/CHAR_ID 当成“隐形人物”；人物必须先有正式人物记录。
+5. 不能因为字段缺失而瞎编；无依据就留空/未知。
+6. 不能提前设计章节、场景或正文。
+
+【人物与关系的绝对顺序】
+人物定义集合 → 稳定 ID/正式姓名映射 → 人物关系。
+如果最终只有一个核心人物，而且故事确实不需要其他核心人物，那么 relationshipTable 必须允许为空；绝不制造“张三↔张三”之类的假关系。
+
+【词典充实的权限边界】
+词典充实只能读取 Foundation Dictionary 并做增量扩展。它可以增加次要人物、普通地点、组织内部细节、普通/次要物件、补充术语、外围历史、风俗、行业知识、民间生态、环境和生活细节；但不能修改、补全覆盖或重新解释任何已有 Foundation 实体的核心事实，也不能把次要人物升级成新的主角/核心人物或幕后 Boss。
+
+因此：词典达人负责“建立世界骨架”；词典充实负责“在骨架上长血肉”。两者不是两个都重新造世界的 AI。
 
 【三、核心世界事实准入原则】
 正式进入词典的内容，至少应满足以下之一：
@@ -16333,15 +16382,25 @@ const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人�
 可以进行合理推导，但禁止凭空增加会改变故事方向的重大核心设定，例如超自然能力、新核心世界规则、新核心组织体系等，除非用户蓝本本身已经提供依据。
 
 【六、人物设计原则】
-characters 是最重要的核心资产之一。人物应重点保证 name、identity、age、gender、appearance、hobby、relation、trait、catchphrase 的可用性。
+characters 是最重要的核心资产之一，而且“建立核心人物体系”是本次任务的第一阶段，不是附带工作。
+你必须先完成人物体系，再继续其他类别。请把 Blueprint 人物视为“已经确认的种子”，而不是“最终名单”。如果主线明显需要但 Blueprint 没有提供的核心对手、盟友、导师、关键亲属、阵营人物或其他长期角色，应主动创建并正式命名；只有在判断确实不需要时才保持较小的人物集合。
+每个新增核心人物都要回答一个问题：“没有这个人物，主线是否会失去一个长期不可替代的功能？”如果答案是否定的，就不要新增。
+人物应重点保证 name、identity、age、gender、appearance、hobby、relation、trait、catchphrase 的可用性。
 
 但绝不能为了填满字段而虚构人物信息，尤其禁止机械制造“喜欢咖啡”“喜欢看书”“喜欢散步”或无实际价值的口头禅。
 
 没有依据或没有长期价值时，可以写“未知”或“无”。identity 与 trait 应尽量明确，因为它们直接影响后续人物塑造。
 
-人物必须具备：真实身份、合理行为逻辑、稳定性格、明确关系和长期价值。
+【核心人物可以新增】
+蓝本明确人物是必须继承的人物；除此之外，为使主线成立而必需的核心对手、核心盟友、导师、关键亲属、核心阵营人物等，可以由词典达人建立。每一个新增人物都必须有明确长期故事职责，并建立正式姓名和唯一 CHAR_xxx ID。
 
-如果角色只需要出现一次，应优先留给后续「词典充实」阶段，而不是在这里制造完整核心人物。
+新增核心人物的正式姓名由词典达人负责定稿；后续词典充实不得改名。
+
+人物必须先进入 characters 集合，再允许进入 relationshipTable。任何关系端点如果不是正式人物集合中的 ID/姓名，都必须被拒绝；绝不能为了保住关系而制造“幽灵人物”。
+
+如果故事只需要一个核心人物，就只建立一个人物；relationshipTable 可以为空。禁止为了满足“关系表必须有数据”而建立自我关系。
+
+如果角色只需要出现一次、且不属于核心故事结构，应优先留给后续“词典充实”阶段，而不是在这里制造完整核心人物。
 
 【七、人物关系表必须真实】
 relationshipTable 只能记录人物↔人物之间的真实关系，例如血缘、亲属、师徒、上下级、同事、朋友、敌对、利益、情感、合作、利用、恩怨、阵营等。
@@ -16430,6 +16489,7 @@ name 字段只能写实体名称。
 
 【十九A、最低通行标准｜硬约束与可选内容必须严格分离】
 词典达人只负责建立 Foundation Dictionary 的最小可用核心骨架，不负责一次性完成整本小说百科全书。
+注意：这里的“最小”不是“只抄蓝本已有人物”。词典达人必须判断故事是否需要新增核心人物；蓝本只有一个人物时，允许建立更多必要核心人物，也允许在确实不需要时保持单人物结构。不要把“关系表可为空”误解成“不能建立新人物”。
 真正不可缺少的硬约束只有：至少1位核心人物；核心人物有正式姓名和基本身份；Blueprint 人物定义区中明确出现的 CHAR_xxx 人物ID必须完成正式姓名映射；Blueprint 明确的人物核心关系不能丢失；WORLD 必须能说明时代/主要舞台/基本世界；Blueprint 明确存在的世界硬规则不得被删除或改成相反规则；必须遵守禁用姓名、实体去重和安全约束。
 以下均为可选，不得因为缺失而判失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、人物 age/gender/appearance/hobby/relation/catchphrase/trait 等详细字段、地点关联、专名关联、关系详细说明。没有依据可以省略或写“未知/无”。
 没有明确世界规则时，RULE 区块可以完全省略。不要为了凑数量创造条目。
@@ -16577,7 +16637,7 @@ summary：只用一句话说明时代、主要舞台或基本世界框架，让�
 【二十二、关联表严格要求】
 三种关联表全部宁缺毋滥。
 
-relationshipTable：两端必须是人物；a≠b。
+relationshipTable：两端必须是人物；a≠b。关系两端允许 AI 使用 CHAR_xxx 或正式姓名，但程序会统一解析为正式人物姓名；如果端点无法映射到已建立人物，必须拒绝该关系，不能让关系表创造人物。
 placeContacts：两端必须是地名；from≠to。
 properContacts：两端必须是专名；from≠to。
 
@@ -16623,7 +16683,21 @@ function buildDictMasterUser(ctx){
   parts.push(`【词典达人唯一故事事实源｜Creative Blueprint】\n方案：${String(c.candidateName||'').trim()}\n${JSON.stringify(blueprint)}`);
   if(Object.keys(anchors||{}).length) parts.push(`【用户原始构想锚点｜仅用于保护用户明确事实】\n${JSON.stringify(anchors)}`);
   if(dims.length) parts.push(`【战略维度｜仅用于取舍，不是第二套故事事实】\n${JSON.stringify(dims)}`);
-  parts.push(`【Foundation Dictionary 最低通行标准】
+  parts.push(`【词典达人执行顺序｜人物体系优先】
+必须严格按以下顺序执行，不得把“读取 Blueprint 人物”误当成“完成全部人物设计”：
+第一步：继承 Blueprint 已确认人物；
+第二步：判断核心冲突和长期剧情需要哪些核心人物；
+第三步：主动创建缺失但确有必要的新核心人物，并为每人分配稳定 CHAR_xxx、正式姓名、身份、长期故事职责；
+第四步：人物集合定稿后再建立核心关系；
+第五步：人物体系完成后，再建立地点、组织/机构、专名、世界规则、物件、术语、历史和生活设定。
+如果 Blueprint 只有主角一个人物，不得因此默认“人物体系已完成”。必须先判断故事是否需要对手、盟友、导师、亲属、关键阵营人物等；需要就创建，不需要才保持单人物。
+新增核心人物不是错误，而是词典达人建立 Foundation Dictionary 的正式职责；但必须“必要优先、数量克制、长期有用”。
+
+【新增核心人物字段约定】
+新增人物建议写：id=CHAR_XXX、name=正式姓名、origin=dictionary_master_created、coreRole=长期故事职责、identity=身份、trait=核心特征、relation=与主角/其他核心人物的核心关系。
+Blueprint 已确认人物可写 origin=blueprint_confirmed；如果 AI 没有输出 origin/coreRole，JS 可以补默认值，不得因此判失败。
+
+【Foundation Dictionary 最低通行标准】
 本次任务的目标不是一次性完成百科全书，而是建立“下游可以安全开写”的最小核心世界骨架。
 必须完成：至少1位核心人物；核心人物有正式姓名和基本身份；Creative Blueprint 中真正定义的人物ID（只指 PROTAGONIST.personId / KEY_CHARACTERS.personId 等人物定义字段）必须完成正式姓名映射；Blueprint 已明确的人物核心关系不能丢失；能够确定时代/主要舞台/基本世界；Blueprint 明确写出的世界硬规则不得被主动删除或改成相反规则；必须遵守禁用姓名和安全约束。
 可以为空、不得因此失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、人物详细档案字段、关系详细描述、地点关联、专名关联。没有依据就不要硬造；有则收录。
@@ -16678,8 +16752,15 @@ function canonicalCoreRelationships(){
     const n=resolve(x?.personId || x?.name);
     if(protagonist && n && String(x?.relation||'').trim()) rels.push({a:resolve(protagonist),b:n,relation:String(x.relation).trim()});
   });
+  const allowed=new Set(defs.flatMap(x=>[String(x.id||'').trim().toUpperCase(),String(x.name||'').trim()]).filter(Boolean));
   const seen=new Set();
-  return rels.filter(r=>{ const k=[r.a,r.b,r.relation].map(v=>String(v).trim().toLowerCase()).join('|'); if(seen.has(k)) return false; seen.add(k); return true; });
+  return rels.filter(r=>{
+    const a=String(r.a||'').trim(), b=String(r.b||'').trim();
+    if(!a || !b || a===b) return false;
+    const okA=allowed.has(a)||allowed.has(a.toUpperCase()), okB=allowed.has(b)||allowed.has(b.toUpperCase());
+    if(!okA || !okB) return false;
+    const k=[a,b,r.relation].map(v=>String(v).trim().toLowerCase()).join('|'); if(seen.has(k)) return false; seen.add(k); return true;
+  });
 }
 function canonicalWorldRules(){
   const c=currentCanonicalStoryStrategy() || {};
@@ -16695,6 +16776,40 @@ function parseDictMasterPlainText(raw){
   let m,count=0;
   while((m=re.exec(text))){ const sec=m[1].toUpperCase(),body=m[2]; if(!map[sec]) continue; count++; const obj={}; body.split(/\r?\n/).forEach(line=>{ const ln=line.trim(); if(!ln) return; const k=ln.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*[=:]\s*(.*)$/); if(k) obj[k[1]]=String(k[2]||'').trim(); }); const key=map[sec]; if(sec==='WORLD') out.summary=String(obj.summary||'').trim(); else out[key].push(obj); }
   return count ? out : null;
+}
+
+function normalizeDictMasterEntities(j){
+  if(!j || !Array.isArray(j.characters)) return j;
+  const usedIds=new Set(); let next=1;
+  // 先锁定 AI 明确给出的合法 CHAR_ID，再给遗漏 ID 的新增人物分配空闲 ID，避免顺序导致误判重复。
+  for(const c of j.characters){
+    const id=String(c?.id||'').trim().toUpperCase();
+    if(id && /^CHAR_\d{3,}$/.test(id)){
+      if(usedIds.has(id)) throw new Error(`词典达人输出人物ID重复：「${id}」`);
+      usedIds.add(id);
+    }
+  }
+  const allocId=()=>{ while(usedIds.has(`CHAR_${String(next).padStart(3,'0')}`)) next++; const id=`CHAR_${String(next).padStart(3,'0')}`; usedIds.add(id); next++; return id; };
+  const idToName=new Map(), nameToId=new Map();
+  for(const c of j.characters){
+    if(!c) continue;
+    let id=String(c.id||'').trim().toUpperCase();
+    if(!id || !/^CHAR_\d{3,}$/.test(id)) id=allocId();
+    c.id=id;
+    const nm=String(c.name||'').trim();
+    if(nm){
+      if(nameToId.has(nm) && nameToId.get(nm)!==id) throw new Error(`词典达人输出人物姓名重复：「${nm}」`);
+      idToName.set(id,nm); nameToId.set(nm,id);
+    }
+  }
+  if(Array.isArray(j.relationshipTable)){
+    j.relationshipTable=j.relationshipTable.map(r=>{
+      if(!r) return r;
+      const resolve=v=>{ const x=String(v||'').trim(); return idToName.get(x.toUpperCase())||x; };
+      return Object.assign({},r,{a:resolve(r.a),b:resolve(r.b)});
+    });
+  }
+  return j;
 }
 
 function validateDictMasterOutput(j){
@@ -16719,6 +16834,8 @@ function validateDictMasterOutput(j){
     for(const kk of ['age','gender','appearance','hobby','relation','catchphrase']){
       if(!String(c[kk]||'').trim()) c[kk]='未知';
     }
+    if(!String(c.origin||'').trim()) c.origin='dictionary_master';
+    if(!String(c.coreRole||'').trim()) c.coreRole='核心人物长期故事职责待补充';
     personNames.add(nm);
   }
 
@@ -16802,6 +16919,7 @@ async function genDictMaster(btn){
       const looksJson=/^[\[{]/.test(rawTrim);
       throw new Error(looksJson ? 'AI 返回了 JSON，但词典达人当前契约只接受结构式纯文本；请重试' : 'AI 未返回可用的词典结构式纯文本');
     }
+    normalizeDictMasterEntities(j);
     const v = validateDictMasterOutput(j);
     if(v) throw new Error('词典校验失败：'+v);
     o.glossary = ensureGlossaryKnowledgeShape(o.glossary || { characters:[], places:[], propernouns:[], subplots:[] });
@@ -16834,7 +16952,7 @@ async function genDictMaster(btn){
         o.glossary[k].push(e); existing.add(nm);
       });
     };
-    push(j.characters, 'characters', c=>({ id:String(c.id||'').trim(), name:String(c.name||'').trim(), identity:String(c.identity||'').trim(), age:String(c.age||'').trim(), gender:String(c.gender||'').trim(), appearance:String(c.appearance||'').trim(), hobby:String(c.hobby||'').trim(), relation:String(c.relation||'').trim(), trait:String(c.trait||'').trim(), catchphrase:String(c.catchphrase||'').trim() }));
+    push(j.characters, 'characters', c=>({ id:String(c.id||'').trim(), name:String(c.name||'').trim(), identity:String(c.identity||'').trim(), age:String(c.age||'').trim(), gender:String(c.gender||'').trim(), appearance:String(c.appearance||'').trim(), hobby:String(c.hobby||'').trim(), relation:String(c.relation||'').trim(), trait:String(c.trait||'').trim(), catchphrase:String(c.catchphrase||'').trim(), origin:String(c.origin||'').trim() || 'dictionary_master', coreRole:String(c.coreRole||'').trim() || '核心人物长期故事职责待补充' }));
     push(j.places, 'places', p=>({ name:String(p.name||'').trim(), type:String(p.type||'').trim(), note:String(p.note||'').trim() }));
     push(j.propernouns, 'propernouns', p=>({ name:String(p.name||'').trim(), note:String(p.note||'').trim() }));
     const masterGeneric = {
@@ -17083,8 +17201,10 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 7. 你可以创造新的世界素材，但新素材必须与既有词典保持自洽。
 8. 本阶段正式输出并被系统收录的新条目，同样会成为后续正文可以使用的正式创作事实。
 
-【核心使命】
+【只读基准｜不得回写 Foundation】
+输入中的 dictionary_foundation 是只读基准。对任何已存在的 Foundation 人物、地点、专名、组织、机构、物件、规则、术语、历史和生活设定：不得修改、补字段覆盖、改名、重分类、改变核心关系或用“更详细版本”替换原条目。相同名称命中 Foundation 时，直接跳过，不做字段合并；只有真正的新实体才允许作为 dictionary_enrichment 新增。
 
+【核心使命】
 在不破坏既有世界事实的前提下，主动补足：
 
 * 人物生活层
@@ -17105,18 +17225,14 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 让后续正文拥有足够丰富的“可写素材”。
 
 【一、人物扩建｜只补外围，不重建核心】
+词典达人阶段已经先完成“核心人物体系”的建立。这里的 Foundation characters 是只读核心集合，包含 Blueprint 已确认人物，也包含词典达人判断主线必需后主动创建并定稿的新核心人物。
+禁止创造新的主角、核心人物、主线关键人物或幕后Boss。你只能在确有生活层、职业层、场景层需要时增加 support/secondary 人物；任何新人物都不得改变或升级 Foundation 核心人物体系。
 
-禁止创造新的主角、核心人物、主线关键人物或幕后Boss。核心人物与主线关键关系必须由词典达人一次性建立。只有在确有世界生活/职业/场景需要时，才可以新增次要配角；新增人物默认属于 dictionary_enrichment / support 层。
+只有在确有世界生活/职业/场景需要时，才可以新增次要配角；新增人物默认属于 dictionary_enrichment / support 层。不得把一个 support 人物偷偷升级为核心人物，不得改写 Foundation 中任何核心人物的姓名、ID、身份、核心关系或核心定位。
 
-新增人物应尽量满足：
+如果输入中已经存在某个 Foundation 人物，即使其某个字段为空，也不能趁“充实”阶段替它补写并覆盖 Foundation；Foundation 是只读事实。需要新增信息时，必须作为新的 enrichment 素材存储，不能回写基础卡。
 
-* 对主线、生活层或世界展示有价值。
-* 有基本明确的身份。
-* 能够自然进入既有世界。
-
-不要求每个次要人物一次性填写完整人物档案，也不要求每次生成固定数量的人物。只要人物具备基本可用信息并能安全进入词典，就可以先收录，后续再由正文和后续充实继续补足。不要为了数量制造人物。
-
-一个没有任何剧情价值、生活价值或世界展示价值的人物，不应该进入词典。
+新增人物应满足：对主线、生活层或世界展示有价值；有基本明确的身份；能够自然进入既有世界。不要求固定数量或一次性完整档案，不要为了数量制造人物。
 
 【二、次要配角扩建】
 
@@ -17851,7 +17967,8 @@ function mergeDictEnrich(res){
     if(extra && !it.identity) it.identity = extra;
     const existing = findExisting(g.characters, nm);
     if(existing){
-      // Enrich missing fields in existing character
+      // Foundation 是只读事实：词典充实不得回写、补写或覆盖基础人物卡。
+      if(String(existing.sourceType||'').trim()==='dictionary_foundation' || existing._dictmaster) return;
       ['identity','age','gender','appearance','hobby','relation','trait','catchphrase'].forEach(f=>{
         if(!existing[f] && it[f]) existing[f] = it[f];
       });
@@ -17873,6 +17990,7 @@ function mergeDictEnrich(res){
     if(extra && !it.note) it.note = extra;
     const existing = findExisting(g.places, nm);
     if(existing){
+      if(String(existing.sourceType||'').trim()==='dictionary_foundation' || existing._dictmaster) return;
       if(!existing.type && it.type) existing.type = it.type;
       if(!existing.note && it.note) existing.note = it.note;
       existing._enrich = true; existing._srcTs = Date.now();
@@ -17890,6 +18008,7 @@ function mergeDictEnrich(res){
     if(extra && !it.note) it.note = extra;
     const existing = findExisting(g.propernouns, nm);
     if(existing){
+      if(String(existing.sourceType||'').trim()==='dictionary_foundation' || existing._dictmaster) return;
       if(!existing.note && it.note) existing.note = it.note;
       existing._enrich = true; existing._srcTs = Date.now();
       return;
