@@ -62,10 +62,11 @@ function lsKeyFor(id){ return KEY_PROJ_PREFIX + id; }
   }catch(e){}
 })();
 const MAX_PROJECTS = 500;
+const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；网络层重试仍由 callDeepSeek 自己管理
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app8.js — 正文单次生成版；强化章节内部一致性、信息去重、句式多样与人物动态反应逻辑。 */
+/* APP VERSION: app11.js — 正文单次生成版；强化章节内部一致性、信息去重、句式多样与人物动态反应逻辑。 */
 const state = {
   mode: 'shortfilm',    // 'shortfilm' 短片 / 'longnovel' 经典长篇小说
   wordRange: null,      // (兼容遗留) 不再作为长篇必填；保留字段避免旧快照破坏
@@ -82,6 +83,7 @@ const state = {
   polishStrategies: [],
   strategicDimensions: [],
   strategicDiversityProfile: null,
+  aiValidationHistory: [],
   // 校长→老师→正文的本章中段推进合同；不是随机化，而是受章节功能/状态/因果约束的结构策略。
   chapterMiddlePlans: {},
   chapterMiddleAudit: {},
@@ -664,22 +666,63 @@ const CHAPTER_REPAIR_SYS=`你是长篇小说“局部修复AI”。你没有改�
 规则：只处理FAIL问题；保持章节卡规定的事件、人物、时间、地点和文学风格；不得新增主线事件；不得整章重写。若FAIL属于多日时间跨度不足，允许在原有事件之间加入最小必要的时间过桥/阶段性推进，让正文自然抵达章节卡终点，但不得用一句“几天后”敷衍，也不得改变核心事件顺序。
 若FAIL属于信息重复：删除或压缩第二次解释，让后文改写为行动、反应或新后果；若FAIL属于设定化对白：保留人物真实目的，把背景说明改成有目的的交锋、试探、回避、打断或行动；若FAIL属于人物扁平：优先改变人物在当前压力下的选择/反应，补出动机、关系影响或潜台词，但不要强行添加口癖；若FAIL属于人物层次不足：优先改变一个关键行为选择，让其体现目标+关系+压力差异，并确保不改变剧情结果；若FAIL属于人物声音同质：调整信息取舍、回应方式和潜台词，不靠替换口头禅解决；若FAIL属于句式重复：只改明显连续的同构句，不做机械同义词替换；若FAIL属于矛盾：以已经成立的事实为准，用最小修改消除冲突，不得凭空发明解释。
 输出严格JSON：{"replacement":"要替换的最小原文片段","newText":"与原文长度大致相当的修复后片段","reason":"修复说明"}`;
+const BODY_AUDIT_REPAIR_MAX_ATTEMPTS = 1;
+const BODY_AUDIT_REPAIRABLE_TYPES = new Set([
+  'repetition','dialogue_exposition','character_flat','character_layer','character_voice','sentence_pattern'
+]);
+const BODY_AUDIT_HARD_TYPES = new Set([
+  'time','location','character','relationship','object','rule','knowledge','event','entity','causal','logic','contradiction'
+]);
+function classifyChapterAuditFailure(report){
+  const fails=(report?.issues||[]).filter(x=>x&&x.severity==='fail');
+  if(!fails.length) return {failureCode:'PASS',repairable:false,repairHint:'',failures:[]};
+  const types=fails.map(x=>String(x.type||'audit').trim()).filter(Boolean);
+  const hard=fails.filter(x=>BODY_AUDIT_HARD_TYPES.has(String(x.type||'').trim()));
+  const local=fails.filter(x=>BODY_AUDIT_REPAIRABLE_TYPES.has(String(x.type||'').trim()));
+  let failureCode='QUALITY_ERROR';
+  if(hard.length) failureCode='CORE_CONTRACT_ERROR';
+  else if(types.includes('repetition')) failureCode='REPETITION_ERROR';
+  else if(types.includes('dialogue_exposition')) failureCode='DIALOGUE_EXPOSITION_ERROR';
+  else if(types.some(t=>t.startsWith('character_'))) failureCode='CHARACTER_EXECUTION_ERROR';
+  else if(types.includes('sentence_pattern')) failureCode='SENTENCE_PATTERN_ERROR';
+  else if(types.length) failureCode='QUALITY_ERROR';
+  const repairable=!hard.length && local.length===fails.length;
+  const repairHint=repairable
+    ? fails.map(x=>String(x.repair||'').trim()).filter(Boolean).slice(0,3).join('；')
+    : '涉及章节事实、时间/地点、人物关系、世界规则、因果或核心事件等硬约束，禁止自动修复，必须人工处理或重新生成。';
+  return {failureCode,repairable,repairHint,failures:fails.map(x=>({type:String(x.type||''),evidence:String(x.evidence||''),expected:String(x.expected||''),actual:String(x.actual||''),repair:String(x.repair||'')}))};
+}
 async function repairChapterByAudit(i,text,report){
-  const fails=(report?.issues||[]).filter(x=>x&&x.severity==='fail'); if(!fails.length) return String(text||'');
+  const fails=(report?.issues||[]).filter(x=>x&&x.severity==='fail');
+  const classification=classifyChapterAuditFailure(report);
+  if(!fails.length || !classification.repairable) return {content:String(text||''),attempted:false,classification};
   const banRepair = stateBanEnabled() ? `\n【用户全书禁则】禁用姓名：${banListNames().join('、')}；姓名禁用字：${banListChars().join('、')}；禁用短语：${(Array.isArray(banListRaw().phrases)?banListRaw().phrases:[]).join('、')}` : '';
   const priorLedger = chapterQualityLedger(i);
-  const user=`【章节卡】${JSON.stringify(chapterPlanAuthority(i))}\n【审计FAIL】${JSON.stringify(fails)}${banRepair}\n【本章已确认质量账本】${JSON.stringify(priorLedger||{})}\n【正文】\n${String(text||'').slice(0,50000)}\n只修复最小冲突，优先修改1-3个最小连续片段；不得把已经成立的信息改成另一套设定。`;
-  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_REPAIR_SYS,user,{maxTokens:3500,temperature:0.15,topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterRepair'})); const j=parseJson(raw)||{}; const old=String(j.replacement||'').trim(), neu=String(j.newText||'').trim(); if(!old||!neu) return String(text||''); const idx=String(text||'').indexOf(old); if(idx<0) return String(text||''); return String(text).slice(0,idx)+neu+String(text).slice(idx+old.length); }catch(e){ return String(text||''); }
+  const user=`【章节卡】${JSON.stringify(chapterPlanAuthority(i))}\n【正文审核失败分类】${classification.failureCode}\n【可修复性】仅允许局部修复一次\n【定向修复提示】${classification.repairHint}\n【审计FAIL】${JSON.stringify(fails)}${banRepair}\n【本章已确认质量账本】${JSON.stringify(priorLedger||{})}\n【正文】\n${String(text||'').slice(0,50000)}\n只修复最小冲突，优先修改1-3个最小连续片段；保留所有已经合格的正文、事实、人物状态、老师教案与章节边界；不得新增主线事件，不得整章重写。`;
+  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_REPAIR_SYS,user,{maxTokens:3500,temperature:0.15,topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterRepair'})); const j=parseJson(raw)||{}; const old=String(j.replacement||'').trim(), neu=String(j.newText||'').trim(); if(!old||!neu) return {content:String(text||''),attempted:true,classification}; const idx=String(text||'').indexOf(old); if(idx<0) return {content:String(text||''),attempted:true,classification}; const content=String(text).slice(0,idx)+neu+String(text).slice(idx+old.length); return {content,attempted:true,classification}; }catch(e){ return {content:String(text||''),attempted:true,classification,error:String(e&&e.message||e)}; }
 }
 async function finalizeChapterState(i,text){
   text = enforceChapterBoundary(i, text);
-  const obs=await commitChapterObservedState(i,text); if(!obs) return {observed:null,audit:null,content:String(text||'')};
+  const obs=await commitChapterObservedState(i,text); if(!obs) return {observed:null,audit:null,content:String(text||''),blocked:false};
   let audit=await auditChapterState(i,text), content=String(text||'');
+  const firstClass=classifyChapterAuditFailure(audit);
   if(audit&&audit.status==='FAIL'){
-    const repaired=await repairChapterByAudit(i,content,audit);
-    if(repaired!==content){ content=repaired; const o=state.outline; o.chapters[i].content=content; updateFactCardFromChapter(i,content); await commitChapterObservedState(i,content); audit=await auditChapterState(i,content); audit.repaired=true; audit.repairedAt=Date.now(); storyState().chapters[i].audit=audit; persist(); }
+    const repair=await repairChapterByAudit(i,content,audit);
+    audit.failureCode=firstClass.failureCode; audit.repairable=firstClass.repairable; audit.repairHint=firstClass.repairHint; audit.repairAttempts=repair.attempted?1:0;
+    if(repair.attempted && repair.content!==content){
+      content=repair.content; const o=state.outline; o.chapters[i].content=content; updateFactCardFromChapter(i,content); await commitChapterObservedState(i,content);
+      audit=await auditChapterState(i,content);
+      const afterClass=classifyChapterAuditFailure(audit);
+      audit.failureCode=afterClass.failureCode; audit.repairable=afterClass.repairable; audit.repairHint=afterClass.repairHint; audit.repairAttempts=1; audit.repaired=true; audit.repairedAt=Date.now();
+      storyState().chapters[i].audit=audit; persist();
+    }
+    if(audit.status==='FAIL'){
+      audit.blocked=true; audit.blockReason=audit.failureCode==='CORE_CONTRACT_ERROR' ? '正文触及核心合同错误，自动修复被禁止。' : '一次局部定向修复后仍未通过正文审核。';
+      storyState().chapters[i].audit=audit; persist();
+      return {observed:storyState().chapters[i]?.observed||obs,audit,content,blocked:true};
+    }
   }
-  return {observed:storyState().chapters[i]?.observed||obs,audit,content};
+  return {observed:storyState().chapters[i]?.observed||obs,audit,content,blocked:false};
 }
 
 async function commitChapterObservedState(i,text){
@@ -1161,6 +1204,7 @@ function projectSnapshot(){
     polishStrategies: state.polishStrategies,
     strategicDimensions: state.strategicDimensions,
     strategicDiversityProfile: state.strategicDiversityProfile,
+    aiValidationHistory: Array.isArray(state.aiValidationHistory) ? state.aiValidationHistory.slice(-20) : [],
     chapterMiddlePlans: state.chapterMiddlePlans,
     chapterMiddleAudit: state.chapterMiddleAudit,
     originalIdeaAnchors: state.originalIdeaAnchors,
@@ -1248,6 +1292,7 @@ function applyProject(p){
   state.polishStrategies = Array.isArray(p.polishStrategies) ? p.polishStrategies : [];
   state.strategicDimensions = Array.isArray(p.strategicDimensions) ? p.strategicDimensions : [];
   state.strategicDiversityProfile = (p.strategicDiversityProfile && typeof p.strategicDiversityProfile === 'object') ? p.strategicDiversityProfile : null;
+  state.aiValidationHistory = Array.isArray(p.aiValidationHistory) ? p.aiValidationHistory.slice(-20) : [];
   state.chapterMiddlePlans = (p.chapterMiddlePlans && typeof p.chapterMiddlePlans === 'object') ? p.chapterMiddlePlans : {};
   state.chapterMiddleAudit = (p.chapterMiddleAudit && typeof p.chapterMiddleAudit === 'object') ? p.chapterMiddleAudit : {};
   state.originalIdeaAnchors = (p.originalIdeaAnchors && typeof p.originalIdeaAnchors==='object') ? p.originalIdeaAnchors : null;
@@ -3079,6 +3124,69 @@ const SIZE_DEFAULT = { min:3000, max:5000 };
 
 let polishMulti = true;
 
+/* ===================== app11：严格校验 + 定向修复重试 ===================== */
+const VALIDATION_FAILURE_CODES = new Set([
+  'STRUCTURE_ERROR','COUNT_ERROR','SOURCE_ERROR','DIVERSITY_ERROR','QUALITY_ERROR','SEMANTIC_ERROR','MODEL_ERROR'
+]);
+function classifyValidationFailure(report, err){
+  const code=String(report?.code||'').toUpperCase();
+  const details=String(report?.details||err?.message||'');
+  if(!report || report.ok===false && /截断|没有返回|空|timeout|network|余额|model|模型|429|5\d\d/i.test(details)) return {category:'MODEL_ERROR',code:code||'MODEL_OUTPUT_ERROR',field:'output',details};
+  if(/COUNT|OPTION_COUNT|SINGLE_OPTION_COUNT|DIMENSIONS_COUNT/i.test(code)) return {category:'COUNT_ERROR',code,field:'count',details};
+  if(/FOREIGN_DIMENSION|ORIGINAL_ANCHOR|SOURCE|STRATEGIC_DIMENSIONS/i.test(code)) return {category:'SOURCE_ERROR',code,field:'source',details};
+  if(/DIVERSITY|DUPLICATE|FINGERPRINT/i.test(code)) return {category:'DIVERSITY_ERROR',code,field:'diversity',details};
+  if(/QUALITY|CREATIVE_ADDITIONS|SCHEMA|FIELD|NAME_EMPTY|MISSING_/i.test(code)) return {category:'QUALITY_ERROR',code,field:'quality',details};
+  if(/SEMANTIC|FAITHFUL|MEANING/i.test(code)) return {category:'SEMANTIC_ERROR',code,field:'semantic',details};
+  return {category:'STRUCTURE_ERROR',code:code||'VALIDATION_FAILED',field:'structure',details};
+}
+function structuredValidationFailure(report, err){
+  const c=classifyValidationFailure(report,err);
+  const repairHint={
+    STRUCTURE_ERROR:'只修复 JSON 结构、字段类型、必填字段；不要改动已经正确的故事内容。',
+    COUNT_ERROR:'只修复数量要求；保持已有有效方案内容不变，不得用占位方案凑数。',
+    SOURCE_ERROR:'只修复与第一阶段权威战略源的引用关系；不得新增或反写全局 strategicDimensions。',
+    DIVERSITY_ERROR:'只拉开方案之间真正的战略差异；不得只换书名、人物名或措辞。',
+    QUALITY_ERROR:'只补齐缺失或空白的必填质量字段；不得削弱已有内容。',
+    SEMANTIC_ERROR:'只修复与原始构想/战略约束的语义偏离；保留已经成立的内容。',
+    MODEL_ERROR:'重新完整输出满足合同的结果；不要解释失败原因，不要输出半成品。'
+  }[c.category];
+  return {ok:false,category:c.category,code:c.code,field:c.field,details:c.details,repairHint};
+}
+function recordValidationAttempt(kind, attempt, failure, passed){
+  if(!Array.isArray(state.aiValidationHistory)) state.aiValidationHistory=[];
+  state.aiValidationHistory.push({kind,attempt,passed:!!passed,category:failure?.category||null,code:failure?.code||null,field:failure?.field||null,details:String(failure?.details||'').slice(0,500),ts:Date.now()});
+  state.aiValidationHistory=state.aiValidationHistory.slice(-20);
+}
+function buildTargetedRepairPrompt(kind, originalUser, raw, failure, ctx){
+  const source=kind==='ideaPolishStage2' ? `\n【第一阶段权威战略源（只读）】\n${JSON.stringify({originalAnchors:ctx?.originalAnchors||null,strategicDimensions:ctx?.strategicDimensions||[],diversityProfile:ctx?.diversityProfile||null})}` : '';
+  return `${originalUser}\n\n【定向修复任务】\n上一版输出未通过严格校验。你现在只允许修复失败项，不得降低任何验收标准，也不得静默省略字段。\n失败分类：${failure.category}\n失败代码：${failure.code}\n失败字段：${failure.field}\n失败详情：${failure.details}\n修复建议：${failure.repairHint}${source}\n\n【上一版输出】\n${String(raw||'').slice(0,90000)}\n\n【硬性要求】\n1. 保留上一版已经有效的内容；只修复失败字段或与其直接相关的部分。\n2. 必须重新输出完整、可解析的最终结果，不要输出解释、诊断、道歉或“已修复”。\n3. 不得通过降低数量、删字段、改成占位文本、换名字/措辞来规避校验。\n4. 第二阶段不得修改第一阶段 strategicDimensions；候选方案只能引用第一阶段维度，新增创意必须进入 creativeAdditions。`;
+}
+async function callValidatedWithRepair(kind, extra, callOpts, ctx, maxRepair=VALIDATION_RETRY_MAX){
+  const system=getSystemPrompt(kind,extra)+globalCreativeConstraintBlock(kind);
+  let user=buildAIPrompt(kind,extra);
+  let raw=''; let lastFailure=null;
+  for(let attempt=0; attempt<=maxRepair; attempt++){
+    try{
+      raw=String(unwrapAIResult(await callDeepSeek(system,user,Object.assign({},callOpts||{}, {taskKey:kind})))||'').trim();
+      if(!raw){
+        lastFailure=structuredValidationFailure({ok:false,code:'EMPTY_OUTPUT',details:'AI未返回内容'},null);
+      }else{
+        const report=validateAIOutput(kind,raw,ctx);
+        if(report && report.ok){ recordValidationAttempt(kind,attempt, null,true); return {raw,attempts:attempt}; }
+        lastFailure=structuredValidationFailure(report,null);
+      }
+    }catch(e){
+      lastFailure=structuredValidationFailure({ok:false,code:'CALL_FAILED',details:e?.message||String(e)},e);
+    }
+    recordValidationAttempt(kind,attempt,lastFailure,false);
+    if(attempt>=maxRepair) break;
+    user=buildTargetedRepairPrompt(kind,user,raw,lastFailure,ctx);
+  }
+  const e=new Error(`${kind} 严格校验最终失败 [${lastFailure?.category||'MODEL_ERROR'}/${lastFailure?.code||'UNKNOWN'}]：${lastFailure?.details||'未知错误'}。${lastFailure?.repairHint||''}`);
+  e.validationFailure=lastFailure; e.attempts=maxRepair+1;
+  throw e;
+}
+
 async function generateStrategyStage(btn, force){
   const idea = (state.idea || '').trim();
   if(!idea){ toast('请先输入故事构想'); return false; }
@@ -3089,7 +3197,7 @@ async function generateStrategyStage(btn, force){
   state.polishStatus = 'empty';
   state.polishSelectedId = null; state.polishAdopted = null; state.polishCanonical = null; state.canonicalStoryStrategy = null;
   state.polishOptions = [];
-  state.strategicDimensions = []; state.originalIdeaAnchors = null; state.polishDiagnosis = null; state.polishStrategies = [];
+  state.strategicDimensions = []; state.strategicDiversityProfile = null; state.originalIdeaAnchors = null; state.polishDiagnosis = null; state.polishStrategies = [];
   // 先进入生成态并把可见按钮切换为 loading；不能在 busy 前 render，否则旧按钮会被替换成脱离 DOM 的节点。
   persist();
   render();
@@ -3097,7 +3205,9 @@ async function generateStrategyStage(btn, force){
   if(liveBtn1) busy(liveBtn1,true,'① 正在生成战略维度…');
   markAIRunning('ideaStrategy');
   try{
-    const raw = await callAIGuarded('ideaStrategy', {}, {temperature: resolveActiveSpec().ideaTemp, maxTokens: Math.max(2500, Math.min(5000, clampMaxTokens('polish')))});
+    const vctx = {rawIdea: state.idea || ''};
+    const v = await callValidatedWithRepair('ideaStrategy', {}, {temperature: resolveActiveSpec().ideaTemp, maxTokens: Math.max(2500, Math.min(5000, clampMaxTokens('polish')))}, vctx);
+    const raw = v.raw;
     const strategy = extractJsonObject(raw);
     const check = validateIdeaStrategyOutput(strategy);
     if(!check.ok) throw new Error(`第一阶段战略分析校验失败：${check.code} ${check.details||''}`);
@@ -3145,14 +3255,9 @@ async function generatePolishStage(btn, force){
   if(liveBtn2) busy(liveBtn2,true,multi ? '② 正在生成3～5个优化构想…' : '② 正在生成最终优化构想…');
   markAIRunning('ideaPolishStage2'); markAIRunning('idea');
   try{
-    const txt = await callAIGuarded('ideaPolishStage2', {
-      multi,
-      originalAnchors: state.originalIdeaAnchors,
-      strategicDimensions: state.strategicDimensions,
-      diversityProfile: state.strategicDiversityProfile || null
-    }, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')});
-    const out = String(txt||'').trim();
-    if(!out) throw new Error('第二阶段没有返回内容');
+    const stage2Ctx = { multi, originalAnchors: state.originalIdeaAnchors, strategicDimensions: state.strategicDimensions, diversityProfile: state.strategicDiversityProfile || null };
+    const v = await callValidatedWithRepair('ideaPolishStage2', stage2Ctx, {temperature: resolveActiveSpec().ideaTemp, maxTokens: clampMaxTokens('polish')}, stage2Ctx);
+    const out = String(v.raw||'').trim();
     showPolishResult(out, multi);
     state.strategyStage2Status = 'ready';
     markAIDone('ideaPolishStage2');
@@ -3350,8 +3455,8 @@ function syncPolishMetaFromCandidate(c){
   const v=(c&&c._v45)||{};
   state.polishDiagnosis = (c&&c.diagnosis) || v.diagnosis || null;
   state.polishStrategies = Array.isArray(c&&c.optimizationStrategies) ? JSON.parse(JSON.stringify(c.optimizationStrategies)) : [];
-  state.strategicDimensions = Array.isArray(c&&c.strategicDimensions) ? JSON.parse(JSON.stringify(c.strategicDimensions)) : state.strategicDimensions;
-  state.strategicDiversityProfile = c&&c.diversityProfile ? JSON.parse(JSON.stringify(c.diversityProfile)) : state.strategicDiversityProfile;
+  // 第一阶段 strategicDimensions / diversityProfile 保持为只读战略地图；采用方案的数据由 canonicalStoryStrategy 承载。
+
   state.originalIdeaAnchors = (c&&c.originalAnchors) ? JSON.parse(JSON.stringify(c.originalAnchors)) : state.originalIdeaAnchors;
 }
 
@@ -3430,11 +3535,9 @@ function showPolishResult(out, multi){
   if(!rawText){ toast('优化失败：AI没有返回内容'); return; }
   const opts=parsePolishCandidatesFixed(out, !!multi);
   polishDebugTrace('parsed', out, opts, {multi:!!multi, firstKeys:opts[0]?Object.keys(opts[0]).slice(0,20):[]});
-  if(!opts.length){
-    state.polishOptions=[normalizePolishCandidate({name:'方案1',optimizedIdea:rawText,text:rawText},0)];
-  }else{
-    state.polishOptions=opts;
-  }
+  if(!opts.length) throw new Error('第二阶段解析失败：未形成结构化优化方案');
+  if(multi && (opts.length<3 || opts.length>5)) throw new Error(`第二阶段解析失败：得到 ${opts.length} 个方案，要求3-5个`);
+  state.polishOptions=opts;
   const pickV45=(o)=>({
     defects:Array.isArray(o?.defects)?o.defects:[],
     navBeacon:(o?.navBeacon&&typeof o.navBeacon==='object')?o.navBeacon:null,
@@ -3444,7 +3547,8 @@ function showPolishResult(out, multi){
     optimizationStrategies:Array.isArray(o?.optimizationStrategies)?o.optimizationStrategies:[],
     strategicDimensions:Array.isArray(o?.strategicDimensions)?o.strategicDimensions:[],
     strategyFingerprint:(o?.strategyFingerprint&&typeof o.strategyFingerprint==='object')?o.strategyFingerprint:null,
-    originalAnchors:(o?.originalAnchors&&typeof o.originalAnchors==='object')?o.originalAnchors:null
+    originalAnchors:(o?.originalAnchors&&typeof o.originalAnchors==='object')?o.originalAnchors:null,
+    diversityProfile:(o?.diversityProfile&&typeof o.diversityProfile==='object')?o.diversityProfile:null
   });
   state.polishOptions=state.polishOptions.map((o,i)=>Object.assign({},o,{
     _id:String(o._id||('polish-'+Date.now()+'-'+i)),
@@ -3452,12 +3556,9 @@ function showPolishResult(out, multi){
     text:String(o.text||o.optimizedIdea||o.novelSummary||o.fullBookBeat||rawText).trim(),
     _v45:pickV45(o)
   }));
-  // 第三阶段：把战略地图与原始锚点提升为项目级中间产物，供采用方案和下游链路继承。
-  const _dims=[]; const _seen=new Set();
-  state.polishOptions.forEach(o=>{ const ds=Array.isArray(o.strategicDimensions)?o.strategicDimensions:((o._v45&&o._v45.strategicDimensions)||[]); ds.forEach(d=>{ const key=String(d?.name||d?.title||d?.id||d||'').trim().toLowerCase(); if(key&&!_seen.has(key)){_seen.add(key); _dims.push(d);} }); });
-  state.strategicDimensions=_dims.slice(0,10);
-  const _anchorSrc=state.polishOptions.find(o=>o.originalAnchors)||state.polishOptions[0];
-  state.originalIdeaAnchors=(_anchorSrc&&_anchorSrc.originalAnchors)||(_anchorSrc?(_anchorSrc._v45&&_anchorSrc._v45.originalAnchors):null)||null;
+  // 第一阶段战略地图是只读权威源：第二阶段候选方案只能引用/组合它，绝不反写 state.strategicDimensions。
+  // 方案自身采用的战略维度只保存在 candidate.strategicDimensions，并在采用后进入 canonicalStoryStrategy。
+  // 第一阶段 originalIdeaAnchors 是只读权威源；第二阶段解析不得反向覆盖它。
   snapshotPolishBatch('重新优化前');
   state.polishSelectedId = state.polishMode==='multi' ? null : state.polishOptions[0]._id;
   state.polishAdopted = state.polishMode==='multi' ? null : (state.polishOptions[0].name||'方案1');
@@ -8839,7 +8940,7 @@ function validateStripLen(text, target){
 const AIValidators = {
   idea: validateIdeaProOutput,
   ideaStrategy: validateIdeaStrategyOutput,
-  ideaPolishStage2: validateIdeaProOutput,
+  ideaPolishStage2: validateIdeaPolishStage2Output,
   titles: validateTitleOutput,
   subplot: validateSubplotOutput,
     glossary: validateGlossaryExtract,
@@ -8847,15 +8948,52 @@ const AIValidators = {
     dictmaster: validateDictMasterOutput
 };
 
+function normalizeStrategyToken(v){
+  return String(v==null?'':v).trim().toLowerCase().replace(/[\s\u3000\-_—–·•:：,，。；;、/\\|()[\]{}<>《》“”"'`]+/g,'');
+}
+function strategicDimensionKey(d){
+  if(d==null) return '';
+  if(typeof d==='string') return normalizeStrategyToken(d);
+  return normalizeStrategyToken(d.name||d.title||d.id||'');
+}
+function validDiversityProfile(dp){
+  if(!dp || typeof dp!=='object') return {ok:false,code:'MISSING_DIVERSITY_PROFILE'};
+  const arrKeys=['fixedCore','variableAxes','avoidRepetition'];
+  for(const k of arrKeys){
+    if(!Array.isArray(dp[k])) return {ok:false,code:'DIVERSITY_PROFILE_FIELD_TYPE',details:k};
+    if(dp[k].some(v=>!String(v==null?'':v).trim())) return {ok:false,code:'DIVERSITY_PROFILE_EMPTY_ITEM',details:k};
+  }
+  if(!String(dp.recommendedMix||'').trim()) return {ok:false,code:'DIVERSITY_PROFILE_MISSING_MIX'};
+  if(!dp.fixedCore.length || !dp.variableAxes.length || !dp.avoidRepetition.length) return {ok:false,code:'DIVERSITY_PROFILE_INCOMPLETE'};
+  return {ok:true};
+}
+function strategyFingerprintSignature(fp, cand){
+  const f=fp&&typeof fp==='object'?fp:{};
+  const parts=[f.mainStrategy,f.secondaryStrategy,f.coreConflict,f.storyEngine,f.emotionalPromise,f.pacing,
+    ...(Array.isArray(cand?.strategicDimensions)?cand.strategicDimensions.map(strategicDimensionKey):[])];
+  return parts.map(normalizeStrategyToken).filter(Boolean).join('|');
+}
+function signatureOverlap(a,b){
+  const A=new Set(String(a||'').split('|').filter(Boolean)), B=new Set(String(b||'').split('|').filter(Boolean));
+  if(!A.size||!B.size) return 0;
+  let inter=0; for(const x of A) if(B.has(x)) inter++;
+  return inter/Math.max(1,Math.min(A.size,B.size));
+}
 function validateIdeaStrategyOutput(j){
   if(!j || typeof j!=='object') return {ok:false, code:'NOT_OBJECT'};
   if(!j.originalAnchors || typeof j.originalAnchors!=='object') return {ok:false, code:'MISSING_ORIGINAL_ANCHORS'};
   if(!Array.isArray(j.strategicDimensions)) return {ok:false, code:'MISSING_STRATEGIC_DIMENSIONS'};
   if(j.strategicDimensions.length < 6 || j.strategicDimensions.length > 10) return {ok:false, code:'STRATEGIC_DIMENSIONS_COUNT', details:String(j.strategicDimensions.length)};
+  const seen = new Set();
   for(const d of j.strategicDimensions){
     if(!d || typeof d!=='object') return {ok:false, code:'BAD_STRATEGIC_DIMENSION'};
     for(const k of ['name','description','whyFit']) if(!String(d[k]||'').trim()) return {ok:false, code:'STRATEGIC_DIMENSION_FIELD_MISSING', details:k};
+    const key=strategicDimensionKey(d); if(!key) return {ok:false,code:'STRATEGIC_DIMENSION_NAME_EMPTY'};
+    if(seen.has(key)) return {ok:false,code:'STRATEGIC_DIMENSION_DUPLICATE',details:d.name};
+    seen.add(key);
   }
+  const dp=validDiversityProfile(j.diversityProfile);
+  if(!dp.ok) return dp;
   return {ok:true};
 }
 
@@ -8885,6 +9023,53 @@ function validateIdeaFaithful(j, idea){
   }
   return '';
 }
+function validateIdeaPolishStage2Output(j, ctx){
+  const multi=!!(ctx&&ctx.multi);
+  if(!j || typeof j!=='object') return {ok:false,code:'STAGE2_NOT_OBJECT'};
+  const options=Array.isArray(j.options)?j.options:((j.name||j.optimizedIdea||j.fullBookBeat)?[j]:[]);
+  if(multi){
+    if(options.length<3 || options.length>5) return {ok:false,code:'STAGE2_OPTION_COUNT',details:`${options.length}（要求3-5）`};
+  }else if(options.length!==1){
+    return {ok:false,code:'STAGE2_SINGLE_OPTION_COUNT',details:String(options.length)};
+  }
+  const sourceDims=Array.isArray(ctx?.strategicDimensions)?ctx.strategicDimensions:[];
+  const sourceMap=new Map(sourceDims.map(d=>[strategicDimensionKey(d),d]).filter(([k])=>k));
+  const seenNames=new Set(), signatures=[];
+  for(let i=0;i<options.length;i++){
+    const o=options[i];
+    if(!o||typeof o!=='object') return {ok:false,code:'STAGE2_BAD_OPTION',details:String(i+1)};
+    const base=validatePolishOutput(o);
+    if(base) return {ok:false,code:'STAGE2_OPTION_SCHEMA',details:`方案${i+1}：${base}`};
+    const dims=Array.isArray(o.strategicDimensions)?o.strategicDimensions:[];
+    if(!dims.length) return {ok:false,code:'STAGE2_OPTION_NO_DIMENSIONS',details:`方案${i+1}`};
+    if(!o.originalAnchors || typeof o.originalAnchors!=='object') return {ok:false,code:'STAGE2_ORIGINAL_ANCHORS_MISSING',details:`方案${i+1}`};
+    const anchorSig = JSON.stringify(o.originalAnchors);
+    const sourceAnchorSig = JSON.stringify(ctx?.originalAnchors||null);
+    if(sourceAnchorSig && anchorSig !== sourceAnchorSig) return {ok:false,code:'STAGE2_ORIGINAL_ANCHORS_MISMATCH',details:`方案${i+1}未严格继承第一阶段原始锚点`};
+    for(const d of dims){
+      const k=strategicDimensionKey(d);
+      if(!k || !sourceMap.has(k)) return {ok:false,code:'STAGE2_FOREIGN_DIMENSION',details:`方案${i+1}：${d?.name||d}`};
+    }
+    const n=normalizeStrategyToken(o.name||'');
+    if(!n) return {ok:false,code:'STAGE2_OPTION_NAME_EMPTY',details:String(i+1)};
+    if(seenNames.has(n)) return {ok:false,code:'STAGE2_DUPLICATE_OPTION_NAME',details:o.name};
+    seenNames.add(n);
+    if(!o.creativeAdditions || !String(o.creativeAdditions).trim()) return {ok:false,code:'STAGE2_MISSING_CREATIVE_ADDITIONS',details:`方案${i+1}`};
+    const sig=strategyFingerprintSignature(o.strategyFingerprint,o);
+    if(!sig) return {ok:false,code:'STAGE2_MISSING_FINGERPRINT_CONTENT',details:`方案${i+1}`};
+    signatures.push(sig);
+    const dp=validDiversityProfile(o.diversityProfile || ctx?.diversityProfile);
+    if(!dp.ok) return {ok:false,code:'STAGE2_DIVERSITY_PROFILE',details:`方案${i+1}：${dp.code}`};
+  }
+  if(multi){
+    for(let i=0;i<signatures.length;i++) for(let j=i+1;j<signatures.length;j++){
+      const ov=signatureOverlap(signatures[i],signatures[j]);
+      if(ov>=0.8) return {ok:false,code:'STAGE2_STRATEGY_DUPLICATE',details:`方案${i+1}与方案${j+1}战略指纹重合度过高（${Math.round(ov*100)}%）`};
+    }
+  }
+  return {ok:true};
+}
+
 function validateIdeaProOutput(j, ctx){
   if(j === null || j === undefined) return {ok:true};          // 纯文本无 JSON：放行
   if(typeof j !== 'object') return {ok:false, code:'EMPTY'};   // 非 null 但非对象（罕见脏数据）仍拒
@@ -8958,7 +9143,7 @@ const AIBus = {
     };
     switch(kind){
       case 'ideaStrategy': return { ...base, rawIdea: state.idea || '' };
-      case 'ideaPolishStage2': return { ...base, rawIdea: state.idea || '', multi: !!extra?.multi, originalAnchors: extra?.originalAnchors || state.originalIdeaAnchors || null, strategicDimensions: extra?.strategicDimensions || state.strategicDimensions || [] };
+      case 'ideaPolishStage2': return { ...base, rawIdea: state.idea || '', multi: !!extra?.multi, originalAnchors: extra?.originalAnchors || state.originalIdeaAnchors || null, strategicDimensions: extra?.strategicDimensions || state.strategicDimensions || [], diversityProfile: extra?.diversityProfile || state.strategicDiversityProfile || null };
       case 'idea': return { ...base, rawIdea: state.idea || '' };
       case 'titles': return { ...base, outline: o, glossary: o.glossary, expectedN: extra?.n || (o.chapters||[]).length };
       case 'chapter': return this._chapterCtx(extra?.idx);
@@ -18396,7 +18581,7 @@ async function genNChapters(start, n){
         state._chapterRetryFix = '';
         persist();
         updateFactCardFromChapter(idx, content);
-        if(isLong()){ const fin=await finalizeChapterState(idx, content); if(fin.content!==content){ content=fin.content; state.chapters[idx].content=content; snapshotChapterVersion(idx); persist(); } }
+        if(isLong()){ const fin=await finalizeChapterState(idx, content); if(fin.content!==content){ content=fin.content; state.chapters[idx].content=content; snapshotChapterVersion(idx); persist(); } if(fin.blocked){ throw new Error(`第${idx+1}章未通过正文硬审核：${fin.audit?.blockReason||fin.audit?.summary||'存在未修复的审核问题'}`); } }
         invalidateChapterMemory(idx);
         chState[idx] = 'done';
         patchChapter(idx);
@@ -19969,18 +20154,13 @@ function parsePolishCandidatesFixed(raw, multi){
   }
 
   if(!arr.length){
-    arr = [{
-      _id: 'polish-' + Date.now(),
-      name: '方案1',
-      bookTitle: '精选小说',
-      novelSummary: rawText.slice(0, 200),
-      optimizedIdea: rawText,
-      text: rawText
-    }];
+    // 严格第二阶段禁止把整段文本静默包装成“方案1”；调用方必须先通过严格结构校验。
+    return [];
   }
 
-  // Force length constraint
+  // Force length constraint；多方案不足3个绝不静默补齐。
   if(!multi) arr = arr.slice(0, 1);
+  if(multi && (arr.length < 3 || arr.length > 5)) return [];
   return arr.map((item, idx) => ({
     _id: item._id || ('opt-' + Date.now() + '-' + idx),
     name: item.name || ('方案' + (idx + 1)),
@@ -19989,6 +20169,10 @@ function parsePolishCandidatesFixed(raw, multi){
     fullBookBeat: item.fullBookBeat || item.beat || '',
     optimizedIdea: item.optimizedIdea || item.text || '',
     creativeAdditions: item.creativeAdditions || '',
+    strategicDimensions: Array.isArray(item.strategicDimensions) ? JSON.parse(JSON.stringify(item.strategicDimensions)) : [],
+    strategyFingerprint: (item.strategyFingerprint && typeof item.strategyFingerprint==='object') ? JSON.parse(JSON.stringify(item.strategyFingerprint)) : null,
+    originalAnchors: (item.originalAnchors && typeof item.originalAnchors==='object') ? JSON.parse(JSON.stringify(item.originalAnchors)) : null,
+    diversityProfile: (item.diversityProfile && typeof item.diversityProfile==='object') ? JSON.parse(JSON.stringify(item.diversityProfile)) : null,
     navBeacon: item.navBeacon || null,
     defects: Array.isArray(item.defects) ? item.defects : [],
     seedCharacters: Array.isArray(item.seedCharacters) ? item.seedCharacters : [],
