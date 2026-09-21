@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.360';
+const APP_VERSION = '1.0.362';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.356.js';
+const APP_FILE_VERSION = 'app1.0.362.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -389,7 +389,7 @@ function ssProtectMasterCanon(){
     const by=new Map((snap[k]||[]).map(x=>[x.name,x]));
     (g[k]||[]).forEach(x=>{const old=by.get(x&&x.name); if(!old) return; fields.forEach(f=>x[f]=old[f]); x.id=old.id; x._dictmaster=true; x.sourceType='dictionary_foundation'; x.source='dictmaster'; x.createdBy='dictmaster'; x.createdAt=x.createdAt||Date.now();});
   };
-  restore('characters',['name','identity','age','gender','appearance','hobby','relation','trait','catchphrase']);
+  restore('characters',['id','name','identity','age','gender','appearance','hobby','relation','trait','catchphrase']);
   restore('places',['name','type','note']); restore('propernouns',['name','note']);
   const generic=snap.generic||{}; Object.keys(generic).forEach(k=>{
     const by=new Map((generic[k]||[]).map(x=>[String(x&&x.name||''),x]));
@@ -8484,7 +8484,7 @@ async function genTeacher(btn, gi){
         state.chapterMiddleAudit[gi] = buildMiddleDiversityAudit(state.chapterMiddlePlans);
         state.chapterEndingAudit = state.chapterEndingAudit || {};
         state.chapterEndingAudit[gi] = _teacherEndingCheck.audit;
-        // v1.0.360：老师成功的唯一落点必须同时完成“组状态 + AI状态 + UI刷新”。
+        // v1.0.362：结构式纯文本词典达人；老师成功的唯一落点必须同时完成“组状态 + AI状态 + UI刷新”。
         // 先写入实际教案，再立即清除该组 stale；随后统一刷新学校管线和全景步骤，避免 AI 已返回而 UI 仍停在“老师”。
         markAIDone(key, false);
         scMark(key, true);
@@ -9545,6 +9545,36 @@ function parseOptimizationStructuredBlock(body){
   return {optionMeta,storyCore,protagonist,keyCharacters,relationships,world,worldRules,conflict,storyArc,fullBookBeat,ending,creativeAdditions};
 }
 
+function explicitPersonNamesFromUserIdea(){
+  // 只有用户原始构想中已经明确写出的正式姓名，优化构想才可以继续沿用；
+  // 优化构想自己新造的人物一律使用 CHAR_001 这类稳定占位ID，正式命名交给词典达人。
+  const src=String(state.idea||state.originalIdeaSnapshot||'').trim();
+  const out=new Set();
+  // 常见中文姓名：2—4个汉字，要求原文中存在“人物/主角/叫/名为/名叫”等弱语境或后续词典已知姓名。
+  const cues=[/(?:主角|主人公|男主|女主|人物|角色|名叫|叫做|叫|姓名|名字)[：:\s“”‘’「『]?([\u4e00-\u9fff]{2,4})/g,/([\u4e00-\u9fff]{2,4})(?:是|为)(?:主角|主人公|男主|女主|人物|角色)/g];
+  cues.forEach(re=>{ let m; while((m=re.exec(src))){ const n=String(m[1]||'').trim(); if(n) out.add(n); }});
+  // 若用户明确输入的是常见姓名但没有上述提示词，允许后续通过原始锚点继承；这里不猜测新名字。
+  return out;
+}
+function isPersonPlaceholder(name){ return /^CHAR_\d{3,}$/i.test(String(name||'').trim()); }
+function validateOptimizationPersonNaming(parsed){
+  const explicit=explicitPersonNamesFromUserIdea();
+  const all=[];
+  const bad=[];
+  (parsed.options||[]).forEach((o,oi)=>{
+    const b=o.structuredBlueprint||{};
+    const candidates=[];
+    if(b.protagonist?.name) candidates.push({name:b.protagonist.name,where:`方案${oi+1}.PROTAGONIST`});
+    (b.keyCharacters||[]).forEach((c,ci)=>candidates.push({name:c?.name,where:`方案${oi+1}.KEY_CHARACTERS[${ci+1}]`}));
+    (b.relationships||[]).forEach((r,ri)=>{ candidates.push({name:r?.from,where:`方案${oi+1}.RELATIONSHIPS[${ri+1}].from`}); candidates.push({name:r?.to,where:`方案${oi+1}.RELATIONSHIPS[${ri+1}].to`}); });
+    for(const c of candidates){
+      const n=String(c.name||'').trim(); if(!n || ['主角','主人公','男主','女主','核心人物','导师','竞争者'].includes(n)) continue;
+      all.push(n);
+      if(!isPersonPlaceholder(n) && !explicit.has(n) && !String(state.idea||state.originalIdeaSnapshot||'').includes(n)) bad.push(`${c.where} 使用了优化构想自行创造的正式姓名「${n}」；新人物必须使用 CHAR_001/CHAR_002…，已有姓名只能继承用户原始构想中的明确姓名`);
+    }
+  });
+  return bad.length ? bad.join('；') : '';
+}
 function parseOptimizationPlainText(raw, multi){
   const text=String(raw||'').replace(/\r/g,'').trim();
   if(!text) return {ok:false,error:'AI未返回内容',options:[],analysis:null};
@@ -9602,6 +9632,8 @@ function validateIdeaOptimizationTextOutput(raw, ctx){
   if(duplicateHeaders.length) return {ok:false,code:'DUPLICATE_VERSION_CONTENT',details:`检测到旧版平行字段：${duplicateHeaders.slice(0,5).map(m=>m[1]).join('、')}。本阶段AI只允许生成一份结构式创作蓝图，由JS派生用户视图和下游字段。`};
   const parsed=parseOptimizationPlainText(raw,!!ctx?.multi);
   if(!parsed.ok) return {ok:false,code:'PLAIN_TEXT_CONTRACT',details:parsed.error||'纯文本结构不符合要求'};
+  const nameErr=validateOptimizationPersonNaming(parsed);
+  if(nameErr) return {ok:false,code:'OPTIMIZATION_PERSON_NAMING',details:nameErr};
   const required=['storyCore','protagonist','world','conflict','storyArc','ending'];
   const blueprintErrors=[];
   for(const [i,o] of parsed.options.entries()){
@@ -9773,6 +9805,12 @@ function buildIdeaOptimizationUser(ctx){
   if(mb) parts.push(`章节微拍：${mb.label}${mb.wc?`（${mb.wc}）`:''}`);
   if(cc) parts.push(`全书章节数：${cc}`);
   if(cc){ const plan=bookStagePlan(cc); if(plan&&plan.length){let cur=0; const seg=[]; plan.forEach(x=>{const a=cur+1;cur+=x.n;seg.push(`第${a}—${cur}章「${x.name}」`);}); parts.push(`章节↔全书拍子落位：${seg.join('；')}`);} }
+  const upstreamRules = [];
+  if(state._narrIron!==false) upstreamRules.push(NARRATIVE_IRON_PLANNING);
+  const ban = banListBlockFor('ideaOptimization');
+  if(ban) upstreamRules.push(ban);
+  upstreamRules.push('【人物命名边界】优化构想只负责人物角色需求、功能、关系、性格与发展方向。除非用户原始构想已经明确给出正式姓名，否则不得创造新的正式人物姓名；未正式命名的人物必须使用稳定人物ID，如 CHAR_001、CHAR_002。正式姓名由后续词典达人统一确定。');
+  upstreamRules.push('【世界与规则边界】可以提出“世界与规则”的战略蓝图，用于说明世界如何服务故事，但不要建立第二套正式世界知识库，不要擅自定稿与词典达人冲突的核心世界事实；最终正式世界事实由词典达人建立并登记。');
   return `【原始用户构想】\n${String(ctx.rawIdea||'').trim()}\n\n【用户锁定写作风格】\n${style}\n\n【已有叙事结构】\n${parts.join('\n')||'（无额外结构）'}\n\n【输出模式】\n${ctx.multi?'多方案：3—5个真正不同的优化构想。':'单方案：只生成1个最终优化构想。'}\n\n【核心任务】\n一次完成“原始构想提炼 → 动态战略分析 → 优化构想生成”。战略分析是内部中间层，不要把它写成独立操作步骤；但必须按纯文本格式输出动态战略维度，供方案形成差异化依据。`;
 }
 function buildIdeaPolishStage2User(ctx){
@@ -10187,6 +10225,10 @@ const IDEA_OPTIMIZATION_SYS = `你是本项目的“优化构想引擎”。你�
 - 禁止把战略分析单独当成一个用户步骤。
 - 禁止固定“五向”模板。
 - 禁止把AI新增内容伪装成用户事实。
+- 禁止优化构想自行创造新的正式人物姓名。优化构想只负责“需要什么人物、人物功能、性格、关系、发展方向”，未在用户原始构想中明确命名的人物必须使用稳定ID：CHAR_001、CHAR_002、CHAR_003……。
+- 如果用户原始构想已经明确给出某人物姓名，可以原样继承；除此之外不得自己起名。
+- CHAR_xxx 是人物身份引用ID，不是最终姓名；最终正式姓名由后续“词典达人”一次性统一命名并写入Foundation Dictionary。
+- 人物关系中也只能引用已经存在的正式姓名或CHAR_xxx，绝不能通过关系字段偷偷创造新人物姓名。
 
 【唯一标准输出协议】
 AI只需要生成一种事实源：每个方案的“结构式创作蓝图”。不得让旧字段与结构蓝图形成两套独立事实。
@@ -10226,7 +10268,8 @@ core_promise=...
 story_question=...
 [/STORY_CORE]
 [PROTAGONIST]
-name=...
+personId=CHAR_001（如果用户已明确姓名仍必须保留稳定ID）
+name=用户已明确的正式姓名；否则写CHAR_001
 identity=...
 goal=...
 motivation=...
@@ -10234,7 +10277,7 @@ flaw=...
 growth=...
 [/PROTAGONIST]
 [KEY_CHARACTERS]
-- 姓名｜身份｜作用｜与主角关系
+- CHAR_002或用户已明确的正式姓名｜身份｜作用｜与主角关系（新人物必须用CHAR_xxx，不得自行起正式姓名）
 [/KEY_CHARACTERS]
 [RELATIONSHIPS]
 - 人物A｜人物B｜关系与变化方向
@@ -16380,14 +16423,136 @@ name 字段只能写实体名称。
 
 因此任何进入正式词典的内容，都必须经得起长期正文使用。
 
-【二十、输出格式｜绝对契约】
-严格只输出 JSON，不要输出解释、前言、后记、分析、Markdown、代码围栏或任何 JSON 之外的文字。
+【二十、输出格式｜结构式纯文本绝对契约】
+严格只输出结构式纯文本，不要输出 JSON、Markdown 代码围栏、解释、前言、后记或任何结构之外的文字。
+使用以下区块标签，标签必须独占一行；每个字段一行，格式为“字段名=值”。值必须保持单行；数组中的多个值使用“；”分隔。没有内容的可写“无”。
 
-必须严格使用以下字段，字段名绝对不能修改：
-{"characters":[{"name":"","identity":"","age":"","gender":"","appearance":"","hobby":"","relation":"","trait":"","catchphrase":"","sourceType":"dictionary_foundation"}],"relationshipTable":[{"a":"人物名称","b":"人物名称","relation":"关系","note":"一句话说明","sourceType":"dictionary_foundation"}],"places":[{"name":"","type":"","note":"","sourceType":"dictionary_foundation"}],"placeContacts":[{"from":"地名","to":"地名","relation":"联系","note":"","sourceType":"dictionary_foundation"}],"propernouns":[{"name":"","note":"","sourceType":"dictionary_foundation"}],"properContacts":[{"from":"专名","to":"专名","relation":"联系","note":"","sourceType":"dictionary_foundation"}],"worldRules":[{"cat":"规则类别","scope":"适用对象/范围","rule":"具体运转规则及违反后果/代价","sourceType":"dictionary_foundation"}],"organizations":[{"name":"","type":"","stance":"","function":"","relation":"","note":"","sourceType":"dictionary_foundation"}],"institutions":[{"name":"","type":"","function":"","audience":"","location":"","note":"","sourceType":"dictionary_foundation"}],"items":[{"name":"","type":"","function":"","source":"","limit":"","note":"","sourceType":"dictionary_foundation"}],"terms":[{"name":"","category":"","meaning":"","usage":"","note":"","sourceType":"dictionary_foundation"}],"events":[{"name":"","era":"","participants":"","course":"","impact":"","relation":"","sourceType":"dictionary_foundation"}],"lifeSettings":[{"name":"","category":"","scope":"","content":"","value":"","note":"","sourceType":"dictionary_foundation"}],"summary":"一句话总结这套词典最重要的世界架构亮点"}
+[WORLD]
+summary=一句话总结这套词典最重要的世界架构亮点
+[/WORLD]
+
+[CHARACTER]
+id=CHAR_001
+name=正式人物姓名
+identity=身份定位
+age=年龄或未知
+gender=性别或未知
+appearance=外貌或未知
+hobby=爱好或未知
+relation=一句话关系摘要或未知
+trait=稳定性格核心
+catchphrase=口头禅或无
+sourceType=dictionary_foundation
+[/CHARACTER]
+
+[RELATION]
+a=人物名称
+b=人物名称
+relation=真实人物关系
+note=一句话说明
+sourceType=dictionary_foundation
+[/RELATION]
+
+[LOCATION]
+name=纯地点名称
+type=地点类型
+note=关键设定
+sourceType=dictionary_foundation
+[/LOCATION]
+
+[PLACE_CONTACT]
+from=地名
+to=地名
+relation=真实地点联系
+note=一句话说明
+sourceType=dictionary_foundation
+[/PLACE_CONTACT]
+
+[PROPER_NOUN]
+name=纯专名
+note=来源、机制、功能、限制或故事价值
+sourceType=dictionary_foundation
+[/PROPER_NOUN]
+
+[PROPER_CONTACT]
+from=专名
+to=专名
+relation=真实专名联系
+note=一句话说明
+sourceType=dictionary_foundation
+[/PROPER_CONTACT]
+
+[RULE]
+cat=规则类别
+scope=适用对象/范围
+rule=具体运转规则及违反后果/代价
+sourceType=dictionary_foundation
+[/RULE]
+
+[ORGANIZATION]
+name=组织名称
+type=组织类型
+stance=立场或未知
+function=功能
+relation=与其他实体关系
+note=关键说明
+sourceType=dictionary_foundation
+[/ORGANIZATION]
+
+[INSTITUTION]
+name=机构名称
+type=机构类型
+function=功能
+audience=服务对象
+location=所在地点
+note=关键说明
+sourceType=dictionary_foundation
+[/INSTITUTION]
+
+[ITEM]
+name=核心道具名称
+type=类型
+function=功能
+source=来源
+limit=限制或代价
+note=关键说明
+sourceType=dictionary_foundation
+[/ITEM]
+
+[TERM]
+name=核心术语
+category=分类
+meaning=含义
+usage=使用方式
+note=关键说明
+sourceType=dictionary_foundation
+[/TERM]
+
+[HISTORY]
+name=历史事件名称
+era=时代
+participants=参与者
+course=经过
+impact=影响
+relation=与当前世界/主线的关系
+sourceType=dictionary_foundation
+[/HISTORY]
+
+[LIFE_SETTING]
+name=生活设定名称
+category=分类
+scope=适用范围
+content=具体内容
+value=长期创作价值
+note=关键说明
+sourceType=dictionary_foundation
+[/LIFE_SETTING]
+
+【输出顺序】WORLD 必须最先出现；随后按 CHARACTER → RELATION → LOCATION → PLACE_CONTACT → PROPER_NOUN → PROPER_CONTACT → RULE → ORGANIZATION → INSTITUTION → ITEM → TERM → HISTORY → LIFE_SETTING 的顺序输出。没有真实关系的区块可以完全省略。不要为了凑数量创建虚假关系。
+【结构式纯文本要求】不要输出大段散文；不要把字段内容拆成多行；不要输出 JSON 花括号。名称、ID、关系两端必须可由程序直接读取。
 
 【二十一、字段契约】
-characters：name 必须是纯人物姓名；identity 为身份定位；age/gender/appearance/hobby/relation/catchphrase 没有依据或没有实际价值时可以写“未知/无”；trait 必须尽量明确。relation 简洁说明即可，不要把多组关系堆进人物卡，多组关系放 relationshipTable。
+上述结构式纯文本会由程序转换为内部对象；转换后字段契约仍保持原有 glossary 数据结构。characters：name 必须是纯人物姓名；identity 为身份定位；age/gender/appearance/hobby/relation/catchphrase 没有依据或没有实际价值时可以写“未知/无”；trait 必须尽量明确。relation 简洁说明即可，不要把多组关系堆进人物卡，多组关系放 relationshipTable。
 
 places：name 必须为纯地点名称；type 明确；note 说明关键设定。
 
@@ -16447,21 +16612,42 @@ function buildDictMasterUser(ctx){
   parts.push(('【采用蓝本完整内容（唯一下游故事来源；已有角色/地名/专名不可擅自改动）】\n' + txt) || '（采用蓝本为空）');
   parts.push(`【第一版完整世界基底要求】本次一次性建立闭环：核心人物 + 人物关系 + 核心地点 + 地点关联 + 核心组织/机构 + 核心专名 + 世界规则 + 已由故事蓝本明确出现的核心物品/道具 + 核心术语 + 核心历史事件。不要把这些核心事实拆给后续第二次AI重新定义。
 【来源层级】本批所有正式条目必须标记 sourceType=dictionary_foundation；后续词典充实只能新增 dictionary_enrichment，不得覆盖本层。
-【人物命名硬约束】禁则中的禁用字/禁用姓名是硬约束，不是建议；尤其姓名含“林”“陈”“苏”等禁用字的任何新人物均不得输出。`);
+【人物命名硬约束】禁则中的禁用字/禁用姓名是硬约束，不是建议；尤其姓名含“林”“陈”“苏”等禁用字的任何新人物均不得输出。优化构想中的 CHAR_001、CHAR_002……是尚未正式命名的人物ID：词典达人必须把这些ID映射到正式姓名，并在人物条目中保留稳定 id 字段。用户蓝本已经明确的正式姓名必须原样继承，不得改名。人物关系表应使用最终正式姓名；同一个人物ID只能对应一个正式姓名，严禁一人多名。`);
   const ban = banListBlockFor('dictmaster');
   if(ban) parts.push(ban);
   return parts.join('\n\n');
 }
+function canonicalPersonPlaceholderIds(){
+  const c=currentCanonicalStoryStrategy();
+  const raw=JSON.stringify(c?.creativeBlueprint || c?.creationBlueprint?.structured || {});
+  return [...new Set((raw.match(/CHAR_\d{3,}/gi)||[]).map(x=>x.toUpperCase()))];
+}
+function parseDictMasterPlainText(raw){
+  let text=String(raw||'').replace(/^```(?:text|plaintext)?\s*/i,'').replace(/\s*```$/,'').trim();
+  if(!text) return null;
+  const map={WORLD:'world',CHARACTER:'characters',RELATION:'relationshipTable',LOCATION:'places',PLACE_CONTACT:'placeContacts',PROPER_NOUN:'propernouns',PROPER_CONTACT:'properContacts',RULE:'worldRules',ORGANIZATION:'organizations',INSTITUTION:'institutions',ITEM:'items',TERM:'terms',HISTORY:'events',LIFE_SETTING:'lifeSettings'};
+  const out={characters:[],relationshipTable:[],places:[],placeContacts:[],propernouns:[],properContacts:[],worldRules:[],organizations:[],institutions:[],items:[],terms:[],events:[],lifeSettings:[],summary:''};
+  const re=/^\[([A-Z_]+)\]\s*$([\s\S]*?)^\[\/\1\]\s*$/gmi;
+  let m,count=0;
+  while((m=re.exec(text))){ const sec=m[1].toUpperCase(),body=m[2]; if(!map[sec]) continue; count++; const obj={}; body.split(/\r?\n/).forEach(line=>{ const ln=line.trim(); if(!ln) return; const k=ln.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*[=:]\s*(.*)$/); if(k) obj[k[1]]=String(k[2]||'').trim(); }); const key=map[sec]; if(sec==='WORLD') out.summary=String(obj.summary||'').trim(); else out[key].push(obj); }
+  return count ? out : null;
+}
+
 function validateDictMasterOutput(j){
   if(!j || typeof j !== 'object') return '返回不是对象';
   if(!Array.isArray(j.characters) || !j.characters.length) return '人物卡 characters 为空（应至少 1 位）';
+  const personIds=new Set();
   for(const c of j.characters){
     if(!c || !String(c.name||'').trim()) return '存在人物缺少 name';
+    if(c.id){ const cid=String(c.id).trim(); if(!/^CHAR_\d{3,}$/i.test(cid)) return `人物「${String(c.name).trim()}」id 必须是 CHAR_001 形式`; if(personIds.has(cid)) return `人物ID「${cid}」重复`; personIds.add(cid); }
+    const banReason=banListViolation(String(c.name||'').trim()); if(stateBanEnabled() && banReason) return `人物「${String(c.name).trim()}」命中禁则：${banReason}`;
     const must = {identity:c.identity, trait:c.trait};
     for(const [kk,vv] of Object.entries(must)){ if(!String(vv||'').trim()) return `人物「${String(c.name).trim()||'?'}」缺字段 ${kk}`; }
     for(const kk of ['age','gender','appearance','hobby','relation','catchphrase']){ if(!String(c[kk]||'').trim()) c[kk]='未知'; }
     if(String(c.relation||'').trim().length > 40) return `人物「${String(c.name).trim()||'?'}」relation 超过 40 字，疑似把多组关系堆进摘要：只写 ≤20字 的一句话（如「主角的青梅」），多组关系的逐条明细放 relationshipTable`;
   }
+  const requiredPersonIds=canonicalPersonPlaceholderIds();
+  for(const rid of requiredPersonIds){ if(!personIds.has(rid)) return `词典达人未为优化构想人物ID「${rid}」建立正式姓名映射`; }
   if(!Array.isArray(j.relationshipTable)) return '缺少 relationshipTable 数组';
   const personNames=new Set((j.characters||[]).map(x=>String(x&&x.name||'').trim()).filter(Boolean));
   const placeNames=new Set((j.places||[]).map(x=>String(x&&x.name||'').trim()).filter(Boolean));
@@ -16514,12 +16700,12 @@ async function genDictMaster(btn){
     const spec = resolveActiveSpec('dictmaster');
     const temp = (spec && spec.dictmasterTemp != null) ? spec.dictmasterTemp : 0.4;
     const txt = await callAIGuarded('dictmaster', {}, {temperature: temp, maxTokens: 16384, signal: _abortCtl?.signal});
-    const j = extractJsonObject(txt);
-    if(!j){ throw new Error('AI 未返回可用的词典 JSON'); }
+    const j = parseDictMasterPlainText(txt);
+    if(!j){ throw new Error('AI 未返回可用的词典结构式纯文本'); }
     const v = validateDictMasterOutput(j);
     if(v) throw new Error('词典校验失败：'+v);
     o.glossary = ensureGlossaryKnowledgeShape(o.glossary || { characters:[], places:[], propernouns:[], subplots:[] });
-    const snapKeys = { characters:['name','identity','age','gender','appearance','hobby','relation','trait','catchphrase'], places:['name','type','note'], propernouns:['name','note'] };
+    const snapKeys = { characters:['id','name','identity','age','gender','appearance','hobby','relation','trait','catchphrase'], places:['name','type','note'], propernouns:['name','note'] };
     const entryJson = (x,k)=>{ const o2={}; (snapKeys[k]||[]).forEach(f=> o2[f]=String((x && x[f])!=null ? x[f] : '').trim()); try{ return JSON.stringify(o2); }catch(e){ return ''; } };
     ['characters','places','propernouns'].forEach(k=>{
       const kept=[];
@@ -16548,7 +16734,7 @@ async function genDictMaster(btn){
         o.glossary[k].push(e); existing.add(nm);
       });
     };
-    push(j.characters, 'characters', c=>({ name:String(c.name||'').trim(), identity:String(c.identity||'').trim(), age:String(c.age||'').trim(), gender:String(c.gender||'').trim(), appearance:String(c.appearance||'').trim(), hobby:String(c.hobby||'').trim(), relation:String(c.relation||'').trim(), trait:String(c.trait||'').trim(), catchphrase:String(c.catchphrase||'').trim() }));
+    push(j.characters, 'characters', c=>({ id:String(c.id||'').trim(), name:String(c.name||'').trim(), identity:String(c.identity||'').trim(), age:String(c.age||'').trim(), gender:String(c.gender||'').trim(), appearance:String(c.appearance||'').trim(), hobby:String(c.hobby||'').trim(), relation:String(c.relation||'').trim(), trait:String(c.trait||'').trim(), catchphrase:String(c.catchphrase||'').trim() }));
     push(j.places, 'places', p=>({ name:String(p.name||'').trim(), type:String(p.type||'').trim(), note:String(p.note||'').trim() }));
     push(j.propernouns, 'propernouns', p=>({ name:String(p.name||'').trim(), note:String(p.note||'').trim() }));
     const masterGeneric = {
