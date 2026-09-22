@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.375';
+const APP_VERSION = '1.0.382';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.375.js';
+const APP_FILE_VERSION = 'app1.0.382.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -1620,6 +1620,8 @@ function openAiLogPanel(){
       </div>
       <div class="ailog-body hidden" data-ailog-body="${ri}">
         ${r.err?`<div class="ailog-sec"><b>错误：</b><span class="err">${esc(r.err)}</span></div>`:''}
+        ${r.principalStages?`<div class="ailog-sec"><b>校长本地阶段耗时：</b><div class="ailog-pre">AI返回=${r.principalStages.aiReturnMs||0}ms｜解析=${r.principalStages.parseMs||0}ms｜清洗=${r.principalStages.sanitizeMs||0}ms｜编译=${r.principalStages.compileMs||0}ms｜中段校验=${r.principalStages.middleValidationMs||0}ms｜章末校验=${r.principalStages.endingValidationMs||0}ms｜章末审计=${r.principalStages.endingAuditMs||0}ms｜标题应用=${r.principalStages.titleApplyMs||0}ms｜写入状态=${r.principalStages.stateWriteMs||0}ms｜持久化=${r.principalStages.persistMs||0}ms｜Render=${r.principalStages.renderMs||0}ms｜AI返回后本地=${r.principalStages.totalLocalMs||0}ms｜总流程=${r.principalStages.totalMs||0}ms｜结果=${esc(String(r.principalStages.status||''))}${r.principalStages.endingAuditWarning?'｜⚠️多样性警告':''}</div></div>`:''}
+        ${r.teacherStages?`<div class="ailog-sec"><b>老师本地阶段耗时：</b><div class="ailog-pre">AI返回=${r.teacherStages.aiReturnMs||0}ms｜解析=${r.teacherStages.parseMs||0}ms｜编译=${r.teacherStages.compileMs||0}ms｜中段校验=${r.teacherStages.middleValidationMs||0}ms｜结尾校验=${r.teacherStages.endingValidationMs||0}ms｜写入状态=${r.teacherStages.stateWriteMs||0}ms｜持久化=${r.teacherStages.persistMs||0}ms｜Render=${r.teacherStages.renderMs||0}ms｜AI返回后本地=${r.teacherStages.totalLocalMs||0}ms｜总流程=${r.teacherStages.totalMs||0}ms｜结果=${esc(String(r.teacherStages.status||''))}</div></div>`:''}
         <div class="ailog-sec"><b>System · 前500字 / 共 ${(r.sysLen||r.sys.length).toLocaleString('en-US')} 字：</b><div class="ailog-pre">${esc(String(r.sys||''))}</div></div>
         <div class="ailog-sec"><b>User · 前500字 / 共 ${(r.userLen||r.user.length).toLocaleString('en-US')} 字：</b><div class="ailog-pre">${esc(String(r.user||''))}</div></div>
         <div class="ailog-sec"><b>响应 · 前500字 / 共 ${(r.respLen||0).toLocaleString('en-US')} 字${r.finishReason==='length'?' · ⚠️ 截断':''}：</b><div class="ailog-pre">${esc(String(r.resp||''))}</div></div>
@@ -3394,7 +3396,7 @@ async function generateOptimizationConcept(btn, force){
   state.polishSelectedId=null; state.polishAdopted=null; state.canonicalStoryStrategy=null;
   state.polishOptions=[]; state.strategicDimensions=[]; state.strategicDiversityProfile=null; state.originalIdeaAnchors=null;
   state.polishDiagnosis=null; state.polishStrategies=[]; state.polishFailureTrace=null; state.polishRawFallback='';
-  persist(); render();
+  persist();
   const live=$('#btnOptimizationConcept'); if(live) busy(live,true,multi?'✨ 正在生成3—5个优化构想…':'✨ 正在生成优化构想…');
   markAIRunning('ideaOptimization'); markAIRunning('idea');
   try{
@@ -3413,13 +3415,14 @@ async function generateOptimizationConcept(btn, force){
     markAIDone('ideaOptimization'); markAIDone('idea');
     persist();
     toast(multi?`优化构想完成：已生成 ${state.polishOptions.length} 个方案`:'优化构想完成：已生成最终方案');
-    playEventSound('polish_done'); render();
+    playEventSound('polish_done');
+    refreshPolishUi();
     queueGenerationFocus('#polishBox',120);
     return true;
   }catch(e){
     state.strategyStage1Status='error'; state.strategyStage2Status='error';
     addToFixQueue({kind:'ideaOptimization',error:e.message});
-    toast('优化构想生成失败：'+e.message); reportSoundError('polish',e); persist(); render(); queueGenerationFocus('#polishBox',120); return false;
+    toast('优化构想生成失败：'+e.message); reportSoundError('polish',e); persist(); refreshPolishUi(); queueGenerationFocus('#polishBox',120); return false;
   }finally{
     state.aiNetwork.running=(state.aiNetwork.running||[]).filter(k=>!['ideaOptimization','ideaStrategy','ideaPolishStage2','idea'].includes(k));
   }
@@ -3678,6 +3681,12 @@ function polishDebugTrace(stage, raw, candidates, extra){
     console.debug('[APP26][优化构想]', Object.assign({stage,rawLength:text.length,candidateCount:Array.isArray(candidates)?candidates.length:0}, extra||{}));
   }catch(_){ }
 }
+function refreshPolishUi(){
+  const box=$('#polishBox'), cards=$('#polishCards');
+  if(box) box.style.display = 'block';
+  if(cards) renderPolishCards(cards);
+}
+
 function showPolishResult(out, multi){
   const box=$('#polishBox'), cards=$('#polishCards');
   const rawText=String(out||'').trim();
@@ -3727,9 +3736,9 @@ function showPolishResult(out, multi){
     state.polishStrategies=[];
   }
   persist();
-  if(box && cards){ box.style.display='block'; render(); openPolishBox(); }
-  else { persist(); }
+  if(box && cards){ box.style.display='block'; renderPolishCards(cards); }
 }
+
 
 function applyV45ToOutline(o, d){
   // 【权限隔离】优化构想阶段不得写入正式 glossary。
@@ -5562,13 +5571,13 @@ function scState(){
   return state.school;
 }
 function scError(key){ return scState().errors[key] || null; }
-function scSetError(key, info){
+function scSetError(key, info, save=true, refresh=true){
   const sc=scState(); sc.errors=sc.errors||{};
   if(info){
     sc.errors[key]=Object.assign({ts:Date.now()}, info);
   }else delete sc.errors[key];
-  persist();
-  refreshSchoolProgressUi();
+  if(save) persist();
+  if(refresh) refreshSchoolProgressUi();
 }
 function scTeacherFailureMessage(f){
   if(!f) return '';
@@ -5616,7 +5625,7 @@ function scSetFailed(key, val){
   if(val && sc.finished) delete sc.finished[key];
   persist();
 }
-function scMark(key, done){
+function scMark(key, done, save=true){
   const sc = scState();
   sc.finished[key] = !!done;
   if(done){
@@ -5624,7 +5633,7 @@ function scMark(key, done){
     sc.retries[key] = 0;
     if(sc.failed) delete sc.failed[key];
   }
-  persist();
+  if(save) persist();
 }
 function getSchoolStepStatus(key){
   const sc = scState();
@@ -5821,7 +5830,7 @@ function doApplyTitles(titles, opts){
   while(state.chapters.length < maxNum){
     state.chapters.push({ title: '', content: '' });
   }
-  snapshotTitleBatch('选用校长拟定标题');
+  snapshotTitleBatch('选用校长拟定标题', { deferCommit: !!opts.deferCommit });
   titles.forEach(t => {
     const idx = t.num - 1;
     if(idx >= 0 && idx < state.outline.chapters.length){
@@ -5831,8 +5840,10 @@ function doApplyTitles(titles, opts){
       state.chapters[idx].title = t.title;
     }
   });
-  persist();
-  render();
+  if(!opts.deferCommit){
+    persist();
+    render();
+  }
   if(!opts.silent) toast(`已成功将校长拟定的 ${titles.length} 章标题应用到全书大纲与章节！`);
   return true;
 }
@@ -6445,6 +6456,12 @@ L0 是最高优先级。
 - 允许人物：本章可以调用的正式人物；
 - 允许地点：本章可以调用的已成立地点；
 - 允许道具/资源：本章可以调用的既有资源；
+- 允许组织/势力：本章可以调用的已成立组织/势力；无则写“无”；
+- 允许职业/机构：本章可以调用的已成立职业/机构；无则写“无”；
+- 允许物品/道具：本章可以调用的已成立物品/道具；无则写“无”；
+- 允许术语：本章可以调用的已成立术语；无则写“无”；
+- 允许历史事件：本章可以调用的已成立历史事件；无则写“无”；
+- 允许生活设定：本章可以调用的已成立生活设定；无则写“无”；
 - 允许线索：本章可以使用或推进的已成立线索；
 - 信息边界：本章人物知道什么、不知道什么，哪些未来信息不得提前开放；
 - 禁止事项：不得新增或改变的核心人物、关系、秘密、地点、道具、线索及因果；
@@ -6454,7 +6471,7 @@ L0 是最高优先级。
 - 待确认项：任何需要新增核心人物/关键情报/新世界事实的需求，只能作为待确认项提出，不得直接成立。
 
 【章级授权硬规则】
-1. 任务卡中的“允许人物/地点/道具/线索”是本章核心剧情资源白名单；名单外若要承担关键剧情功能，必须先进入待确认项。
+1. 任务卡中的“允许人物/地点/道具/线索”以及六类“允许世界资源”字段共同构成本章核心资源白名单；名单外的组织/机构/物品/术语/历史/生活设定若要承担关键剧情功能，必须先进入待确认项。
 2. 普通路人、老人、摊贩、店小二等只能作为一次性环境人物存在；不得凭空获得核心情报，不得改变主线。
 3. 任何人物掌握核心人物住址、秘密、关系、身份、主线线索等信息，必须有可追溯的信息来源链。
 4. 校长不得为了让任务卡完整而虚构词典不存在的核心人物或关键事实；无法授权的内容写入“待确认项”。
@@ -7024,6 +7041,12 @@ ${chapterEndingContractText()}
 - 允许人物：……
 - 允许地点：……
 - 允许道具/资源：……
+- 允许组织/势力：……
+- 允许职业/机构：……
+- 允许物品/道具：……
+- 允许术语：……
+- 允许历史事件：……
+- 允许生活设定：……
 - 允许线索：……
 - 信息边界：……
 - 禁止事项：……
@@ -7151,6 +7174,12 @@ ${chapterEndingContractText()}
 - 允许人物：……
 - 允许地点：……
 - 允许道具/资源：……
+- 允许组织/势力：……
+- 允许职业/机构：……
+- 允许物品/道具：……
+- 允许术语：……
+- 允许历史事件：……
+- 允许生活设定：……
 - 允许线索：……
 - 信息边界：……
 - 禁止事项：……
@@ -7456,6 +7485,19 @@ mustKeep=必须保留的因果/信息
 只输出已经成立或被上游授权的事实；不要用结构块偷偷新增主线人物、核心秘密或世界规则。`;
 
 const PRINCIPAL_SYS_STRUCTURED = PRINCIPAL_SYS + STRUCTURED_PRINCIPAL_PROTOCOL;
+function principalPerfRecord(metrics){
+  try{
+    const sc=scState();
+    sc.principalPerf={ts:Date.now(), ...metrics};
+    for(let i=aiLog.length-1;i>=0;i--){
+      if(aiLog[i] && aiLog[i].task==='principal'){
+        aiLog[i].principalStages={...metrics};
+        try{ localStorage.setItem(KEY_AILOG, JSON.stringify(aiLog)); }catch(e){}
+        break;
+      }
+    }
+  }catch(e){ console.debug('[principalPerf] 记录失败',e); }
+}
 async function genPrincipal(btn, opts){
   if(!isLong()){ toast('仅长篇小说模式支持校长统筹'); return false; }
   const groups = schoolStageGroups(); if(!groups.length){ toast('请先填写章节数，才能分组'); return false; }
@@ -7469,50 +7511,103 @@ async function genPrincipal(btn, opts){
     const spec = resolveActiveSpec('principal');
     const temp = (spec && spec.principalTemp != null) ? spec.principalTemp : 0.4;
     for(let attempt=1; attempt<=SCHOOL_RETRY_MAX; attempt++){
+      const _tp0 = performance.now();
+      const _tp = {attempt};
       try{
         const sourceBlocks = principalSourceBlocks(groups);
         const ctxPack = await buildPrincipalContextUnderstanding(sourceBlocks, _abortCtl?.signal);
         console.info('[Principal] 来源处理模式：', ctxPack.mode, '；来源字符数：', ctxPack.ledger.length);
         const principalUser = principalFinalContext(buildPrincipalUser(groups), ctxPack.understanding, sourceBlocks, ctxPack.mode);
         const txt = await callAIGuarded('principal', sys, principalUser, {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
+        _tp.aiReturnMs = Math.round(performance.now()-_tp0);
         if(!txt || !String(txt||'').trim()){ setScRetry('principal', attempt); scRefreshBadge(btn,'principal'); throw new Error('校长返回空'); }
         const principalViolations = isScopeBanned('principal') ? banTextViolations(txt).filter(x=>x.type==='name') : [];
         if(principalViolations.length){
           throw new Error('校长输出命中禁用姓名：'+principalViolations.map(x=>x.value).join('、'));
         }
         const sc = scState();
+        const _parse0 = performance.now();
         const principalMachine = parsePrincipalMachine(txt, state.chapterCount || state.outline?.chapters?.length || 0);
+        _tp.parseMs = Math.round(performance.now()-_parse0);
+        const _sanitize0 = performance.now();
         let principalTxt = sanitizePrincipalText(txt);
+        _tp.sanitizeMs = Math.round(performance.now()-_sanitize0);
         let _middleMissing, _endingCheck;
         if(principalMachine){
-          if(principalMachine.missing.length) throw new Error('校长结构化章卡缺少核心字段：第'+principalMachine.missing.join('、')+'章');
+          if(principalMachine.missing.length){
+            const err = new Error('校长结构化章卡缺少核心字段：第'+principalMachine.missing.join('、')+'章');
+            err.principalValidation = true;
+            err.principalFailure = {category:'PRINCIPAL_VALIDATION_ERROR',code:'MACHINE_CONTRACT_MISSING',chapters:principalMachine.missing,details:'结构式校长章卡缺少核心字段',expected:'每章都应具备完整的章级施工合同',actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字`};
+            throw err;
+          }
+          const _compile0 = performance.now();
           const compiled = compilePrincipalMachineCards(principalMachine);
+          _tp.compileMs = Math.round(performance.now()-_compile0);
           // 保留原始全书战略说明，同时追加JS标准化章卡；下游统一读取标准化结构。
           principalTxt = principalTxt + '\n\n' + compiled;
           _middleMissing = [];
           const plans={}; Object.keys(principalMachine.rows).forEach(n=>{ const r=principalMachine.rows[n]; plans[n]={endingFunction:machineField(r,'endingFunction','endFunction'),intensity:machineField(r,'endingIntensity','intensity'),lastEffectiveEvent:machineField(r,'lastEffectiveEvent','lastEvent'),form:machineField(r,'form','endingForm'),nextTransitionType:machineField(r,'nextTransitionType','nextTransition'),nextTransitionBasis:machineField(r,'nextTransitionBasis','transitionBasis')}; });
+          const _endAudit0 = performance.now();
           _endingCheck = {missing:[],audit:buildEndingDiversityAudit(plans)};
+          _tp.endingAuditMs = Math.round(performance.now()-_endAudit0);
         }else{
+          const _middle0 = performance.now();
           _middleMissing = validatePrincipalMiddlePlans(principalTxt, state.chapterCount || state.outline?.chapters?.length || 0);
-          if(_middleMissing.length) throw new Error('校长缺少本章中段推进战略卡：第'+_middleMissing.join('、')+'章');
+          _tp.middleValidationMs = Math.round(performance.now()-_middle0);
+          if(_middleMissing.length){
+            const err = new Error('校长缺少本章中段推进战略卡：第'+_middleMissing.join('、')+'章');
+            err.principalValidation = true;
+            err.principalFailure = {category:'PRINCIPAL_VALIDATION_ERROR',code:'MIDDLE_PLAN_MISSING',chapters:_middleMissing,details:'校长缺少本章中段推进战略卡',expected:'每章都应具备可供老师执行的中段推进信息',actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字`};
+            throw err;
+          }
+          const _endVal0 = performance.now();
           _endingCheck = validatePrincipalEndingPlans(principalTxt, state.chapterCount || state.outline?.chapters?.length || 0);
-          if(_endingCheck.missing.length) throw new Error('校长缺少完整章末战略字段：第'+_endingCheck.missing.join('、')+'章');
+          _tp.endingValidationMs = Math.round(performance.now()-_endVal0);
+          if(_endingCheck.missing.length){
+            const err = new Error('校长缺少完整章末战略字段：第'+_endingCheck.missing.join('、')+'章');
+            err.principalValidation = true;
+            err.principalFailure = {category:'PRINCIPAL_VALIDATION_ERROR',code:'ENDING_PLAN_MISSING',chapters:_endingCheck.missing,details:'校长缺少完整章末战略字段',expected:'每章都应具备完整章末施工信息',actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字`};
+            throw err;
+          }
         }
-        if(_endingCheck.audit.risk==='high') throw new Error('校长章末结尾功能重复风险过高：最长连续'+_endingCheck.audit.maxConsecutive+'章；请在不改变主线的前提下重新分配收束形态');
+        _tp.validationMs = (_tp.middleValidationMs||0) + (_tp.endingValidationMs||0) + (_tp.endingAuditMs||0);
+        // 多样性审计是诊断信息，不再作为整次校长生成的致命失败条件，避免已有可用规划被迫重新调用AI。
+        const _principalEndingWarning = _endingCheck.audit && _endingCheck.audit.risk==='high' ? {
+          risk:'high', maxConsecutive:_endingCheck.audit.maxConsecutive,
+          repeatedFunctions:_endingCheck.audit.repeatedFunctions||[]
+        } : null;
+        const _title0 = performance.now();
         const titles = parsePrincipalTitles(principalTxt).map(sanitizePrincipalChapter);
         if(titles && titles.length){
-          doApplyTitles(titles, { silent: true });
+          doApplyTitles(titles, { silent: true, deferCommit: true });
         }
+        _tp.titleApplyMs = Math.round(performance.now()-_title0);
+        const _state0 = performance.now();
         storyState().canon.principalAt=Date.now(); storyState().versions.principal=Number(storyState().versions.principal||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1;
         delete sc.stale.principal;
         const _principalEndingPlans = buildChapterEndingPlansFromPrincipal(principalTxt, state.chapterCount || state.outline?.chapters?.length || 0);
         sc.principal = { machine: !!principalMachine, machineRows: principalMachine?.rows || null, ts:Date.now(), folded:false, groups: groups.map((g,gi)=>({ gi, stage:g.stage, first:g.first, last:g.last })), raw:principalTxt, titles, chapterTasks: principalChapterTaskCards(principalTxt), chapterEndingPlans: _principalEndingPlans, chapterEndingAudit: _endingCheck.audit };
+        if(_principalEndingWarning) sc.principal.chapterEndingAuditWarning = _principalEndingWarning; else delete sc.principal.chapterEndingAuditWarning;
         state.chapterEndingPlans = JSON.parse(JSON.stringify(sc.principal.chapterEndingPlans || {}));
         state.chapterEndingAudit = JSON.parse(JSON.stringify(sc.principal.chapterEndingAudit || {})); storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={version:storyState().versions.principal,source:'principal',ts:Date.now(),groups:sc.principal.groups,titles,chapterTasks:sc.principal.chapterTasks};
         state.outline._principalChapterTasks = sc.principal.chapterTasks || {};
-        scMark('principal', true);
-        markAIDone('principal');
-        render();
+        _tp.stateWriteMs = Math.round(performance.now()-_state0);
+        // 与老师成功路径一致：所有状态先内存落地，最后只做一次完整持久化。
+        scMark('principal', true, false);
+        markAIDone('principal', false);
+        scSetError('principal', null, false, false);
+        const _persist0 = performance.now();
+        persist();
+        _tp.persistMs = Math.round(performance.now()-_persist0);
+        // v1.0.382：AI 成功路径禁止全局 render()。状态已持久化后只做局部学校管线刷新，避免异步流程中重建 #view、销毁控件和产生失效 DOM 引用。
+        _tp.renderMs = 0;
+        refreshSchoolProgressUi();
+        _tp.aiReturnMs = _tp.aiReturnMs || 0;
+        _tp.totalLocalMs = Math.max(0, Math.round(performance.now()-_tp0) - _tp.aiReturnMs);
+        _tp.totalMs = Math.round(performance.now()-_tp0);
+        _tp.status='success';
+        if(_principalEndingWarning) _tp.endingAuditWarning=_principalEndingWarning;
+        principalPerfRecord(_tp);
         toast(`校长统筹完成：${groups.length} 位老师分组 + 全校守则 + 组级框架 + ${titles.length}章标题已自动定稿应用！`);
         playDoneSound('single');
         return true;
@@ -7520,6 +7615,25 @@ async function genPrincipal(btn, opts){
         lastPrincipalError = e instanceof Error ? e : new Error(String(e || '未知错误'));
         console.error('[genPrincipal] 第'+attempt+'次校长流程失败：', lastPrincipalError);
         if(e && e.name === 'AbortError'){ setScRetry('principal', attempt); toast('已停止校长统筹'); return false; }
+        if(e && e.principalValidation){
+          const _elapsed = Math.round(performance.now()-_tp0);
+          _tp.totalLocalMs = Math.max(0, _elapsed - (_tp.aiReturnMs||0));
+          _tp.totalMs = _elapsed;
+          _tp.status='validation_error';
+          principalPerfRecord(_tp);
+          const scErr = scState();
+          scErr.errors = scErr.errors || {};
+          scErr.errors.principal = Object.assign({ts:Date.now()}, e.principalFailure || {category:'PRINCIPAL_VALIDATION_ERROR',code:'VALIDATION_ERROR',details:String(e.message||e),expected:'校长结果通过必要结构契约',actual:'未通过必要结构契约'}, {attempt, retrying:false, manualRetry:true});
+          scErr.retries.principal = Math.max(0, Math.min(SCHOOL_RETRY_MAX, attempt));
+          scErr.failed = scErr.failed || {};
+          scErr.failed.principal = true;
+          delete scErr.finished.principal;
+          persist();
+          refreshSchoolProgressUi();
+          scRefreshBadge(document.querySelector('[data-scp-step="principal"]'),'principal');
+          toast(`校长内容已返回，但未通过必要结构检查：${e.message || '请查看校长步骤下方的错误说明'}`);
+          return false;
+        }
         setScRetry('principal', attempt); scRefreshBadge(btn,'principal');
         if(attempt < SCHOOL_RETRY_MAX) await new Promise(r=>setTimeout(r,1500));
       }
@@ -8380,34 +8494,39 @@ function buildTeacherAuthorizationPack(g, gi){
     const ep=chapterEndingPlanFor(n-1);
     if(ep) parts.push(`【第${n}章章末计划（结构化）】\n${JSON.stringify(ep,null,2)}\n老师不得突破校长的 endingFunction / intensity / hook 战略边界；在该边界内，老师负责确定本章实际承接方式、最后有效事件与具体收束。`);
   }
-  parts.push(`【授权解释】\n- “必须推进”与“终止状态”是本章目标约束。\n- “允许人物/地点/道具/线索”是核心剧情白名单。\n- “信息边界”规定当前章人物可以知道什么。\n- “待确认项”不得被老师直接升级为事实。\n- 老师可以自由设计白名单资源之间的中间事件和节拍，但不得突破以上边界。`);
+  parts.push(`【授权解释】\n- “必须推进”与“终止状态”是本章目标约束。\n- “允许人物/地点/道具/线索”与六类“允许世界资源”共同构成核心资源白名单。\n- 六类世界资源用途：组织/势力=阵营、权力、冲突与归属；职业/机构=人物工作与社会运行；物品/道具=行动资源、线索与可见细节；术语=世界内部语言与专业表达；历史事件=过去对现在的人物/组织/地点/冲突影响；生活设定=日常行为、地域/时代质感与场景真实感。\n- 未被授权的世界素材不得因为“词典里存在”就主动升级为本章剧情事实；只有与本章授权、教案或已成立状态有明确关系时才能使用。\n- “信息边界”规定当前章人物知道什么。\n- “待确认项”不得被老师直接升级为事实。\n- 老师可以自由设计白名单资源之间的中间事件和节拍，但不得突破以上边界。`);
   return parts.join('\n\n');
 }
 function teacherScopedGlossary(g, gi, maxChar){
   const o=state.outline||{}, gl=o.glossary||{};
   const names=new Set();
+  const addNames = text => String(text||'').split(/[、，,；;|\/]/).map(x=>x.trim().replace(/^[-*•\s]+/,'').replace(/^《|》$/g,'')).forEach(x=>{ if(x && !/^(无|暂无|无特别限制|未指定)$/.test(x)) names.add(x); });
+  const explicitRe=/-\s*(允许人物|允许地点|允许道具\/资源|允许线索|允许组织\/势力|允许职业\/机构|允许物品\/道具|允许术语|允许历史事件|允许生活设定)\s*[：:]\s*([^\n]+)/g;
+  const chapterCards=[];
   for(let n=g.first;n<=g.last;n++){
-    const card=principalChapterTask(n-1);
-    const fields=card.match(/-\s*(?:允许人物|允许地点|允许道具\/资源|允许线索)\s*[：:]\s*([^\n]+)/g)||[];
-    fields.forEach(line=>line.replace(/^.*?[：:]\s*/,'').split(/[、，,；;]/).forEach(x=>{x=x.trim().replace(/^[-*•]\s*/,''); if(x && !/^(无|暂无|无特别限制)$/.test(x)) names.add(x.replace(/^《|》$/g,''));}));
+    const card=String(principalChapterTask(n-1)||'').trim();
+    if(card) chapterCards.push(card);
+    let m; explicitRe.lastIndex=0;
+    while((m=explicitRe.exec(card))) addNames(m[2]);
   }
+  // 兼容旧版校长任务卡：没有六类显式字段时，只从“已存在于词典且确实被章级卡提及”的名称中恢复，不把整库灌给老师。
+  const allGeneric=[...(gl.organizations||[]),...(gl.institutions||[]),...(gl.items||[]),...(gl.terms||[]),...(gl.events||[]),...(gl.lifeSettings||[])];
+  const cardText=chapterCards.join('\n');
+  allGeneric.forEach(x=>{ const nm=String(x&&x.name||'').trim(); if(nm && cardText.includes(nm)) names.add(nm); });
   const out=[];
-  const chars=(gl.characters||[]).filter(c=>{const nm=String(c?.name||'').trim();return nm && [...names].some(x=>nm===x||nm.includes(x)||x.includes(nm));});
-  const places=(gl.places||[]).filter(c=>{const nm=String(c?.name||'').trim();return nm && [...names].some(x=>nm===x||nm.includes(x)||x.includes(nm));});
-  const props=(gl.propernouns||[]).filter(c=>{const nm=String(c?.name||'').trim();return nm && [...names].some(x=>nm===x||nm.includes(x)||x.includes(nm));});
+  const matchByName=(arr)=> (Array.isArray(arr)?arr:[]).filter(x=>{const nm=String(x&&x.name||'').trim();return nm && [...names].some(q=>nm===q||nm.includes(q)||q.includes(nm));});
+  const chars=matchByName(gl.characters), places=matchByName(gl.places), props=matchByName(gl.propernouns);
   if(chars.length) out.push('人物：'+chars.map(c=>fmtCharFullFields(c).join('，')).join('\n· '));
   if(places.length) out.push('地点：'+places.map(c=>`${c.name}${c.note?`：${c.note}`:''}`).join('、'));
-  if(props.length) out.push('专名/道具：'+props.map(c=>`${c.name}${c.note?`：${c.note}`:''}`).join('、'));
-  const matchGeneric=(arr)=> (Array.isArray(arr)?arr:[]).filter(x=>{const nm=String(x&&x.name||'').trim();return nm && [...names].some(q=>nm===q||nm.includes(q)||q.includes(nm));});
-  const genericSets=[['组织/势力',gl.organizations],['职业/机构',gl.institutions],['物品/道具',gl.items],['补充术语',gl.terms],['历史事件',gl.events],['生活设定',gl.lifeSettings]];
-  genericSets.forEach(([label,arr])=>{ const hits=matchGeneric(arr); if(hits.length) out.push(label+'：'+hits.map(x=>{const vals=[x.name,x.type,x.category,x.function,x.meaning,x.content,x.note,x.impact].map(v=>String(v||'').trim()).filter(Boolean);return vals.join('｜');}).join('\n· ')); });
+  if(props.length) out.push('专名：'+props.map(c=>`${c.name}${c.note?`：${c.note}`:''}`).join('、'));
+  const genericSets=[['组织/势力',gl.organizations],['职业/机构',gl.institutions],['物品/道具',gl.items],['术语',gl.terms],['历史事件',gl.events],['生活设定',gl.lifeSettings]];
+  genericSets.forEach(([label,arr])=>{ const hits=matchByName(arr); if(hits.length) out.push(label+'：'+hits.map(x=>{const vals=[x.name,x.type,x.category,x.function,x.meaning,x.content,x.note,x.impact,x.usage,x.value].map(v=>String(v||'').trim()).filter(Boolean);return vals.join('｜');}).join('\n· ')); });
   const rules=(gl._worldRules||[]).map(fmtWR).filter(Boolean);
   if(rules.length) out.push('世界观规则（执行必守）：\n'+rules.slice(0,20).map(x=>'- '+x).join('\n'));
   let text=out.join('\n\n');
-  if(text.length>(maxChar||9000)) text=text.slice(0,maxChar||9000)+'…（按授权范围截断）';
-  return text||'（本组章级授权未指定额外词典资源；核心剧情不得自行扩大人物/地点/线索范围。）';
+  if(text.length>(maxChar||9000)) text=text.slice(0,maxChar||9000)+'…（按本章授权范围截断）';
+  return text||'（本章未授权额外词典资源；不得因为词典存在某条素材就自行扩大剧情。）';
 }
-
 function buildTeacherUser(g, gi){
   const pr = (state.school && state.school.principal) || {};
   const o = state.outline || {};
@@ -8481,6 +8600,22 @@ function prevGroupTailState(gi, g){
 
 
 const TEACHER_SYS_STRUCTURED = TEACHER_SYS + STRUCTURED_TEACHER_PROTOCOL;
+function teacherPerfRecord(gi, metrics){
+  try{
+    const sc=scState();
+    sc.teacherPerf=sc.teacherPerf||{};
+    sc.teacherPerf[gi]={gi, ts:Date.now(), ...metrics};
+    // 追加到已有 AI 请求日志的最近一次 teacher 记录，不新增 AI 请求。
+    for(let i=aiLog.length-1;i>=0;i--){
+      if(aiLog[i] && aiLog[i].task==='teacher'){
+        aiLog[i].teacherStages={...metrics};
+        try{ localStorage.setItem(KEY_AILOG, JSON.stringify(aiLog)); }catch(e){}
+        break;
+      }
+    }
+  }catch(e){ console.debug('[teacherPerf] 记录失败',e); }
+}
+
 async function genTeacher(btn, gi){
   if(!isLong()){ toast('仅长篇小说模式支持老师施教'); return false; }
   const groups = schoolStageGroups(); const g = groups[gi];
@@ -8496,10 +8631,14 @@ async function genTeacher(btn, gi){
     const spec = resolveActiveSpec('teacher');
     const temp = (spec && spec.teacherTemp != null) ? spec.teacherTemp : 0.4;
     for(let attempt=1; attempt<=SCHOOL_RETRY_MAX; attempt++){
+      const _tp0 = performance.now();
+      const _tp = {attempt};
       try{
         const txt = await callAIGuarded('teacher', TEACHER_SYS_STRUCTURED, buildTeacherUser(g, gi), {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
+        _tp.aiReturnMs = Math.round(performance.now()-_tp0);
         if(!txt || !String(txt||'').trim()){ setScRetry(key, attempt); scRefreshBadge(btn,key); throw new Error('老师返回空'); }
         const teacherMachine = parseTeacherMachine(String(txt), g.first, g.last);
+        _tp.parseMs = Math.round(performance.now()-_tp0) - (_tp.aiReturnMs||0);
         let teacherRaw = String(txt);
         let _teacherMiddleMissing = [];
         let _teacherEndingCheck = {missing:[], audit:{risk:'normal', maxConsecutive:0, repeatedFunctions:[]}};
@@ -8507,8 +8646,14 @@ async function genTeacher(btn, gi){
           const compiled = compileTeacherMachine(teacherMachine, teacherRaw);
           if(compiled) teacherRaw = teacherRaw + '\n\n' + compiled;
         }
+        _tp.compileMs = Math.round(performance.now()-_tp0) - (_tp.aiReturnMs||0) - (_tp.parseMs||0);
+        const _val0 = performance.now();
         _teacherMiddleMissing = validateTeacherMiddlePlans(teacherRaw, g.first, g.last);
+        _tp.middleValidationMs = Math.round(performance.now()-_val0);
+        const _endVal0 = performance.now();
         _teacherEndingCheck = validateTeacherEndingPlans(teacherRaw, g.first, g.last);
+        _tp.endingValidationMs = Math.round(performance.now()-_endVal0);
+        _tp.validationMs = (_tp.middleValidationMs||0) + (_tp.endingValidationMs||0);
         // 这里重新启用“必要结构质检”作为重试条件，但不把所有审计意见都当成失败。
         // 这样既不会悄悄放松质量要求，也不会把“结尾多样性风险”等诊断项误当成致命错误。
         const _hardMissing = Array.from(new Set([...(teacherMachine?.missing||[]).filter(n=>Number.isFinite(n)), ..._teacherMiddleMissing, ..._teacherEndingCheck.missing]));
@@ -8525,17 +8670,21 @@ async function genTeacher(btn, gi){
             expected:'每章都应具备可供正文直接消费的中段推进信息与章末施工信息；仅多样性风险不作为失败。',
             actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字，但必要质检仍有 ${_hardMissing.length} 章未通过`
           };
-          scSetError(key, Object.assign({}, _failure, {attempt, retrying:attempt < SCHOOL_RETRY_MAX}));
+          _tp.totalLocalMs = Math.round(performance.now()-_tp0) - (_tp.aiReturnMs||0);
+          _tp.totalMs = Math.round(performance.now()-_tp0);
+          _tp.status='validation_error';
+          teacherPerfRecord(gi,_tp);
+          scSetError(key, Object.assign({}, _failure, {attempt, retrying:false, manualRetry:true}));
           scSetRetry(key, attempt);
           scRefreshBadge(btn,key);
           refreshSchoolProgressUi();
-          render();
-          throw Object.assign(new Error(_failure.details), {name:'TeacherValidationError', teacherFailure:_failure});
+          break;
         }
         const _teacherEndingWarning = _teacherEndingCheck.audit.risk==='high' ? {
           risk:'high', maxConsecutive:_teacherEndingCheck.audit.maxConsecutive,
           repeatedFunctions:_teacherEndingCheck.audit.repeatedFunctions||[]
         } : null;
+        _tp.stateWriteStartMs = Math.round(performance.now()-_tp0);
         const sc = scState(); delete sc.stale['t'+gi];
         sc.teachers[gi] = { gi, ts:Date.now(), raw:teacherRaw, machine:!!teacherMachine, machineText: teacherMachine ? String(txt) : '' };
         state.chapterMiddlePlans = state.chapterMiddlePlans || {};
@@ -8548,16 +8697,22 @@ async function genTeacher(btn, gi){
         state.chapterEndingAuditWarnings = state.chapterEndingAuditWarnings || {};
         if(_teacherEndingWarning) state.chapterEndingAuditWarnings[gi] = _teacherEndingWarning;
         else delete state.chapterEndingAuditWarnings[gi];
+        _tp.stateWriteMs = Math.round(performance.now()-_tp0) - (_tp.stateWriteStartMs||0);
         // v1.0.362：结构式纯文本词典达人；老师成功的唯一落点必须同时完成“组状态 + AI状态 + UI刷新”。
         // 先写入实际教案，再立即清除该组 stale；随后统一刷新学校管线和全景步骤，避免 AI 已返回而 UI 仍停在“老师”。
         markAIDone(key, false);
-        scSetError(key, null);
-        scMark(key, true);
-        scState();
+        scSetError(key, null, false, false);
+        scMark(key, true, false);
+        _tp.persistStartMs = Math.round(performance.now()-_tp0);
+        persist();
+        _tp.persistMs = Math.round(performance.now()-_tp0) - _tp.persistStartMs;
+        // v1.0.382：老师成功后不再全局 render()；学校管线与本组按钮由局部 DOM 更新完成。
+        _tp.renderMs = 0;
         refreshSchoolProgressUi();
-        render();
-        // render() 后 DOM 已换新，再补一次进度刷新，确保新节点拿到 done 状态。
-        refreshSchoolProgressUi();
+        _tp.totalLocalMs = Math.round(performance.now()-_tp0) - (_tp.aiReturnMs||0);
+        _tp.totalMs = Math.round(performance.now()-_tp0);
+        _tp.status='success';
+        teacherPerfRecord(gi,_tp);
         toast(`老师${gi+1}备课完成：第 ${g.first}-${g.last} 章已按校长章级授权施工`);
         playDoneSound('single');
         return true;
@@ -8752,7 +8907,7 @@ async function genSchoolAll(btn){
     if(!scTeacherPipelineComplete()) throw new Error('一键开学未完成独立老师教案');
     toast('学校一键全部完成：词典达人→词典充实→校长→独立老师全链路就绪！');
     playDoneSound('all');
-  }finally{ finish(); render(); }
+  }finally{ finish(); }
 }
 
 function bindSchoolSteps(){
@@ -9998,10 +10153,10 @@ function markAIRunning(kind){
   persist();
 }
 
-function markAIDone(kind){
+function markAIDone(kind, save=true){
   state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!==kind);
   state.aiNetwork.completed = Array.from(new Set([...(state.aiNetwork.completed||[]), kind]));
-  persist();
+  if(save) persist();
 }
 
 function addToFixQueue(entry){
@@ -12900,6 +13055,20 @@ function rollingSummaryCardHtml(){
   </div>`;
 }
 
+function refreshRollingSummaryCardOnly(){
+  const card = document.querySelector('.rs-card');
+  if(!card) return false;
+  const active = document.activeElement;
+  if(active && card.contains(active)) return false;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = rollingSummaryCardHtml().trim();
+  const next = wrap.firstElementChild;
+  if(!next) return false;
+  card.replaceWith(next);
+  bindRollingSummaryCard();
+  return true;
+}
+
 function bindRollingSummaryCard(){
   const head = $('[data-rs-fold]');
   if(head) head.onclick = ()=>{
@@ -12910,9 +13079,9 @@ function bindRollingSummaryCard(){
   const gen = $('[data-rs-gen]');
   if(gen) gen.onclick = async ()=>{
     busy(gen, true, '生成中…');
-    try{ await ensureChapterDigests(); await generateRollingSummaries(); render(); toast('滚动摘要已补齐'); }
+    try{ await ensureChapterDigests(); await generateRollingSummaries(); toast('滚动摘要已补齐'); }
     catch(e){ toast('摘要生成失败：'+e.message); }
-    finally{ busy(gen, false); }
+    finally{ busy(gen, false); refreshRollingSummaryCardOnly(); }
   };
   const clr = $('[data-rs-clear]');
   if(clr) clr.onclick = ()=>{
@@ -13654,7 +13823,8 @@ function openChTitleHistoryPanel(){
 function closeChTitleHistoryPanel(){ const p=$('#cthPanel'); if(p) p.remove(); }
 
 function chTitleBatches(){ const o=state.outline; return (o && Array.isArray(o.chTitleBatches)) ? o.chTitleBatches : []; }
-function snapshotTitleBatch(label){
+function snapshotTitleBatch(label, opts){
+  opts = opts || {};
   const o = state.outline; if(!o) return;
   const titles = (o.chapters||[]).map(c=> (c&&c.title)||'');
   if(!Array.isArray(o.chTitleBatches)) o.chTitleBatches = [];   // fixed: 先挂回 state.outline，persist 才存得住
@@ -13664,7 +13834,7 @@ function snapshotTitleBatch(label){
   const t = (d.getMonth()+1)+'-'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
   bt.unshift({ ts: Date.now(), label: `${t} · ${label||'生成批次'}`, titles });
   if(bt.length > 50) bt.length = 50;
-  persist();
+  if(!opts.deferCommit) persist();
 }
 function applyTitleBatch(idx){
   const bt = chTitleBatches(); const b = bt[idx]; if(!b) return;
@@ -14211,7 +14381,9 @@ function glossaryCardHtml(){
     </div>`;
   }).join('');
   const collapsed = !!state.gsCollapsed;
-  const total = (g.characters||[]).length + (g.walkons||[]).length + (g.places||[]).length + (g.propernouns||[]).length + (g.subplots||[]).length;
+  const worldCounts={organizations:(g.organizations||[]).length,institutions:(g.institutions||[]).length,items:(g.items||[]).length,terms:(g.terms||[]).length,events:(g.events||[]).length,lifeSettings:(g.lifeSettings||[]).length};
+  const worldTotal=Object.values(worldCounts).reduce((a,v)=>a+Number(v||0),0);
+  const total = (g.characters||[]).length + (g.walkons||[]).length + (g.places||[]).length + (g.propernouns||[]).length + (g.subplots||[]).length + worldTotal;
   const vRel=validAssoc(g._relationshipTable,'a','b').length;
   const vPC=validAssoc(g._placeContacts,'from','to').length;
   const vPRC=validAssoc(g._properContacts,'from','to').length;
@@ -14231,7 +14403,7 @@ function glossaryCardHtml(){
       <div class="ch-left">
         <span class="ch-badge ch-badge-glossary">📇</span>
         <h3 class="ch-title">设定表 · 万物词典总览</h3>
-        <span class="ch-subtag ch-subtag-glossary">${total} 条已收录</span>
+        <span class="ch-subtag ch-subtag-glossary">${total} 条已收录${worldTotal?` · 世界素材 ${worldTotal}（正文按章授权调用）`:""}</span>
       </div>
       <div class="ch-right">
         <span class="gs-card-arrow" style="font-size:14px;color:var(--muted)">${collapsed?'▸':'▾'}</span>
@@ -14249,6 +14421,10 @@ function glossaryCardHtml(){
         ['place',  '🗺️ 地点',     places,       (g.places||[]).length],
         ['proper', '📌 专名',     props,        (g.propernouns||[]).length],
         ['sub',    '🧵 副线',     subsHtml,     (g.subplots||[]).length],
+        ['world',  '🌍 世界素材', (()=>{
+          const groups=[['🏛️ 组织/势力',g.organizations],['🏢 职业/机构',g.institutions],['🧰 物品/道具',g.items],['🔤 术语',g.terms],['🕰️ 历史事件',g.events],['🍜 生活设定',g.lifeSettings]];
+          return groups.map(([lab,arr])=>{const a=Array.isArray(arr)?arr:[]; if(!a.length) return ''; const body=a.map(x=>{const nm=String(x&&x.name||'').trim(); const brief=[x.type,x.category,x.function,x.meaning,x.content,x.note,x.impact,x.usage,x.value].map(v=>String(v||'').trim()).filter(Boolean).join(' · '); const src=String(x&&x.sourceType||'')==='dictionary_foundation'?'基底':'扩充'; return `<div class="gs-entry gs-world-entry"><div class="gs-head"><span class="gs-fold-ico">•</span><span class="gs-name" style="cursor:default">${esc(nm)}</span><span class="gs-brief">[${src}] ${esc(brief||'可供下游AI按章授权调用')}</span></div></div>`;}).join(''); return `<details class="dm-fold" open><summary>${lab}（${a.length}）</summary><div>${body}</div></details>`;}).join('') || '<span class="muted">（暂无世界素材）</span>';
+        })(), worldTotal],
       ]).map(([t,lab,body,cnt])=>{
       const fold = !!(state.gsCatFold && state.gsCatFold[t]);
       return `<div class="gs-group${fold?' gs-folded':''}" data-gs-type="${t}" data-gs-catfold>
@@ -16935,12 +17111,28 @@ function validateDictMasterOutput(j){
   }
   return '';
 }
-function collapseGlossaryAfterDictionaryGeneration(){
+function refreshGlossaryCardOnly(){
+  const card = document.querySelector('.gs-card');
+  if(!card) return false;
+  const active = document.activeElement;
+  if(active && card.contains(active)) return false; // 不抢占用户正在编辑/操作的词典控件
+  const html = glossaryCardHtml();
+  if(!html) return false;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html.trim();
+  const next = wrap.firstElementChild;
+  if(!next) return false;
+  card.replaceWith(next);
+  bindGlossary();
+  return true;
+}
+
+function collapseGlossaryAfterDictionaryGeneration(save=true){
   state.gsCollapsed = true;
   state.gsCatFold = Object.assign({}, state.gsCatFold || {}, {
     main:true, support:true, walkon:true, place:true, proper:true, sub:true
   });
-  persist();
+  if(save) persist();
 }
 
 async function genDictMaster(btn){
@@ -16954,6 +17146,7 @@ async function genDictMaster(btn){
   markAIRunning('dictmaster');
   if(btn) busy(btn,true,'生成万物词典中…');
   if(btn && btn.parentNode) showStopBtn(btn.parentNode);
+  let _refreshGlossaryAfterDictMaster = false;
   try{
     const spec = resolveActiveSpec('dictmaster');
     const temp = (spec && spec.dictmasterTemp != null) ? spec.dictmasterTemp : 0.4;
@@ -17025,10 +17218,10 @@ async function genDictMaster(btn){
     // 不再让折叠/渲染等非核心 UI 操作位于完成标记之前，避免“AI 已返回、数据已落地，但界面仍卡在生成中”。
     markAIDone('dictmaster');
     scMark('dictMaster', true);
+    collapseGlossaryAfterDictionaryGeneration(false);
     persist();
-    collapseGlossaryAfterDictionaryGeneration();
-    render();
     refreshSchoolProgressUi();
+    _refreshGlossaryAfterDictMaster = true;
     toast(`万物词典已生成：人物 ${result.nChar} · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系 ${result.nRel} · 规则 ${result.nWR} · 组织 ${result.nOrg} · 机构 ${result.nInst} · 道具 ${result.nItem} · 术语 ${result.nTerm} · 历史 ${result.nEvent} · 生活 ${result.nLife}（世界基底已建立）`);
     playEventSound('dictmaster_done');
     return true;
@@ -17041,6 +17234,7 @@ async function genDictMaster(btn){
   }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='dictmaster');
     hideStopBtn(); if(btn) busy(btn,false);
+    if(_refreshGlossaryAfterDictMaster) refreshGlossaryCardOnly();
   }
 }
 function dictMasterBlockHtml(){
@@ -18175,6 +18369,7 @@ async function genDictHarvest(btn, opts){
   if(stopParent) showStopBtn(stopParent);
   const stream = $('#dictEnrichStream');
   if(stream){ stream.style.display='block'; stream.textContent='正在扫描正文反复出现实体并收编进词典…'; }
+  let _refreshGlossaryAfterHarvest = false;
   try{
     const spec = resolveActiveSpec('dictEnrich');
     const temp = (spec && spec.dictEnrichTemp != null) ? spec.dictEnrichTemp : 0.4;
@@ -18191,11 +18386,10 @@ async function genDictHarvest(btn, opts){
     const n = mergeDictHarvest(parsed);
     state.outline._dictHarvestText = txt;
     // 收编结果写入成功后立即结束任务状态；折叠/刷新属于非核心 UI 操作，不应阻断完成状态。
-    persist();
     markAIDone('dictEnrich');
-    render();
-    collapseGlossaryAfterDictionaryGeneration();
-    render();
+    collapseGlossaryAfterDictionaryGeneration(false);
+    persist();
+    _refreshGlossaryAfterHarvest = true;
     if(stream) stream.style.display='none';
     toast(`正文收编完成：主要人物 ${n.main||0} · 次要配角 ${n.support||0} · 路人 ${n.w} · 地名 ${n.p} · 专名 ${n.k} 已入词典${n.up?`，${n.up} 个路人升级为主/配角`:''}`);
     return true;
@@ -18207,6 +18401,7 @@ async function genDictHarvest(btn, opts){
   }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='dictEnrich');
     hideStopBtn(); if(btn) busy(btn,false); if(stream) stream.style.display='none';
+    if(_refreshGlossaryAfterHarvest) refreshGlossaryCardOnly();
   }
 }
 function mergeDictHarvest(res){
@@ -18257,6 +18452,7 @@ async function genDictEnrich(btn, opts){
   if(stopParent) showStopBtn(stopParent);
   const stream = $('#dictEnrichStream');
   if(stream){ stream.style.display='block'; stream.textContent='正在生成词典充实内容…'; }
+  let _refreshGlossaryAfterDictEnrich = false;
   try{
     const spec = resolveActiveSpec('dictEnrich');
     const temp = (spec && spec.dictEnrichTemp != null) ? spec.dictEnrichTemp : 0.4;
@@ -18283,7 +18479,7 @@ async function genDictEnrich(btn, opts){
     // 数据已经安全写入词典后，先完成 AI 状态，再做非核心 UI 刷新；避免 render 异常导致“内容已入库但 UI 仍显示未完成”。
     persist();
     markAIDone('dictEnrich');
-    render();
+    _refreshGlossaryAfterDictEnrich = true;
     if(stream) stream.style.display='none';
     toast(`词典已充实：人物 ${n.main||0}/${n.support||0} · 路人 ${n.w||0} · 地名 ${n.p} · 专名 ${n.k} · 世界素材 ${[n.organizations,n.institutions,n.items,n.rules,n.terms,n.events,n.lifeSettings].reduce((a,v)=>a+(Number(v)||0),0)}（已并入万物词典，正文可直接选用）`);
     playEventSound('dictEnrich_done');
@@ -18296,6 +18492,7 @@ async function genDictEnrich(btn, opts){
   }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='dictEnrich');
     hideStopBtn(); if(btn) busy(btn,false); if(stream) stream.style.display='none';
+    if(_refreshGlossaryAfterDictEnrich) refreshGlossaryCardOnly();
   }
 }
 function buildDictEnrichSummary(parsed){
@@ -18767,6 +18964,29 @@ function principalCausalityExcerpt(){
 }
 
 
+function authorizedWorldResourceBlock(i){
+  const o=state.outline||{}, g=o.glossary||{};
+  const card=String(principalChapterTask(i)||'').trim();
+  const lesson=String(teacherChapterPlan(i)||'').trim();
+  if(!card && !lesson) return '';
+  const names=new Set();
+  const addList = text => String(text||'').split(/[、，,；;|\/]/).map(x=>x.trim().replace(/^[-*•\s]+/,'').replace(/^《|》$/g,'')).forEach(x=>{if(x&&!/^(无|暂无|无特别限制|未指定)$/.test(x))names.add(x);});
+  const explicitRe=/-\s*(允许人物|允许地点|允许道具\/资源|允许线索|允许组织\/势力|允许职业\/机构|允许物品\/道具|允许术语|允许历史事件|允许生活设定)\s*[：:]\s*([^\n]+)/g;
+  let m; explicitRe.lastIndex=0;
+  while((m=explicitRe.exec(card))) addList(m[2]);
+  const allWorld=[...(g.organizations||[]),...(g.institutions||[]),...(g.items||[]),...(g.terms||[]),...(g.events||[]),...(g.lifeSettings||[])];
+  const sourceText=card+'\n'+lesson;
+  allWorld.forEach(x=>{const nm=String(x&&x.name||'').trim();if(nm&&sourceText.includes(nm))names.add(nm);});
+  if(!names.size)return '';
+  const match=(arr)=> (Array.isArray(arr)?arr:[]).filter(x=>{const nm=String(x&&x.name||'').trim();return nm&&[...names].some(q=>nm===q||nm.includes(q)||q.includes(nm));});
+  const sections=[];
+  const sets=[['组织/势力',g.organizations,'组织/势力用于阵营、权力、冲突与人物归属。'],['职业/机构',g.institutions,'职业/机构用于人物工作身份、社会运行与专业场景。'],['物品/道具',g.items,'物品/道具用于行动资源、线索、限制与可见细节。'],['术语',g.terms,'术语用于世界内部语言、专业表达与共同认知。'],['历史事件',g.events,'历史事件用于解释过去对现在人物、组织、地点或冲突的影响。'],['生活设定',g.lifeSettings,'生活设定用于日常行为、地域/时代质感与场景真实感。']];
+  sets.forEach(([label,arr,use])=>{const hits=match(arr);if(hits.length)sections.push(`【${label}】\n${use}\n`+hits.map(x=>{const src=String(x&&x.sourceType||'')==='dictionary_foundation'?'基底':'扩充';const vals=[x.name,x.type,x.category,x.function,x.meaning,x.content,x.note,x.impact,x.usage,x.value].map(v=>String(v||'').trim()).filter(Boolean);return `- [${src}] ${vals.join('｜')}`;}).join('\n'));});
+  if(!sections.length)return '';
+  return `【本章授权世界资源包｜正式世界事实，只供本章使用】\n以下素材已经存在于万物词典，并由校长章级授权或本章教案明确引用。它们不是要求本章全部使用的清单；只有在当前事件、人物行动、场景描写或因果链真正需要时自然调用。禁止为了“丰富”而强行塞入，也不得修改、重定义或创造同名替代品。\n\n${sections.join('\n\n')}`;
+}
+function fullGlossaryChapterBlock(i){ return authorizedWorldResourceBlock(i); }
+
 function buildChapterUser(i, opt={}){
   const o = state.outline || {};
   const chap = (state.chapters && state.chapters[i]) || {};
@@ -18850,6 +19070,9 @@ ${_lesson}
 本章为全书第 1 章（首章开篇）：无上一章正文。首段应从实际事件/人物现场或本章教案规定的起点自然起笔，尽早建立核心人物、当前处境与读者可继续追问的问题。若用户选择了具体开篇策略，必须与本章教案融合执行；若选择“不选择开篇策略”，不得自行生成、推荐或强行套用任何开篇策略。`);
     }
 
+    const _worldPack = authorizedWorldResourceBlock(i);
+    if(_worldPack) parts.push(_worldPack);
+
     const _endingPlan = chapterEndingPlanFor(i);
     if(_endingPlan) parts.push(chapterEndingDecisionBlock(i));
 
@@ -18929,39 +19152,6 @@ ${_lesson}
   const _b = budgetChapterContext(parts, 24000);
   if(_dictRedlineOver){ setTimeout(()=>toast('当前上下文超出建议预算，若频繁出现请提高输出上限。'), 0); }
   return _b.join('\n\n');
-}
-
-function fullGlossaryChapterBlock(i){
-  const o = state.outline;
-  const g = (o && o.glossary) || {};
-  const chars = Array.isArray(g.characters) ? g.characters : [];
-  const places = Array.isArray(g.places) ? g.places : [];
-  const props = Array.isArray(g.propernouns) ? g.propernouns : [];
-  if(!chars.length && !places.length && !props.length) return '';
-  const protagonist = (o && o.navBeacon && o.navBeacon.protagonist) ? String(o.navBeacon.protagonist).split(/[，,：:（(]/)[0].trim() : '';
-  const appearing = new Set();
-  (relevantGlossaryForChapter(i).characters||[]).forEach(c=>{ const n=String(c&&c.name||'').trim(); if(n) appearing.add(n); });
-  if(protagonist) appearing.add(protagonist);
-  const lines = [];
-  const charLines = chars.map(c=>{
-    const n = String(c&&c.name||'').trim(); if(!n) return '';
-    if(appearing.has(n)){
-      return `\n· ${fmtCharFullFields(c).join('，')}`;
-    }
-    return `\n· ${n}（${(c&&c.identity)||'人物'}）`;
-  }).filter(Boolean);
-  if(charLines.length) lines.push(`人物（全量名单；●=主角/本章出场·给全部7字段）：${charLines.join('')}`);
-  const placeLines = places.map(p=>{ const n=String(p&&p.name||'').trim(); if(!n) return ''; return `\n· ${n}（${(p&&p.type)||''}）${p&&p.note?`：${p.note}`:''}`; }).filter(Boolean);
-  if(placeLines.length) lines.push(`地名（全量）：${placeLines.join('')}`);
-  const propLines = props.map(p=>{ const n=String(p&&p.name||'').trim(); if(!n) return ''; return `\n· ${n}${p&&p.note?`：${p.note}`:''}`; }).filter(Boolean);
-  if(propLines.length) lines.push(`专名（全量）：${propLines.join('')}`);
-  if(Array.isArray(g._worldRules) && g._worldRules.length){
-    lines.push(`世界观规则（全量·正文须遵守不违背）：${g._worldRules.map(fmtWR).join('；')}`);
-  }
-  const wkOnes = (g.walkons||[]).filter(w=>String(w&&w.name||'').trim()).map(w=>`${String(w.name).trim()}${String(w&&w.note||'').trim()?`（${String(w.note).trim()}）`:''}`).join('、');
-  if(wkOnes) lines.push(`路人龙套（词典充实闲人，可选用登场：只一句台词/一个镜头即可，无需九维）：${wkOnes}`);
-  lines.push(`【临时闲人·小地名·小专名（允许现场点缀，不入词典）】当场景自然地需要店小二、摊贩、车夫、茶客、围观者、更夫、报信者这类只出现这一次、只说一两句或只露一眼的过场闲人，或某个只此一现、日后不再提起的小地名/小专名时，可现场信手自拟一个名字，写一句便止、点到即收：只作氛围点缀，不写主持戏份、不给任何设定交代、更不得写入万物词典。硬约束：①仅限真实"过场/一次性泛称"——凡有台词作用、会再登场、或要推动情节的人地专名，一律回到本词典取用，严禁自立核心名绕开词典；②不得与本词典或上方【路人龙套】已有人名/地名/专名重名；③非机械化——这是剧情的自然点缀，不是每章必须完成的任务，切忌刻意凑数、生硬点名或反复秀存在感，多数章节甚至无需新增。`);
-  return '请全程遵循本设定词典（有台词/有戏份或反复出现的人地专名一律取用本词典、保持一致，禁止自造核心名；仅作氛围的临时路人/小地名/小专名允许现场点缀一次、不入词典，见上【临时闲人】段，非机械化凑数；人物关系/性格/地域往来/专名用法与世界规则与此保持统一）：\n' + lines.join('\n');
 }
 
 function rollCallGlossary(i){
