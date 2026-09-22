@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.373';
+const APP_VERSION = '1.0.375';
 // Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.373.js';
+const APP_FILE_VERSION = 'app1.0.375.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -5509,7 +5509,7 @@ function teacherChapterPlan(ci){
   return block;
 }
 
-const SCHOOL_RETRY_MAX = 16;
+const SCHOOL_RETRY_MAX = 16; // 仅用于 AI 请求本身失败/空返回等异常；老师内容质检不再触发这 16 次重试
 // 老师阶段完成以老师成功生成教案为准；正文需要章节卡时再从老师 raw 建立。
 // 旧逻辑把 canon.teacherAt 版本快照当成唯一闸门；只要快照与版本计数出现一次不同步，
 // 即使“读取老师教案”已经能正常读出全部章节，也会被一键开学判定为未完成并停在第4步。
@@ -5555,10 +5555,31 @@ function scState(){
   state.school.finished = state.school.finished || {};
   state.school.failed   = state.school.failed   || {};
   state.school.retries  = state.school.retries  || {};
+  state.school.errors   = state.school.errors   || {};
   state.school.stale    = state.school.stale || {};
   state.school.teachers = Array.isArray(state.school.teachers) ? state.school.teachers : [];
   scHealState();
   return state.school;
+}
+function scError(key){ return scState().errors[key] || null; }
+function scSetError(key, info){
+  const sc=scState(); sc.errors=sc.errors||{};
+  if(info){
+    sc.errors[key]=Object.assign({ts:Date.now()}, info);
+  }else delete sc.errors[key];
+  persist();
+  refreshSchoolProgressUi();
+}
+function scTeacherFailureMessage(f){
+  if(!f) return '';
+  const parts=[];
+  if(f.category) parts.push(`类型：${f.category}`);
+  if(f.code) parts.push(`代码：${f.code}`);
+  if(f.chapters && f.chapters.length) parts.push(`章节：${f.chapters.join('、')}`);
+  if(f.details) parts.push(`详情：${f.details}`);
+  if(f.expected) parts.push(`应满足：${f.expected}`);
+  if(f.actual) parts.push(`实际检测：${f.actual}`);
+  return parts.join('｜');
 }
 function scRetry(key){ return scState().retries[key] || 0; }
 function setScRetry(key, n){ scState().retries[key] = Math.max(0, Math.min(SCHOOL_RETRY_MAX, n||0)); persist(); }
@@ -5638,6 +5659,11 @@ function getSchoolStepStatus(key){
 function scBadge(key){
   const n = scRetry(key);
   return n > 0 ? `<b class="sc-retry-badge" title="本步已自动重试 ${n}/${SCHOOL_RETRY_MAX} 次（失败重试，成功清零）">↻${n}</b>` : '';
+}
+function schoolFailureHtml(key){
+  const e=scError(key); if(!e) return '';
+  const title=e.attempt ? `第 ${e.attempt}/${SCHOOL_RETRY_MAX} 次失败` : '最近一次失败';
+  return `<div class="sc-error-box"><b>⚠️ ${esc(title)}</b><span>${esc(scTeacherFailureMessage(e))}</span></div>`;
 }
 function scRefreshBadge(el, key){
   if(el && el.querySelectorAll){ el.querySelectorAll('.sc-retry-badge').forEach(x => x.remove()); }
@@ -5925,18 +5951,28 @@ function principalContextChunks(text, maxChars){
 const PRINCIPAL_CONTEXT_SYS = `你是“校长AI”的上下文理解器，不负责直接规划全书。\n你的任务是像专业 Prompt Engineering 工具一样，把注入的来源内容全部读懂，再形成可供校长决策的“语义理解层”。\n\n硬规则：\n1. 不得凭空增加来源中没有的事实。\n2. 必须区分用户选择、世界事实/词典、既有规划、正文已观测事实、风格要求和系统配置。\n3. 发现冲突时，不要自行裁决；记录“冲突点 + 涉及来源 + 权限关系”。\n4. 不要因为内容很长而只关注最后一段；每个来源都要覆盖。\n5. 提炼与校长职责直接相关的：核心意图、不可违背约束、关键事实、人物/关系、阶段任务、节奏要求、时间约束、因果约束、连续性状态、风格规则、待决策事项。\n6. 输出应高度压缩但信息密度高，保留足以让后续校长做出准确决策的细节。\n7. 明确标记“来源证据”，方便最终校长回溯。\n\n输出格式：\n# 来源理解\n## 核心意图\n## 不可违背约束\n## 已成立事实\n## 结构与节奏\n## 人物与关系\n## 时间与连续性\n## 风格与表达\n## 来源冲突/不确定项\n## 校长需要处理的决策点`;
 async function buildPrincipalContextUnderstanding(blocks, signal){
   const ledger=principalSourceLedger(blocks);
+  const totalChars=ledger.length;
+  // 正常项目不再强制先调用“上下文理解 AI”。来源规模可直接注入最终校长时，直接交给校长，避免无意义的串行等待。
+  // 只有来源确实很大时才启用压缩层，而且各块并行读取，避免 3×180 秒的串行等待。
+  const DIRECT_LIMIT=80000;
+  if(totalChars<=DIRECT_LIMIT) return {ledger,understanding:'',mode:'direct'};
   const chunks=principalContextChunks(ledger,28000);
-  const results=[];
-  for(let i=0;i<chunks.length;i++){
-    const user=`【来源总账第 ${i+1}/${chunks.length} 段】\n${chunks[i]}\n\n请完整理解本段涉及的所有来源，并输出结构化“来源理解”。如果一个来源跨越多个段落，请结合本段出现的上下文，不要臆造缺失部分。`;
-    const res=await callDeepSeek(PRINCIPAL_CONTEXT_SYS,user,{temperature:0.15,topP:0.2,maxTokens:8192,signal,taskKey:'principal'});
-    results.push(`【上下文理解块 ${i+1}/${chunks.length}】\n${unwrapAIResult(res)}`);
-  }
-  return {ledger,understanding:results.join('\n\n')};
+  const tasks=chunks.map((chunk,i)=>{
+    const user=`【来源总账第 ${i+1}/${chunks.length} 段】\n${chunk}\n\n请完整理解本段涉及的所有来源，并输出结构化“来源理解”。如果一个来源跨越多个段落，请结合本段出现的上下文，不要臆造缺失部分。`;
+    return callDeepSeek(PRINCIPAL_CONTEXT_SYS,user,{temperature:0.15,topP:0.2,maxTokens:8192,signal,taskKey:'principal_context'})
+      .then(res=>`【上下文理解块 ${i+1}/${chunks.length}】\n${unwrapAIResult(res)}`);
+  });
+  const results=await Promise.all(tasks);
+  return {ledger,understanding:results.join('\n\n'),mode:'compressed'};
 }
-function principalFinalContext(baseUser, understanding, blocks){
+function principalFinalContext(baseUser, understanding, blocks, contextMode){
   const manifest=(blocks||[]).map((b,i)=>`来源${i+1}：${b.id}｜${b.label}｜权限=${b.authority}｜优先级=${b.priority}｜原文字符数=${String(b.content||'').length}`).join('\n');
-  return `${baseUser}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n【Prompt-Perfect式上下文理解层｜模型已先阅读全部来源】\n以下不是新的事实来源，而是对上方来源总账逐段阅读后的语义理解结果。\n校长必须回到来源总账核对关键事实；理解层不得凌驾于原始来源权限之上。\n\n${understanding}\n\n【来源清单（原文均已在前置理解阶段逐段读取）】\n${manifest}\n\n【最终决策要求】\n- 先综合全部来源，再开始规划；不要只依据某一个来源。\n- 用户明确选择/要求、词典已成立事实、正文已观测事实不得被下游规划擅自改写。\n- 当来源冲突时，按既有权限链处理并在规划中保持边界，不要偷偷“修正”原始事实。\n- 每一项重要规划结论都应能追溯到一个或多个来源。\n- 只输出原校长系统规定的最终 Markdown 契约。`;
+  const ledger=principalSourceLedger(blocks||[]);
+  const hasUnderstanding=!!String(understanding||'').trim();
+  const sourceSection=hasUnderstanding
+    ? `【来源清单（原文已在前置理解阶段逐段读取）】\n${manifest}\n\n【Prompt-Perfect式上下文理解层】\n以下是对来源总账逐段阅读后的语义理解结果；它不得凌驾于原始来源权限之上。\n\n${understanding}`
+    : `【来源总账（直接提供给最终校长）】\n${ledger}\n\n【来源清单】\n${manifest}\n\n【上下文处理模式】直接阅读原始来源；未额外调用前置上下文理解 AI。`;
+  return `${baseUser}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${sourceSection}\n\n【最终决策要求】\n- 先综合全部来源，再开始规划；不要只依据某一个来源。\n- 用户明确选择/要求、词典已成立事实、正文已观测事实不得被下游规划擅自改写。\n- 当来源冲突时，按既有权限链处理并在规划中保持边界，不要偷偷“修正”原始事实。\n- 每一项重要规划结论都应能追溯到一个或多个来源。\n- 只输出原校长系统规定的最终 Markdown 契约。`;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -7209,7 +7245,7 @@ ${JSON.stringify(state.strategicDiversityProfile || currentCanonicalStoryStrateg
   lines.push(`【本章中段设计总要求】
 请在逐章章级导演/授权任务卡中增加“本章中段推进战略卡”。它必须把全书战略多样性转译为章节级中段差异：由章节功能、故事状态、因果链、人物关系、信息运动、冲突运动、节奏与场景决定，而不是随机挑选模式。必须同时考虑相邻章节重复风险。`);  lines.push('【写作风格/配方摘要】\n' + scStyleBrief());
   lines.push('【各组对应范围】\n' + groups.map((g,i)=>`组${i+1}·老师${i+1}（第${g.first}-${g.last}章${g.stage?('·'+g.stage):''}）`).join('\n'));
-  lines.push('【原始来源完整性声明】\n校长上下文理解器将在最终决策前逐段阅读“来源总账”中的全部来源内容；不得以摘要函数、字符截断或单一来源代替完整理解。');
+  lines.push('【原始来源完整性声明】\n最终校长必须综合所有已注入来源；来源规模可直接注入时，直接读取原始来源，不强制经过额外上下文理解 AI。');
   const ban = banListBlockFor('principal');
   if(ban) lines.push(ban);
   return lines.join('\n\n');
@@ -7436,7 +7472,8 @@ async function genPrincipal(btn, opts){
       try{
         const sourceBlocks = principalSourceBlocks(groups);
         const ctxPack = await buildPrincipalContextUnderstanding(sourceBlocks, _abortCtl?.signal);
-        const principalUser = principalFinalContext(buildPrincipalUser(groups), ctxPack.understanding, sourceBlocks);
+        console.info('[Principal] 来源处理模式：', ctxPack.mode, '；来源字符数：', ctxPack.ledger.length);
+        const principalUser = principalFinalContext(buildPrincipalUser(groups), ctxPack.understanding, sourceBlocks, ctxPack.mode);
         const txt = await callAIGuarded('principal', sys, principalUser, {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
         if(!txt || !String(txt||'').trim()){ setScRetry('principal', attempt); scRefreshBadge(btn,'principal'); throw new Error('校长返回空'); }
         const principalViolations = isScopeBanned('principal') ? banTextViolations(txt).filter(x=>x.type==='name') : [];
@@ -8464,20 +8501,37 @@ async function genTeacher(btn, gi){
         if(!txt || !String(txt||'').trim()){ setScRetry(key, attempt); scRefreshBadge(btn,key); throw new Error('老师返回空'); }
         const teacherMachine = parseTeacherMachine(String(txt), g.first, g.last);
         let teacherRaw = String(txt);
-        let _teacherMiddleMissing, _teacherEndingCheck;
-        if(teacherMachine){
-          if(teacherMachine.missing.length) throw new Error('老师'+(gi+1)+'结构化教案缺少核心字段：第'+teacherMachine.missing.join('、')+'章');
+        let _teacherMiddleMissing = [];
+        let _teacherEndingCheck = {missing:[], audit:{risk:'normal', maxConsecutive:0, repeatedFunctions:[]}};
+        if(teacherMachine && !teacherMachine.missing.length){
           const compiled = compileTeacherMachine(teacherMachine, teacherRaw);
-          teacherRaw = teacherRaw + '\n\n' + compiled;
-          _teacherMiddleMissing = [];
-          _teacherEndingCheck = validateTeacherEndingPlans(teacherRaw, g.first, g.last);
-        }else{
-          _teacherMiddleMissing = validateTeacherMiddlePlans(teacherRaw, g.first, g.last);
-          if(_teacherMiddleMissing.length) throw new Error('老师'+(gi+1)+'缺少本章中段施工卡：第'+_teacherMiddleMissing.join('、')+'章');
-          _teacherEndingCheck = validateTeacherEndingPlans(teacherRaw, g.first, g.last);
-          if(_teacherEndingCheck.missing.length) throw new Error('老师'+(gi+1)+'缺少完整章末结尾施工：第'+_teacherEndingCheck.missing.join('、')+'章');
+          if(compiled) teacherRaw = teacherRaw + '\n\n' + compiled;
         }
-        // 结尾完整性只校验一次；多样性审计属于提示信息，不应因“重复风险”单独否决已经满足剧情契约的教案。
+        _teacherMiddleMissing = validateTeacherMiddlePlans(teacherRaw, g.first, g.last);
+        _teacherEndingCheck = validateTeacherEndingPlans(teacherRaw, g.first, g.last);
+        // 这里重新启用“必要结构质检”作为重试条件，但不把所有审计意见都当成失败。
+        // 这样既不会悄悄放松质量要求，也不会把“结尾多样性风险”等诊断项误当成致命错误。
+        const _hardMissing = Array.from(new Set([...(teacherMachine?.missing||[]).filter(n=>Number.isFinite(n)), ..._teacherMiddleMissing, ..._teacherEndingCheck.missing]));
+        if(_hardMissing.length){
+          const _failure = {
+            category:'TEACHER_VALIDATION_ERROR',
+            code: teacherMachine?.missing?.length ? 'MACHINE_CONTRACT_MISSING' : (_teacherMiddleMissing.length ? 'MIDDLE_PLAN_MISSING' : 'ENDING_PLAN_MISSING'),
+            chapters:_hardMissing,
+            details:[
+              teacherMachine?.missing?.length ? `结构式教案第 ${teacherMachine.missing.join('、')} 章未通过机器合同检查` : '',
+              _teacherMiddleMissing.length ? `中段施工卡缺少必要字段：第 ${_teacherMiddleMissing.join('、')} 章` : '',
+              _teacherEndingCheck.missing.length ? `章末施工字段缺少必要内容：第 ${_teacherEndingCheck.missing.join('、')} 章` : ''
+            ].filter(Boolean).join('；'),
+            expected:'每章都应具备可供正文直接消费的中段推进信息与章末施工信息；仅多样性风险不作为失败。',
+            actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字，但必要质检仍有 ${_hardMissing.length} 章未通过`
+          };
+          scSetError(key, Object.assign({}, _failure, {attempt, retrying:attempt < SCHOOL_RETRY_MAX}));
+          scSetRetry(key, attempt);
+          scRefreshBadge(btn,key);
+          refreshSchoolProgressUi();
+          render();
+          throw Object.assign(new Error(_failure.details), {name:'TeacherValidationError', teacherFailure:_failure});
+        }
         const _teacherEndingWarning = _teacherEndingCheck.audit.risk==='high' ? {
           risk:'high', maxConsecutive:_teacherEndingCheck.audit.maxConsecutive,
           repeatedFunctions:_teacherEndingCheck.audit.repeatedFunctions||[]
@@ -8497,6 +8551,7 @@ async function genTeacher(btn, gi){
         // v1.0.362：结构式纯文本词典达人；老师成功的唯一落点必须同时完成“组状态 + AI状态 + UI刷新”。
         // 先写入实际教案，再立即清除该组 stale；随后统一刷新学校管线和全景步骤，避免 AI 已返回而 UI 仍停在“老师”。
         markAIDone(key, false);
+        scSetError(key, null);
         scMark(key, true);
         scState();
         refreshSchoolProgressUi();
@@ -8508,12 +8563,17 @@ async function genTeacher(btn, gi){
         return true;
       }catch(e){
         console.error('[genTeacher] 第'+attempt+'次老师'+(gi+1)+'流程失败：', e);
-        if(e && e.name === 'AbortError'){ setScRetry(key, attempt); toast('已停止备课'); return false; }
-        setScRetry(key, attempt); scRefreshBadge(btn,key);
+        if(e && e.name === 'AbortError'){
+          scSetError(key,{category:'USER_ABORT',code:'ABORTED',attempt,details:'用户主动停止备课',expected:'完成本组老师教案',actual:'已停止'});
+          setScRetry(key, attempt); toast('已停止备课'); return false;
+        }
+        const f = e?.teacherFailure || {category:'TEACHER_GENERATION_ERROR',code:'GENERATION_ERROR',chapters:[],details:String(e?.message||e||'未知错误'),expected:'AI 返回可用教案并通过必要质检',actual:'本次流程未完成'};
+        scSetError(key, Object.assign({}, f, {attempt, retrying:attempt < SCHOOL_RETRY_MAX}));
+        setScRetry(key, attempt); scRefreshBadge(btn,key); refreshSchoolProgressUi();
         if(attempt < SCHOOL_RETRY_MAX) await new Promise(r=>setTimeout(r,1500));
       }
     }
-    toast(`老师${gi+1}备课失败（已自动重试 ${SCHOOL_RETRY_MAX} 次）`);
+    toast(`老师${gi+1}备课失败（已自动重试 ${SCHOOL_RETRY_MAX} 次）；请查看老师步骤下方的错误说明`);
     return false;
   }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!==key);
@@ -8761,6 +8821,7 @@ function bindSchoolSteps(){
         const groups = schoolStageGroups();
         if(!groups.length){ toast('请先填写章节数，才能备课'); return; }
         scSetFailed('teacher', false);
+        scSetError('teacher', null);
         state._schoolRunning = { activeKey:'teacher', stepIndex:3, totalSteps:4, label:'老师' };
         refreshSchoolProgressUi();
         try {
@@ -13843,6 +13904,7 @@ function schoolPipelineProgress(){
     <div class="sc-pipe-steps">
       ${buttonsHtml}
     </div>
+    ${schoolFailureHtml('teacher')}
   </div>`;
 }
 
