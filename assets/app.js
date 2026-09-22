@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.414';
-// Version line: app1.0.414.js — 校长上下文压缩、立即采用与后置质检解耦。
-const APP_FILE_VERSION = 'app1.0.414.js';
+const APP_VERSION = '1.0.415';
+// Version line: app1.0.415.js — 老师上下文去重、Compact Context、可编译采用与重试解耦。
+const APP_FILE_VERSION = 'app1.0.415.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -5527,9 +5527,14 @@ function scTeacherGroupComplete(gi){
   const sc=state.school;
   // 老师是否完成，只看 AI 是否已经成功生成并落地本组完整教案。
   // 章节机器卡是下游使用的数据，不再作为老师完成的门槛。
-  return !!(sc && Array.isArray(sc.teachers) && sc.teachers[gi] &&
-            String(sc.teachers[gi].raw||'').trim() &&
-            !(sc.stale && sc.stale['t'+gi]));
+  const t=sc && Array.isArray(sc.teachers) ? sc.teachers[gi] : null;
+  const g=schoolStageGroups()[gi];
+  if(!t || !g || !String(t.raw||'').trim() || (sc.stale && sc.stale['t'+gi])) return false;
+  const plans=t.plans && typeof t.plans==='object' ? t.plans : {};
+  for(let n=g.first;n<=g.last;n++){
+    if(!plans[n] || Number(plans[n]?.identity?.chapter)!==Number(n)) return false;
+  }
+  return true;
 }
 function scTeacherPipelineComplete(){
   const groups=schoolStageGroups();
@@ -5558,6 +5563,7 @@ function scState(){
   state.school.failed   = state.school.failed   || {};
   state.school.retries  = state.school.retries  || {};
   state.school.errors   = state.school.errors   || {};
+  state.school.noAutoRetry = state.school.noAutoRetry || {};
   state.school.stale    = state.school.stale || {};
   state.school.teacherQc = state.school.teacherQc && typeof state.school.teacherQc === 'object' ? state.school.teacherQc : {};
   state.school.teachers = Array.isArray(state.school.teachers) ? state.school.teachers : [];
@@ -5936,7 +5942,7 @@ function principalSourceLedger(blocks){
   return blocks.map((b,i)=>`【来源${i+1}｜${b.id}｜${b.label}｜权限=${b.authority}｜优先级=${b.priority}】\n${b.content}`).join('\n\n');
 }
 
-/* v1.0.414 · Principal Context Builder
+/* v1.0.415 · Teacher Context Builder
  * 校长只接收“决策所需的最小上下文”，不再把正文全文、全量重复词典、历史/UI资料
  * 原样再次塞进 user prompt。目标是：一次调用完成全书章节战略，同时保留事实锚点。
  */
@@ -8165,11 +8171,36 @@ function previousChapterEndingBrief(chapter, gi){
 
 function buildTeacherAuthorizationPack(g, gi){
   const plans=state.school?.principal?.plans||scState()?.principal?.plans||{};
-  const parts=['【本组章级导演/授权任务｜唯一 PrincipalChapterPlan 输入】'];
+  const compact=(p)=>({
+    chapter:Number(p?.chapter||0),
+    title:String(p?.title||'').trim(),
+    function:String(p?.function||'').trim(),
+    goal:String(p?.goal||'').trim(),
+    coreEvent:String(p?.coreEvent||'').trim(),
+    characterActions:String(p?.characterActions||'').trim(),
+    progressionSkeleton:String(p?.progressionSkeleton||'').trim(),
+    midStrategy:{
+      primaryMode:String(p?.midStrategy?.primaryMode||'').trim(),
+      secondaryMode:String(p?.midStrategy?.secondaryMode||'无').trim()||'无',
+      coreChange:String(p?.midStrategy?.coreChange||'').trim(),
+      driver:String(p?.midStrategy?.driver||'').trim(),
+      difference:String(p?.midStrategy?.difference||'').trim()
+    },
+    ending:{
+      function:String(p?.ending?.function||'').trim(),
+      intensity:Number(p?.ending?.intensity),
+      lastEffectiveEvent:String(p?.ending?.lastEffectiveEvent||'').trim(),
+      form:String(p?.ending?.form||'').trim(),
+      nextTransitionType:String(p?.ending?.nextTransitionType||'').trim(),
+      nextTransitionBasis:String(p?.ending?.nextTransitionBasis||'').trim(),
+      diversityNote:String(p?.ending?.diversityNote||'').trim()
+    }
+  });
+  const parts=['【TeacherCompactContext｜本组校长战略】'];
   for(let n=g.first;n<=g.last;n++){
     const p=plans[n];
     if(!p){ parts.push(`【第${n}章校长战略缺失】\n禁止自行补写校长战略；请先重新生成校长。`); continue; }
-    parts.push(`【第${n}章校长战略】\n${JSON.stringify(p,null,2)}`);
+    parts.push(`【第${n}章】\n${JSON.stringify(compact(p),null,2)}`);
   }
   parts.push(`【老师权限边界】\n- progressionSkeleton 与 midStrategy 是校长战略，只能读取，不得修改。\n- 老师只能生成 openingLink、midConstruction、endingConstruction、sceneConstruction。\n- 未授权事实、核心人物、核心秘密、世界规则不得自行升级。\n- 老师的 requiredStateChange 必须是校长 midStrategy.coreChange 的可验证施工结果。\n- 章末必须遵守校长 ending 战略边界。`);
   return parts.join('\n\n');
@@ -8195,11 +8226,11 @@ function teacherScopedGlossary(g, gi, maxChar){
 }
 
 function buildTeacherUser(g, gi){
-  const pr=state.school?.principal||{}; const lines=[]; const plans=pr.plans||{};
+  const pr=state.school?.principal||{}; const lines=[];
   lines.push(storyStateCanonBlock());
   lines.push(`【校长战略总则】\n${principalRulesExcerpt()}`);
-  lines.push(`【本组校长标准章节计划】\n${JSON.stringify(Object.fromEntries(Object.entries(plans).filter(([n])=>Number(n)>=g.first&&Number(n)<=g.last)),null,2)}`);
   lines.push(`【本组章节标题】\n${scGroupTitles(g).join('\n')}`);
+  // TeacherCompactContext 已包含本组唯一 PrincipalChapterPlan；禁止再次注入完整校长计划。
   lines.push(buildTeacherAuthorizationPack(g,gi));
   const transitions=[]; for(let n=g.first;n<=g.last;n++)transitions.push(previousChapterEndingBrief(n,gi));
   lines.push(`【逐章章头衔接核对】\n${transitions.join('\n\n')}`);
@@ -8296,7 +8327,7 @@ function buildTeacherQcReport(gi,g,raw,teacherMachine,planMap,elapsedMs){
   const sceneCoverageMissing=nums.flatMap(n=>(plans[n]?.coverage?.constructionToScene||[]).flatMap(x=>(x.missingBeats||[]).map(b=>({chapter:n,beat:b}))));
   checks.push({key:'sceneCoverage',label:'施工→场景覆盖',status:sceneCoverageMissing.length?'fail':'pass',detail:sceneCoverageMissing.length?sceneCoverageMissing.map(x=>`第${x.chapter}章场景未覆盖${x.beat}`).join('；'):'中段施工与推进节点均已落到具体场景'});
   checks.push({key:'scene',label:'场景施工',status:sceneMissing.length?'fail':'pass',detail:sceneMissing.length?`第${sceneMissing.join('、')}章没有场景施工卡`:'各章均有场景施工'});
-  checks.push({key:'delivery',label:'老师落地',status:'pass',detail:'AI返回后即完成；质检只报告，不自动重试'});
+  checks.push({key:'delivery',label:'老师落地',status:plans && Object.keys(plans).length===chapters ? 'pass' : 'fail',detail:plans && Object.keys(plans).length===chapters ? '已形成完整可编译 TeacherPlan；质检只报告，不自动重试' : '未形成完整可编译 TeacherPlan；原始返回已保留，不自动重试'});
   const failCount=checks.filter(x=>x.status==='fail').length; const warnCount=checks.filter(x=>x.status==='warn').length;
   return {version:2,gi,ts:Date.now(),elapsedMs:Number(elapsedMs||0),chapters,checks,warnCount,failCount,status:failCount?'review':'pass'};
 }
@@ -8312,7 +8343,7 @@ function teacherQcReportHtml(){
     const lines=[];
     lines.push(`${label} · 第${g.first}-${g.last}章`);
     lines.push(`状态：${statusText}`);
-    lines.push(`说明：已返回即完成 · 不自动重试 · 是否重生成由你决定`);
+    lines.push(`说明：可编译 TeacherPlan 才标记完成 · 质检不阻塞采用 · 不自动重试 · 是否重生成由你决定`);
     lines.push('');
     (q.checks||[]).forEach((c,n)=>{
       const icon=teacherQcStatusIcon(c.status);
@@ -8324,7 +8355,7 @@ function teacherQcReportHtml(){
     rows.push(`<pre class="sc-tqc-text" style="margin:0;padding:10px 0 12px;border-bottom:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;color:var(--text);background:transparent;">${esc(lines.join('\n'))}</pre><button type="button" class="sc-tqc-retry" data-scp-qc-retry="${i}" style="margin:8px 0 12px;">↻ 用户决定重生成</button>`);
   });
   if(!rows.length) return `<pre class="sc-tqc-text" style="margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;color:var(--muted);background:transparent;">老师生成后，这里会立即显示快速质检报告。\n质检只提供信息，不会自动重生成老师。</pre>`;
-  return `<div class="sc-tqc-text-head" style="padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid var(--line);font:600 13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;color:var(--text);">老师快速质检报告\n规则：已返回即完成 · 不自动重试 · 是否重生成由你决定</div>${rows.join('')}`;
+  return `<div class="sc-tqc-text-head" style="padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid var(--line);font:600 13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;color:var(--text);">老师快速质检报告\n规则：可编译 TeacherPlan 才标记完成 · 质检不阻塞采用 · 不自动重试 · 是否重生成由你决定</div>${rows.join('')}`;
 }
 function refreshTeacherQcUi(){ const el=document.querySelector('#scTeacherQcPanel'); if(el) el.innerHTML=teacherQcReportHtml(); }
 
@@ -8339,24 +8370,77 @@ async function genTeacher(btn, gi){
   try{
     const spec=resolveActiveSpec('teacher'),temp=(spec&&spec.teacherTemp!=null)?spec.teacherTemp:0.4;
     const _tp0=performance.now();
-    const txt=await callAIGuarded('teacher',TEACHER_SYS_STRUCTURED,buildTeacherUser(g,gi),{}, {temperature:temp,maxTokens:16384,signal:_abortCtl?.signal});
+    const _tp={gi,startedAt:Date.now()};
+    const _teacherUser=buildTeacherUser(g,gi);
+    _tp.systemChars=String(TEACHER_SYS_STRUCTURED||'').length;
+    _tp.inputChars=String(_teacherUser||'').length;
+    const _aiStart=performance.now();
+    const txt=await callAIGuarded('teacher',TEACHER_SYS_STRUCTURED,_teacherUser,{}, {temperature:temp,maxTokens:16384,signal:_abortCtl?.signal});
+    _tp.aiReturnMs=Math.round(performance.now()-_aiStart);
     if(!txt||!String(txt).trim()) throw new Error('老师返回空');
+    _tp.outputChars=String(txt).length;
+    const _parseStart=performance.now();
     const machine=parseTeacherMachine(String(txt),g.first,g.last);
+    _tp.parseMs=Math.round(performance.now()-_parseStart);
     let plans={};
+    const _compileStart=performance.now();
     if(machine && !machine.missing.length && !machine.invalid.length && !machine.duplicate.length && !machine.unexpected.length){
       for(let n=g.first;n<=g.last;n++){
         const scenes=machine.scenes.filter(x=>Number(String(x.chapter||'').trim())===n);
         plans[n]=compileTeacherChapterPlan(machine.rows[n],scenes,principalPlans[n]);
       }
     }
-    // AI 一旦成功返回，老师步骤即落地；结构问题属于快速质检结果，不触发自动重试。
+    _tp.compileMs=Math.round(performance.now()-_compileStart);
+    // AI返回与结构编译分开：只有形成完整可编译 TeacherPlan 才能进入完成状态；QC始终后置。
+    const _qcStart=performance.now();
     const qc=buildTeacherQcReport(gi,g,String(txt),machine,plans,Math.round(performance.now()-_tp0));
+    _tp.qcMs=Math.round(performance.now()-_qcStart);
     const sc=scState(); delete sc.stale[key];
     sc.teachers[gi]={gi,ts:Date.now(),raw:String(txt),machine:!!machine,machineText:String(txt),plans};
     state.school.teacherQc=state.school.teacherQc||{}; state.school.teacherQc[gi]=qc;
-    if(Object.keys(plans).length) commitTeacherChapterCards(plans,g,gi);
-    persist();
-    markAIDone(key,false); scSetError(key,null,false,false); scMark(key,true,false);
+    _tp.stateWriteMs=0;
+    const structurallyUsable=!!(machine && !machine.missing.length && !machine.invalid.length && !machine.duplicate.length && !machine.unexpected.length && Object.keys(plans).length === (g.last-g.first+1));
+    if(structurallyUsable){
+      commitTeacherChapterCards(plans,g,gi);
+      scSetFailed(key,false);
+      scSetError(key,null,false,false);
+      scState().noAutoRetry = scState().noAutoRetry || {};
+      delete scState().noAutoRetry[key];
+      const _persistStart=performance.now();
+      persist();
+      _tp.persistMs=Math.round(performance.now()-_persistStart);
+      _tp.totalLocalMs=Math.round(performance.now()-_aiStart);
+      _tp.totalMs=Math.round(performance.now()-_tp0);
+      _tp.status='adopted';
+      teacherPerfRecord(gi,_tp);
+      markAIDone(key,false);
+      scMark(key,true,false);
+    }else{
+      // 原始返回与QC保留，但结构无法编译为完整 TeacherPlan 时不得标记老师步骤完成。
+      // 结构问题属于后置诊断，不触发无意义的16次自动重试。
+      const badChapters=[...(machine?.missing||[]),...(machine?.invalid||[]).map(x=>x.chapter),...(machine?.duplicate||[]),...(machine?.unexpected||[])];
+      const sc=scState();
+      sc.failed=sc.failed||{};
+      sc.failed[key]=true;
+      delete sc.finished[key];
+      sc.noAutoRetry=sc.noAutoRetry||{};
+      sc.noAutoRetry[key]=true;
+      sc.errors=sc.errors||{};
+      sc.errors[key]={ts:Date.now(),category:'TEACHER_STRUCTURE_INVALID',code:'MACHINE_CONTRACT_INVALID',chapters:[...new Set(badChapters)],details:qc.checks.filter(x=>x.status==='fail').map(x=>x.detail).join('；')||'未形成完整可编译 TeacherPlan',expected:'每章均有合法TEACHER_CHAPTER+SCENE并可编译为TeacherPlan',actual:'结构检查未通过；原始返回与QC已保留'};
+      const _persistStart=performance.now();
+      persist();
+      _tp.persistMs=Math.round(performance.now()-_persistStart);
+      _tp.totalLocalMs=Math.round(performance.now()-_aiStart);
+      _tp.totalMs=Math.round(performance.now()-_tp0);
+      _tp.status='validation_error';
+      teacherPerfRecord(gi,_tp);
+      markAIDone(key,false);
+      scRefreshBadge(btn,key);
+      refreshSchoolProgressUi();
+      refreshTeacherQcUi();
+      toast(`老师${gi+1}已返回，但结构未形成完整教案；已保留结果，未标记完成，也不会自动重试`);
+      return false;
+    }
     refreshSchoolProgressUi(); refreshTeacherQcUi();
     const review=qc.status==='review';
     toast(`老师${gi+1}备课完成${review?'，快速质检发现需要人工复核的问题':''}；是否重生成由你决定`); playDoneSound('single');
@@ -8374,6 +8458,12 @@ async function nailRetry(key, label, run, btn){
   for(let attempt=1; attempt<=SCHOOL_RETRY_MAX; attempt++){
     let ok = false; try{ ok = await run(); }catch(e){ ok = false; }
     if(ok){ scMark(key, true); scRefreshBadge(btn, key); return true; }
+    if(scState().noAutoRetry?.[key]){
+      delete scState().noAutoRetry[key];
+      persist();
+      scRefreshBadge(btn,key);
+      return false;
+    }
     setScRetry(key, attempt); scRefreshBadge(btn, key);
     if(attempt < SCHOOL_RETRY_MAX) await new Promise(r=>setTimeout(r,1200));
   }
