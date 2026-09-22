@@ -1034,7 +1034,7 @@ const TM_KEYS = ['idea',
   'chapter',
   'strip', 'subplot', 'glossary', 'rolling',
   'contentAdvice', 'assets', 'recipe',
-  'titleAdvice','chapterAudit','chapterRepair','chapterState','principalContext','timeAnchor','recipeAnalysis'];
+  'titleAdvice','chapterAudit','chapterRepair','chapterState','timeAnchor','recipeAnalysis'];
 
 function glmModels(){ return [
   {name:'glm-4.5-air', label:'GLM-4.5-Air（智谱 · 高性价比，现用）', kind:'pro'},
@@ -1107,7 +1107,7 @@ function resolveActiveSpec(taskKey){
   let group = cfg.groups.find(g=>g.id===act.groupId) || cfg.groups[0] || {};
   let key = (group.keys||[]).find(k=>k.id===act.keyId) || (group.keys||[])[0] || {};
   let model = (group.models||[]).find(m=>m.name===act.model) || (group.models||[])[0] || {};
-  const _taskModelAlias = { ideaOptimization:'idea', ideaPolishStage2:'idea', dictHarvest:'dictEnrich', principal_context:'principalContext' };
+  const _taskModelAlias = { ideaOptimization:'idea', ideaPolishStage2:'idea', dictHarvest:'dictEnrich' };
   const _tm = taskKey ? ((cfg.taskModels||{})[taskKey] || (cfg.taskModels||{})[_taskModelAlias[taskKey]||'']) : null;
   let _overridden = false;
   if(_tm){
@@ -1145,7 +1145,6 @@ function resolveActiveSpec(taskKey){
     chapterAuditTemp:(cfg.chapterAuditTemp==null ? 0.05 : cfg.chapterAuditTemp),
     chapterRepairTemp:(cfg.chapterRepairTemp==null ? 0.20 : cfg.chapterRepairTemp),
     chapterStateTemp:(cfg.chapterStateTemp==null ? 0.10 : cfg.chapterStateTemp),
-    principalContextTemp:(cfg.principalContextTemp==null ? 0.15 : cfg.principalContextTemp),
     timeAnchorTemp:(cfg.timeAnchorTemp==null ? 0.20 : cfg.timeAnchorTemp),
     recipeAnalysisTemp:(cfg.recipeAnalysisTemp==null ? 0.20 : cfg.recipeAnalysisTemp)
   };
@@ -1592,7 +1591,7 @@ function openAiLogPanel(){
       <div class="ailog-head">
         <span class="ailog-time">${fmtTs(r.ts)}</span>
         <span class="ailog-task">${esc(task||'（无任务名）')}</span>
-        <span class="ailog-meta">${r.temp!=null?('🌡 '+r.temp):''} · ${r.ms!=null?(r.ms+'ms'):''}${r.finishReason?(' · 结束:'+esc(String(r.finishReason))):''} · <b class="${r.ok?'ok':'err'}">${r.ok?'✓':'✗'}</b>${r.tmo?` · 🎯${esc(String(r.tm||''))}（分任务覆盖）`:''}</span>
+        <span class="ailog-meta">${r.temp!=null?('🌡 '+r.temp):''} · ${r.ms!=null?(r.ms+'ms'):''}${r.finishReason?(' · 结束:'+esc(String(r.finishReason))):''} · <b class="${r.ok?'ok':'err'}">${r.ok?'✓':'✗'}</b>${r.tmo?` · 🎯${esc(String(r.tm||''))}（分任务覆盖）`:''}${r.runId?` · 🔗${esc(String(r.runId))}${r.outerAttempt?` · 外层第${r.outerAttempt}次`:''}`:''}</span>
         <button type="button" class="btn small ghost" data-ailog-toggle="${ri}">展开</button>
       </div>
       <div class="ailog-body hidden" data-ailog-body="${ri}">
@@ -1605,11 +1604,11 @@ function openAiLogPanel(){
         <p class="muted" style="font-size:11px">日志只展示前500字正文；长度字段记录实际请求/响应规模。若结束原因=length，表示AI输出触及上限。旧日志没有结束原因时不代表没有返回。</p>
       </div>
     </div>`;
-  }).join('') : '<p class="muted">暂无请求记录。每次调用 AI 都会记录（最近 50 0条，仅存本机）。</p>';
+  }).join('') : '<p class="muted">暂无请求记录。每次实际 AI 调用都会记录（最近 50 条，仅存本机）。</p>';
   const ov = document.createElement('div'); ov.id='ailogPanel'; ov.className='gs-overlay';
   ov.innerHTML = `
     <div class="gs-modal">
-      <div class="gs-modal-head"><b>🗒️ AI 请求日志（${aiLog.length}/500）</b>
+      <div class="gs-modal-head"><b>🗒️ AI 请求日志（${aiLog.length}/50）</b>
         <span style="display:flex;gap:6px">
           <button class="gs-x" data-ailog-close>✕</button>
         </span></div>
@@ -1640,7 +1639,7 @@ function _f2(x){ const n = Number(x); if(!isFinite(n)) return x; return Math.rou
 // 推荐值仅用于设置界面展示，不参与运行时计算。
 const TASK_TEMP_MAP = {
   idea:'ideaTemp', ideaOptimization:'ideaTemp', ideaPolishStage2:'ideaTemp',
-  principal:'principalTemp', principal_context:'principalContextTemp',
+  principal:'principalTemp',
   teacher:'teacherTemp',
   dictmaster:'dictmasterTemp',
   dictEnrich:'dictEnrichTemp', dictHarvest:'dictEnrichTemp',
@@ -1656,7 +1655,7 @@ function resolveTaskTemperature(taskKey, explicitTemperature=null){
   if(explicitTemperature != null && isFinite(Number(explicitTemperature))) return _f2(explicitTemperature);
   return _f2(s.temperature);
 }
-async function callDeepSeek(system, user, {temperature=null, topP=null, signal=null, maxTokens=null, onStream=null, retry=2, taskKey=null}={}){
+async function callDeepSeek(system, user, {temperature=null, topP=null, signal=null, maxTokens=null, onStream=null, retry=2, taskKey=null, runId=null, attempt=null}={}){
   const _t0 = Date.now();
   function isReasonModel(name){
     const n = String(name||'').toLowerCase();
@@ -1666,14 +1665,15 @@ async function callDeepSeek(system, user, {temperature=null, topP=null, signal=n
   }
   const _rec = {
     ts: _t0,
-    task: String(system||'').replace(/\s+/g,' ').slice(0,24),
+    task: taskKey || String(system||'').replace(/\s+/g,' ').slice(0,24),
     temp: (temperature==null ? null : temperature),
     sys: String(system||'').slice(0,500),
     user: String(user||'').slice(0,500),
     sysLen: String(system||'').length,
     userLen: String(user||'').length,
     respLen: 0,
-    resp: '', ms: null, ok: false, err: '', finishReason:'', usage:null, tm: taskKey || '', tmo: false
+    resp: '', ms: null, ok: false, err: '', finishReason:'', usage:null, tm: taskKey || '', tmo: false,
+    runId: runId || null, outerAttempt: Number.isFinite(Number(attempt)) ? Number(attempt) : null
   };
   let lastErr;
   for(let attempt=0; attempt<=retry; attempt++){
@@ -5511,7 +5511,8 @@ function chapterPlanReadableText(plan){
 }
 
 
-const SCHOOL_RETRY_MAX = 16; // 仅用于 AI 请求本身失败/空返回等异常；老师返回后的质检永不自动重试
+const SCHOOL_RETRY_MAX = 16; // 其他学校步骤保留原有失败重试上限
+const PRINCIPAL_AUTO_RETRY_MAX = 2; // 校长网络/API异常最多自动重试2次；结构校验失败直接交给用户/QC，不重跑
 // 老师阶段完成以老师成功生成教案为准；返回后的快速质检只做提示，正文需要章节卡时再从老师 raw 建立。
 // 旧逻辑把 canon.teacherAt 版本快照当成唯一闸门；只要快照与版本计数出现一次不同步，
 // 即使“读取老师教案”已经能正常读出全部章节，也会被一键开学判定为未完成并停在第4步。
@@ -5663,18 +5664,21 @@ function getSchoolStepStatus(key){
 }
 function scBadge(key){
   const n = scRetry(key);
-  return n > 0 ? `<b class="sc-retry-badge" title="本步已自动重试 ${n}/${SCHOOL_RETRY_MAX} 次（失败重试，成功清零）">↻${n}</b>` : '';
+  const max = key === 'principal' ? PRINCIPAL_AUTO_RETRY_MAX : SCHOOL_RETRY_MAX;
+  return n > 0 ? `<b class="sc-retry-badge" title="本步已自动重试 ${n}/${max} 次（失败重试，成功清零）">↻${n}</b>` : '';
 }
 function schoolFailureHtml(key){
   const e=scError(key); if(!e) return '';
-  const title=e.attempt ? `第 ${e.attempt}/${SCHOOL_RETRY_MAX} 次失败` : '最近一次失败';
+  const max = key === 'principal' ? PRINCIPAL_AUTO_RETRY_MAX : SCHOOL_RETRY_MAX;
+  const title=e.attempt ? `第 ${e.attempt}/${max} 次失败` : '最近一次失败';
   return `<div class="sc-error-box"><b>⚠️ ${esc(title)}</b><span>${esc(scTeacherFailureMessage(e))}</span></div>`;
 }
 function scRefreshBadge(el, key){
   if(el && el.querySelectorAll){ el.querySelectorAll('.sc-retry-badge').forEach(x => x.remove()); }
   const n = scRetry(key);
   if(el){
-    if(n > 0){ el.insertAdjacentHTML('beforeend', `<b class="sc-retry-badge" title="本步已自动重试 ${n}/${SCHOOL_RETRY_MAX} 次">↻${n}</b>`); el.classList.add('sc-failed'); }
+    const max = key === 'principal' ? PRINCIPAL_AUTO_RETRY_MAX : SCHOOL_RETRY_MAX;
+    if(n > 0){ el.insertAdjacentHTML('beforeend', `<b class="sc-retry-badge" title="本步已自动重试 ${n}/${max} 次">↻${n}</b>`); el.classList.add('sc-failed'); }
     else if(!scFailed(key)) el.classList.remove('sc-failed');
   }
 }
@@ -5935,6 +5939,8 @@ function principalSourceBlocks(groups){
   _ppAddSource(out,'chapters_written','已写正文（用于连续性与状态理解）',
     (state.chapters||[]).map((c,i)=>({chapter:i+1,title:c&&c.title||'',content:c&&c.content||'',confirmed:!!(c&&c.confirmed)})),
     'high','observed_state');
+  const _openingBrief = [openingStrategyBrief(), openingStrategyExecutionCard(0)].filter(Boolean).join('\n\n');
+  _ppAddSource(out,'opening_strategy','开篇策略与执行边界',_openingBrief,'high','planning');
   _ppAddSource(out,'school_groups','校长即将管理的老师分组',groups,'high','planning');
   return out;
 }
@@ -5950,7 +5956,7 @@ const PRINCIPAL_SOURCE_CAPS = Object.freeze({
   original_idea:2500, nav_beacon:1200, outline_core:3000,
   canonical_story_strategy:3000, strategic_diversity:1000, chapter_plans:3000,
   global_timeline:1800, microbeat:900, writing_style:1800, glossary:6000,
-  story_state:2200, chapters_written:2000, school_groups:1000
+  story_state:2200, chapters_written:2000, opening_strategy:1800, school_groups:1000
 });
 function _principalCompactString(text, cap){
   const s=String(text||'').trim(); if(!s || s.length<=cap) return s;
@@ -5999,37 +6005,7 @@ function principalCompactSourceBlocks(groups){
   console.info('[Principal] 最小决策上下文：',total.toLocaleString(),'字符；来源数：',out.length);
   return out;
 }
-function principalContextChunks(text, maxChars){
-  const cap=maxChars||28000, s=String(text||'');
-  if(!s) return [];
-  const chunks=[]; let start=0;
-  while(start<s.length){
-    let end=Math.min(s.length,start+cap);
-    if(end<s.length){
-      const cut=Math.max(s.lastIndexOf('\n\n',end),s.lastIndexOf('\n',end));
-      if(cut>start+cap*0.65) end=cut;
-    }
-    chunks.push(s.slice(start,end)); start=end;
-  }
-  return chunks;
-}
-const PRINCIPAL_CONTEXT_SYS = `你是“校长AI”的上下文理解器，不负责直接规划全书。\n你的任务是像专业 Prompt Engineering 工具一样，把注入的来源内容全部读懂，再形成可供校长决策的“语义理解层”。\n\n硬规则：\n1. 不得凭空增加来源中没有的事实。\n2. 必须区分用户选择、世界事实/词典、既有规划、正文已观测事实、风格要求和系统配置。\n3. 发现冲突时，不要自行裁决；记录“冲突点 + 涉及来源 + 权限关系”。\n4. 不要因为内容很长而只关注最后一段；每个来源都要覆盖。\n5. 提炼与校长职责直接相关的：核心意图、不可违背约束、关键事实、人物/关系、阶段任务、节奏要求、时间约束、因果约束、连续性状态、风格规则、待决策事项。\n6. 输出应高度压缩但信息密度高，保留足以让后续校长做出准确决策的细节。\n7. 明确标记“来源证据”，方便最终校长回溯。\n\n输出格式：\n# 来源理解\n## 核心意图\n## 不可违背约束\n## 已成立事实\n## 结构与节奏\n## 人物与关系\n## 时间与连续性\n## 风格与表达\n## 来源冲突/不确定项\n## 校长需要处理的决策点`;
-async function buildPrincipalContextUnderstanding(blocks, signal){
-  const ledger=principalSourceLedger(blocks);
-  const totalChars=ledger.length;
-  // 正常项目不再强制先调用“上下文理解 AI”。来源规模可直接注入最终校长时，直接交给校长，避免无意义的串行等待。
-  // 只有来源确实很大时才启用压缩层，而且各块并行读取，避免 3×180 秒的串行等待。
-  const DIRECT_LIMIT=80000;
-  if(totalChars<=DIRECT_LIMIT) return {ledger,understanding:'',mode:'direct'};
-  const chunks=principalContextChunks(ledger,28000);
-  const tasks=chunks.map((chunk,i)=>{
-    const user=`【来源总账第 ${i+1}/${chunks.length} 段】\n${chunk}\n\n请完整理解本段涉及的所有来源，并输出结构化“来源理解”。如果一个来源跨越多个段落，请结合本段出现的上下文，不要臆造缺失部分。`;
-    return callDeepSeek(PRINCIPAL_CONTEXT_SYS,user,{temperature:resolveTaskTemperature('principal_context'),topP:0.2,maxTokens:8192,signal,taskKey:'principal_context'})
-      .then(res=>`【上下文理解块 ${i+1}/${chunks.length}】\n${unwrapAIResult(res)}`);
-  });
-  const results=await Promise.all(tasks);
-  return {ledger,understanding:results.join('\n\n'),mode:'compressed'};
-}
+// 旧版 principal_context 多请求理解层已移除：当前校长链路固定采用一次性最小决策上下文直接调用。
 function principalFinalContext(baseUser, understanding, blocks, contextMode){
   const manifest=(blocks||[]).map((b,i)=>`来源${i+1}：${b.id}｜${b.label}｜权限=${b.authority}｜优先级=${b.priority}｜原文字符数=${String(b.content||'').length}`).join('\n');
   const ledger=principalSourceLedger(blocks||[]);
@@ -6954,25 +6930,12 @@ const PRINCIPAL_FOLDED_SYS = `【已废弃】不得启用校长兼任老师模�
 
 
 function buildPrincipalUser(groups){
-  const o = state.outline || {};
   const lines = [];
-  lines.push(`【长篇小说】${o.title||'（未定书名）'}`);
-  lines.push(`【全校章节数】${(o.chapters||[]).length || chapterCountVal() || '未知'} 章`);
-  lines.push(storyStateCanonBlock());
-  const _opening = openingStrategyBrief(); if(_opening) lines.push(_opening);
-  const _openingTask = openingStrategyExecutionCard(0); if(_openingTask) lines.push(_openingTask);
-  const bc = currentBeatCfg ? currentBeatCfg() : null;
-  if(bc && bc.label){
-    const beatDetail = (bc.types||[]).map((t, idx) => `  ${idx+1}. 【${t.label}】(type=${t.key})：${t.note || ''} ${t.aiDirective ? `[执行指令: ${t.aiDirective}]` : ''}`).join('\n');
-    lines.push(`【全书微拍总纲与节奏体系】\n微拍型号：${bc.label} (${bc.emoji || ''})\n节拍说明：${bc.desc || ''}\n逐拍节奏结构定义：\n${beatDetail}`);
-  }
-  lines.push(`【全书战略多样性边界】
-${JSON.stringify(state.strategicDiversityProfile || currentCanonicalStoryStrategy()?.diversityProfile || {}, null, 2)}
-执行要求：固定核心不可被多样性破坏；变量轴必须在合理章节中产生有意义差异，不得随机化。`);
+  // 运行时资料统一由 principalSourceBlocks → principalCompactSourceBlocks → principalFinalContext 注入。
+  // 本函数只保留任务协议，不再重复注入标题、微拍、多样性、风格、分组等来源资料。
   lines.push(`【本章推进结构总要求】
 每章必须通过唯一[PRINCIPAL_CHAPTER]结构式块给出“本章推进骨架”与“本章中段推进战略”。推进骨架描述全章从章头到章末的关键状态/事件节点及因果连接；中段战略只定义中段为何这样推进、必须完成什么状态变化。二者不得互相矛盾。
-不得输出旧版Markdown章级导演/授权任务卡，不得重复输出第二套章节计划。`);  lines.push('【写作风格/配方摘要】\n' + scStyleBrief());
-  lines.push('【各组对应范围】\n' + groups.map((g,i)=>`组${i+1}·老师${i+1}（第${g.first}-${g.last}章${g.stage?('·'+g.stage):''}）`).join('\n'));
+不得输出旧版Markdown章级导演/授权任务卡，不得重复输出第二套章节计划。`);
   lines.push('【校长输入边界】\n本次调用必须一次完成全部章节战略。你只处理已注入的最小决策上下文；不要要求正文全文、老师施工细节或历史版本。缺失的信息只能写成待确认，不得臆造。');
   const ban = banListBlockFor('principal');
   if(ban) lines.push(ban);
@@ -7299,7 +7262,7 @@ function principalPerfRecord(metrics){
     const sc=scState();
     sc.principalPerf={ts:Date.now(), ...metrics};
     for(let i=aiLog.length-1;i>=0;i--){
-      if(aiLog[i] && aiLog[i].task==='principal'){
+      if(aiLog[i] && aiLog[i].task==='principal' && (!metrics.runId || aiLog[i].runId===metrics.runId)){
         aiLog[i].principalStages={...metrics};
         try{ localStorage.setItem(KEY_AILOG, JSON.stringify(aiLog)); }catch(e){}
         break;
@@ -7307,26 +7270,30 @@ function principalPerfRecord(metrics){
     }
   }catch(e){ console.debug('[principalPerf] 记录失败',e); }
 }
+let _principalRun = null;
 async function genPrincipal(btn, opts){
+  if(_principalRun){ toast('校长统筹已经在运行中，请勿重复点击'); return false; }
   if(!isLong()){ toast('仅长篇小说模式支持校长统筹'); return false; }
   const groups = schoolStageGroups(); if(!groups.length){ toast('请先填写章节数，才能分组'); return false; }
   if(!scDone('dictEnrich')){ toast('校长必须接收完整词典后再统筹，请先完成“词典充实”'); return false; }
   invalidateSchoolDownstream('principal');
   scState();
   const sys = PRINCIPAL_SYS_STRUCTURED;
+  const runId = 'principal-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7);
   let lastPrincipalError = null;
+  _principalRun = {runId, startedAt:Date.now(), button:btn||null};
   markAIRunning('principal'); if(btn) busy(btn, true, '校长统筹中…'); if(btn && btn.parentNode) showStopBtn(btn.parentNode);
   try{
     const spec = resolveActiveSpec('principal');
     const temp = (spec && spec.principalTemp != null) ? spec.principalTemp : 0.4;
-    for(let attempt=1; attempt<=SCHOOL_RETRY_MAX; attempt++){
+    for(let attempt=1; attempt<=PRINCIPAL_AUTO_RETRY_MAX; attempt++){
       const _tp0 = performance.now();
-      const _tp = {attempt};
+      const _tp = {attempt, runId};
       try{
         const sourceBlocks = principalCompactSourceBlocks(groups);
         const principalUser = principalFinalContext(buildPrincipalUser(groups), '', sourceBlocks, 'compact-direct');
         _tp.inputChars=String(principalUser||'').length; _tp.systemChars=String(sys||'').length;
-        const txt = await callAIGuarded('principal', sys, principalUser, {}, { temperature:temp, maxTokens:8192, signal:_abortCtl?.signal });
+        const txt = await callAIGuarded('principal', sys, principalUser, {}, { temperature:temp, maxTokens:8192, signal:_abortCtl?.signal, retry:2, taskKey:'principal', runId, attempt });
         _tp.aiReturnMs = Math.round(performance.now()-_tp0);
         if(!txt || !String(txt||'').trim()){ setScRetry('principal', attempt); scRefreshBadge(btn,'principal'); throw new Error('校长返回空'); }
         const principalViolations = isScopeBanned('principal') ? banEntityTextViolations(txt, 'principal').filter(x=>x.type==='name') : [];
@@ -7440,15 +7407,16 @@ async function genPrincipal(btn, opts){
           return false;
         }
         setScRetry('principal', attempt); scRefreshBadge(btn,'principal');
-        if(attempt < SCHOOL_RETRY_MAX) await new Promise(r=>setTimeout(r,1500));
+        if(attempt < PRINCIPAL_AUTO_RETRY_MAX) await new Promise(r=>setTimeout(r,1500));
       }
     }
     const reason = lastPrincipalError && String(lastPrincipalError.message || '').trim();
-    toast(reason ? `校长统筹失败：${reason}（已自动重试 ${SCHOOL_RETRY_MAX} 次）` : `校长统筹失败（已自动重试 ${SCHOOL_RETRY_MAX} 次）`);
+    toast(reason ? `校长统筹失败：${reason}（已自动重试 ${PRINCIPAL_AUTO_RETRY_MAX} 次）` : `校长统筹失败（已自动重试 ${PRINCIPAL_AUTO_RETRY_MAX} 次）`);
     return false;
   }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='principal');
     hideStopBtn(); if(btn) busy(btn,false); scRefreshBadge(btn,'principal');
+    _principalRun = null;
   }
 }
 
@@ -20847,7 +20815,7 @@ function saveTemps(){
   const rd = (id, def)=>{ const v=parseFloat($(id) && $(id).value); return isNaN(v)?def:v; };
   editCfg.temperature = rd('#cfgTemp', 0.6);
   const live = getCfg();
-  const TM_FIELDS = ['ideaTemp','dictmasterTemp','dictEnrichTemp','principalTemp','teacherTemp','chapterTemp','aiRecipeTemp','stripTemp','subplotTemp','qcTemp','rollingTemp','contentAdviseTemp','assetsTemp','titleTemp','chapterAuditTemp','chapterRepairTemp','chapterStateTemp','principalContextTemp','timeAnchorTemp','recipeAnalysisTemp'];
+  const TM_FIELDS = ['ideaTemp','dictmasterTemp','dictEnrichTemp','principalTemp','teacherTemp','chapterTemp','aiRecipeTemp','stripTemp','subplotTemp','qcTemp','rollingTemp','contentAdviseTemp','assetsTemp','titleTemp','chapterAuditTemp','chapterRepairTemp','chapterStateTemp','timeAnchorTemp','recipeAnalysisTemp'];
   TM_FIELDS.forEach(f=>{ if(live && typeof live[f]==='number') editCfg[f]=live[f]; });
 }
 
@@ -20896,7 +20864,6 @@ const TM_GROUPS = [
     ['chapterAudit','正文审计','正文事实、逻辑与质量账本审计'],
     ['chapterRepair','正文修复','根据审计结果进行局部修复'],
     ['chapterState','正文状态结算','提取章末事实状态'],
-    ['principalContext','校长上下文整理','校长流程内部上下文整理'],
     ['timeAnchor','时间锚点','从正文抽取时间状态'],
     ['recipeAnalysis','配方输入理解','写作配方的前置需求分析']
   ]}
@@ -20909,7 +20876,7 @@ const TM_TEMP = {
   strip:['stripTemp',0.80], subplot:['subplotTemp',0.25], glossary:['qcTemp',0.20], rolling:['rollingTemp',0.30],
   contentAdvice:['contentAdviseTemp',0.60], assets:['assetsTemp',0.70], titleAdvice:['titleTemp',0.50],
   chapterAudit:['chapterAuditTemp',0.05], chapterRepair:['chapterRepairTemp',0.20], chapterState:['chapterStateTemp',0.10],
-  principalContext:['principalContextTemp',0.15], timeAnchor:['timeAnchorTemp',0.20], recipeAnalysis:['recipeAnalysisTemp',0.20]
+  timeAnchor:['timeAnchorTemp',0.20], recipeAnalysis:['recipeAnalysisTemp',0.20]
 };
 let editTM = null;          // 面板暂存：保存前绝不落盘（对齐设置弹窗 editCfg 模式）
 let editTemps = {};
