@@ -6164,7 +6164,7 @@ const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（全
 
 L0 · 用户确定的作品事实、世界观、作品定位、写作风格与明确要求
 L1 · 全量万物词典中已经确认的世界事实
-L2 · 校长全书规划 + 本章章级导演/授权任务卡
+L2 · 校长全书规划 + 本章结构式章节战略
 L3 · 老师在授权边界内形成的本章教案
 L4 · 正文AI文学表达
 
@@ -6201,7 +6201,7 @@ L0 是最高优先级。
 11. 第一章开篇任务卡
 12. 各组组级框架
 13. 全书章节标题
-14. 每章章级导演/授权任务卡
+14. 每章结构式章节战略
 15. 全书级风险审计
 
 你不得负责：
@@ -6219,13 +6219,13 @@ L0 是最高优先级。
 
 校长的输出必须停留在：
 
-「战略约束 + 章节功能 + 章级授权任务卡 + 组级结构 + 必要接口」
+「战略约束 + 章节功能 + 结构式章节战略 + 组级结构 + 必要接口」
 
 而不是：
 
 「逐章施工图」。
 
-章级任务卡必须规定“必须实现什么、允许调用什么、哪些信息开放、哪些事情禁止发生”，但不得规定老师逐拍如何施工。
+结构式章节战略必须规定“必须实现什么、允许调用什么、哪些信息开放、哪些事情禁止发生”，但不得规定老师逐拍如何施工。
 
 ━━━━━━━━━━━━━━━━━━
 【三、校长与老师的正确分工】
@@ -6380,7 +6380,7 @@ L0 是最高优先级。
 ━━━━━━━━━━━━━━━━━━
 【六B、本章结尾多样性战略与事前审计】
 ━━━━━━━━━━━━━━━━━━
-结尾不是最后一句怎么写，而是本章终止状态如何自然落地。校长必须在全部章级任务卡中规划结尾功能、强度、最后有效事件、具体收尾方式、表现形式、下一章承接方式与承接依据，并在本次输出内部检查相邻章节是否机械重复。
+结尾不是最后一句怎么写，而是本章终止状态如何自然落地。校长必须在全部结构式章节战略中规划结尾功能、强度、最后有效事件、具体收尾方式、表现形式、下一章承接方式与承接依据，并在本次输出内部检查相邻章节是否机械重复。
 1. 结尾多样性服从章节功能、终止状态、因果与真实承接依据，不得随机换类型。
 2. 同一结尾功能可以重复，但连续重复必须有明确剧情理由；不得把正常完成式、悬念式或期待式当默认模板。
 3. 不得为了多样性新增未经授权人物、秘密、反转、爆炸、危机或未来承诺。
@@ -6388,12 +6388,12 @@ L0 是最高优先级。
 5. 结尾重复风险必须在校长输出时提前识别，而不是只依赖正文事后审计。
 
 ━━━━━━━━━━━━━━━━━━
-【七、章级导演/授权任务卡】
+【七、结构式章节战略】
 ━━━━━━━━━━━━━━━━━━
 
-每一章都必须先生成一张“章级导演/授权任务卡”，再交给老师施工。
+每一章都必须生成一个唯一的 `[PRINCIPAL_CHAPTER]` 结构式章节战略块，再交给老师施工。不得另行输出任何旧版 Markdown 章节卡。
 
-任务卡不是教案，不写完整事件列表、不写逐拍动作、不写对白。
+结构式章节战略不是教案，不写完整事件列表、不写逐拍动作、不写对白。
 任务卡必须回答：
 
 - 本章战略目标：章末全书状态必须发生什么变化；
@@ -6418,8 +6418,8 @@ L0 是最高优先级。
 - 本章中段推进战略卡：主推进方式、次推进方式、核心变化、驱动力、信息运动、人物运动、冲突运动、节奏组织、场景运动、重复风险、禁止的伪多样化；
 - 待确认项：任何需要新增核心人物/关键情报/新世界事实的需求，只能作为待确认项提出，不得直接成立。
 
-【章级授权硬规则】
-1. 任务卡中的“允许人物/地点/道具/线索”以及六类“允许世界资源”字段共同构成本章核心资源白名单；名单外的组织/机构/物品/术语/历史/生活设定若要承担关键剧情功能，必须先进入待确认项。
+【结构式章节战略硬规则】
+1. 结构式章节战略中的“允许人物/地点/道具/线索”以及六类“允许世界资源”字段共同构成本章核心资源白名单；名单外的组织/机构/物品/术语/历史/生活设定若要承担关键剧情功能，必须先进入待确认项。
 2. 普通路人、老人、摊贩、店小二等只能作为一次性环境人物存在；不得凭空获得核心情报，不得改变主线。
 3. 任何人物掌握核心人物住址、秘密、关系、身份、主线线索等信息，必须有可追溯的信息来源链。
 4. 校长不得为了让任务卡完整而虚构词典不存在的核心人物或关键事实；无法授权的内容写入“待确认项”。
@@ -6430,7 +6430,7 @@ L0 是最高优先级。
 ━━━━━━━━━━━━━━━━━━
 开头与结尾之外，中段必须有独立的“推进方式设计”。它不是固定模板，也不是随机换花样。
 
-校长必须为每一章在“章级导演/授权任务卡”中额外输出【本章中段推进战略卡】，至少包含：
+校长必须为每一章在 `[PRINCIPAL_CHAPTER]` 结构式章节战略块中输出中段战略字段，至少包含：
 - 中段主推进方式：本章中间部分主要靠什么向前走（如调查深入、行动受阻、信息揭示、关系博弈、失败—调整、因果累积、多线交替、环境/时间推进等）；不得固定轮换，也不得随机抽签。
 - 中段次推进方式：如确有必要，指定一个辅助方式；没有必要可以写“无”。
 - 中段核心变化：中段结束时，相比中段开始，人物/信息/关系/目标/冲突/环境至少哪一项发生了可验证变化。
@@ -6976,11 +6976,11 @@ ${chapterEndingContractText()}
 【第一章开篇与全书战略多样性的关系】
 第一章开篇不是孤立选项。必须结合固定核心、战略变量轴、第一章战略目标与起始状态判断为什么从这里进入。用户若明确选择具体开篇策略，必须执行；若选择“不选择开篇策略”，不得擅自替用户选择预设策略，但必须说明自然开笔应突出哪个已经成立的核心冲突、人物处境或信息缺口，以及它为何服务全书战略。不得为了多样性制造未经授权的异常、秘密或反转。
 
-③ 各章章级导演/授权任务卡
+③ 各章 `[PRINCIPAL_CHAPTER]` 结构式章节战略块
 
 必须覆盖全部章节。每章使用独立小节：
 
-## 第X章章级导演/授权任务卡
+## 第X章结构式章节战略（仅作字段说明，不得照此输出）
 - 战略目标：……
 - 起始状态：……
 - 终止状态：……
@@ -7046,159 +7046,57 @@ ${chapterEndingContractText()}
 第N章《……》
 
 ━━━━━━━━━━━━━━━━━━
-【二十一、最终输出契约】
+【二十一、最终输出契约｜新版唯一协议】
 ━━━━━━━━━━━━━━━━━━
 
-只输出纯文本 Markdown。
+你可以输出必要的全书级战略说明，但“章节级内容”只能使用一种格式：[PRINCIPAL_CHAPTER]。
 
-禁止：
+严禁输出旧版：
+- 逐章 Markdown 章节卡
+- 任何与 [PRINCIPAL_CHAPTER] 等价的第二套章节结构
+- “机器版/人类版/兼容版”双轨章节内容
 
-- JSON
-- 三反引号代码块
-- 开场白
-- 结束语
-- “好的”
-- “以下是”
-- 解释自己如何完成任务
-- 逐章完整教案
-- 逐章机器章节卡
-- 正文
-- 大段文学范文
-- 虚构输入中不存在的事实
+严禁在章节级内容中用 Markdown 标题替代结构式协议。程序只认 [PRINCIPAL_CHAPTER] ... [/PRINCIPAL_CHAPTER]。
 
-必须严格使用以下结构：
+每一章必须且只能输出一个完整、闭合的结构块，并且必须覆盖全书所有章节。不要省略中间章节，不要把多个章节合并到一个块中。
 
-# 全校写作守则
+结构块严格使用以下协议：
 
-## 配方锚点
-……
+[PRINCIPAL_CHAPTER]
+chapter=1
+title=章节标题
+function=章节功能
+goal=本章战略目标
+coreEvent=本章必须实现的核心事件
+characterActions=允许人物/资源及行动方向
+progressionSkeleton=本章从章头到章末的完整推进骨架；写明关键状态/事件节点及因果连接
+midMode=中段主推进方式
+midSecondary=中段次推进方式；没有辅助方式时写“无”
+midChange=中段核心状态变化
+midDriver=中段驱动力
+midDifference=与最近章节的真实差异
+endingFunction=章末功能
+endingIntensity=0-4
+lastEffectiveEvent=最后有效事件
+endingForm=具体收尾方式
+nextTransitionType=下一章承接方式；终章写“无”
+nextTransitionBasis=下一章承接依据；终章写“无”
+diversityNote=重复风险或多样性说明
+[/PRINCIPAL_CHAPTER]
 
-## 风格融合总纲
-……
+结构式硬规则：
+1. 开始标记和结束标记必须成对出现。
+2. 每章必须有且只有一个块。
+3. chapter 必须是对应的阿拉伯数字。
+4. 所有字段必须存在并有值；没有辅助中段方式、没有下一章的终章字段，必须明确写“无”。
+5. endingIntensity 只能是 0、1、2、3、4。
+6. 字段值可以是自然中文；不要把等号用作字段值内部的结构分隔符。
+7. 不要用 JSON、代码块或表格包裹这些机器块。
+8. 输出过长时，宁可压缩字段表述，也绝不能省略章节或截断结构块。
+9. 先完成全部结构块，再补充必要的全书战略说明；不得在结构块中插入大段 Markdown。
+10. [PRINCIPAL_CHAPTER] 是唯一章节结构协议，旧版自然语言章卡不得作为替代或补充输出。
 
-## 风格施工规则
-……
-
-## 风格验收标准
-……
-
-## 全书节拍纪律
-……
-
-## 因果闭环总纲
-……
-
-## 章间连续性纪律
-……
-
-## 时间纪律
-……
-
-## 人物与词典纪律
-……
-
-## 章节边界纪律
-……
-
-## 可执行纪律
-……
-
-# 第一章开篇任务卡
-
-策略：……
-首拍动作/场景：……
-前800字必须建立：……
-禁止事项：……
-继续阅读问题：……
-
-# 各章章级导演/授权任务卡
-
-## 第1章章级导演/授权任务卡
-- 战略目标：……
-- 起始状态：……
-- 终止状态：……
-- 必须推进：……
-- 必须继承：……
-- 允许人物：……
-- 允许地点：……
-- 允许道具/资源：……
-- 允许组织/势力：……
-- 允许职业/机构：……
-- 允许物品/道具：……
-- 允许术语：……
-- 允许历史事件：……
-- 允许生活设定：……
-- 允许线索：……
-- 信息边界：……
-- 禁止事项：……
-- 因果边界：……
-- 老师创造空间：……
-- 待确认项：……
-
-……
-
-# 各组组级框架
-
-## 组1 · 老师1
-- 起止章节：……
-- 所属阶段：……
-- 本组阶段任务：……
-- 每章功能：……
-- 每章战略目标：……
-- 整组节奏与情绪曲线：……
-- 承接上一组：……
-- 启动下一组：……
-- 重点调用词典资源：……
-- 本组核心风险：……
-
-## 组2 · 老师2
-……
-
-# 全书章节标题总表
-
-第1章《……》
-第2章《……》
-……
-第N章《……》
-
-━━━━━━━━━━━━━━━━━━
-【二十二、最终自检】
-━━━━━━━━━━━━━━━━━━
-
-输出前必须自行检查：
-
-□ 有没有修改用户已经确定的世界事实？
-□ 有没有修改用户已经确定的风格？
-□ 有没有越权替老师写逐章教案？
-□ 有没有越权替正文AI写正文？
-□ 每章功能是否清楚？
-□ 每章战略目标是否可执行？
-□ 各组之间是否存在清晰交接？
-□ 节拍体系是否遵守当前实际配置？
-□ 有没有把时间流水账当节拍？
-□ 因果原则是否明确？
-□ 核心事实是否严格尊重词典？
-□ 第一章任务卡是否足够具体但没有越权成为教案？
-□ 是否为每一章生成章级导演/授权任务卡？
-□ 每章授权是否包含人物/地点/线索/信息边界与禁止事项？
-□ 是否禁止把未授权核心人物或关键情报直接写成事实？
-□ 是否明确要求章节在自己的边界停止？
-□ 是否避免提前设计下一章具体剧情？
-□ 标题是否完整覆盖所有章节？
-□ 输出是否严格符合规定结构？
-
-如果某项不满足，先在内部修正，再输出最终结果。
-
-最终目标只有一个：
-
-让「校长 → 老师 → 正文AI」形成清晰、稳定、不可越权的三级生产链：
-
-校长定方向与结构，
-老师定章节施工方案，
-正文AI把方案写成小说。
-
-任何一级都不得偷偷替代另一级。`;
-
+最终输出目标：校长定方向与结构；老师读取唯一的 PrincipalChapterPlan；JS 负责确定性解析与 QC。不要替老师写完整教案。`
 const PRINCIPAL_FOLDED_SYS = `【已废弃】不得启用校长兼任老师模式。无论章节数多少，校长只负责全校统筹，老师必须独立生成机器教案。`;
 
 
@@ -7222,7 +7120,7 @@ ${JSON.stringify(state.strategicDiversityProfile || currentCanonicalStoryStrateg
   lines.push(`【本章推进结构总要求】
 每章必须同时给出“本章推进骨架”与“本章中段推进战略卡”。推进骨架描述全章从章头到章末的关键状态/事件节点及因果连接；中段战略只定义中段为何这样推进、必须完成什么状态变化。二者不得互相矛盾。
 【本章中段设计总要求】
-请在逐章章级导演/授权任务卡中增加“本章中段推进战略卡”。它必须把全书战略多样性转译为章节级中段差异：由章节功能、故事状态、因果链、人物关系、信息运动、冲突运动、节奏与场景决定，而不是随机挑选模式。必须同时考虑相邻章节重复风险。`);  lines.push('【写作风格/配方摘要】\n' + scStyleBrief());
+请在`[PRINCIPAL_CHAPTER]` 结构式章节战略块中增加“本章中段推进战略卡”。它必须把全书战略多样性转译为章节级中段差异：由章节功能、故事状态、因果链、人物关系、信息运动、冲突运动、节奏与场景决定，而不是随机挑选模式。必须同时考虑相邻章节重复风险。`);  lines.push('【写作风格/配方摘要】\n' + scStyleBrief());
   lines.push('【各组对应范围】\n' + groups.map((g,i)=>`组${i+1}·老师${i+1}（第${g.first}-${g.last}章${g.stage?('·'+g.stage):''}）`).join('\n'));
   lines.push('【原始来源完整性声明】\n最终校长必须综合所有已注入来源；来源规模可直接注入时，直接读取原始来源，不强制经过额外上下文理解 AI。');
   const ban = banListBlockFor('principal');
@@ -7256,6 +7154,20 @@ function machineField(o, ...names){
 }
 function machineList(v){
   return String(v||'').split(/[|｜,，、;；]+/).map(x=>x.trim()).filter(Boolean);
+}
+function diagnosePrincipalMachineProtocol(text, total){
+  const src=String(text||'').replace(/\r\n?/g,'\n');
+  const openRe=/\[\s*PRINCIPAL_CHAPTER\s*\]/gi;
+  const closeRe=/\[\s*\/\s*PRINCIPAL_CHAPTER\s*\]/gi;
+  const opens=(src.match(openRe)||[]).length;
+  const closes=(src.match(closeRe)||[]).length;
+  const hasAny=opens>0 || closes>0;
+  if(!opens && !closes) return {code:'NO_PRINCIPAL_CHAPTER',kind:'missing_start',message:'AI 完全没有返回 [PRINCIPAL_CHAPTER] 结构块。'};
+  if(opens>closes) return {code:'PRINCIPAL_CHAPTER_UNCLOSED',kind:'unclosed',message:`检测到 ${opens} 个 [PRINCIPAL_CHAPTER] 开始标记，但只有 ${closes} 个结束标记，至少有结构块未闭合。`};
+  if(closes>opens) return {code:'PRINCIPAL_CHAPTER_ORPHAN_CLOSE',kind:'orphan_close',message:`检测到 ${opens} 个开始标记、${closes} 个结束标记，存在多余的结束标记。`};
+  const parsed=parseMachineBlocks(src,'PRINCIPAL_CHAPTER');
+  if(!parsed.length) return {code:'PRINCIPAL_CHAPTER_EMPTY_OR_UNPARSEABLE',kind:'unparseable',message:'检测到成对 [PRINCIPAL_CHAPTER] 标记，但块内没有可解析的 key=value 字段。'};
+  return {code:'OK',kind:'ok',message:'PRINCIPAL_CHAPTER 结构块已识别。',blocks:parsed.length};
 }
 function parsePrincipalMachine(text, total){
   const rows=parseMachineBlocks(text,'PRINCIPAL_CHAPTER');
@@ -7462,7 +7374,8 @@ function chapterExecutionGuideBlock(i){
 
 const STRUCTURED_PRINCIPAL_PROTOCOL = `
 
-【机器协议｜结构式纯文本（优先于格式美观）】
+【机器协议｜结构式纯文本（最高优先级、唯一章节协议）】
+如果前文任何旧说明与本协议冲突，以本协议为准；不要输出旧版 Markdown 逐章章卡。
 除必要的全书战略说明外，每章章级任务必须额外输出一个机器块，严格使用以下字段名；不要JSON，不要Markdown表格，不要项目符号装饰。JS会自动解析并组装，不因标点、空格、中文/英文冒号、换行差异判错。
 [PRINCIPAL_CHAPTER]
 chapter=1
@@ -7485,7 +7398,7 @@ nextTransitionType=下一章承接方式
 nextTransitionBasis=下一章承接依据
 diversityNote=重复风险或多样性说明
 [/PRINCIPAL_CHAPTER]
-必须为全书每章各输出一次。内容字段优先于格式；字段值允许自然中文。`;
+必须为全书每章各输出一次。内容字段优先于格式；字段值允许自然中文。开始/结束标记必须成对闭合。每章只能有一个块；不要把多个章节合并。不要输出任何第二套等价章节卡。`;
 const STRUCTURED_TEACHER_PROTOCOL = `
 
 【机器协议｜唯一新版老师 ChapterPlan 契约】
@@ -7570,10 +7483,12 @@ async function genPrincipal(btn, opts){
         }
         const sc = scState();
         const _parse0 = performance.now();
+        const _principalProtocolDiag = diagnosePrincipalMachineProtocol(txt, state.chapterCount || state.outline?.chapters?.length || 0);
         const principalMachine = parsePrincipalMachine(txt, state.chapterCount || state.outline?.chapters?.length || 0);
         _tp.parseMs = Math.round(performance.now()-_parse0);
+        _tp.protocolDiagnostic = _principalProtocolDiag.code;
         const _qcPlans = principalMachine ? normalizePrincipalPlans(principalMachine) : {};
-        const _principalQc = buildPrincipalQcReport(String(txt), principalMachine, _qcPlans, state.chapterCount || state.outline?.chapters?.length || 0);
+        const _principalQc = buildPrincipalQcReport(String(txt), principalMachine, _qcPlans, state.chapterCount || state.outline?.chapters?.length || 0, _principalProtocolDiag);
         sc.principalQc = _principalQc;
         persist();
         refreshPrincipalQcUi();
@@ -7615,9 +7530,11 @@ async function genPrincipal(btn, opts){
           _endingCheck = {missing:[],audit:buildEndingDiversityAudit(principalEndingPlans)};
           _tp.endingAuditMs = Math.round(performance.now()-_endAudit0);
         }else{
-          const err = new Error('校长未返回新的结构式章节计划：缺少 [PRINCIPAL_CHAPTER] 契约');
+          const diag = _principalProtocolDiag || diagnosePrincipalMachineProtocol(txt, state.chapterCount || state.outline?.chapters?.length || 0);
+          const msg = diag.code==='PRINCIPAL_CHAPTER_UNCLOSED' ? '校长返回了 [PRINCIPAL_CHAPTER]，但结构块未闭合' : diag.code==='PRINCIPAL_CHAPTER_ORPHAN_CLOSE' ? '校长返回了多余的 [PRINCIPAL_CHAPTER] 结束标记' : diag.code==='PRINCIPAL_CHAPTER_EMPTY_OR_UNPARSEABLE' ? '校长返回了 [PRINCIPAL_CHAPTER] 标记，但块内没有可解析字段' : '校长完全没有返回 [PRINCIPAL_CHAPTER] 结构块';
+          const err = new Error(msg);
           err.principalValidation = true;
-          err.principalFailure = {category:'PRINCIPAL_VALIDATION_ERROR',code:'MACHINE_CONTRACT_MISSING',details:'新的校长唯一章节契约缺失',expected:'每章一个完整 [PRINCIPAL_CHAPTER]，不再接受自然语言旧结构作为回退来源',actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字`};
+          err.principalFailure = {category:'PRINCIPAL_VALIDATION_ERROR',code:diag.code,details:diag.message,expected:'每章一个完整且成对闭合的 [PRINCIPAL_CHAPTER] 结构块',actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字`};
           throw err;
         }
         _tp.validationMs = (_tp.middleValidationMs||0) + (_tp.endingValidationMs||0) + (_tp.endingAuditMs||0);
@@ -7748,7 +7665,7 @@ L3 · 正文作家的文学表达
 
 1. 你只接收：当前负责章节组的组级框架、当前每章章级导演/授权任务卡、必要的上一组末状态、当前组已生成正文状态，以及为执行当前组明确需要的词典资料。
 2. 不默认读取完整 storyBlueprint、全书未来故事节拍、其他组老师完整教案或与当前组无关的未来秘密。
-3. 章级任务卡中的“允许人物/地点/道具/线索”是当前章核心剧情资源白名单。
+3. 章级结构式章节战略中的“允许人物/地点/道具/线索”是当前章核心剧情资源白名单。
 4. 名单外普通路人可临时出现，但只能承担环境或非关键功能；一旦承担关键情报、关键线索或主线转折功能，就不再是普通路人。
 5. 新核心人物、关键人物关系、核心秘密、关键地点、关键道具、主线线索不得由老师直接确认为事实。只能写入“待确认项”，等待词典/校长授权。
 6. 任何人物获得关键情报，都必须说明“为什么知道、从谁那里知道、该信息何时成立、可靠性如何”。没有来源链就不能把该情报写成事实。
@@ -8552,11 +8469,12 @@ function buildTeacherQcReport(gi,g,raw,teacherMachine,planMap,elapsedMs){
   return {version:2,gi,ts:Date.now(),elapsedMs:Number(elapsedMs||0),chapters,checks,warnCount,failCount,status:failCount?'review':'pass'};
 }
 
-function buildPrincipalQcReport(rawText, machine, plans, total){
+function buildPrincipalQcReport(rawText, machine, plans, total, protocolDiag){
   const count=Number(total||0);
   const checks=[];
   const machineOk=!!machine;
-  checks.push({key:'protocol',label:'PRINCIPAL_CHAPTER结构式',status:machineOk?'pass':'fail',detail:machineOk?'已识别到新的[PRINCIPAL_CHAPTER]结构式内容':'未识别到[PRINCIPAL_CHAPTER]结构式区块，不能作为有效校长计划。'});
+  const pd=protocolDiag||diagnosePrincipalMachineProtocol(rawText,total);
+  checks.push({key:'protocol',label:'PRINCIPAL_CHAPTER结构式',status:machineOk?'pass':'fail',detail:machineOk?`已识别到${pd.blocks||Object.keys(machine.rows||{}).length}个结构块。`:pd.message});
   if(machine){
     const structureIssues=[];
     if(machine.missing?.length) structureIssues.push(`缺少章节：${machine.missing.join('、')}`);
@@ -8577,7 +8495,7 @@ function buildPrincipalQcReport(rawText, machine, plans, total){
     const rangeBad=machine.invalid?.filter(x=>x.fields.some(f=>String(f).includes('endingIntensity')))||[];
     checks.push({key:'range',label:'字段范围/枚举',status:rangeBad.length?'fail':'pass',detail:rangeBad.length?'存在endingIntensity不在0-4范围内。':'endingIntensity等已通过范围检查。'});
   } else {
-    checks.push({key:'structure',label:'章节编号与必填字段',status:'fail',detail:'由于未识别结构式章节计划，无法继续进行章节级结构检查。'});
+    checks.push({key:'structure',label:'章节编号与必填字段',status:'fail',detail:`由于${pd.message}，暂时无法进行章节级字段检查。`});
   }
   const failCount=checks.filter(x=>x.status==='fail').length;
   const warnCount=checks.filter(x=>x.status==='warn').length;
