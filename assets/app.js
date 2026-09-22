@@ -5560,7 +5560,6 @@ function scState(){
   state.school.errors   = state.school.errors   || {};
   state.school.stale    = state.school.stale || {};
   state.school.teacherQc = state.school.teacherQc && typeof state.school.teacherQc === 'object' ? state.school.teacherQc : {};
-  state.school.principalQc = state.school.principalQc && typeof state.school.principalQc === 'object' ? state.school.principalQc : {};
   state.school.teachers = Array.isArray(state.school.teachers) ? state.school.teachers : [];
   scHealState();
   return state.school;
@@ -6388,113 +6387,12 @@ L0 是最高优先级。
 5. 结尾重复风险必须在校长输出时提前识别，而不是只依赖正文事后审计。
 
 ━━━━━━━━━━━━━━━━━━
-【七、章级导演/授权任务卡】
-━━━━━━━━━━━━━━━━━━
+【七、章节战略输出边界】
 
-每一章都必须先生成一张“章级导演/授权任务卡”，再交给老师施工。
+校长只负责章节战略，不写老师逐拍教案。章节战略必须通过唯一的[PRINCIPAL_CHAPTER]结构式协议输出。
+必须说明：本章功能、目标、核心事件、推进骨架、中段战略、章末战略、下一章承接依据及授权边界。
+不得输出第二套Markdown章节卡，不得输出旧版“章级导演/授权任务卡”，不得把结构式字段再重复翻译成另一套章节计划。
 
-任务卡不是教案，不写完整事件列表、不写逐拍动作、不写对白。
-任务卡必须回答：
-
-- 本章战略目标：章末全书状态必须发生什么变化；
-- 起始状态：本章开始时人物、地点、时间、已知信息与未决问题；
-- 终止状态：本章结束后必须成立的状态；
-- 必须推进：本章不可省略的核心变化/剧情结果；
-- 必须继承：上一章交接来的真实状态、悬念、人物状态；
-- 允许人物：本章可以调用的正式人物；
-- 允许地点：本章可以调用的已成立地点；
-- 允许道具/资源：本章可以调用的既有资源；
-- 允许组织/势力：本章可以调用的已成立组织/势力；无则写“无”；
-- 允许职业/机构：本章可以调用的已成立职业/机构；无则写“无”；
-- 允许物品/道具：本章可以调用的已成立物品/道具；无则写“无”；
-- 允许术语：本章可以调用的已成立术语；无则写“无”；
-- 允许历史事件：本章可以调用的已成立历史事件；无则写“无”；
-- 允许生活设定：本章可以调用的已成立生活设定；无则写“无”；
-- 允许线索：本章可以使用或推进的已成立线索；
-- 信息边界：本章人物知道什么、不知道什么，哪些未来信息不得提前开放；
-- 禁止事项：不得新增或改变的核心人物、关系、秘密、地点、道具、线索及因果；
-- 因果边界：重大事件必须满足哪些前置条件；
-- 老师创造空间：允许老师自行设计的中间事件、节拍、调查路径和文学化施工范围；
-- 本章中段推进战略卡：主推进方式、次推进方式、核心变化、驱动力、信息运动、人物运动、冲突运动、节奏组织、场景运动、重复风险、禁止的伪多样化；
-- 待确认项：任何需要新增核心人物/关键情报/新世界事实的需求，只能作为待确认项提出，不得直接成立。
-
-【章级授权硬规则】
-1. 任务卡中的“允许人物/地点/道具/线索”以及六类“允许世界资源”字段共同构成本章核心资源白名单；名单外的组织/机构/物品/术语/历史/生活设定若要承担关键剧情功能，必须先进入待确认项。
-2. 普通路人、老人、摊贩、店小二等只能作为一次性环境人物存在；不得凭空获得核心情报，不得改变主线。
-3. 任何人物掌握核心人物住址、秘密、关系、身份、主线线索等信息，必须有可追溯的信息来源链。
-4. 校长不得为了让任务卡完整而虚构词典不存在的核心人物或关键事实；无法授权的内容写入“待确认项”。
-5. 老师不得把待确认项直接升级为既成事实。
-
-━━━━━━━━━━━━━━━━━━
-【六A、本章中段推进战略卡】
-━━━━━━━━━━━━━━━━━━
-开头与结尾之外，中段必须有独立的“推进方式设计”。它不是固定模板，也不是随机换花样。
-
-校长必须为每一章在“章级导演/授权任务卡”中额外输出【本章中段推进战略卡】，至少包含：
-- 中段主推进方式：本章中间部分主要靠什么向前走（如调查深入、行动受阻、信息揭示、关系博弈、失败—调整、因果累积、多线交替、环境/时间推进等）；不得固定轮换，也不得随机抽签。
-- 中段次推进方式：如确有必要，指定一个辅助方式；没有必要可以写“无”。
-- 中段核心变化：中段结束时，相比中段开始，人物/信息/关系/目标/冲突/环境至少哪一项发生了可验证变化。
-- 中段驱动力：行动、信息、人物关系、外部压力、时间、环境或其他已经成立的因素。
-- 信息运动：获得、隐瞒、误判、修正、交换、缺口等具体变化。
-- 人物运动：判断、目标、关系、选择、行动方式或处境如何变化。
-- 冲突运动：升级、转移、暴露、停滞、转化、降低或其他真实变化。
-- 节奏组织：快慢交替、连续行动、对话拉扯、观察/环境缓冲、多线切换等；必须服务于本章状态，不得为“多样化”而强行变化。
-- 场景运动：单场景深挖、有限切换、路途推进、时间跳跃、多线交替等。
-- 与前后章节的重复风险：指出最近章节已经反复使用的中段组织方式，并说明本章为什么仍使用或为什么需要改变。
-- 禁止的伪多样化：不得通过突然新增人物/秘密/爆炸/反转/无依据冲突来制造中段丰富感。
-
-硬规则：
-1. 中段多样性不是随机化。必须由章节功能、起始/终止状态、因果链、人物关系、信息边界、当前战略变量轴共同约束。
-2. “换场景”“增加事件数量”“提高冲突强度”本身都不等于中段多样化。
-3. 每个中段推进方式都必须回答“上一状态如何产生下一状态”。
-4. 相邻章节可以使用同一种方式，但必须有不同的驱动力、变化轴或施工形态；连续重复且没有必要理由时应标记重复风险。
-5. 不得让中段策略越权改变章级目标、事实授权、世界规则或结尾停止点。
-6. 校长只定义中段为什么这样推进；老师负责把它施工成节拍；正文只负责文学表现，不重新选择中段模式。
-
-━━━━━━━━━━━━━━━━━━
-【七A、唯一章末口令】
-${chapterEndingContractText()}
-校长只生成一次本章停止点/结尾功能数据；不得另设“留钩子”“制造悬念”“读者期待”等第二套章末规则。
-
-【七B、校长章级结尾决策边界】
-━━━━━━━━━━━━━━━━━━
-校长决定“为什么在这里停、停时读者应处于什么叙事状态”；老师决定“最后一个有效事件怎样完成”；正文决定“怎样写得自然”。
-如果本章核心变化已经完成且没有下一步必要动作，优先允许正常停止。禁止为了制造连续感而追加无依据的新期待。
-
-【七、全书微拍与节奏体系】
-━━━━━━━━━━━━━━━━━━
-
-【全书微拍总纲与节奏体系】是全书统一节拍来源。
-
-必须尊重当前实际配置。
-
-如果当前是：
-
-微三拍 → 老师每章使用3个逻辑节拍；
-微五拍 → 老师每章使用5个逻辑节拍；
-微七拍 → 老师每章使用7个逻辑节拍；
-双拍 → 老师每章使用2个逻辑节拍；
-其他配置 → 严格按照实际配置。
-
-不得擅自规定固定“5-8拍”。
-
-但必须注意：
-
-校长负责“节拍纪律”，
-老师负责“节拍内容”。
-
-校长需要明确：
-
-本微拍体系应该在全书中解决什么节奏问题；
-不同阶段应该如何利用节拍；
-什么情况下节拍必须形成推进；
-什么情况下允许转折；
-什么情况下必须形成回报；
-什么情况下必须收束。
-
-不要在校长层面提前替每章写完整节拍。
-
-━━━━━━━━━━━━━━━━━━
 【八、节拍 ≠ 时间】
 ━━━━━━━━━━━━━━━━━━
 
@@ -6939,265 +6837,53 @@ ${chapterEndingContractText()}
 【二十、输出任务】
 ━━━━━━━━━━━━━━━━━━
 
-必须完整输出以下四大部分：
-
-① 全校写作守则
-
-必须包含：
-
-## 配方锚点
-## 风格融合总纲
-## 风格施工规则
-## 风格验收标准
-## 全书节拍纪律
-## 因果闭环总纲
-## 章间连续性纪律
-## 时间纪律
-## 人物与词典纪律
-## 章节边界纪律
-## 可执行纪律
-
-② 第一章开篇任务卡
-
-如果存在第1章：
-
-## 第一章开篇任务卡
-
-包含：
-
-- 策略
-- 首拍动作/场景
-- 前800字必须建立
-- 禁止事项
-- 继续阅读问题
-
-如果不存在第1章，则不要虚构。
-
-【第一章开篇与全书战略多样性的关系】
-第一章开篇不是孤立选项。必须结合固定核心、战略变量轴、第一章战略目标与起始状态判断为什么从这里进入。用户若明确选择具体开篇策略，必须执行；若选择“不选择开篇策略”，不得擅自替用户选择预设策略，但必须说明自然开笔应突出哪个已经成立的核心冲突、人物处境或信息缺口，以及它为何服务全书战略。不得为了多样性制造未经授权的异常、秘密或反转。
-
-③ 各章章级导演/授权任务卡
-
-必须覆盖全部章节。每章使用独立小节：
-
-## 第X章章级导演/授权任务卡
-- 战略目标：……
-- 起始状态：……
-- 终止状态：……
-- 必须推进：……
-- 必须继承：……
-- 允许人物：……
-- 允许地点：……
-- 允许道具/资源：……
-- 允许组织/势力：……
-- 允许职业/机构：……
-- 允许物品/道具：……
-- 允许术语：……
-- 允许历史事件：……
-- 允许生活设定：……
-- 允许线索：……
-- 信息边界：……
-- 禁止事项：……
-- 因果边界：……
-- 老师创造空间：……
-- 待确认项：……
-- 结尾功能：……（从既有结尾功能库选择，不得默认全部使用正常完成式）
-- 结尾强度：0-4
-- 最后有效事件：……
-- 具体收尾方式：……
-- 表现形式：……
-- 下一章承接方式：……（必须根据本章真实终止状态选择，可为事件未完、信息揭示、动作延续、关系状态、物件/线索、环境状态、冲突停滞、问题悬置、信息缺口、情绪未决、选择未决、直接后果、时间切换、场景切换、冷收束、平淡收束、不确定状态等；不得默认悬念/期待）
-- 下一章承接依据：……（只写本章已经成立的事实/状态）
-- 禁止追加：……
-- 重复风险：……
-
-要求：只能做章级授权，不得写成完整教案。结尾与承接字段是老师的上游战略约束，正文不得自行重新选择。
-
-④ 各组组级框架
-
-每组必须完整输出：
-
-## 组X · 老师X
-
-- 起止章节：……
-- 所属阶段：……
-- 本组阶段任务：……
-- 每章功能：……
-- 每章战略目标：……
-- 整组节奏与情绪曲线：……
-- 承接上一组：……
-- 启动下一组：……
-- 重点调用词典资源：……
-- 本组核心风险：……
-
-注意：
-
-“每章功能”和“每章战略目标”必须是战略级描述。
-
-禁止写成逐章教案。
-
-④ 全书章节标题总表
-
-必须覆盖所有章节：
-
-第1章《……》
-第2章《……》
-……
-第N章《……》
+全书战略、第一章开篇、组级框架等信息可以作为内部规划依据，但不得以第二套章节卡形式输出。所有逐章战略必须只进入唯一的[PRINCIPAL_CHAPTER]结构式协议。第一章开篇与组级信息如需传递，必须通过对应结构式字段或上游状态完成，不得创建另一套逐章计划。
 
 ━━━━━━━━━━━━━━━━━━
 【二十一、最终输出契约】
-━━━━━━━━━━━━━━━━━━
 
-只输出纯文本 Markdown。
+最终回答只能输出[PRINCIPAL_CHAPTER]结构式纯文本块。不得输出Markdown章节卡、自然语言章节计划、JSON或第二套章节计划。
+每章必须且只能输出一个完整、成对闭合的结构块，严格覆盖全部章节。
 
-禁止：
+[PRINCIPAL_CHAPTER]
+chapter=1
+title=章节标题
+function=章节功能
+goal=本章战略目标
+coreEvent=本章必须实现的核心事件
+characterActions=允许人物/资源及行动方向
+progressionSkeleton=完整推进骨架及关键因果连接
+midMode=中段主推进方式
+midSecondary=中段次推进方式，没有则写无
+midChange=中段核心状态变化
+midDriver=中段驱动力
+midDifference=与最近章节的真实差异
+endingFunction=章末功能
+endingIntensity=0-4
+lastEffectiveEvent=最后有效事件
+endingForm=具体收尾方式
+nextTransitionType=下一章承接方式
+nextTransitionBasis=下一章承接依据
+diversityNote=重复风险或多样性说明
+[/PRINCIPAL_CHAPTER]
 
-- JSON
-- 三反引号代码块
-- 开场白
-- 结束语
-- “好的”
-- “以下是”
-- 解释自己如何完成任务
-- 逐章完整教案
-- 逐章机器章节卡
-- 正文
-- 大段文学范文
-- 虚构输入中不存在的事实
-
-必须严格使用以下结构：
-
-# 全校写作守则
-
-## 配方锚点
-……
-
-## 风格融合总纲
-……
-
-## 风格施工规则
-……
-
-## 风格验收标准
-……
-
-## 全书节拍纪律
-……
-
-## 因果闭环总纲
-……
-
-## 章间连续性纪律
-……
-
-## 时间纪律
-……
-
-## 人物与词典纪律
-……
-
-## 章节边界纪律
-……
-
-## 可执行纪律
-……
-
-# 第一章开篇任务卡
-
-策略：……
-首拍动作/场景：……
-前800字必须建立：……
-禁止事项：……
-继续阅读问题：……
-
-# 各章章级导演/授权任务卡
-
-## 第1章章级导演/授权任务卡
-- 战略目标：……
-- 起始状态：……
-- 终止状态：……
-- 必须推进：……
-- 必须继承：……
-- 允许人物：……
-- 允许地点：……
-- 允许道具/资源：……
-- 允许组织/势力：……
-- 允许职业/机构：……
-- 允许物品/道具：……
-- 允许术语：……
-- 允许历史事件：……
-- 允许生活设定：……
-- 允许线索：……
-- 信息边界：……
-- 禁止事项：……
-- 因果边界：……
-- 老师创造空间：……
-- 待确认项：……
-
-……
-
-# 各组组级框架
-
-## 组1 · 老师1
-- 起止章节：……
-- 所属阶段：……
-- 本组阶段任务：……
-- 每章功能：……
-- 每章战略目标：……
-- 整组节奏与情绪曲线：……
-- 承接上一组：……
-- 启动下一组：……
-- 重点调用词典资源：……
-- 本组核心风险：……
-
-## 组2 · 老师2
-……
-
-# 全书章节标题总表
-
-第1章《……》
-第2章《……》
-……
-第N章《……》
+输出要求：先完成全部章节结构块，再结束回答；不得省略、合并、重复或改名字段；不得用“同上”“略”“见上文”代替字段值。
 
 ━━━━━━━━━━━━━━━━━━
 【二十二、最终自检】
 ━━━━━━━━━━━━━━━━━━
+□ 全部章节均有且只有一个PRINCIPAL_CHAPTER
+□ 每个结构块均有开始与结束标记
+□ 每章chapter唯一且连续
+□ 20个字段均已填写
+□ endingIntensity为0-4整数
+□ 没有输出旧版Markdown章节卡
+□ 没有输出第二套章节计划
+□ 没有把老师逐拍教案写进校长结构
+□ 没有修改用户和词典已经确定的事实
 
-输出前必须自行检查：
-
-□ 有没有修改用户已经确定的世界事实？
-□ 有没有修改用户已经确定的风格？
-□ 有没有越权替老师写逐章教案？
-□ 有没有越权替正文AI写正文？
-□ 每章功能是否清楚？
-□ 每章战略目标是否可执行？
-□ 各组之间是否存在清晰交接？
-□ 节拍体系是否遵守当前实际配置？
-□ 有没有把时间流水账当节拍？
-□ 因果原则是否明确？
-□ 核心事实是否严格尊重词典？
-□ 第一章任务卡是否足够具体但没有越权成为教案？
-□ 是否为每一章生成章级导演/授权任务卡？
-□ 每章授权是否包含人物/地点/线索/信息边界与禁止事项？
-□ 是否禁止把未授权核心人物或关键情报直接写成事实？
-□ 是否明确要求章节在自己的边界停止？
-□ 是否避免提前设计下一章具体剧情？
-□ 标题是否完整覆盖所有章节？
-□ 输出是否严格符合规定结构？
-
-如果某项不满足，先在内部修正，再输出最终结果。
-
-最终目标只有一个：
-
-让「校长 → 老师 → 正文AI」形成清晰、稳定、不可越权的三级生产链：
-
-校长定方向与结构，
-老师定章节施工方案，
-正文AI把方案写成小说。
-
-任何一级都不得偷偷替代另一级。`;
+最终目标：校长定方向与结构，老师定施工方案，正文AI负责文学呈现。
+`;
 
 const PRINCIPAL_FOLDED_SYS = `【已废弃】不得启用校长兼任老师模式。无论章节数多少，校长只负责全校统筹，老师必须独立生成机器教案。`;
 
@@ -7220,9 +6906,8 @@ function buildPrincipalUser(groups){
 ${JSON.stringify(state.strategicDiversityProfile || currentCanonicalStoryStrategy()?.diversityProfile || {}, null, 2)}
 执行要求：固定核心不可被多样性破坏；变量轴必须在合理章节中产生有意义差异，不得随机化。`);
   lines.push(`【本章推进结构总要求】
-每章必须同时给出“本章推进骨架”与“本章中段推进战略卡”。推进骨架描述全章从章头到章末的关键状态/事件节点及因果连接；中段战略只定义中段为何这样推进、必须完成什么状态变化。二者不得互相矛盾。
-【本章中段设计总要求】
-请在逐章章级导演/授权任务卡中增加“本章中段推进战略卡”。它必须把全书战略多样性转译为章节级中段差异：由章节功能、故事状态、因果链、人物关系、信息运动、冲突运动、节奏与场景决定，而不是随机挑选模式。必须同时考虑相邻章节重复风险。`);  lines.push('【写作风格/配方摘要】\n' + scStyleBrief());
+每章必须通过唯一[PRINCIPAL_CHAPTER]结构式块给出“本章推进骨架”与“本章中段推进战略”。推进骨架描述全章从章头到章末的关键状态/事件节点及因果连接；中段战略只定义中段为何这样推进、必须完成什么状态变化。二者不得互相矛盾。
+不得输出旧版Markdown章级导演/授权任务卡，不得重复输出第二套章节计划。`);  lines.push('【写作风格/配方摘要】\n' + scStyleBrief());
   lines.push('【各组对应范围】\n' + groups.map((g,i)=>`组${i+1}·老师${i+1}（第${g.first}-${g.last}章${g.stage?('·'+g.stage):''}）`).join('\n'));
   lines.push('【原始来源完整性声明】\n最终校长必须综合所有已注入来源；来源规模可直接注入时，直接读取原始来源，不强制经过额外上下文理解 AI。');
   const ban = banListBlockFor('principal');
@@ -7257,9 +6942,21 @@ function machineField(o, ...names){
 function machineList(v){
   return String(v||'').split(/[|｜,，、;；]+/).map(x=>x.trim()).filter(Boolean);
 }
+function inspectPrincipalMachineProtocol(text){
+  const src=String(text||'').replace(/\r\n?/g,'\n');
+  const opens=(src.match(/\[\s*PRINCIPAL_CHAPTER\s*\]/gi)||[]).length;
+  const closes=(src.match(/\[\s*\/\s*PRINCIPAL_CHAPTER\s*\]/gi)||[]).length;
+  if(!opens && !closes) return {code:'NO_PRINCIPAL_CHAPTER',message:'AI未返回任何[PRINCIPAL_CHAPTER]结构块。'};
+  if(opens>closes) return {code:'PRINCIPAL_CHAPTER_UNCLOSED',message:`检测到${opens}个[PRINCIPAL_CHAPTER]开始标记，但只有${closes}个结束标记，结构块可能被截断。`,opens,closes};
+  if(closes>opens) return {code:'PRINCIPAL_CHAPTER_ORPHAN_CLOSE',message:`检测到${closes}个结束标记，但只有${opens}个开始标记。`,opens,closes};
+  const rows=parseMachineBlocks(src,'PRINCIPAL_CHAPTER');
+  if(!rows.length) return {code:'PRINCIPAL_CHAPTER_EMPTY_OR_UNPARSEABLE',message:'检测到PRINCIPAL_CHAPTER标记，但结构块内没有可解析的字段。',opens,closes};
+  return {code:'OK',message:'PRINCIPAL_CHAPTER结构块已识别。',opens,closes,rows};
+}
 function parsePrincipalMachine(text, total){
-  const rows=parseMachineBlocks(text,'PRINCIPAL_CHAPTER');
-  if(!rows.length) return null;
+  const protocol=inspectPrincipalMachineProtocol(text);
+  if(protocol.code!=='OK') return null;
+  const rows=protocol.rows;
   const by={};
   const duplicate=[];
   rows.forEach(r=>{
@@ -7462,8 +7159,13 @@ function chapterExecutionGuideBlock(i){
 
 const STRUCTURED_PRINCIPAL_PROTOCOL = `
 
-【机器协议｜结构式纯文本（优先于格式美观）】
-除必要的全书战略说明外，每章章级任务必须额外输出一个机器块，严格使用以下字段名；不要JSON，不要Markdown表格，不要项目符号装饰。JS会自动解析并组装，不因标点、空格、中文/英文冒号、换行差异判错。
+【校长唯一输出契约｜最高优先级】
+以下契约覆盖并替代本提示中任何旧的“章级导演/授权任务卡”“Markdown章节卡”“禁止机器章节卡”或自然语言章节卡输出要求。校长不得同时输出第二套章节计划。
+校长最终输出只允许由连续的[PRINCIPAL_CHAPTER]结构式纯文本块组成；不要JSON、不要Markdown章节卡、不要自然语言章节计划、不要重复输出同一章。
+每章必须且只能输出一个完整、成对闭合的[PRINCIPAL_CHAPTER]块。先完整生成结构块，再结束回答。不得在结构块中省略字段，不得用“同上”“略”“见上文”代替字段值。
+
+【机器协议｜结构式纯文本】
+严格使用以下字段名；JS会自动解析并组装，不因标点、空格、中文/英文冒号、换行差异判错。
 [PRINCIPAL_CHAPTER]
 chapter=1
 title=章节标题
@@ -7570,13 +7272,9 @@ async function genPrincipal(btn, opts){
         }
         const sc = scState();
         const _parse0 = performance.now();
+        const principalProtocol = inspectPrincipalMachineProtocol(txt);
         const principalMachine = parsePrincipalMachine(txt, state.chapterCount || state.outline?.chapters?.length || 0);
         _tp.parseMs = Math.round(performance.now()-_parse0);
-        const _qcPlans = principalMachine ? normalizePrincipalPlans(principalMachine) : {};
-        const _principalQc = buildPrincipalQcReport(String(txt), principalMachine, _qcPlans, state.chapterCount || state.outline?.chapters?.length || 0);
-        sc.principalQc = _principalQc;
-        persist();
-        refreshPrincipalQcUi();
         const _sanitize0 = performance.now();
         let principalTxt = sanitizePrincipalText(txt);
         _tp.sanitizeMs = Math.round(performance.now()-_sanitize0);
@@ -7590,11 +7288,8 @@ async function genPrincipal(btn, opts){
             err.principalFailure = {category:'PRINCIPAL_VALIDATION_ERROR',code:'MACHINE_CONTRACT_INVALID',chapters:badChapters,details:'新的唯一 [PRINCIPAL_CHAPTER] 章节契约未通过结构检查',expected:'每章一个完整且唯一的新章节计划，字段必须完整',actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字`};
             throw err;
           }
-          const _compile0 = performance.now();
-          const compiled = compilePrincipalMachineCards(principalMachine);
-          _tp.compileMs = Math.round(performance.now()-_compile0);
-          // 保留原始全书战略说明，同时追加JS标准化章卡；下游统一读取标准化结构。
-          principalTxt = principalTxt + '\n\n' + compiled;
+          _tp.compileMs = 0;
+          // 校长最终内容保持结构式纯文本；不再追加旧版Markdown章节卡。
           const _middle0 = performance.now();
           const principalPlans = normalizePrincipalPlans(principalMachine);
           const _middleNormalized = principalPlanContractAudit(principalPlans, state.chapterCount || state.outline?.chapters?.length || 0);
@@ -7615,9 +7310,9 @@ async function genPrincipal(btn, opts){
           _endingCheck = {missing:[],audit:buildEndingDiversityAudit(principalEndingPlans)};
           _tp.endingAuditMs = Math.round(performance.now()-_endAudit0);
         }else{
-          const err = new Error('校长未返回新的结构式章节计划：缺少 [PRINCIPAL_CHAPTER] 契约');
+          const err = new Error(`校长结构式章节计划解析失败：${principalProtocol?.message||'未知结构协议错误'}`);
           err.principalValidation = true;
-          err.principalFailure = {category:'PRINCIPAL_VALIDATION_ERROR',code:'MACHINE_CONTRACT_MISSING',details:'新的校长唯一章节契约缺失',expected:'每章一个完整 [PRINCIPAL_CHAPTER]，不再接受自然语言旧结构作为回退来源',actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字`};
+          err.principalFailure = {category:'PRINCIPAL_PROTOCOL_ERROR',code:principalProtocol?.code||'MACHINE_CONTRACT_MISSING',details:principalProtocol?.message||'新的校长唯一章节契约缺失',expected:'每章一个完整、成对闭合的[PRINCIPAL_CHAPTER]结构块',actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字`,opens:principalProtocol?.opens||0,closes:principalProtocol?.closes||0};
           throw err;
         }
         _tp.validationMs = (_tp.middleValidationMs||0) + (_tp.endingValidationMs||0) + (_tp.endingAuditMs||0);
@@ -7627,7 +7322,7 @@ async function genPrincipal(btn, opts){
           repeatedFunctions:_endingCheck.audit.repeatedFunctions||[]
         } : null;
         const _title0 = performance.now();
-        const titles = parsePrincipalTitles(principalTxt).map(sanitizePrincipalChapter);
+        const titles = Object.keys(principalMachine?.rows||{}).map(Number).sort((a,b)=>a-b).map(n=>({num:n,title:sanitizePrincipalChapter({title:machineField(principalMachine.rows[n],'title')}).title})).filter(x=>x.title);
         if(titles && titles.length){
           doApplyTitles(titles, { silent: true, deferCommit: true });
         }
@@ -8552,57 +8247,6 @@ function buildTeacherQcReport(gi,g,raw,teacherMachine,planMap,elapsedMs){
   return {version:2,gi,ts:Date.now(),elapsedMs:Number(elapsedMs||0),chapters,checks,warnCount,failCount,status:failCount?'review':'pass'};
 }
 
-function buildPrincipalQcReport(rawText, machine, plans, total){
-  const count=Number(total||0);
-  const checks=[];
-  const machineOk=!!machine;
-  checks.push({key:'protocol',label:'PRINCIPAL_CHAPTER结构式',status:machineOk?'pass':'fail',detail:machineOk?'已识别到新的[PRINCIPAL_CHAPTER]结构式内容':'未识别到[PRINCIPAL_CHAPTER]结构式区块，不能作为有效校长计划。'});
-  if(machine){
-    const structureIssues=[];
-    if(machine.missing?.length) structureIssues.push(`缺少章节：${machine.missing.join('、')}`);
-    if(machine.duplicate?.length) structureIssues.push(`重复章节：${machine.duplicate.join('、')}`);
-    if(machine.unexpected?.length) structureIssues.push(`越界章节：${machine.unexpected.join('、')}`);
-    if(machine.invalid?.length) structureIssues.push(`必填字段缺失/非法：${machine.invalid.map(x=>`第${x.chapter}章[${x.fields.join('、')}]`).join('；')}`);
-    checks.push({key:'structure',label:'章节编号与必填字段',status:structureIssues.length?'fail':'pass',detail:structureIssues.length?structureIssues.join('；'):`共${count}章，编号连续、唯一，必填字段完整。`});
-    const contract=principalPlanContractAudit(plans,count);
-    checks.push({key:'progression',label:'推进骨架 progressionSkeleton',status:contract.missing?.length?'fail':'pass',detail:contract.missing?.length?`第${contract.missing.join('、')}章缺少核心推进结构。`:'各章均存在核心推进骨架。'});
-    const midBad=[];
-    Object.keys(plans||{}).forEach(n=>{const m=plans[n]?.midStrategy||{}; if(!m.primaryMode||!m.coreChange||!m.driver) midBad.push(n);});
-    checks.push({key:'midStrategy',label:'中段战略 midStrategy',status:midBad.length?'fail':'pass',detail:midBad.length?`第${midBad.join('、')}章缺少中段核心战略字段。`:'各章主方式、核心变化、驱动力齐全。'});
-    const endBad=[];
-    Object.keys(plans||{}).forEach(n=>{const e=plans[n]?.ending||{}; if(!e.lastEffectiveEvent||!e.form||!e.nextTransitionType||!e.nextTransitionBasis) endBad.push(n);});
-    checks.push({key:'ending',label:'章末战略 ending',status:endBad.length?'fail':'pass',detail:endBad.length?`第${endBad.join('、')}章章末关键字段不完整。`:'各章章末功能、最后有效事件、收束与承接字段齐全。'});
-    const logic=auditPrincipalPlanLogic(plans,count);
-    checks.push({key:'logic',label:'章节间逻辑与重复风险',status:logic.warnings?.length?'warn':'pass',detail:logic.warnings?.length?logic.warnings.map(x=>`第${x.chapter}章：${x.detail}`).join('；'):'未发现标题、核心事件、推进骨架等明显重复或承接异常。'});
-    const rangeBad=machine.invalid?.filter(x=>x.fields.some(f=>String(f).includes('endingIntensity')))||[];
-    checks.push({key:'range',label:'字段范围/枚举',status:rangeBad.length?'fail':'pass',detail:rangeBad.length?'存在endingIntensity不在0-4范围内。':'endingIntensity等已通过范围检查。'});
-  } else {
-    checks.push({key:'structure',label:'章节编号与必填字段',status:'fail',detail:'由于未识别结构式章节计划，无法继续进行章节级结构检查。'});
-  }
-  const failCount=checks.filter(x=>x.status==='fail').length;
-  const warnCount=checks.filter(x=>x.status==='warn').length;
-  const status=failCount?'REVIEW_REQUIRED':warnCount?'PASS_WITH_WARNINGS':'PASS';
-  const lines=[];
-  lines.push('[PRINCIPAL_QC]');
-  lines.push(`status=${status}`);
-  lines.push(`blockingIssues=${failCount}`);
-  lines.push(`warnings=${warnCount}`);
-  lines.push(`chapters=${count}`);
-  lines.push('autoRegenerate=false');
-  lines.push('');
-  checks.forEach((c,i)=>{lines.push(`${String(i+1).padStart(2,'0')}. ${c.key}=${c.status.toUpperCase()}`); lines.push(`detail=${c.detail}`);});
-  lines.push('');
-  lines.push('decision=USER_DECIDES_REGENERATE');
-  lines.push('[/PRINCIPAL_QC]');
-  return {version:1,ts:Date.now(),raw:String(rawText||''),machine:!!machine,checks,failCount,warnCount,status,text:lines.join('\n')};
-}
-function principalQcReportHtml(){
-  const q=scState().principalQc||{};
-  if(!q.text) return `<pre class="sc-tqc-text" style="margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;color:var(--muted);background:transparent;">校长生成后，这里会立即显示结构式快速质检报告。\n质检只提供信息，不自动重生成校长。</pre>`;
-  const label=q.status==='PASS'?'快速质检通过':q.status==='PASS_WITH_WARNINGS'?'已通过，但有警告':'存在必须人工复核的问题';
-  return `<div class="sc-tqc-text-head" style="padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid var(--line);font:600 13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;color:var(--text);">校长快速质检报告\n规则：已返回即完成 · 不自动重试 · 是否重生成由你决定 · ${esc(label)}</div><pre class="sc-tqc-text" style="margin:0;padding:10px 0 12px;border-bottom:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;color:var(--text);background:transparent;">${esc(q.text)}</pre><button type="button" class="sc-tqc-retry" data-scp-principal-qc-retry style="margin:8px 0 12px;">↻ 用户决定重生成校长</button>`;
-}
-function refreshPrincipalQcUi(){ const el=document.querySelector('#scPrincipalQcPanel'); if(el) el.innerHTML=principalQcReportHtml(); }
 function teacherQcStatusIcon(status){ return status==='pass'?'✓':status==='warn'?'△':'✕'; }
 function teacherQcReportHtml(){
   const sc=scState(); const groups=schoolStageGroups(); const qcs=sc.teacherQc||{};
@@ -8949,16 +8593,6 @@ function bindSchoolSteps(){
   $$('[data-scp-plan]').forEach(b=>{ b.onclick = ()=> openSchoolPlanReader(+b.dataset.scpPlan); });
   const pv = $('[data-scp-plan-pr]');
   if(pv) pv.onclick = ()=> openSchoolPrincipalReader();
-  const principalQcPanel = $('#scPrincipalQcPanel');
-  if(principalQcPanel && !principalQcPanel._bound){
-    principalQcPanel._bound = true;
-    principalQcPanel.addEventListener('click', async e=>{
-      const b=e.target.closest('[data-scp-principal-qc-retry]'); if(!b) return;
-      const principalBtn=document.querySelector('[data-scp-step="principal"]');
-      b.disabled=true;
-      try{ await genPrincipal(principalBtn); } finally { b.disabled=false; refreshSchoolProgressUi(); }
-    });
-  }
   const qcPanel = $('#scTeacherQcPanel');
   if(qcPanel && !qcPanel._bound){
     qcPanel._bound = true;
@@ -14183,7 +13817,6 @@ function schoolZoneBlock(){
         </label>
       </div>
       <div id="scTeacherQcPanel" class="sc-teacher-qc-panel" style="height:220px;max-height:220px;overflow:auto;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);box-sizing:border-box;">${teacherQcReportHtml()}</div>
-      <div id="scPrincipalQcPanel" class="sc-teacher-qc-panel" style="height:220px;max-height:220px;overflow:auto;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);box-sizing:border-box;">${principalQcReportHtml()}</div>
     </div>
   </div>`;
 }
