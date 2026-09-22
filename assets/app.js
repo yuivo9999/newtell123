@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.412';
-// Version line: app1.0.412.js — 第六阶段：全链路压力测试、旧章节规划残留清理与最终结构验收。
-const APP_FILE_VERSION = 'app1.0.412.js';
+const APP_VERSION = '1.0.414';
+// Version line: app1.0.414.js — 校长上下文压缩、立即采用与后置质检解耦。
+const APP_FILE_VERSION = 'app1.0.414.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -5935,6 +5935,64 @@ function principalSourceBlocks(groups){
 function principalSourceLedger(blocks){
   return blocks.map((b,i)=>`【来源${i+1}｜${b.id}｜${b.label}｜权限=${b.authority}｜优先级=${b.priority}】\n${b.content}`).join('\n\n');
 }
+
+/* v1.0.414 · Principal Context Builder
+ * 校长只接收“决策所需的最小上下文”，不再把正文全文、全量重复词典、历史/UI资料
+ * 原样再次塞进 user prompt。目标是：一次调用完成全书章节战略，同时保留事实锚点。
+ */
+const PRINCIPAL_SOURCE_CAPS = Object.freeze({
+  original_idea:2500, nav_beacon:1200, outline_core:3000,
+  canonical_story_strategy:3000, strategic_diversity:1000, chapter_plans:3000,
+  global_timeline:1800, microbeat:900, writing_style:1800, glossary:6000,
+  story_state:2200, chapters_written:2000, school_groups:1000
+});
+function _principalCompactString(text, cap){
+  const s=String(text||'').trim(); if(!s || s.length<=cap) return s;
+  const half=Math.max(500,Math.floor(cap*0.58));
+  const tail=Math.max(300,cap-half-80);
+  return `${s.slice(0,half)}\n…【校长上下文压缩：中间重复/低优先级内容省略 ${Math.max(0,s.length-cap).toLocaleString()} 字】…\n${s.slice(-tail)}`;
+}
+function _principalCompactValue(id, content, cap){
+  const raw=String(content||'');
+  if(!raw) return '';
+  // JSON来源优先做“字段级压缩”，避免直接 slice(JSON) 把结构切断。
+  try{
+    const v=JSON.parse(raw);
+    if(Array.isArray(v)){
+      const items=v.map((x,i)=>{
+        if(x==null) return null;
+        if(typeof x==='string') return `- ${_principalCompactString(x,420)}`;
+        if(typeof x!=='object') return `- ${String(x)}`;
+        const o={};
+        const keys=Object.keys(x);
+        const preferred=['id','name','title','chapter','function','goal','summary','description','role','type','status','relationship','location','organization','event','coreEvent','content','confirmed','time','date','from','to'];
+        [...preferred,...keys].forEach(k=>{ if(Object.prototype.hasOwnProperty.call(x,k) && !Object.prototype.hasOwnProperty.call(o,k)) o[k]=x[k]; });
+        Object.keys(o).forEach(k=>{ if(typeof o[k]==='string') o[k]=_principalCompactString(o[k],520); });
+        return `- ${JSON.stringify(o)}`;
+      }).filter(Boolean).join('\n');
+      return _principalCompactString(items,cap);
+    }
+    if(v && typeof v==='object'){
+      const o={};
+      const keys=Object.keys(v);
+      const preferred=['title','logline','tone','chapters','timeline','timeAnchors','timeAudit','goal','function','summary','description','rules','characters','places','propernouns','walkons','organizations','institutions','items','terms','events','lifeSettings','_relationshipTable','_placeContacts','_properContacts','_worldRules','current','confirmed','status'];
+      [...preferred,...keys].forEach(k=>{ if(Object.prototype.hasOwnProperty.call(v,k) && !Object.prototype.hasOwnProperty.call(o,k)) o[k]=v[k]; });
+      Object.keys(o).forEach(k=>{
+        if(typeof o[k]==='string') o[k]=_principalCompactString(o[k],900);
+        else if(Array.isArray(o[k])) o[k]=o[k].map((x)=>typeof x==='string'?_principalCompactString(x,360):x);
+      });
+      return _principalCompactString(JSON.stringify(o,null,2),cap);
+    }
+  }catch(e){}
+  return _principalCompactString(raw,cap);
+}
+function principalCompactSourceBlocks(groups){
+  const blocks=principalSourceBlocks(groups);
+  const out=blocks.map(b=>Object.assign({},b,{content:_principalCompactValue(b.id,b.content,PRINCIPAL_SOURCE_CAPS[b.id]||4200)})).filter(b=>b.content);
+  const total=out.reduce((n,b)=>n+b.content.length,0);
+  console.info('[Principal] 最小决策上下文：',total.toLocaleString(),'字符；来源数：',out.length);
+  return out;
+}
 function principalContextChunks(text, maxChars){
   const cap=maxChars||28000, s=String(text||'');
   if(!s) return [];
@@ -5971,9 +6029,9 @@ function principalFinalContext(baseUser, understanding, blocks, contextMode){
   const ledger=principalSourceLedger(blocks||[]);
   const hasUnderstanding=!!String(understanding||'').trim();
   const sourceSection=hasUnderstanding
-    ? `【来源清单（原文已在前置理解阶段逐段读取）】\n${manifest}\n\n【Prompt-Perfect式上下文理解层】\n以下是对来源总账逐段阅读后的语义理解结果；它不得凌驾于原始来源权限之上。\n\n${understanding}`
-    : `【来源总账（直接提供给最终校长）】\n${ledger}\n\n【来源清单】\n${manifest}\n\n【上下文处理模式】直接阅读原始来源；未额外调用前置上下文理解 AI。`;
-  return `${baseUser}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${sourceSection}\n\n【最终决策要求】\n- 先综合全部来源，再开始规划；不要只依据某一个来源。\n- 用户明确选择/要求、词典已成立事实、正文已观测事实不得被下游规划擅自改写。\n- 当来源冲突时，按既有权限链处理并在规划中保持边界，不要偷偷“修正”原始事实。\n- 每一项重要规划结论都应能追溯到一个或多个来源。\n- 只输出原校长系统规定的最终 Markdown 契约。`;
+    ? `【来源清单（已做最小决策上下文压缩）】\n${manifest}\n\n【上下文理解层】\n${understanding}`
+    : `【来源总账（校长专用最小决策上下文）】\n${ledger}\n\n【来源清单】\n${manifest}\n\n【上下文处理模式】仅注入校长决策所需的压缩事实；不重复注入正文全文、UI/历史信息和低优先级施工细节。`;
+  return `${baseUser}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${sourceSection}\n\n【最终决策要求】\n- 先综合全部来源，再开始规划；不要只依据某一个来源。\n- 用户明确选择/要求、词典已成立事实、正文已观测事实不得被下游规划擅自改写。\n- 当来源冲突时，按既有权限链处理并在规划中保持边界，不要偷偷“修正”原始事实。\n- 每一项重要规划结论都应能追溯到一个或多个来源。\n- 最终只允许输出唯一的[PRINCIPAL_CHAPTER]结构式协议，不得输出Markdown章节卡。`;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -6163,7 +6221,7 @@ const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（全
 
 L0 · 用户确定的作品事实、世界观、作品定位、写作风格与明确要求
 L1 · 全量万物词典中已经确认的世界事实
-L2 · 校长全书规划 + 本章章级导演/授权任务卡
+L2 · 校长全书规划 + 唯一 PrincipalChapterPlan 章节战略
 L3 · 老师在授权边界内形成的本章教案
 L4 · 正文AI文学表达
 
@@ -6200,7 +6258,7 @@ L0 是最高优先级。
 11. 第一章开篇任务卡
 12. 各组组级框架
 13. 全书章节标题
-14. 每章章级导演/授权任务卡
+14. 每章唯一 PrincipalChapterPlan 章节战略
 15. 全书级风险审计
 
 你不得负责：
@@ -6909,7 +6967,7 @@ ${JSON.stringify(state.strategicDiversityProfile || currentCanonicalStoryStrateg
 每章必须通过唯一[PRINCIPAL_CHAPTER]结构式块给出“本章推进骨架”与“本章中段推进战略”。推进骨架描述全章从章头到章末的关键状态/事件节点及因果连接；中段战略只定义中段为何这样推进、必须完成什么状态变化。二者不得互相矛盾。
 不得输出旧版Markdown章级导演/授权任务卡，不得重复输出第二套章节计划。`);  lines.push('【写作风格/配方摘要】\n' + scStyleBrief());
   lines.push('【各组对应范围】\n' + groups.map((g,i)=>`组${i+1}·老师${i+1}（第${g.first}-${g.last}章${g.stage?('·'+g.stage):''}）`).join('\n'));
-  lines.push('【原始来源完整性声明】\n最终校长必须综合所有已注入来源；来源规模可直接注入时，直接读取原始来源，不强制经过额外上下文理解 AI。');
+  lines.push('【校长输入边界】\n本次调用必须一次完成全部章节战略。你只处理已注入的最小决策上下文；不要要求正文全文、老师施工细节或历史版本。缺失的信息只能写成待确认，不得臆造。');
   const ban = banListBlockFor('principal');
   if(ban) lines.push(ban);
   return lines.join('\n\n');
@@ -6972,7 +7030,7 @@ function parsePrincipalMachine(text, total){
     const r=by[n];
     if(!r){ missing.push(n); continue; }
     const intensity=Number(r.endingIntensity);
-    const required=['chapter','title','function','goal','coreEvent','characterActions','progressionSkeleton','midMode','midSecondary','midChange','midDriver','midDifference','endingFunction','endingIntensity','lastEffectiveEvent','endingForm','nextTransitionType','nextTransitionBasis','diversityNote'];
+    const required=['chapter','title','function','goal','coreEvent','progressionSkeleton','midMode','midChange','midDriver','endingFunction','endingIntensity','lastEffectiveEvent','endingForm','nextTransitionType','nextTransitionBasis'];
     const miss=required.filter(k=>!String(r[k]??'').trim());
     if(!Number.isInteger(intensity) || intensity<0 || intensity>4) miss.push('endingIntensity(0-4)');
     if(miss.length) invalid.push({chapter:n,fields:miss});
@@ -6991,10 +7049,10 @@ function normalizePrincipalChapterPlan(r){
     progressionSkeleton:String(r.progressionSkeleton||'').trim(),
     midStrategy:{
       primaryMode:String(r.midMode||'').trim(),
-      secondaryMode:String(r.midSecondary||'').trim(),
+      secondaryMode:String(r.midSecondary||'无').trim() || '无',
       coreChange:String(r.midChange||'').trim(),
       driver:String(r.midDriver||'').trim(),
-      difference:String(r.midDifference||'').trim()
+      difference:String(r.midDifference||'').trim() || '待质检确认'
     },
     ending:{
       function:String(r.endingFunction||'').trim(),
@@ -7003,7 +7061,7 @@ function normalizePrincipalChapterPlan(r){
       form:String(r.endingForm||'').trim(),
       nextTransitionType:String(r.nextTransitionType||'').trim(),
       nextTransitionBasis:String(r.nextTransitionBasis||'').trim(),
-      diversityNote:String(r.diversityNote||'').trim()
+      diversityNote:String(r.diversityNote||'').trim() || '待质检确认'
     }
   };
 }
@@ -7259,11 +7317,10 @@ async function genPrincipal(btn, opts){
       const _tp0 = performance.now();
       const _tp = {attempt};
       try{
-        const sourceBlocks = principalSourceBlocks(groups);
-        const ctxPack = await buildPrincipalContextUnderstanding(sourceBlocks, _abortCtl?.signal);
-        console.info('[Principal] 来源处理模式：', ctxPack.mode, '；来源字符数：', ctxPack.ledger.length);
-        const principalUser = principalFinalContext(buildPrincipalUser(groups), ctxPack.understanding, sourceBlocks, ctxPack.mode);
-        const txt = await callAIGuarded('principal', sys, principalUser, {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
+        const sourceBlocks = principalCompactSourceBlocks(groups);
+        const principalUser = principalFinalContext(buildPrincipalUser(groups), '', sourceBlocks, 'compact-direct');
+        _tp.inputChars=String(principalUser||'').length; _tp.systemChars=String(sys||'').length;
+        const txt = await callAIGuarded('principal', sys, principalUser, {}, { temperature:temp, maxTokens:8192, signal:_abortCtl?.signal });
         _tp.aiReturnMs = Math.round(performance.now()-_tp0);
         if(!txt || !String(txt||'').trim()){ setScRetry('principal', attempt); scRefreshBadge(btn,'principal'); throw new Error('校长返回空'); }
         const principalViolations = isScopeBanned('principal') ? banEntityTextViolations(txt, 'principal').filter(x=>x.type==='name') : [];
@@ -7298,10 +7355,8 @@ async function genPrincipal(btn, opts){
           _tp.principalLogicWarnings = _principalLogicAudit.warnings.length;
           _tp.middleValidationMs = Math.round(performance.now()-_middle0);
           if(_middleMissing.length){
-            const err = new Error('校长缺少本章中段推进战略卡：第'+_middleMissing.join('、')+'章');
-            err.principalValidation = true;
-            err.principalFailure = {category:'PRINCIPAL_VALIDATION_ERROR',code:'MIDDLE_PLAN_MISSING',chapters:_middleMissing,details:'校长缺少本章中段推进战略卡',expected:'每章都应具备可供老师执行的中段推进信息',actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字`};
-            throw err;
+            console.warn('[Principal] 中段字段存在软缺口，先采用，交由后置QC诊断：',_middleMissing);
+            _tp.principalLogicWarnings = (_tp.principalLogicWarnings||0) + _middleMissing.length;
           }
           const _endAudit0 = performance.now();
           const principalEndingPlans = {};
@@ -7331,11 +7386,10 @@ async function genPrincipal(btn, opts){
         storyState().canon.principalAt=Date.now(); storyState().versions.principal=Number(storyState().versions.principal||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1;
         delete sc.stale.principal;
         const _principalEndingPlans = {}; Object.keys(principalPlans).forEach(n=>{ if(principalPlans[n]?.ending) _principalEndingPlans[n]=Object.assign({chapter:Number(n)},principalPlans[n].ending); });
-        const principalPlans = normalizePrincipalPlans(principalMachine);
         const principalLogicAudit = auditPrincipalPlanLogic(principalPlans, state.chapterCount || state.outline?.chapters?.length || 0);
-        sc.principal = { machine: true, plans: principalPlans, logicAudit: principalLogicAudit, ts:Date.now(), folded:false, groups: groups.map((g,gi)=>({ gi, stage:g.stage, first:g.first, last:g.last })), raw:principalTxt, titles, chapterEndingAudit: _endingCheck.audit };
+        sc.principal = { machine: true, status:'ADOPTED', qcStatus:'PENDING', plans: principalPlans, logicAudit: principalLogicAudit, ts:Date.now(), folded:false, groups: groups.map((g,gi)=>({ gi, stage:g.stage, first:g.first, last:g.last })), raw:principalTxt, titles, chapterEndingAudit: _endingCheck.audit };
         if(_principalEndingWarning) sc.principal.chapterEndingAuditWarning = _principalEndingWarning; else delete sc.principal.chapterEndingAuditWarning;
-        storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={version:storyState().versions.principal,source:'principal',ts:Date.now(),groups:sc.principal.groups,titles,plans:principalPlans,logicAudit:principalLogicAudit};
+        storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={version:storyState().versions.principal,source:'principal',status:'ADOPTED',qcStatus:'PENDING',ts:Date.now(),groups:sc.principal.groups,titles,plans:principalPlans,logicAudit:principalLogicAudit};
         _tp.stateWriteMs = Math.round(performance.now()-_state0);
         // 与老师成功路径一致：所有状态先内存落地，最后只做一次完整持久化。
         scMark('principal', true, false);
@@ -7353,7 +7407,7 @@ async function genPrincipal(btn, opts){
         _tp.status='success';
         if(_principalEndingWarning) _tp.endingAuditWarning=_principalEndingWarning;
         principalPerfRecord(_tp);
-        toast(`校长统筹完成：${groups.length} 位老师分组 + 全校守则 + 组级框架 + ${titles.length}章标题已自动定稿应用！`);
+        toast(`校长已生成并立即采用：${groups.length} 位老师分组 + ${titles.length}章结构计划已落地；质检仅作后置诊断。`);
         playDoneSound('single');
         return true;
       }catch(e){
