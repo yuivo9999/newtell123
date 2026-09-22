@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.381';
-// Version line: app22.js — 正文单次生成版；强化章节事实账本、人物动态反应链、关系差异、潜台词与正文质量审计。
-const APP_FILE_VERSION = 'app1.0.381.js';
+const APP_VERSION = '1.0.403';
+// Version line: app1.0.402.js — 老师返回后快速质检即完成；质检不自动重试，报告由用户决定是否重生成。
+const APP_FILE_VERSION = 'app1.0.403.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -691,10 +691,10 @@ async function auditChapterState(i,text){
   if(!c||!obs) return null;
   const g=(state.outline&&state.outline.glossary)||{};
   const canon=`人物:${(g.characters||[]).map(x=>x.name).join('、')}\n地点:${(g.places||[]).map(x=>x.name).join('、')}\n专名:${(g.propernouns||[]).map(x=>x.name).join('、')}\n世界规则:${(g._worldRules||[]).map(x=>x.rule).join('；')}`;
-  const banAudit = stateBanEnabled() ? `\n【用户全书禁则·必须审计】\n禁用姓名：${banListNames().join('、')}\n姓名禁用字：${banListChars().join('、')}\n禁用短语：${(Array.isArray(banListRaw().phrases)?banListRaw().phrases:[]).join('、')}` : '';
+  const banAudit = stateBanEnabled() ? `\n【用户全书禁则·必须审计】\n禁用实体：${banListAllEntityNames().join('、')}\n禁用文本：${banListAllTextItems().join('、')}` : '';
   const plannedTime=c.time||''; const tr=_extractPlanTimeRange({beatsText:'剧情时间落点：'+plannedTime});
   const user=`【机器章节卡】${JSON.stringify(c)}\n【时间覆盖核验】起点=${tr.from||'未知'}；终点=${tr.to||'未知'}；跨度=${_timeDaySpan(tr.from,tr.to)==null?'未知':_timeDaySpan(tr.from,tr.to)+'天'}；时间推进安排=${c.timeCoverage||'无'}\n【上一章正文结算】${JSON.stringify(prev||{})}\n【本章正文结算】${JSON.stringify(obs)}\n【词典只读实体】${canon}${banAudit}\n【上一章质量账本】${JSON.stringify(ss.chapters?.[i-1]?.qualityLedger||{})}\n【本章已有质量账本】${JSON.stringify(ss.chapters?.[i]?.qualityLedger||{})}\n【本章正文】\n${String(text||'').slice(0,50000)}`;
-  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_AUDIT_SYS,user,{maxTokens:3200,temperature:0.05,topP:0.1,signal:_abortCtl?.signal,taskKey:'chapterAudit'})); const j=parseJson(raw)||{}; const ql=j.qualityLedger&&typeof j.qualityLedger==='object'?j.qualityLedger:{}; const normList=k=>Array.isArray(ql[k])?ql[k].map(x=>String(x||'').trim()).filter(Boolean).slice(0,20):[]; const qualityLedger={facts:normList('facts'),introducedInfo:normList('introducedInfo'),characterKnowledge:normList('characterKnowledge'),relationshipChanges:normList('relationshipChanges'),objects:normList('objects'),locations:normList('locations'),unresolved:normList('unresolved'),ts:Date.now(),chapter:i}; const report={status:['PASS','WARN','FAIL'].includes(j.status)?j.status:'WARN',issues:Array.isArray(j.issues)?j.issues.slice(0,30):[],summary:String(j.summary||'').trim(),qualityLedger,ts:Date.now(),chapter:i}; ss.chapters[i].qualityLedger=qualityLedger; o._chapterQualityLedger=o._chapterQualityLedger||{}; o._chapterQualityLedger[i]=qualityLedger; const p=ss.chapters[i]?.planned||{}; const pt=_timeOrdinal(p.to), ot=_timeOrdinal(obs.time); if(pt!=null && ot!=null && ot<pt){ report.status='FAIL'; report.issues.unshift({type:'time',severity:'fail',evidence:`正文状态结算时间：${obs.time}`,expected:`本章必须抵达计划终点：${p.to}`,actual:`正文结算仍早于计划终点约${Math.max(0,pt-ot)}小时`,repair:'补足计划终点前真实发生的时间流逝/阶段性事件，并让章末状态落到计划终点。'}); } else if(pt!=null && ot==null && (p.spanDays||0)>=1){ report.status=report.status==='FAIL'?'FAIL':'WARN'; report.issues.unshift({type:'time',severity:'warn',evidence:'正文状态结算器未能确认章末日期',expected:`抵达计划终点：${p.to}`,actual:'无法确认',repair:'复核正文是否真正走到计划终点；必要时补足自然时间过桥。'}); } if(report.issues.some(x=>x.severity==='fail')) report.status='FAIL'; ss.chapters[i].audit=report; persist(); return report; }catch(e){ ss.chapters[i].audit={status:'WARN',issues:[{type:'audit',severity:'warn',evidence:'审计AI不可用',expected:'完成审计',actual:e.message,repair:'稍后重试'}],summary:'审计未完成',ts:Date.now(),chapter:i}; persist(); return ss.chapters[i].audit; }
+  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_AUDIT_SYS,user,{maxTokens:3200,temperature:resolveTaskTemperature('chapterAudit'),topP:0.1,signal:_abortCtl?.signal,taskKey:'chapterAudit'})); const j=parseJson(raw)||{}; const ql=j.qualityLedger&&typeof j.qualityLedger==='object'?j.qualityLedger:{}; const normList=k=>Array.isArray(ql[k])?ql[k].map(x=>String(x||'').trim()).filter(Boolean).slice(0,20):[]; const qualityLedger={facts:normList('facts'),introducedInfo:normList('introducedInfo'),characterKnowledge:normList('characterKnowledge'),relationshipChanges:normList('relationshipChanges'),objects:normList('objects'),locations:normList('locations'),unresolved:normList('unresolved'),ts:Date.now(),chapter:i}; const report={status:['PASS','WARN','FAIL'].includes(j.status)?j.status:'WARN',issues:Array.isArray(j.issues)?j.issues.slice(0,30):[],summary:String(j.summary||'').trim(),qualityLedger,ts:Date.now(),chapter:i}; ss.chapters[i].qualityLedger=qualityLedger; o._chapterQualityLedger=o._chapterQualityLedger||{}; o._chapterQualityLedger[i]=qualityLedger; const p=ss.chapters[i]?.planned||{}; const pt=_timeOrdinal(p.to), ot=_timeOrdinal(obs.time); if(pt!=null && ot!=null && ot<pt){ report.status='FAIL'; report.issues.unshift({type:'time',severity:'fail',evidence:`正文状态结算时间：${obs.time}`,expected:`本章必须抵达计划终点：${p.to}`,actual:`正文结算仍早于计划终点约${Math.max(0,pt-ot)}小时`,repair:'补足计划终点前真实发生的时间流逝/阶段性事件，并让章末状态落到计划终点。'}); } else if(pt!=null && ot==null && (p.spanDays||0)>=1){ report.status=report.status==='FAIL'?'FAIL':'WARN'; report.issues.unshift({type:'time',severity:'warn',evidence:'正文状态结算器未能确认章末日期',expected:`抵达计划终点：${p.to}`,actual:'无法确认',repair:'复核正文是否真正走到计划终点；必要时补足自然时间过桥。'}); } if(report.issues.some(x=>x.severity==='fail')) report.status='FAIL'; ss.chapters[i].audit=report; persist(); return report; }catch(e){ ss.chapters[i].audit={status:'WARN',issues:[{type:'audit',severity:'warn',evidence:'审计AI不可用',expected:'完成审计',actual:e.message,repair:'稍后重试'}],summary:'审计未完成',ts:Date.now(),chapter:i}; persist(); return ss.chapters[i].audit; }
 }
 const CHAPTER_REPAIR_SYS=`你是长篇小说“局部修复AI”。你没有改写世界和剧情的权力，只能修复审计指出的最小冲突或明显质量缺陷。
 规则：只处理FAIL问题；保持章节卡规定的事件、人物、时间、地点和文学风格；不得新增主线事件；不得整章重写。若FAIL属于多日时间跨度不足，允许在原有事件之间加入最小必要的时间过桥/阶段性推进，让正文自然抵达章节卡终点，但不得用一句“几天后”敷衍，也不得改变核心事件顺序。
@@ -730,10 +730,10 @@ async function repairChapterByAudit(i,text,report){
   const fails=(report?.issues||[]).filter(x=>x&&x.severity==='fail');
   const classification=classifyChapterAuditFailure(report);
   if(!fails.length || !classification.repairable) return {content:String(text||''),attempted:false,classification};
-  const banRepair = stateBanEnabled() ? `\n【用户全书禁则】禁用姓名：${banListNames().join('、')}；姓名禁用字：${banListChars().join('、')}；禁用短语：${(Array.isArray(banListRaw().phrases)?banListRaw().phrases:[]).join('、')}` : '';
+  const banRepair = stateBanEnabled() ? `\n【用户全书禁则】禁用实体：${banListAllEntityNames().join('、')}；禁用文本：${banListAllTextItems().join('、')}` : '';
   const priorLedger = chapterQualityLedger(i);
   const user=`【章节卡】${JSON.stringify(chapterPlanAuthority(i))}\n【正文审核失败分类】${classification.failureCode}\n【可修复性】仅允许局部修复一次\n【定向修复提示】${classification.repairHint}\n【审计FAIL】${JSON.stringify(fails)}${banRepair}\n【本章已确认质量账本】${JSON.stringify(priorLedger||{})}\n【正文】\n${String(text||'').slice(0,50000)}\n只修复最小冲突，优先修改1-3个最小连续片段；保留所有已经合格的正文、事实、人物状态、老师教案与章节边界；不得新增主线事件，不得整章重写。`;
-  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_REPAIR_SYS,user,{maxTokens:3500,temperature:0.20,topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterRepair'})); const j=parseJson(raw)||{}; const old=String(j.replacement||'').trim(), neu=String(j.newText||'').trim(); if(!old||!neu) return {content:String(text||''),attempted:true,classification}; const idx=String(text||'').indexOf(old); if(idx<0) return {content:String(text||''),attempted:true,classification}; const content=String(text).slice(0,idx)+neu+String(text).slice(idx+old.length); return {content,attempted:true,classification}; }catch(e){ return {content:String(text||''),attempted:true,classification,error:String(e&&e.message||e)}; }
+  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_REPAIR_SYS,user,{maxTokens:3500,temperature:resolveTaskTemperature('chapterRepair'),topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterRepair'})); const j=parseJson(raw)||{}; const old=String(j.replacement||'').trim(), neu=String(j.newText||'').trim(); if(!old||!neu) return {content:String(text||''),attempted:true,classification}; const idx=String(text||'').indexOf(old); if(idx<0) return {content:String(text||''),attempted:true,classification}; const content=String(text).slice(0,idx)+neu+String(text).slice(idx+old.length); return {content,attempted:true,classification}; }catch(e){ return {content:String(text||''),attempted:true,classification,error:String(e&&e.message||e)}; }
 }
 async function finalizeChapterState(i,text){
   text = enforceChapterBoundary(i, text);
@@ -744,7 +744,9 @@ async function finalizeChapterState(i,text){
     const repair=await repairChapterByAudit(i,content,audit);
     audit.failureCode=firstClass.failureCode; audit.repairable=firstClass.repairable; audit.repairHint=firstClass.repairHint; audit.repairAttempts=repair.attempted?1:0;
     if(repair.attempted && repair.content!==content){
-      content=repair.content; const o=state.outline; o.chapters[i].content=content; updateFactCardFromChapter(i,content); await commitChapterObservedState(i,content);
+      content=repair.content;
+      assertChapterLocalHardGate(i, content);
+      const o=state.outline; o.chapters[i].content=content; updateFactCardFromChapter(i,content); await commitChapterObservedState(i,content);
       audit=await auditChapterState(i,content);
       const afterClass=classifyChapterAuditFailure(audit);
       audit.failureCode=afterClass.failureCode; audit.repairable=afterClass.repairable; audit.repairHint=afterClass.repairHint; audit.repairAttempts=1; audit.repaired=true; audit.repairedAt=Date.now();
@@ -764,7 +766,7 @@ async function commitChapterObservedState(i,text){
   const o=state.outline||{}, plan=(o.chapterPlans||[])[i]||{}, ss=storyState();
   const user=`【第${i+1}章教案】\n${String(plan.beatsText||'').slice(0,7000)}\n【本章正文】\n${String(text).slice(-40000)}`;
   try{
-    const raw=unwrapAIResult(await callDeepSeek(CHAPTER_STATE_SYS,user,{maxTokens:1800,temperature:0.1,topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterState'}));
+    const raw=unwrapAIResult(await callDeepSeek(CHAPTER_STATE_SYS,user,{maxTokens:1800,temperature:resolveTaskTemperature('chapterState'),topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterState'}));
     const j=parseJson(raw)||{};
     const obs={time:String(j.time||'').trim(),location:String(j.location||'').trim(),characters:j.characters&&typeof j.characters==='object'&&!Array.isArray(j.characters)?j.characters:{},endingState:String(j.endingState||'').trim(),openThreads:Array.isArray(j.openThreads)?j.openThreads.map(x=>String(x||'').trim()).filter(Boolean).slice(0,12):[],newFacts:Array.isArray(j.newFacts)?j.newFacts.map(x=>String(x||'').trim()).filter(Boolean).slice(0,12):[],source:'observed',ts:Date.now()};
     ss.chapters[i]=ss.chapters[i]||{}; ss.chapters[i].observed=obs; ss.chapters[i].observedAt=Date.now();
@@ -1056,7 +1058,8 @@ const TM_KEYS = ['idea',
   'principal', 'teacher', 'dictmaster', 'dictEnrich',
   'chapter',
   'strip', 'subplot', 'glossary', 'rolling',
-  'contentAdvice', 'assets', 'recipe'];
+  'contentAdvice', 'assets', 'recipe',
+  'titleAdvice','chapterAudit','chapterRepair','chapterState','principalContext','timeAnchor','recipeAnalysis'];
 
 function glmModels(){ return [
   {name:'glm-4.5-air', label:'GLM-4.5-Air（智谱 · 高性价比，现用）', kind:'pro'},
@@ -1129,7 +1132,8 @@ function resolveActiveSpec(taskKey){
   let group = cfg.groups.find(g=>g.id===act.groupId) || cfg.groups[0] || {};
   let key = (group.keys||[]).find(k=>k.id===act.keyId) || (group.keys||[])[0] || {};
   let model = (group.models||[]).find(m=>m.name===act.model) || (group.models||[])[0] || {};
-  const _tm = taskKey ? (cfg.taskModels||{})[taskKey] : null;
+  const _taskModelAlias = { ideaOptimization:'idea', ideaPolishStage2:'idea', dictHarvest:'dictEnrich', principal_context:'principalContext' };
+  const _tm = taskKey ? ((cfg.taskModels||{})[taskKey] || (cfg.taskModels||{})[_taskModelAlias[taskKey]||'']) : null;
   let _overridden = false;
   if(_tm){
     const tg = cfg.groups.find(g=>g.id===_tm.groupId);
@@ -1162,7 +1166,13 @@ function resolveActiveSpec(taskKey){
     subplotTemp: (cfg.subplotTemp==null ? 0.25 : cfg.subplotTemp),    // 分任务温度：支线进度更新（契约类窄采样）
     rollingTemp: (cfg.rollingTemp==null ? 0.3 : cfg.rollingTemp),    // 分任务温度：滚动摘要（忠实压缩）
     contentAdviseTemp: (cfg.contentAdviseTemp==null ? 0.6 : cfg.contentAdviseTemp),  // 分任务温度：内容建议（建议类）
-    aiRecipeTemp:(cfg.aiRecipeTemp==null ? 0.85 : cfg.aiRecipeTemp)
+    aiRecipeTemp:(cfg.aiRecipeTemp==null ? 0.85 : cfg.aiRecipeTemp),
+    chapterAuditTemp:(cfg.chapterAuditTemp==null ? 0.05 : cfg.chapterAuditTemp),
+    chapterRepairTemp:(cfg.chapterRepairTemp==null ? 0.20 : cfg.chapterRepairTemp),
+    chapterStateTemp:(cfg.chapterStateTemp==null ? 0.10 : cfg.chapterStateTemp),
+    principalContextTemp:(cfg.principalContextTemp==null ? 0.15 : cfg.principalContextTemp),
+    timeAnchorTemp:(cfg.timeAnchorTemp==null ? 0.20 : cfg.timeAnchorTemp),
+    recipeAnalysisTemp:(cfg.recipeAnalysisTemp==null ? 0.20 : cfg.recipeAnalysisTemp)
   };
 }
 function currentSpecLabel(){
@@ -1658,6 +1668,27 @@ function openAiLogPanel(){
 function closeAiLogPanel(){ const p=$('#ailogPanel'); if(p) p.remove(); }
 
 function _f2(x){ const n = Number(x); if(!isFinite(n)) return x; return Math.round(n * 100) / 100; }
+
+// 统一温度唯一入口：任务专属温度优先；全局温度只作为没有专属配置时的最终兜底。
+// 推荐值仅用于设置界面展示，不参与运行时计算。
+const TASK_TEMP_MAP = {
+  idea:'ideaTemp', ideaOptimization:'ideaTemp', ideaPolishStage2:'ideaTemp',
+  principal:'principalTemp', principal_context:'principalContextTemp',
+  teacher:'teacherTemp',
+  dictmaster:'dictmasterTemp',
+  dictEnrich:'dictEnrichTemp', dictHarvest:'dictEnrichTemp',
+  chapter:'chapterTemp', chapterAudit:'chapterAuditTemp', chapterRepair:'chapterRepairTemp', chapterState:'chapterStateTemp',
+  strip:'stripTemp', subplot:'subplotTemp', glossary:'qcTemp', rolling:'rollingTemp',
+  contentAdvice:'contentAdviseTemp', assets:'assetsTemp', titleAdvice:'titleTemp',
+  recipe:'aiRecipeTemp', recipeAnalysis:'recipeAnalysisTemp', timeAnchor:'timeAnchorTemp'
+};
+function resolveTaskTemperature(taskKey, explicitTemperature=null){
+  const s = resolveActiveSpec(taskKey);
+  const field = taskKey ? TASK_TEMP_MAP[taskKey] : null;
+  if(field && s[field] != null && isFinite(Number(s[field]))) return _f2(s[field]);
+  if(explicitTemperature != null && isFinite(Number(explicitTemperature))) return _f2(explicitTemperature);
+  return _f2(s.temperature);
+}
 async function callDeepSeek(system, user, {temperature=null, topP=null, signal=null, maxTokens=null, onStream=null, retry=2, taskKey=null}={}){
   const _t0 = Date.now();
   function isReasonModel(name){
@@ -1690,7 +1721,7 @@ async function callDeepSeek(system, user, {temperature=null, topP=null, signal=n
         model: s.model,
         messages: [{role:'system', content: system}, {role:'user', content: user}],
         ...(!_reason ? {
-          temperature: _f2(temperature==null ? s.temperature : temperature),
+          temperature: resolveTaskTemperature(taskKey, temperature),
           top_p: _f2(topP==null ? 0.95 : topP)
         } : {}),   // 推理模型通常不支持 temperature/top_p，省略
         stream: streaming
@@ -1978,6 +2009,10 @@ function installGlobalGenerationUi(){
     .app-idea-section>summary{cursor:pointer;padding:11px 13px;font-weight:800;list-style:none;display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,rgba(255,255,255,.82),rgba(244,246,255,.62))}.app-idea-section>summary::-webkit-details-marker{display:none}.app-idea-section>summary:after{content:'＋';margin-left:auto;opacity:.55}.app-idea-section[open]>summary:after{content:'−'}
     .app-idea-section-body{padding:11px 13px;line-height:1.75}.app-idea-kv{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:5px 0}.app-idea-kv b{color:#5967a8}.app-idea-chip{display:inline-block;margin:4px 5px 4px 0;padding:5px 9px;border-radius:999px;background:linear-gradient(135deg,rgba(99,102,241,.10),rgba(45,177,199,.10));border:1px solid rgba(99,102,241,.14);font-size:12px}
     .app-idea-readable{border-radius:15px!important;background:linear-gradient(180deg,rgba(255,255,255,.78),rgba(248,249,253,.72))!important;line-height:1.82!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9)}
+    /* 1.0.402：优化构想/全书节拍阅读区固定白底黑字，隔离深色主题覆盖 */
+    .app-idea-ui .app-idea-readable,.app-idea-readable,.app-idea-ui .ai-book-beat-brief,.ai-book-beat-brief,.app-idea-ui .app-idea-section-body,.app-idea-section-body{background:#fff!important;color:#000!important;}
+    .app-idea-ui .app-idea-readable *,.app-idea-readable *,.app-idea-ui .ai-book-beat-brief *,.ai-book-beat-brief *,.app-idea-ui .app-idea-section-body *,.app-idea-section-body *{color:#000!important;}
+    .app-idea-ui .ai-book-beat-brief,.ai-book-beat-brief{border-color:#d8d8d8!important;box-shadow:0 4px 14px rgba(0,0,0,.06)!important;}
     #btnOptimizationConcept.app-opt-btn{border:0!important;border-radius:15px!important;color:#fff!important;font-weight:900!important;letter-spacing:.2px!important;box-shadow:0 10px 24px rgba(70,90,180,.18)!important;position:relative;overflow:hidden}
     @media(max-width:640px){.app-idea-structured{padding:9px;border-radius:16px}.app-idea-structured-head{align-items:flex-start;flex-wrap:wrap}.app-idea-structured-head em{width:100%;margin-left:0}.app-idea-kv{grid-template-columns:1fr;gap:2px}.app-idea-kv b{font-size:12px}}
     @media (prefers-reduced-motion:reduce){#btnOptimizationConcept.app-opt-btn,.app-idea-fold>summary::before{animation:none !important;transition:none !important}.app-opt-btn.app-opt-generating::after{animation:none !important}}
@@ -3396,7 +3431,7 @@ async function generateOptimizationConcept(btn, force){
   state.polishSelectedId=null; state.polishAdopted=null; state.canonicalStoryStrategy=null;
   state.polishOptions=[]; state.strategicDimensions=[]; state.strategicDiversityProfile=null; state.originalIdeaAnchors=null;
   state.polishDiagnosis=null; state.polishStrategies=[]; state.polishFailureTrace=null; state.polishRawFallback='';
-  persist(); render();
+  persist();
   const live=$('#btnOptimizationConcept'); if(live) busy(live,true,multi?'✨ 正在生成3—5个优化构想…':'✨ 正在生成优化构想…');
   markAIRunning('ideaOptimization'); markAIRunning('idea');
   try{
@@ -3415,13 +3450,14 @@ async function generateOptimizationConcept(btn, force){
     markAIDone('ideaOptimization'); markAIDone('idea');
     persist();
     toast(multi?`优化构想完成：已生成 ${state.polishOptions.length} 个方案`:'优化构想完成：已生成最终方案');
-    playEventSound('polish_done'); render();
+    playEventSound('polish_done');
+    refreshPolishUi();
     queueGenerationFocus('#polishBox',120);
     return true;
   }catch(e){
     state.strategyStage1Status='error'; state.strategyStage2Status='error';
     addToFixQueue({kind:'ideaOptimization',error:e.message});
-    toast('优化构想生成失败：'+e.message); reportSoundError('polish',e); persist(); render(); queueGenerationFocus('#polishBox',120); return false;
+    toast('优化构想生成失败：'+e.message); reportSoundError('polish',e); persist(); refreshPolishUi(); queueGenerationFocus('#polishBox',120); return false;
   }finally{
     state.aiNetwork.running=(state.aiNetwork.running||[]).filter(k=>!['ideaOptimization','ideaStrategy','ideaPolishStage2','idea'].includes(k));
   }
@@ -3680,6 +3716,12 @@ function polishDebugTrace(stage, raw, candidates, extra){
     console.debug('[APP26][优化构想]', Object.assign({stage,rawLength:text.length,candidateCount:Array.isArray(candidates)?candidates.length:0}, extra||{}));
   }catch(_){ }
 }
+function refreshPolishUi(){
+  const box=$('#polishBox'), cards=$('#polishCards');
+  if(box) box.style.display = 'block';
+  if(cards) renderPolishCards(cards);
+}
+
 function showPolishResult(out, multi){
   const box=$('#polishBox'), cards=$('#polishCards');
   const rawText=String(out||'').trim();
@@ -3729,9 +3771,9 @@ function showPolishResult(out, multi){
     state.polishStrategies=[];
   }
   persist();
-  if(box && cards){ box.style.display='block'; render(); openPolishBox(); }
-  else { persist(); }
+  if(box && cards){ box.style.display='block'; renderPolishCards(cards); }
 }
+
 
 function applyV45ToOutline(o, d){
   // 【权限隔离】优化构想阶段不得写入正式 glossary。
@@ -3793,7 +3835,7 @@ function renderOptimizationStructuredView(o){
     <details class="app-idea-section"><summary>👤 主角与核心人物</summary><div class="app-idea-section-body">${kv(b.protagonist)}${escList(b.keyCharacters)}</div></details>
     <details class="app-idea-section"><summary>🌍 世界与规则</summary><div class="app-idea-section-body">${kv(b.world)}${escList(b.worldRules)}</div></details>
     <details class="app-idea-section"><summary>⚔️ 冲突与故事发展</summary><div class="app-idea-section-body">${kv(b.conflict)}${kv(b.storyArc)}</div></details>
-    <details class="app-idea-section"><summary>📖 全书故事节拍</summary><div class="app-idea-section-body">${escList(b.fullBookBeat)}</div></details>
+    <details class="app-idea-section"><summary>📖 全书故事节拍</summary><div class="app-idea-section-body" style="background:#fff!important;color:#000!important">${escList(b.fullBookBeat)}</div></details>
     <details class="app-idea-section"><summary>🎬 结局方向</summary><div class="app-idea-section-body">${kv(b.ending)}</div></details>
     ${b.creativeAdditions&&b.creativeAdditions.length?`<details class="app-idea-section"><summary>💡 AI 创意补充</summary><div class="app-idea-section-body">${escList(b.creativeAdditions)}</div></details>`:''}
   </div>`;
@@ -3836,9 +3878,9 @@ function renderPolishCards(container){
       </div>
       ${pTitle?`<div class="pol-cand-title" style="background:${c}">📖 ${esc(pTitle)}</div>`:''}
       ${renderOptimizationStructuredView(o)}
-      <div class="pol-cand-body app-idea-readable">${esc(pBody ? pBody : String(o.text||''))}</div>
+      <div class="pol-cand-body app-idea-readable" style="background:#fff!important;color:#000!important">${esc(pBody ? pBody : String(o.text||''))}</div>
       ${String(o.novelSummary||'').trim()?`<div class="pol-cand-body" style="border-top:1px dashed var(--line,#ddd)"><b>📖 小说简介（下游创作材料）</b><br>${esc(String(o.novelSummary).trim())}</div>`:''}
-      ${String(o.fullBookBeat||o.bookBeat||'').trim()?`<div class="pol-cand-body" style="border-top:1px dashed var(--line,#ddd)"><b>🎬 全书故事节拍</b><br>${esc(String(o.fullBookBeat||o.bookBeat).trim())}</div>`:''}
+      ${String(o.fullBookBeat||o.bookBeat||'').trim()?`<div class="pol-cand-body app-idea-readable" style="border-top:1px dashed #d8d8d8!important;background:#fff!important;color:#000!important"><b>🎬 全书故事节拍</b><br>${esc(String(o.fullBookBeat||o.bookBeat).trim())}</div>`:''}
       ${defects.length?`<div class="pol-cand-body" style="opacity:.85"><b>⚠️ 构想缺陷清单：</b><br>${defects.map(d=>'· '+esc(String(d))).join('<br>')}</div>`:''}
       <div class="pol-cand-foot">
         ${hasV45?`<button type="button" class="btn small ghost" data-pol-import="${i}" title="导入结构化设定（导航灯塔/种子人物/种子地点/建议章节数）">📥 导入设定</button>`:''}
@@ -4741,7 +4783,7 @@ async function aiRecipeAnalyze(userDesc){
   const lib = writeStyleLib();
   const compactLib = lib.map(s=>({id:s.id,name:s.name,cat:s.cat||'custom',note:String(s.note||'').trim(),tips:Array.isArray(s.tips)?s.tips:[]}));
   const user = `${base}\n\n【现有词库用于覆盖核对】\n${JSON.stringify(compactLib)}\n\n请先完成输入理解，不要生成最终配方。`;
-  const raw = unwrapAIResult(await callDeepSeek(AI_RECIPE_ANALYSIS_SYS,user,{maxTokens:2200,temperature:0.2,topP:0.2,signal:_abortCtl?.signal,taskKey:'recipe'}));
+  const raw = unwrapAIResult(await callDeepSeek(AI_RECIPE_ANALYSIS_SYS,user,{maxTokens:2200,temperature:resolveTaskTemperature('recipeAnalysis'),topP:0.2,signal:_abortCtl?.signal,taskKey:'recipeAnalysis'}));
   const j = parseJson(raw);
   if(!j || typeof j!=='object' || Array.isArray(j)) throw new Error('写作配方AI的输入理解阶段返回无效结果');
   return j;
@@ -4854,8 +4896,7 @@ function dedupeRecipeList(list){
   return out;
 }
 async function aiRecipeProduce(system, user){
-  const cfg=getCfg();
-  const opt = { maxTokens: clampMaxTokens('recipe'), temperature:(cfg.aiRecipeTemp==null?0.85:Math.min(0.90,Math.max(0.25,Number(cfg.aiRecipeTemp)||0.85))), topP:0.45 };
+  const opt = { maxTokens: clampMaxTokens('recipe'), temperature:resolveTaskTemperature('recipe'), topP:0.45 };
   const FIX = `\n\n【上一轮质量修正】重新检查输入理解：删除仅靠换形容词、换名称、换顺序形成的重复候选；只保留有实际执行差异的方向。gap 必须来自真实且重要的写作方法缺口；现有词库能覆盖就 gap=null。`;
   const FIX_JSON = `\n\n【上一轮格式修正】上一轮输出无法解析。只输出合法 JSON 数组，不要 markdown、解释或额外文字。`;
   let list = null, lastJsonOk = false;
@@ -5328,30 +5369,11 @@ function clampMaxTokens(task){
   return limits[task] || 4096;
 }
 function dynamicChapterParams(idx){
-  const o = state.outline;
-  const base = resolveActiveSpec().chapterTemp;
-  const total = (o && o.chapters && o.chapters.length) || 1;
-  const ratio = (idx + 1) / total;
-  let phase = 'act1';
-  const stages = chapterPlanStages(o);
-  if(stages.length >= 3){
-    if(ratio <= 0.33) phase = 'act1';
-    else if(ratio <= 0.66) phase = 'act2';
-    else phase = 'act3';
-  } else if(ratio > 0.75) phase = 'act3';
-  else if(ratio > 0.35) phase = 'act2';
-  const map = {
-    act1: { temperature: 0.70, topP: 0.95 },   // 立人设：低温稳
-    act2: { temperature: 0.80, topP: 0.95 },   // 中段铺陈：保持变化，同时避免过度发散
-    act3: { temperature: 0.75, topP: 0.90 }    // 高潮+收束：表达强度保留，结构采样收紧
-  };
-  const p = map[phase] || map.act2;
-  const t = base + (p.temperature - 0.75);
-  return {
-    temperature: Math.max(0.1, Math.min(1.2, t)),
-    topP: p.topP,
-    phase
-  };
+  const base = resolveTaskTemperature('chapter');
+  const i = Math.max(0, Number(idx)||0);
+  const act = i < 2 ? 'act1' : (i < 4 ? 'act2' : 'act3');
+  const topP = act==='act3' ? 0.90 : 0.95;
+  return { temperature: base, topP, act };
 }
 function chapterPlanStages(o){
   const outline = o || state.outline || {};
@@ -5511,8 +5533,8 @@ function teacherChapterPlan(ci){
   return block;
 }
 
-const SCHOOL_RETRY_MAX = 16; // 仅用于 AI 请求本身失败/空返回等异常；老师内容质检不再触发这 16 次重试
-// 老师阶段完成以老师成功生成教案为准；正文需要章节卡时再从老师 raw 建立。
+const SCHOOL_RETRY_MAX = 16; // 仅用于 AI 请求本身失败/空返回等异常；老师返回后的质检永不自动重试
+// 老师阶段完成以老师成功生成教案为准；返回后的快速质检只做提示，正文需要章节卡时再从老师 raw 建立。
 // 旧逻辑把 canon.teacherAt 版本快照当成唯一闸门；只要快照与版本计数出现一次不同步，
 // 即使“读取老师教案”已经能正常读出全部章节，也会被一键开学判定为未完成并停在第4步。
 function ssTeacherCardCurrent(card, gi){
@@ -5559,6 +5581,7 @@ function scState(){
   state.school.retries  = state.school.retries  || {};
   state.school.errors   = state.school.errors   || {};
   state.school.stale    = state.school.stale || {};
+  state.school.teacherQc = state.school.teacherQc && typeof state.school.teacherQc === 'object' ? state.school.teacherQc : {};
   state.school.teachers = Array.isArray(state.school.teachers) ? state.school.teachers : [];
   scHealState();
   return state.school;
@@ -5963,7 +5986,7 @@ async function buildPrincipalContextUnderstanding(blocks, signal){
   const chunks=principalContextChunks(ledger,28000);
   const tasks=chunks.map((chunk,i)=>{
     const user=`【来源总账第 ${i+1}/${chunks.length} 段】\n${chunk}\n\n请完整理解本段涉及的所有来源，并输出结构化“来源理解”。如果一个来源跨越多个段落，请结合本段出现的上下文，不要臆造缺失部分。`;
-    return callDeepSeek(PRINCIPAL_CONTEXT_SYS,user,{temperature:0.15,topP:0.2,maxTokens:8192,signal,taskKey:'principal_context'})
+    return callDeepSeek(PRINCIPAL_CONTEXT_SYS,user,{temperature:resolveTaskTemperature('principal_context'),topP:0.2,maxTokens:8192,signal,taskKey:'principal_context'})
       .then(res=>`【上下文理解块 ${i+1}/${chunks.length}】\n${unwrapAIResult(res)}`);
   });
   const results=await Promise.all(tasks);
@@ -7514,7 +7537,7 @@ async function genPrincipal(btn, opts){
         const txt = await callAIGuarded('principal', sys, principalUser, {}, { temperature:temp, maxTokens:16384, signal:_abortCtl?.signal });
         _tp.aiReturnMs = Math.round(performance.now()-_tp0);
         if(!txt || !String(txt||'').trim()){ setScRetry('principal', attempt); scRefreshBadge(btn,'principal'); throw new Error('校长返回空'); }
-        const principalViolations = isScopeBanned('principal') ? banTextViolations(txt).filter(x=>x.type==='name') : [];
+        const principalViolations = isScopeBanned('principal') ? banEntityTextViolations(txt, 'principal').filter(x=>x.type==='name') : [];
         if(principalViolations.length){
           throw new Error('校长输出命中禁用姓名：'+principalViolations.map(x=>x.value).join('、'));
         }
@@ -7538,7 +7561,16 @@ async function genPrincipal(btn, opts){
           _tp.compileMs = Math.round(performance.now()-_compile0);
           // 保留原始全书战略说明，同时追加JS标准化章卡；下游统一读取标准化结构。
           principalTxt = principalTxt + '\n\n' + compiled;
-          _middleMissing = [];
+          const _middle0 = performance.now();
+          const _middleNormalized = normalizePrincipalMiddlePlans(principalMachine, txt, state.chapterCount || state.outline?.chapters?.length || 0);
+          _middleMissing = _middleNormalized.missing;
+          _tp.middleValidationMs = Math.round(performance.now()-_middle0);
+          if(_middleMissing.length){
+            const err = new Error('校长缺少本章中段推进战略卡：第'+_middleMissing.join('、')+'章');
+            err.principalValidation = true;
+            err.principalFailure = {category:'PRINCIPAL_VALIDATION_ERROR',code:'MIDDLE_PLAN_MISSING',chapters:_middleMissing,details:'校长缺少本章中段推进战略卡',expected:'每章都应具备可供老师执行的中段推进信息',actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字`};
+            throw err;
+          }
           const plans={}; Object.keys(principalMachine.rows).forEach(n=>{ const r=principalMachine.rows[n]; plans[n]={endingFunction:machineField(r,'endingFunction','endFunction'),intensity:machineField(r,'endingIntensity','intensity'),lastEffectiveEvent:machineField(r,'lastEffectiveEvent','lastEvent'),form:machineField(r,'form','endingForm'),nextTransitionType:machineField(r,'nextTransitionType','nextTransition'),nextTransitionBasis:machineField(r,'nextTransitionBasis','transitionBasis')}; });
           const _endAudit0 = performance.now();
           _endingCheck = {missing:[],audit:buildEndingDiversityAudit(plans)};
@@ -7592,7 +7624,7 @@ async function genPrincipal(btn, opts){
         const _persist0 = performance.now();
         persist();
         _tp.persistMs = Math.round(performance.now()-_persist0);
-        // v1.0.381：AI 成功路径禁止全局 render()。状态已持久化后只做局部学校管线刷新，避免异步流程中重建 #view、销毁控件和产生失效 DOM 引用。
+        // v1.0.385：AI 成功路径禁止全局 render()。状态已持久化后只做局部学校管线刷新，避免异步流程中重建 #view、销毁控件和产生失效 DOM 引用。
         _tp.renderMs = 0;
         refreshSchoolProgressUi();
         _tp.aiReturnMs = _tp.aiReturnMs || 0;
@@ -8381,14 +8413,38 @@ function endingDiversityInstruction(audit,scope='本组'){
   return `【${scope}结尾多样性事前审计】已规划${audit.chapterCount}章；重复功能=${(audit.repeatedFunctions||[]).join('、')||'无'}；最长连续同功能=${audit.maxConsecutive||0}；风险=${audit.risk}。多样性必须服从章节功能、终止状态、因果与承接依据，不得随机换类型；不得为了躲避重复制造无依据反转、悬念或未来期待。`;
 }
 
-function validatePrincipalMiddlePlans(raw, total){
-  const cards=principalChapterTaskCards(raw); const missing=[];
-  for(let n=1;n<=Number(total||0);n++){
-    const card=cards[n]||'';
-    const p=chapterMiddlePlanFromText(card,n);
-    if(!p || !p.primaryMode || !p.coreChange || !p.driver) missing.push(n);
+function normalizePrincipalMiddlePlans(machine, raw, total){
+  const count=Number(total||0);
+  const out={}; const missing=[];
+  const rows=machine && machine.rows ? machine.rows : {};
+  for(let n=1;n<=count;n++){
+    const r=rows[n];
+    const machinePlan = r ? {
+      chapter:n,
+      primaryMode:machineField(r,'midMode','middleMode','primaryMode'),
+      secondaryMode:machineField(r,'midSecondary','secondaryMode'),
+      coreChange:machineField(r,'midChange','middleChange','coreChange'),
+      driver:machineField(r,'midDriver','middleDriver','driver'),
+      difference:machineField(r,'midDifference','difference')
+    } : null;
+    // 兼容旧自然语言章卡：只有机器字段缺失时才补，不让旧解析器反过来决定机器协议是否有效。
+    const legacy=chapterMiddlePlanFromText(raw,n);
+    const plan={
+      chapter:n,
+      primaryMode:machinePlan?.primaryMode || legacy?.primaryMode || '',
+      secondaryMode:machinePlan?.secondaryMode || legacy?.secondaryMode || '',
+      coreChange:machinePlan?.coreChange || legacy?.coreChange || '',
+      driver:machinePlan?.driver || legacy?.driver || '',
+      difference:machinePlan?.difference || legacy?.difference || '',
+      source: machinePlan ? 'machine'+(legacy ? '+legacy' : '') : (legacy ? 'legacy' : '')
+    };
+    if(plan.primaryMode && plan.coreChange && plan.driver) out[n]=plan;
+    else missing.push(n);
   }
-  return missing;
+  return {plans:out,missing};
+}
+function validatePrincipalMiddlePlans(raw, total){
+  return normalizePrincipalMiddlePlans(null, raw, total).missing;
 }
 function validateTeacherMiddlePlans(raw, first, last){
   const missing=[];
@@ -8609,6 +8665,40 @@ function teacherPerfRecord(gi, metrics){
   }catch(e){ console.debug('[teacherPerf] 记录失败',e); }
 }
 
+function buildTeacherQcReport(gi, g, raw, teacherMachine, middleMissing, endingCheck, elapsedMs){
+  const text = String(raw||'').trim();
+  const chapters = Math.max(0, Number(g?.last||0) - Number(g?.first||0) + 1);
+  const machineMissing = Array.from(new Set((teacherMachine?.missing||[]).filter(n=>Number.isFinite(n))));
+  const middle = Array.from(new Set((middleMissing||[]).filter(n=>Number.isFinite(n))));
+  const ending = Array.from(new Set(((endingCheck&&endingCheck.missing)||[]).filter(n=>Number.isFinite(n))));
+  const highRisk = !!(endingCheck && endingCheck.audit && endingCheck.audit.risk === 'high');
+  const checks = [
+    {key:'return', label:'AI返回', status:text ? 'pass' : 'fail', detail:text ? `已返回 ${text.length.toLocaleString()} 字` : '返回为空'},
+    {key:'machine', label:'结构合同', status:teacherMachine ? (machineMissing.length ? 'warn' : 'pass') : 'warn', detail:teacherMachine ? (machineMissing.length ? `第 ${machineMissing.join('、')} 章结构字段不完整` : `已识别 ${chapters} 章结构卡`) : '未识别结构式协议，改用正文快速检查'},
+    {key:'middle', label:'中段推进', status:middle.length ? 'warn' : 'pass', detail:middle.length ? `第 ${middle.join('、')} 章中段推进字段待人工复核` : '各章均通过快速检查'},
+    {key:'ending', label:'章末施工', status:ending.length ? 'warn' : 'pass', detail:ending.length ? `第 ${ending.join('、')} 章章末施工字段待人工复核` : '各章均通过快速检查'},
+    {key:'diversity', label:'结尾多样性', status:highRisk ? 'warn' : 'pass', detail:highRisk ? `检测到结尾形式连续/重复风险（连续 ${Number(endingCheck.audit.maxConsecutive||0)} 章）` : '未发现高风险连续重复'},
+    {key:'delivery', label:'老师落地', status:'pass', detail:`本组第 ${g.first}-${g.last} 章教案已写入，老师步骤不因质检意见阻塞`}
+  ];
+  const warnCount=checks.filter(x=>x.status==='warn').length;
+  const failCount=checks.filter(x=>x.status==='fail').length;
+  return {version:1, gi, ts:Date.now(), elapsedMs:Number(elapsedMs||0), chapters, checks, warnCount, failCount, status:failCount?'fail':(warnCount?'review':'pass')};
+}
+function teacherQcStatusIcon(status){ return status==='pass'?'✓':status==='warn'?'△':'✕'; }
+function teacherQcReportHtml(){
+  const sc=scState(); const groups=schoolStageGroups(); const qcs=sc.teacherQc||{};
+  const rows=[];
+  groups.forEach((g,i)=>{
+    const q=qcs[i]; if(!q) return;
+    const label=groups.length>1?`老师${i+1}`:'老师';
+    const cls=q.status==='pass'?'pass':(q.status==='review'?'review':'fail');
+    rows.push(`<div class="sc-tqc-group" style="padding:10px 0;border-bottom:1px solid var(--line);"><div class="sc-tqc-ghead" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;"><b>${label} · 第${g.first}-${g.last}章</b><span class="sc-tqc-summary ${cls}" style="font-size:12px;padding:3px 7px;border-radius:999px;background:var(--panel);">${q.status==='pass'?'快速质检通过':q.status==='review'?`已完成，${q.warnCount}项待人工复核`:'已完成，但有返回异常'}</span><button type="button" class="sc-plan-btn sc-tqc-retry" data-scp-qc-retry="${i}">↻ 用户决定重生成</button></div><div class="sc-tqc-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;">${(q.checks||[]).map(c=>`<div class="sc-tqc-item ${c.status}" style="display:grid;grid-template-columns:20px 72px 1fr;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:12px;"><span class="sc-tqc-ico">${teacherQcStatusIcon(c.status)}</span><span class="sc-tqc-name">${esc(c.label)}</span><span class="sc-tqc-detail">${esc(c.detail)}</span></div>`).join('')}</div></div>`);
+  });
+  if(!rows.length) return `<div class="sc-tqc-empty" style="color:var(--muted);font-size:12px;line-height:1.6;">老师生成后，这里会立即显示快速质检报告。质检只提供信息，不会自动重生成老师。</div>`;
+  return `<div class="sc-tqc-head" style="display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:0;padding-bottom:8px;margin-bottom:4px;background:var(--panel2);z-index:2;"><b>🔎 老师快速质检报告</b><span style="font-size:11px;color:var(--muted);">已返回即完成 · 不自动重试 · 是否重生成由你决定</span></div>${rows.join('')}`;
+}
+function refreshTeacherQcUi(){ const el=document.querySelector('#scTeacherQcPanel'); if(el) el.innerHTML=teacherQcReportHtml(); }
+
 async function genTeacher(btn, gi){
   if(!isLong()){ toast('仅长篇小说模式支持老师施教'); return false; }
   const groups = schoolStageGroups(); const g = groups[gi];
@@ -8647,32 +8737,13 @@ async function genTeacher(btn, gi){
         _teacherEndingCheck = validateTeacherEndingPlans(teacherRaw, g.first, g.last);
         _tp.endingValidationMs = Math.round(performance.now()-_endVal0);
         _tp.validationMs = (_tp.middleValidationMs||0) + (_tp.endingValidationMs||0);
-        // 这里重新启用“必要结构质检”作为重试条件，但不把所有审计意见都当成失败。
-        // 这样既不会悄悄放松质量要求，也不会把“结尾多样性风险”等诊断项误当成致命错误。
-        const _hardMissing = Array.from(new Set([...(teacherMachine?.missing||[]).filter(n=>Number.isFinite(n)), ..._teacherMiddleMissing, ..._teacherEndingCheck.missing]));
-        if(_hardMissing.length){
-          const _failure = {
-            category:'TEACHER_VALIDATION_ERROR',
-            code: teacherMachine?.missing?.length ? 'MACHINE_CONTRACT_MISSING' : (_teacherMiddleMissing.length ? 'MIDDLE_PLAN_MISSING' : 'ENDING_PLAN_MISSING'),
-            chapters:_hardMissing,
-            details:[
-              teacherMachine?.missing?.length ? `结构式教案第 ${teacherMachine.missing.join('、')} 章未通过机器合同检查` : '',
-              _teacherMiddleMissing.length ? `中段施工卡缺少必要字段：第 ${_teacherMiddleMissing.join('、')} 章` : '',
-              _teacherEndingCheck.missing.length ? `章末施工字段缺少必要内容：第 ${_teacherEndingCheck.missing.join('、')} 章` : ''
-            ].filter(Boolean).join('；'),
-            expected:'每章都应具备可供正文直接消费的中段推进信息与章末施工信息；仅多样性风险不作为失败。',
-            actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字，但必要质检仍有 ${_hardMissing.length} 章未通过`
-          };
-          _tp.totalLocalMs = Math.round(performance.now()-_tp0) - (_tp.aiReturnMs||0);
-          _tp.totalMs = Math.round(performance.now()-_tp0);
-          _tp.status='validation_error';
-          teacherPerfRecord(gi,_tp);
-          scSetError(key, Object.assign({}, _failure, {attempt, retrying:false, manualRetry:true}));
-          scSetRetry(key, attempt);
-          scRefreshBadge(btn,key);
-          refreshSchoolProgressUi();
-          break;
-        }
+        // 老师 AI 返回后只做快速本地质检；质检意见进入报告，不作为自动重试条件。
+        // v1.0.402：AI 已返回后只做快速本地质检。质检问题写入报告，但绝不触发自动重试，也不阻塞老师完成。
+        const _teacherQc = buildTeacherQcReport(gi, g, txt, teacherMachine, _teacherMiddleMissing, _teacherEndingCheck, Math.round(performance.now()-_tp0));
+        _tp.qcMs = Math.max(0, Math.round(performance.now()-_tp0) - (_tp.aiReturnMs||0));
+        _tp.validationMs = (_tp.middleValidationMs||0) + (_tp.endingValidationMs||0);
+        _tp.qcStatus = _teacherQc.status;
+        _tp.qcWarnings = _teacherQc.warnCount;
         const _teacherEndingWarning = _teacherEndingCheck.audit.risk==='high' ? {
           risk:'high', maxConsecutive:_teacherEndingCheck.audit.maxConsecutive,
           repeatedFunctions:_teacherEndingCheck.audit.repeatedFunctions||[]
@@ -8690,6 +8761,8 @@ async function genTeacher(btn, gi){
         state.chapterEndingAuditWarnings = state.chapterEndingAuditWarnings || {};
         if(_teacherEndingWarning) state.chapterEndingAuditWarnings[gi] = _teacherEndingWarning;
         else delete state.chapterEndingAuditWarnings[gi];
+        state.school.teacherQc = state.school.teacherQc || {};
+        state.school.teacherQc[gi] = _teacherQc;
         _tp.stateWriteMs = Math.round(performance.now()-_tp0) - (_tp.stateWriteStartMs||0);
         // v1.0.362：结构式纯文本词典达人；老师成功的唯一落点必须同时完成“组状态 + AI状态 + UI刷新”。
         // 先写入实际教案，再立即清除该组 stale；随后统一刷新学校管线和全景步骤，避免 AI 已返回而 UI 仍停在“老师”。
@@ -8699,14 +8772,15 @@ async function genTeacher(btn, gi){
         _tp.persistStartMs = Math.round(performance.now()-_tp0);
         persist();
         _tp.persistMs = Math.round(performance.now()-_tp0) - _tp.persistStartMs;
-        // v1.0.381：老师成功后不再全局 render()；学校管线与本组按钮由局部 DOM 更新完成。
+        // v1.0.385：老师成功后不再全局 render()；学校管线与本组按钮由局部 DOM 更新完成。
         _tp.renderMs = 0;
         refreshSchoolProgressUi();
+        refreshTeacherQcUi();
         _tp.totalLocalMs = Math.round(performance.now()-_tp0) - (_tp.aiReturnMs||0);
         _tp.totalMs = Math.round(performance.now()-_tp0);
         _tp.status='success';
         teacherPerfRecord(gi,_tp);
-        toast(`老师${gi+1}备课完成：第 ${g.first}-${g.last} 章已按校长章级授权施工`);
+        toast(`老师${gi+1}备课完成：第 ${g.first}-${g.last} 章已落地；快速质检报告已更新`);
         playDoneSound('single');
         return true;
       }catch(e){
@@ -8811,6 +8885,7 @@ function refreshSchoolProgressUi(){
       tBtn.classList.toggle('done', tDone);
     }
   });
+  refreshTeacherQcUi();
 }
 
 async function genSchoolAll(btn){
@@ -8835,7 +8910,7 @@ async function genSchoolAll(btn){
           if(!okT){ allT = false; break; }
           // genTeacher 已经在 AI 成功返回后直接标记本组完成；这里不再重复扫描章节卡或再次 persist。
         }
-        // genTeacher 已逐章硬验收；这里不要再用另一套不同的完成条件把已经可读的教案判失败。
+        // genTeacher 已在 AI 返回后完成落地与快速质检；质检意见不改变老师完成状态。
         const teacherReady = allT && groups.every((g,gi)=>scTeacherGroupComplete(gi));
         // 不在老师子流程里再次 persist；一键外层会在该步骤成功后统一标记 teacher。
         if(!teacherReady) scSetFailed('teacher', true);
@@ -9005,6 +9080,20 @@ function bindSchoolSteps(){
   $$('[data-scp-plan]').forEach(b=>{ b.onclick = ()=> openSchoolPlanReader(+b.dataset.scpPlan); });
   const pv = $('[data-scp-plan-pr]');
   if(pv) pv.onclick = ()=> openSchoolPrincipalReader();
+  const qcPanel = $('#scTeacherQcPanel');
+  if(qcPanel && !qcPanel._bound){
+    qcPanel._bound = true;
+    qcPanel.addEventListener('click', async e=>{
+      const b=e.target.closest('[data-scp-qc-retry]'); if(!b) return;
+      const gi=Number(b.dataset.scpQcRetry); if(!Number.isFinite(gi)) return;
+      const teacherBtn=document.querySelector(`[data-scp-teacher="${gi}"]`);
+      b.disabled=true;
+      try{
+        const ok=await genTeacher(teacherBtn,gi);
+        if(ok){ scMark('t'+gi,true); const gs=schoolStageGroups(); if(gs.every((x,i)=>scDone('t'+i))) scMark('teacher',true); }
+      }finally{ b.disabled=false; refreshSchoolProgressUi(); }
+    });
+  }
   bindPlannerSoundTool();
 }
 
@@ -9355,46 +9444,148 @@ const NM_ADVISORY_NAMES = [
   '苏清月','林小满','晚卿','沈知予','顾晚柠','林晚星','慕晚晴','苏沐瑶','温妤','夏晚璃','楚清鸢','叶轻寒','姜知微','云舒','苏念汐','洛清欢','白若曦','顾绾绾','江晚渔','宋知晚','宁疏影'
 ];
 const BANLIST_DEFAULT = {
-  enabled: true,                            // 总开关（默认开）：清单是否参与注入
-  chars: [],                                // 禁用字/词（人名/专名任何位置命中即拒，由校验器联动）；默认沿用 NM_BANNED_CHARS 读取
-  names: [],                                // 禁用姓名（逐字精确）；默认沿用 NM_BANNED_NAMES
-  phrases: ['天刚蒙蒙亮','破旧的窗棂','窗棂'],          // 禁用短语/模板词：正文及指定上游 AI 输出均需规避
-  rules: [],                                 // 附加规则条目：每条声明生效 AI 范围
-  scopeAi: ['chapter','dictmaster','dictEnrich','principal'] // 缺省同时约束正文、词典达人、词典充实、校长
+  // 禁则清单默认全局关闭：长篇、短篇、新项目、旧项目迁移均遵循同一默认值。
+  // 用户显式保存 enabled:true 后才重新启用。
+  enabled: false,
+  // 新结构：实体名称与文本禁则完全分离。旧字段仍保留用于兼容导入/导出。
+  entity: {
+    enabled: true,
+    person: { enabled: true, names: [], chars: [], charRulesEnabled: false },
+    place: { enabled: true, names: [], chars: [], charRulesEnabled: false },
+    properNoun: { enabled: false, names: [], charRulesEnabled: false }
+  },
+  text: {
+    enabled: true,
+    words: { enabled: true, items: [] },
+    phrases: { enabled: true, items: ['天刚蒙蒙亮','破旧的窗棂','窗棂'] },
+    sentences: { enabled: true, items: [] }
+  },
+  rules: [],
+  entityScopeAi: ['ideaOptimization','dictmaster','dictEnrich','principal','teacher','chapter'],
+  textScopeAi: ['ideaOptimization','dictmaster','dictEnrich','principal','chapter'],
+  // legacy compatibility fields
+  chars: [], names: [], phrases: [],
+  scopeAi: ['chapter','dictmaster','dictEnrich','principal']
 };
+function _banStrArr(v){ return Array.isArray(v) ? [...new Set(v.map(x=>String(x??'').trim()).filter(Boolean))] : []; }
+function _banScopeArr(v, fallback){
+  const allowed=['ideaOptimization','idea','titles','dictmaster','dictEnrich','principal','teacher','chapter','planner','outline'];
+  // 字段不存在/非数组：使用默认范围；字段明确存在但为空数组：保留为空。
+  if(Array.isArray(v)) return [...new Set(v.map(x=>String(x??'').trim()).filter(x=>allowed.includes(x)))];
+  return fallback.slice();
+}
+function _legacyBanMigration(b){
+  const oldNames=_banStrArr(b.names);
+  const oldChars=_banStrArr(b.chars);
+  const oldPhrases=_banStrArr(b.phrases);
+  const legacyScope=_banStrArr(b.scopeAi);
+  // 旧逻辑中：姓名/禁字对 ideaOptimization、teacher 有特殊生效路径；文本短语对 ideaOptimization 生效但不默认作用 teacher。
+  const entityScope=_banScopeArr(b.entityScopeAi, [...new Set(['ideaOptimization','teacher',...(legacyScope.length?legacyScope:['chapter','dictmaster','dictEnrich','principal'])])]);
+  const textScope=_banScopeArr(b.textScopeAi, [...new Set(['ideaOptimization',...(legacyScope.length?legacyScope:['chapter','dictmaster','dictEnrich','principal'])])]);
+  return {
+    // 旧项目没有顶层 enabled 时，迁移后的默认值必须是 OFF；只有用户明确保存 true 才启用。
+    enabled: b.enabled === true,
+    entity: {
+      enabled: b.entity && typeof b.entity==='object' ? b.entity.enabled !== false : true,
+      person: {
+        enabled: b.entity?.person?.enabled !== false,
+        names: _banStrArr(b.entity?.person?.names ?? oldNames),
+        chars: _banStrArr(b.entity?.person?.chars ?? oldChars),
+        charRulesEnabled: b.entity?.person?.charRulesEnabled === true
+      },
+      place: {
+        enabled: b.entity?.place?.enabled !== false,
+        names: _banStrArr(b.entity?.place?.names),
+        chars: _banStrArr(b.entity?.place?.chars),
+        charRulesEnabled: b.entity?.place?.charRulesEnabled === true
+      },
+      properNoun: {
+        enabled: b.entity?.properNoun?.enabled === true,
+        names: _banStrArr(b.entity?.properNoun?.names),
+        charRulesEnabled: b.entity?.properNoun?.charRulesEnabled === true
+      }
+    },
+    text: {
+      enabled: b.text && typeof b.text==='object' ? b.text.enabled !== false : true,
+      words: { enabled: b.text?.words?.enabled !== false, items: _banStrArr(b.text?.words?.items) },
+      phrases: { enabled: b.text?.phrases?.enabled !== false, items: _banStrArr(b.text?.phrases?.items ?? oldPhrases) },
+      sentences: { enabled: b.text?.sentences?.enabled !== false, items: _banStrArr(b.text?.sentences?.items) }
+    },
+    rules: Array.isArray(b.rules) ? b.rules.filter(r=>r&&String(r.text||'').trim()).map(r=>({text:String(r.text).trim(), ai:_banStrArr(r.ai)})) : [],
+    entityScopeAi: entityScope,
+    textScopeAi: textScope,
+    // 保留旧字段，避免旧版导入/导出及外部工具丢数据；运行时匹配不再直接使用旧 chars/phrases。
+    chars: oldChars,
+    names: oldNames,
+    phrases: oldPhrases,
+    scopeAi: legacyScope.length ? legacyScope : ['chapter','dictmaster','dictEnrich','principal']
+  };
+}
 function nmNameRuleViolation(nm){
   const s = String(nm||'').trim();
   if(!s) return '';
-  if(!/^[\u4e00-\u9fa5]+$/.test(s)) return '';           // 含非汉字（外文名）不约束
-  const bv = banListViolation(s);
+  if(!/^[\u4e00-\u9fa5]+$/.test(s)) return '';
+  const bv = banListViolation(s, 'person');
   if(bv) return bv;
   let surLen = 0;
   if(NM_SURNAME_2.has(s.slice(0,2))) surLen = 2;
   else if(NM_SURNAME_1.has(s.charAt(0))) surLen = 1;
-  if(!surLen) return '';                                   // 首字(两字)非百家姓 → 外国角色不约束
-  const exp = surLen + 2;                                  // 姓 + 两字名
+  if(!surLen) return '';
+  const exp = surLen + 2;
   if(s.length !== exp) return `姓名应为百家姓(${surLen}字姓)+两字名＝${exp}字（当前「${s}」为${s.length}字）`;
   const given = s.slice(surLen);
   if(/([\u4e00-\u9fa5])\1/.test(given)) return `名字不得叠字（「${s}」）`;
   return '';
 }
-
 function normalizeBanList(b){
   if(!b || typeof b !== 'object') return null;
-  const out = { enabled: !(b.enabled === false) };
-  out.chars = Array.isArray(b.chars) ? b.chars.filter(x=>x&&String(x).trim()) : [];
-  out.names = Array.isArray(b.names) ? b.names.filter(x=>x&&String(x).trim()) : [];
-  out.phrases = Array.isArray(b.phrases) ? b.phrases.filter(x=>x&&String(x).trim()) : [];
-  out.rules = Array.isArray(b.rules) ? b.rules.filter(r=>r&&r.text).map(r=>({ text:String(r.text), ai:Array.isArray(r.ai)?r.ai:[] })) : [];
-  out.scopeAi = Array.isArray(b.scopeAi) ? b.scopeAi.filter(x=>x) : (Array.isArray(BANLIST_DEFAULT.scopeAi) ? BANLIST_DEFAULT.scopeAi.slice() : []);
-  return out;
+  return _legacyBanMigration(b);
 }
-function banListRaw(){ return (state.banList && typeof state.banList === 'object') ? state.banList : BANLIST_DEFAULT; }
-function stateBanEnabled(){ const b = banListRaw(); return !(b && b.enabled === false); }
-function banListChars(){ const c = Array.isArray(banListRaw().chars) ? banListRaw().chars : []; return [...new Set(c.map(x=>String(x||'').trim()).filter(Boolean))]; }
-function banListNames(){ const n = Array.isArray(banListRaw().names) ? banListRaw().names : []; return [...new Set(n.map(x=>String(x||'').trim()).filter(Boolean))]; }
-function banListAdvisoryChars(){ return [...new Set([...NM_ADVISORY_CHARS, ...banListChars()])]; }
-function banListAdvisoryNames(){ return [...new Set([...NM_ADVISORY_NAMES, ...banListNames()])]; }
+function banListRaw(){ return (state.banList && typeof state.banList === 'object') ? normalizeBanList(state.banList) : _legacyBanMigration(BANLIST_DEFAULT); }
+function stateBanEnabled(){ const b=banListRaw(); return !(b && b.enabled===false); }
+function banEntityEnabled(){ const b=banListRaw(); return stateBanEnabled() && b.entity.enabled!==false; }
+function banTextEnabled(){ const b=banListRaw(); return stateBanEnabled() && b.text.enabled!==false; }
+function banListEntityScope(){ return banListRaw().entityScopeAi || []; }
+function banListTextScope(){ return banListRaw().textScopeAi || []; }
+function banListAiActive(role, type='entity'){
+  if(!stateBanEnabled()) return false;
+  const sc = type==='text' ? banListTextScope() : banListEntityScope();
+  return !Array.isArray(sc) || !sc.length || sc.indexOf(role)>=0;
+}
+function banListChars(type='person'){
+  const b=banListRaw();
+  const x=type==='place' ? b.entity.place.chars : type==='properNoun' ? [] : b.entity.person.chars;
+  return _banStrArr(x);
+}
+function banListNames(type='person'){
+  const b=banListRaw();
+  const x=type==='place' ? b.entity.place.names : type==='properNoun' ? b.entity.properNoun.names : b.entity.person.names;
+  return _banStrArr(x);
+}
+function banListAllEntityNames(){
+  const b=banListRaw();
+  return [...new Set([...banListNames('person'),...banListNames('place'),...banListNames('properNoun')])];
+}
+function banListTextItems(type){
+  const b=banListRaw();
+  if(type==='word') return _banStrArr(b.text.words.items);
+  if(type==='sentence') return _banStrArr(b.text.sentences.items);
+  return _banStrArr(b.text.phrases.items);
+}
+function banListAllTextItems(){
+  const b=banListRaw(), out=[];
+  if(b.text.words.enabled!==false) out.push(...banListTextItems('word'));
+  if(b.text.phrases.enabled!==false) out.push(...banListTextItems('phrase'));
+  if(b.text.sentences.enabled!==false) out.push(...banListTextItems('sentence'));
+  return [...new Set(out)];
+}
+function banListAdvisoryChars(){
+  const user=[]; const b=banListRaw();
+  if(b.entity.person.charRulesEnabled) user.push(...banListChars('person'));
+  if(b.entity.place.charRulesEnabled) user.push(...banListChars('place'));
+  return [...new Set([...NM_ADVISORY_CHARS,...user])];
+}
+function banListAdvisoryNames(){ return [...new Set([...NM_ADVISORY_NAMES,...banListAllEntityNames()])]; }
 function characterNameAdvisory(name){
   const s=String(name||'').trim(); if(!s) return [];
   const out=[];
@@ -9403,46 +9594,46 @@ function characterNameAdvisory(name){
   if(NM_WEB_BLACKLIST.some(w=>s.indexOf(w)>=0)) out.push('疑似网文高频组合');
   return [...new Set(out)];
 }
-function banListAiActive(role){
-  // 优化构想属于全书规划母本生成阶段，必须始终知道当前用户的禁则清单；
-  // 不受旧版本 scopeAi 是否包含 ideaOptimization 的影响。
-  if(role === 'ideaOptimization') return true;
-  const sc = banListRaw().scopeAi;
-  if(!Array.isArray(sc) || !sc.length) return true;
-  return sc.indexOf(role) >= 0;
-}
 function banListBlockFor(role){
-  if(!isLong()) return '';
-  if(!stateBanEnabled()) return '';
-  const b = banListRaw();
-  const lines = [];
-  const chars = banListChars(), names = banListNames();
-  if(chars.length && banListAiActive(role)) lines.push('用户硬禁·人名禁用字：' + chars.join('、') + '（姓名任何位置命中即违规）');
-  if(names.length && banListAiActive(role)) lines.push('用户硬禁·禁用姓名（不得逐字原样使用或当作现成名）：' + names.join('、'));
-  const advNames=banListAdvisoryNames(), advChars=banListAdvisoryChars();
-  if((advNames.length||advChars.length) && ['dictmaster','dictEnrich'].indexOf(role)>=0) lines.push('🟡 系统高频姓名提醒（仅提示、不阻断）：高频姓名='+advNames.join('、')+'；高频提醒字='+advChars.join('、')+'。若新人物命中，只需考虑是否在人物定名台修改，不得因此拒绝整次创作。');
-  const rules = Array.isArray(b.rules) ? b.rules : [];
-  rules.forEach(r => {
-    if(!r || !r.text) return;
-    const ai = Array.isArray(r.ai) ? r.ai : [];
-    if(ai.indexOf(role) >= 0) lines.push(r.text);
-  });
-  const phrases = Array.isArray(b.phrases) ? b.phrases : [];
-  if(['chapter','dictmaster','dictEnrich','principal'].indexOf(role) >= 0 && phrases.length){
-    lines.push('【禁用词汇/短语·输出正文与说明文字均不得出现】' + phrases.join('、'));
-    lines.push('若生成结果中命中以上词汇/短语，必须在提交前自行改写为自然、不重复的替代表达；不得只删词造成病句。');
+  if(!isLong() || !stateBanEnabled()) return '';
+  const b=banListRaw(), lines=[];
+  if(banEntityEnabled() && banListAiActive(role,'entity')){
+    const persons=banListNames('person'), places=banListNames('place'), props=banListNames('properNoun');
+    if(persons.length && b.entity.person.enabled!==false) lines.push('用户硬禁·人名（精确实体名称）：'+persons.join('、'));
+    if(places.length && b.entity.place.enabled!==false) lines.push('用户硬禁·地名（精确实体名称）：'+places.join('、'));
+    if(props.length && b.entity.properNoun.enabled!==false) lines.push('用户硬禁·其他专名（精确实体名称）：'+props.join('、'));
+    if(b.entity.person.charRulesEnabled && banListChars('person').length) lines.push('用户硬禁·人名禁用字（仅高级按字规则）：'+banListChars('person').join('、'));
+    if(b.entity.place.charRulesEnabled && banListChars('place').length) lines.push('用户硬禁·地名禁用字（仅高级按字规则）：'+banListChars('place').join('、'));
+    const advNames=banListAdvisoryNames(), advChars=banListAdvisoryChars();
+    if((advNames.length||advChars.length) && ['dictmaster','dictEnrich'].indexOf(role)>=0) lines.push('🟡 系统高频姓名提醒（仅提示、不阻断）：高频姓名='+advNames.join('、')+'；高频提醒字='+advChars.join('、')+'。若新人物命中，只需考虑是否在人物定名台修改，不得因此拒绝整次创作。');
   }
-  if(!lines.length) return '';
-  return '\n\n【用户禁则清单（最高优先）】\n' + lines.join('\n');
+  if(banTextEnabled() && banListAiActive(role,'text')){
+    const words=b.text.words.enabled!==false?banListTextItems('word'):[];
+    const phrases=b.text.phrases.enabled!==false?banListTextItems('phrase'):[];
+    const sentences=b.text.sentences.enabled!==false?banListTextItems('sentence'):[];
+    if(words.length) lines.push('用户硬禁·禁用词汇：'+words.join('、'));
+    if(phrases.length) lines.push('用户硬禁·禁用短语：'+phrases.join('、'));
+    if(sentences.length) lines.push('用户硬禁·禁用短句：'+sentences.join('、'));
+    if(words.length||phrases.length||sentences.length) lines.push('输出前必须逐字自检；命中时改写整句，不能简单删除造成病句。');
+  }
+  const rules=Array.isArray(b.rules)?b.rules:[];
+  rules.forEach(r=>{ if(!r||!r.text)return; const ai=Array.isArray(r.ai)?r.ai:[]; if(!ai.length||ai.indexOf(role)>=0) lines.push('【用户禁则·规则】'+String(r.text).trim()); });
+  return lines.length ? '\n\n【用户禁则清单（最高优先）】\n'+lines.join('\n') : '';
 }
-function banListViolation(nm){
-  const s = String(nm||'').trim(); if(!s) return '';
-  const ch = banListChars().find(c => s.indexOf(c) >= 0);
-  if(ch) return `名字含禁用字「${ch}」（禁则清单）`;
-  if(banListNames().indexOf(s) >= 0) return `命中禁则名单「${s}」`;
+function banListViolation(nm, type='person'){
+  const s=String(nm||'').trim(); if(!s || !banEntityEnabled()) return '';
+  const b=banListRaw();
+  if(type==='person' && b.entity.person.enabled!==false){
+    if(banListNames('person').indexOf(s)>=0) return `命中禁用人名「${s}」（禁则清单）`;
+    if(b.entity.person.charRulesEnabled){ const ch=banListChars('person').find(c=>s.includes(c)); if(ch) return `名字含禁用字「${ch}」（禁则清单）`; }
+  }
+  if(type==='place' && b.entity.place.enabled!==false){
+    if(banListNames('place').indexOf(s)>=0) return `命中禁用地名「${s}」（禁则清单）`;
+    if(b.entity.place.charRulesEnabled){ const ch=banListChars('place').find(c=>s.includes(c)); if(ch) return `地名含禁用字「${ch}」（禁则清单）`; }
+  }
+  if(type==='properNoun' && b.entity.properNoun.enabled!==false && banListNames('properNoun').indexOf(s)>=0) return `命中禁用专名「${s}」（禁则清单）`;
   return '';
 }
-
 
 
 const BOOK_BEAT_OPTIONS = [
@@ -10203,25 +10394,15 @@ const NARRATIVE_IRON_PLANNING = `【全书叙事铁律·规划层】这是用户
 
 function globalCreativeConstraintBlock(kind){
   const creative = ['idea','ideaOptimization','principal','teacher','chapter','planner','outline'];
-  const banRoles = ['idea','ideaOptimization','titles','dictmaster','dictEnrich','principal','teacher'];
+  const banRoles = ['idea','ideaOptimization','titles','dictmaster','dictEnrich','principal','teacher','chapter'];
   const parts=[];
-  if(banRoles.indexOf(kind)>=0 && stateBanEnabled()){
-    const b=banListRaw();
-    const chars=banListChars(), names=banListNames();
-    if(chars.length) parts.push('【用户禁则清单·全书姓名禁用字】以下字不得用于新人物/地点/专名命名：'+chars.join('、'));
-    if(names.length) parts.push('【用户禁则清单·全书禁用姓名】以下姓名不得被新创作、复用、建议或写入本阶段成果：'+names.join('、'));
-    const phrases=Array.isArray(b.phrases)?b.phrases:[];
-    if(['chapter','dictmaster','dictEnrich','principal','ideaOptimization'].indexOf(kind)>=0 && phrases.length){
-      parts.push('【用户禁则·禁用词汇/短语】以下词汇/短语不得出现在本阶段任何正文、说明文字、总结、标题或示例文本中：'+phrases.join('、'));
-      parts.push('输出前必须逐字自检；命中时改写整句，不能简单删除造成病句。');
-    }
-    const rules=Array.isArray(b.rules)?b.rules:[];
-    rules.forEach(r=>{ if(r&&r.text && (!Array.isArray(r.ai)||!r.ai.length || r.ai.indexOf(kind)>=0)) parts.push('【用户禁则·规则】'+String(r.text).trim()); });
+  if(banRoles.indexOf(kind)>=0){
+    const ban=banListBlockFor(kind);
+    if(ban) parts.push(ban);
   }
   if(creative.indexOf(kind)>=0 && kind!=='chapter' && state._narrIron!==false) parts.push(NARRATIVE_IRON_PLANNING);
   return parts.length ? '\n\n'+parts.join('\n') : '';
 }
-
 function narrativeIronBlock(role, opts){
   const parts = [];
   const ban = banListBlockFor(role);
@@ -11103,7 +11284,7 @@ async function extractChapterEndTime(chIdx, content){
   if(!body) return { time: '' };
   const user = `【本章正文（第 ${chIdx+1} 章）】
 ${String(body).slice(-30000)}`;
-  const txt = unwrapAIResult(await callDeepSeek(TIME_ANCHOR_SYS, user, {maxTokens: clampMaxTokens('json'), temperature: 0.2, topP: 0.5, taskKey:'timeAnchor'}));
+  const txt = unwrapAIResult(await callDeepSeek(TIME_ANCHOR_SYS, user, {maxTokens: clampMaxTokens('json'), temperature:resolveTaskTemperature('timeAnchor'), topP: 0.5, taskKey:'timeAnchor'}));
   const j = parseJson(txt) || {};
   const t = String((j && j.time)||'').trim();
   return { time: t };
@@ -13048,6 +13229,20 @@ function rollingSummaryCardHtml(){
   </div>`;
 }
 
+function refreshRollingSummaryCardOnly(){
+  const card = document.querySelector('.rs-card');
+  if(!card) return false;
+  const active = document.activeElement;
+  if(active && card.contains(active)) return false;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = rollingSummaryCardHtml().trim();
+  const next = wrap.firstElementChild;
+  if(!next) return false;
+  card.replaceWith(next);
+  bindRollingSummaryCard();
+  return true;
+}
+
 function bindRollingSummaryCard(){
   const head = $('[data-rs-fold]');
   if(head) head.onclick = ()=>{
@@ -13058,9 +13253,9 @@ function bindRollingSummaryCard(){
   const gen = $('[data-rs-gen]');
   if(gen) gen.onclick = async ()=>{
     busy(gen, true, '生成中…');
-    try{ await ensureChapterDigests(); await generateRollingSummaries(); render(); toast('滚动摘要已补齐'); }
+    try{ await ensureChapterDigests(); await generateRollingSummaries(); toast('滚动摘要已补齐'); }
     catch(e){ toast('摘要生成失败：'+e.message); }
-    finally{ busy(gen, false); }
+    finally{ busy(gen, false); refreshRollingSummaryCardOnly(); }
   };
   const clr = $('[data-rs-clear]');
   if(clr) clr.onclick = ()=>{
@@ -14108,6 +14303,7 @@ function schoolZoneBlock(){
           <em id="cpsSoundVolLb" class="muted">80%</em>
         </label>
       </div>
+      <div id="scTeacherQcPanel" class="sc-teacher-qc-panel" style="height:220px;max-height:220px;overflow:auto;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);box-sizing:border-box;">${teacherQcReportHtml()}</div>
     </div>
   </div>`;
 }
@@ -17090,12 +17286,28 @@ function validateDictMasterOutput(j){
   }
   return '';
 }
-function collapseGlossaryAfterDictionaryGeneration(){
+function refreshGlossaryCardOnly(){
+  const card = document.querySelector('.gs-card');
+  if(!card) return false;
+  const active = document.activeElement;
+  if(active && card.contains(active)) return false; // 不抢占用户正在编辑/操作的词典控件
+  const html = glossaryCardHtml();
+  if(!html) return false;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html.trim();
+  const next = wrap.firstElementChild;
+  if(!next) return false;
+  card.replaceWith(next);
+  bindGlossary();
+  return true;
+}
+
+function collapseGlossaryAfterDictionaryGeneration(save=true){
   state.gsCollapsed = true;
   state.gsCatFold = Object.assign({}, state.gsCatFold || {}, {
     main:true, support:true, walkon:true, place:true, proper:true, sub:true
   });
-  persist();
+  if(save) persist();
 }
 
 async function genDictMaster(btn){
@@ -17109,6 +17321,7 @@ async function genDictMaster(btn){
   markAIRunning('dictmaster');
   if(btn) busy(btn,true,'生成万物词典中…');
   if(btn && btn.parentNode) showStopBtn(btn.parentNode);
+  let _refreshGlossaryAfterDictMaster = false;
   try{
     const spec = resolveActiveSpec('dictmaster');
     const temp = (spec && spec.dictmasterTemp != null) ? spec.dictmasterTemp : 0.4;
@@ -17142,7 +17355,7 @@ async function genDictMaster(btn){
     const push = (list,k,mapper)=>{
       const existing = new Set((o.glossary[k]||[]).map(x=>x && String(x.name||'').trim()).filter(Boolean));
       (list||[]).forEach(it=>{
-        if((k==='characters'||k==='places'||k==='propernouns') && isScopeBanned('dictmaster') && !filterDictMasterEntry(it)) throw new Error(`词典达人命中禁则姓名：${String(it&&it.name||'').trim()}；已拒绝本次词典生成，请按现有重试机制重新生成`);
+        if((k==='characters'||k==='places'||k==='propernouns') && isScopeBanned('dictmaster','entity') && !filterDictMasterEntry(it,k)) throw new Error(`词典达人命中禁则姓名：${String(it&&it.name||'').trim()}；已拒绝本次词典生成，请按现有重试机制重新生成`);
         const nm=String((it && it.name)||'').trim(); if(!nm) return;
         if(existing.has(nm)) return;   // 同名让位
         o.glossary[k]=o.glossary[k]||[];
@@ -17168,7 +17381,7 @@ async function genDictMaster(btn){
     o.glossary._placeContacts = (j.placeContacts||[]).map(x=>({ from:String(x.from||'').trim(), to:String(x.to||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim(), sourceType:'dictionary_foundation' }));
     o.glossary._properContacts = (j.properContacts||[]).map(x=>({ from:String(x.from||'').trim(), to:String(x.to||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim(), sourceType:'dictionary_foundation' }));
     o.glossary._worldRules = (j.worldRules||[]).map(x=>({ cat:String(x.cat||'').trim(), scope:String(x.scope||'').trim(), rule:String(x.rule||'').trim(), sourceType:'dictionary_foundation' }));
-    const dmText = x => isScopeBanned('dictmaster') ? scrubBannedPhrases(String(x||'')) : String(x||'');
+    const dmText = x => isScopeBanned('dictmaster','text') ? scrubBannedPhrases(String(x||''), 'dictmaster') : String(x||'');
     const result = { ts: Date.now(), book: (o.title)||'', summary:dmText(j.summary), nChar:(j.characters||[]).length, nPlace:(j.places||[]).length, nProp:(j.propernouns||[]).length, nRel:(j.relationshipTable||[]).length, nPC:(j.placeContacts||[]).length, nPRC:(j.properContacts||[]).length, nWR:(j.worldRules||[]).length, nOrg:(j.organizations||[]).length, nInst:(j.institutions||[]).length, nItem:(j.items||[]).length, nTerm:(j.terms||[]).length, nEvent:(j.events||[]).length, nLife:(j.lifeSettings||[]).length, characters:j.characters||[], rel:j.relationshipTable||[], places:j.places||[], pc:j.placeContacts||[], props:j.propernouns||[], prc:j.properContacts||[], wr:j.worldRules||[], organizations:j.organizations||[], institutions:j.institutions||[], items:j.items||[], terms:j.terms||[], events:j.events||[], lifeSettings:j.lifeSettings||[] };
     state.dictmasterLatest = result;
     state.dictmasterHistory = Array.isArray(state.dictmasterHistory) ? state.dictmasterHistory : [];
@@ -17180,10 +17393,10 @@ async function genDictMaster(btn){
     // 不再让折叠/渲染等非核心 UI 操作位于完成标记之前，避免“AI 已返回、数据已落地，但界面仍卡在生成中”。
     markAIDone('dictmaster');
     scMark('dictMaster', true);
+    collapseGlossaryAfterDictionaryGeneration(false);
     persist();
-    collapseGlossaryAfterDictionaryGeneration();
-    render();
     refreshSchoolProgressUi();
+    _refreshGlossaryAfterDictMaster = true;
     toast(`万物词典已生成：人物 ${result.nChar} · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系 ${result.nRel} · 规则 ${result.nWR} · 组织 ${result.nOrg} · 机构 ${result.nInst} · 道具 ${result.nItem} · 术语 ${result.nTerm} · 历史 ${result.nEvent} · 生活 ${result.nLife}（世界基底已建立）`);
     playEventSound('dictmaster_done');
     return true;
@@ -17196,6 +17409,7 @@ async function genDictMaster(btn){
   }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='dictmaster');
     hideStopBtn(); if(btn) busy(btn,false);
+    if(_refreshGlossaryAfterDictMaster) refreshGlossaryCardOnly();
   }
 }
 function dictMasterBlockHtml(){
@@ -18330,6 +18544,7 @@ async function genDictHarvest(btn, opts){
   if(stopParent) showStopBtn(stopParent);
   const stream = $('#dictEnrichStream');
   if(stream){ stream.style.display='block'; stream.textContent='正在扫描正文反复出现实体并收编进词典…'; }
+  let _refreshGlossaryAfterHarvest = false;
   try{
     const spec = resolveActiveSpec('dictEnrich');
     const temp = (spec && spec.dictEnrichTemp != null) ? spec.dictEnrichTemp : 0.4;
@@ -18346,11 +18561,10 @@ async function genDictHarvest(btn, opts){
     const n = mergeDictHarvest(parsed);
     state.outline._dictHarvestText = txt;
     // 收编结果写入成功后立即结束任务状态；折叠/刷新属于非核心 UI 操作，不应阻断完成状态。
-    persist();
     markAIDone('dictEnrich');
-    render();
-    collapseGlossaryAfterDictionaryGeneration();
-    render();
+    collapseGlossaryAfterDictionaryGeneration(false);
+    persist();
+    _refreshGlossaryAfterHarvest = true;
     if(stream) stream.style.display='none';
     toast(`正文收编完成：主要人物 ${n.main||0} · 次要配角 ${n.support||0} · 路人 ${n.w} · 地名 ${n.p} · 专名 ${n.k} 已入词典${n.up?`，${n.up} 个路人升级为主/配角`:''}`);
     return true;
@@ -18362,6 +18576,7 @@ async function genDictHarvest(btn, opts){
   }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='dictEnrich');
     hideStopBtn(); if(btn) busy(btn,false); if(stream) stream.style.display='none';
+    if(_refreshGlossaryAfterHarvest) refreshGlossaryCardOnly();
   }
 }
 function mergeDictHarvest(res){
@@ -18412,6 +18627,7 @@ async function genDictEnrich(btn, opts){
   if(stopParent) showStopBtn(stopParent);
   const stream = $('#dictEnrichStream');
   if(stream){ stream.style.display='block'; stream.textContent='正在生成词典充实内容…'; }
+  let _refreshGlossaryAfterDictEnrich = false;
   try{
     const spec = resolveActiveSpec('dictEnrich');
     const temp = (spec && spec.dictEnrichTemp != null) ? spec.dictEnrichTemp : 0.4;
@@ -18425,20 +18641,20 @@ async function genDictEnrich(btn, opts){
     const txt = String(res.text || '').trim();
     if(!txt) throw new Error('未返回词典充实内容');
     const parsed = parseDictEnrichText(txt);
-    if(isScopeBanned('dictEnrich')){
+    if(isScopeBanned('dictEnrich','entity')){
       const allNamed = [parsed.characters,parsed.walkons,parsed.places,parsed.propernouns,parsed.organizations,parsed.institutions,parsed.items,parsed.rules,parsed.terms,parsed.events,parsed.lifeSettings];
       const bad = allNamed.flatMap(arr=>(arr||[]).map(x=>({name:String(x&&x.name||'').trim(),bad:bannedEntityName(x&&x.name)}))).find(x=>x.bad);
       if(bad) throw new Error(`词典充实命中禁则姓名/名称「${bad.name}」：${bad.bad}；已拒绝本次扩充，请按现有重试机制重新生成`);
     }
     if(!(parsed.characters.length || parsed.walkons.length || parsed.places.length || parsed.propernouns.length || parsed.organizations.length || parsed.institutions.length || parsed.items.length || parsed.rules.length || parsed.terms.length || parsed.events.length || parsed.lifeSettings.length)) throw new Error('未识别到有效条目，请重试');
     const n = mergeDictEnrich(parsed); ssProtectMasterCanon(); storyState().canon.dictEnrichAt=Date.now(); storyState().versions.dictEnrich=Number(storyState().versions.dictEnrich||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldExpansion={version:storyState().versions.dictEnrich,source:'dictEnrich',ts:Date.now(),added:n};
-    state.outline._dictEnrichText = isScopeBanned('dictEnrich') ? scrubBannedPhrases(txt) : txt;   // 仅存档（导入/导出时仍保留原文兜底），UI 不再直接渲染
+    state.outline._dictEnrichText = isScopeBanned('dictEnrich','text') ? scrubBannedPhrases(txt, 'dictEnrich') : txt;   // 仅存档（导入/导出时仍保留原文兜底），UI 不再直接渲染
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, organizations:n.organizations||0, institutions:n.institutions||0, items:n.items||0, rules:n.rules||0, terms:n.terms||0, events:n.events||0, lifeSettings:n.lifeSettings||0, ts:Date.now() };
     // 数据已经安全写入词典后，先完成 AI 状态，再做非核心 UI 刷新；避免 render 异常导致“内容已入库但 UI 仍显示未完成”。
     persist();
     markAIDone('dictEnrich');
-    render();
+    _refreshGlossaryAfterDictEnrich = true;
     if(stream) stream.style.display='none';
     toast(`词典已充实：人物 ${n.main||0}/${n.support||0} · 路人 ${n.w||0} · 地名 ${n.p} · 专名 ${n.k} · 世界素材 ${[n.organizations,n.institutions,n.items,n.rules,n.terms,n.events,n.lifeSettings].reduce((a,v)=>a+(Number(v)||0),0)}（已并入万物词典，正文可直接选用）`);
     playEventSound('dictEnrich_done');
@@ -18451,6 +18667,7 @@ async function genDictEnrich(btn, opts){
   }finally{
     state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='dictEnrich');
     hideStopBtn(); if(btn) busy(btn,false); if(stream) stream.style.display='none';
+    if(_refreshGlossaryAfterDictEnrich) refreshGlossaryCardOnly();
   }
 }
 function buildDictEnrichSummary(parsed){
@@ -18732,6 +18949,52 @@ function chapterEndingFeelingAudit(text){
   return {fail,futureFeeling,readerHookFeeling,abstractLift,positiveWrap,packaging,last};
 }
 
+function localNarrativeIronAudit(i,text){
+  const src=String(text||'').trim();
+  const issues=[];
+  if(!src) return {status:'FAIL',issues:[{type:'empty',severity:'fail',evidence:'正文为空',expected:'产生有效正文',actual:'空文本',repair:'重新生成正文。'}]};
+  // 只对高置信、可确定的模板化重复做本地硬检查；语义质量继续交给现有审计AI。
+  const templates=['倏然','眸光','眼底','凤眸','邪魅一笑','轻嗤'];
+  templates.forEach(w=>{
+    const n=(src.match(new RegExp(w.replace(/[.*+?^${}()|[\\]\\]/g,'\\$&'),'g'))||[]).length;
+    if(n>1) issues.push({type:'template_repeat',severity:'fail',evidence:`模板词「${w}」本章出现${n}次`,expected:'同类模板词原则上最多一次',actual:`${n}次`,repair:`减少「${w}」的重复使用，优先改为具体行动、语气或场景信息。`});
+  });
+  const sentences=src.split(/[。！？!?]+/).map(x=>x.replace(/\s+/g,'').trim()).filter(x=>x.length>=12);
+  const seen=new Map();
+  sentences.forEach(x=>seen.set(x,(seen.get(x)||0)+1));
+  for(const [x,n] of seen){
+    if(n>1) issues.push({type:'sentence_duplicate',severity:'fail',evidence:`同句重复${n}次：「${x.slice(0,80)}${x.length>80?'…':''}」`,expected:'避免完全重复的长句',actual:`${n}次`,repair:'删除重复句或改为真正新增的信息。'});
+  }
+  return {status:issues.length?'FAIL':'PASS',issues};
+}
+function localChapterHardGate(i,text){
+  const issues=[];
+  const role='chapter';
+  const entityHits=banEntityTextViolations(text,role);
+  const textHits=banTextViolations(text,role);
+  entityHits.forEach(x=>issues.push({type:'ban_entity',severity:'fail',value:x.value,entityType:x.entityType}));
+  textHits.forEach(x=>issues.push({type:'ban_text',severity:'fail',value:x.value}));
+  if(state._narrIron!==false){ const iron=localNarrativeIronAudit(i,text); issues.push(...iron.issues); }
+  return issues;
+}
+function assertChapterLocalHardGate(i,text){
+  const issues=localChapterHardGate(i,text);
+  if(!issues.length) return {ok:true,issues:[]};
+  const ban=issues.filter(x=>x.type==='ban_entity'||x.type==='ban_text');
+  const iron=issues.filter(x=>x.type!=='ban_entity'&&x.type!=='ban_text');
+  const parts=[];
+  if(ban.length){
+    const entities=ban.filter(x=>x.type==='ban_entity').map(x=>`${x.entityType||'实体'}「${x.value}」`);
+    const texts=ban.filter(x=>x.type==='ban_text').map(x=>`文本「${x.value}」`);
+    if(entities.length) parts.push('禁用实体命中：'+[...new Set(entities)].slice(0,12).join('、'));
+    if(texts.length) parts.push('禁用词/短语/短句命中：'+[...new Set(texts)].slice(0,12).join('、'));
+  }
+  if(iron.length) parts.push('叙事铁律本地硬检查：'+iron.slice(0,6).map(x=>x.evidence).join('；'));
+  const e=new Error(parts.join('；')||'正文未通过本地质量硬门');
+  e.code='CHAPTER_LOCAL_HARD_GATE'; e.qualityIssues=issues;
+  throw e;
+}
+
 async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride, signal){
   const mt = chapterMaxTokens();
   onPhase = onPhase || (()=>{});
@@ -18777,7 +19040,10 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
     const paras=_rawTail.split(/\n\s*\n/).filter(x=>x.trim());
     if(paras.length>1){ paras.pop(); content=paras.join('\n\n').trim(); }
   }
-  return enforceChapterBoundary(i, content);
+  content = enforceChapterBoundary(i, content);
+  // 正文进入任何 state/persist 前的本地质量闸门：禁则是硬约束，叙事铁律只做高置信确定性检查。
+  assertChapterLocalHardGate(i, content);
+  return content;
 }
 function splitChapterCastout(prose){
   const lines = String(prose||'').split(/\r?\n/);
@@ -19819,7 +20085,7 @@ async function genOneChapter(i, btn, opt={}){
     snapshotChapterVersion(i);
     state.chapters[i].content = txt;
     updateFactCardFromChapter(i, txt);
-    if(isLong()){ const fin=await finalizeChapterState(i, txt); if(fin.content!==txt){ txt=fin.content; state.chapters[i].content=txt; snapshotChapterVersion(i); persist(); } }
+    if(isLong()){ const fin=await finalizeChapterState(i, txt); if(fin.content!==txt){ txt=fin.content; assertChapterLocalHardGate(i, txt); state.chapters[i].content=txt; snapshotChapterVersion(i); persist(); } if(fin.blocked) throw new Error(`第${i+1}章未通过正文硬审核：${fin.audit?.blockReason||fin.audit?.summary||'存在未修复的审核问题'}`); }
     invalidateChapterMemory(i);
     chState[i] = 'done';
     if(!isLong()) state.chapters[i].confirmed = false;
@@ -19849,9 +20115,11 @@ async function genTwoChapters(pairStart){
       patchChapter(idx);
     }) : null;
     const txt = await writeOneChapterContent(idx, buildChapterUser(idx), null, onStream);
+    assertChapterLocalHardGate(idx, txt);
     snapshotChapterVersion(idx);
     state.chapters[idx].content = txt;
-    updateFactCardFromChapter(idx, txt); if(isLong()){ const fin=await finalizeChapterState(idx, txt); if(fin.content!==txt){ txt=fin.content; state.chapters[idx].content=txt; snapshotChapterVersion(idx); } }
+    updateFactCardFromChapter(idx, txt); if(isLong()){ const fin=await finalizeChapterState(idx, txt); if(fin.content!==txt){ txt=fin.content; assertChapterLocalHardGate(idx, txt); state.chapters[idx].content=txt; snapshotChapterVersion(idx); } if(fin.blocked) throw new Error(`第${idx+1}章未通过正文硬审核：${fin.audit?.blockReason||fin.audit?.summary||'存在未修复的审核问题'}`); }
+    persist();
     invalidateChapterMemory(idx);
   }
   generateRollingSummaries().catch(()=>{});
@@ -19901,14 +20169,17 @@ async function genNChapters(start, n){
           }
         }
         let content = enforceChapterBoundary(idx, String(txt||'').trim());
+        // 批量正文与单章正文使用同一个本地硬门；通过后才允许写入正式章节状态。
+        assertChapterLocalHardGate(idx, content);
         snapshotChapterVersion(idx);
         state.chapters[idx].content = content;
         if(!isLong()) state.chapters[idx].confirmed = false;
         delete state._chapterPartial[idx];   // 正文落库即清流式缓存，避免已完成章残留"可续写"态
         state._chapterRetryFix = '';
-        persist();
         updateFactCardFromChapter(idx, content);
-        if(isLong()){ const fin=await finalizeChapterState(idx, content); if(fin.content!==content){ content=fin.content; state.chapters[idx].content=content; snapshotChapterVersion(idx); persist(); } if(fin.blocked){ throw new Error(`第${idx+1}章未通过正文硬审核：${fin.audit?.blockReason||fin.audit?.summary||'存在未修复的审核问题'}`); } }
+        if(isLong()){ const fin=await finalizeChapterState(idx, content); if(fin.content!==content){ content=fin.content; assertChapterLocalHardGate(idx, content); state.chapters[idx].content=content; snapshotChapterVersion(idx); persist(); } if(fin.blocked){ throw new Error(`第${idx+1}章未通过正文硬审核：${fin.audit?.blockReason||fin.audit?.summary||'存在未修复的审核问题'}`); } }
+        assertChapterLocalHardGate(idx, content);
+        persist();
         invalidateChapterMemory(idx);
         chState[idx] = 'done';
         patchChapter(idx);
@@ -20105,9 +20376,9 @@ async function genManyChapters(count, fromStart){
       const targetPage = Math.floor(start / CH_PAGE_SIZE);
       if(Math.abs(chPage - targetPage) >= 1){ chPage = targetPage; renderChapters(); }
     }
-    // v1.0.360：正文 AI 已成功落库后，必须主动刷新全局步骤状态。
-    // 之前正文生成只 patch 章节卡，没有重绘“创作进度/步骤”视图，导致正文已完成但步骤仍停在“正文”。
-    render();
+    // 正文批量任务完成只做局部管线/章节刷新，避免后台 AI 任务重建整个 #view。
+    patchChapter(start);
+    refreshSchoolProgressUi();
   }catch(e){
     for(let k=0;k<n;k++){ if(chState[start+k] === 'generating'){ chState[start+k]='error'; } patchChapter(start+k); }
     if(st){ st.className='status err'; st.textContent = `第${start+1}~${start+n}章生成失败（${e.message}）。已停止本批，请修复后重试。`; }
@@ -20714,43 +20985,100 @@ function renderResumePanel(){
 }
 
 
+function _banScopeCheckboxesHtml(prefix, scopes, active){
+  const labels=[['ideaOptimization','优化构想'],['dictmaster','词典达人'],['dictEnrich','词典充实'],['principal','校长'],['teacher','老师'],['chapter','正文']];
+  return labels.map(([k,l])=>`<label class="mini-check"><input type="checkbox" data-bl-${prefix}-scope="${k}" ${active.includes(k)?'checked':''}> ${l}</label>`).join('');
+}
+function _banListArea(label, key, items, placeholder){
+  return `<label class="kv"><span class="k">${label}</span><textarea data-bl-list="${key}" rows="3" placeholder="每行一个，也可用逗号分隔">${esc(items.join('\n'))}</textarea></label>`;
+}
+function _banScopeArrFromModal(m,prefix,fallback){
+  const nodes=[...m.querySelectorAll(`[data-bl-${prefix}-scope]`)];
+  if(!nodes.length) return fallback.slice();
+  return nodes.filter(x=>x.checked).map(x=>x.dataset.blScope);
+}
+function renderBanListPanel(){
+  const b=banListRaw();
+  const html=`
+  <div class="ne-body ne-bl-body">
+    <div class="ne-bl-enable"><label class="mini-check"><input type="checkbox" data-bl-enabled ${stateBanEnabled()?'checked':''}> <b>总开关：启用「禁则清单」</b></label></div>
+    <div class="bl-note muted">现在把“实体名称”和“文本片段”彻底分开。关闭其中一套，不会影响另一套。实体名称默认按完整名称精确匹配；旧版“禁用字”不会默认启用，避免一个汉字误伤大量名称。</div>
+
+    <section style="margin-top:12px;padding:12px;border:1px solid rgba(99,102,241,.22);border-radius:14px;background:rgba(99,102,241,.05)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b>👤 实体名称禁则</b><label class="mini-check"><input type="checkbox" data-bl-entity-enabled ${b.entity.enabled!==false?'checked':''}> 启用</label></div>
+      <div class="bl-note muted">针对人名、地名、其他专名。默认精确匹配完整实体名称，不按单个汉字误伤。</div>
+      <div class="btn-row"><button class="btn primary" data-bl-character-naming>👤 打开人物定名台</button></div>
+      <label class="mini-check"><input type="checkbox" data-bl-person-enabled ${b.entity.person.enabled!==false?'checked':''}> 人名</label>
+      <label class="mini-check"><input type="checkbox" data-bl-place-enabled ${b.entity.place.enabled!==false?'checked':''}> 地名</label>
+      <label class="mini-check"><input type="checkbox" data-bl-proper-enabled ${b.entity.properNoun.enabled?'checked':''}> 其他专名</label>
+      ${_banListArea('禁用人名','personNames',b.entity.person.names,'顾沉、苏晚')}
+      ${_banListArea('禁用地名','placeNames',b.entity.place.names,'黑石城、青云镇')}
+      ${_banListArea('禁用其他专名','properNames',b.entity.properNoun.names,'组织、机构、独有名词')}
+      <details style="margin-top:8px"><summary><b>⚙ 高级：按字禁止</b></summary><div class="bl-note muted">默认关闭。开启后才会把“晚”这类单字当作人名/地名组成规则，而不是全局禁字。</div>
+        <label class="mini-check"><input type="checkbox" data-bl-person-char ${b.entity.person.charRulesEnabled?'checked':''}> 人名按字匹配</label>
+        <input data-bl-list="personChars" value="${esc(b.entity.person.chars.join(', '))}" placeholder="例如：晚,砚,秋"/>
+        <label class="mini-check"><input type="checkbox" data-bl-place-char ${b.entity.place.charRulesEnabled?'checked':''}> 地名按字匹配</label>
+        <input data-bl-list="placeChars" value="${esc(b.entity.place.chars.join(', '))}" placeholder="例如：城,镇"/>
+      </details>
+      <div style="margin-top:10px"><b>实体禁则生效范围</b><div class="ne-bl-scope">${_banScopeCheckboxesHtml('entity',b.entityScopeAi,b.entityScopeAi)}</div></div>
+    </section>
+
+    <section style="margin-top:12px;padding:12px;border:1px solid rgba(16,185,129,.22);border-radius:14px;background:rgba(16,185,129,.05)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b>📝 文本禁则</b><label class="mini-check"><input type="checkbox" data-bl-text-enabled ${b.text.enabled!==false?'checked':''}> 启用</label></div>
+      <div class="bl-note muted">与人名/地名完全独立。词汇、短语、短句可以分别开关。</div>
+      <label class="mini-check"><input type="checkbox" data-bl-word-enabled ${b.text.words.enabled!==false?'checked':''}> 词汇</label>
+      ${_banListArea('禁用词汇','words',b.text.words.items,'例如：眸光、不由得')}
+      <label class="mini-check"><input type="checkbox" data-bl-phrase-enabled ${b.text.phrases.enabled!==false?'checked':''}> 短语</label>
+      ${_banListArea('禁用短语','phrases',b.text.phrases.items,'例如：天刚蒙蒙亮、破旧的窗棂')}
+      <label class="mini-check"><input type="checkbox" data-bl-sentence-enabled ${b.text.sentences.enabled!==false?'checked':''}> 短句</label>
+      ${_banListArea('禁用短句','sentences',b.text.sentences.items,'每行一句完整句子')}
+      <div style="margin-top:10px"><b>文本禁则生效范围</b><div class="ne-bl-scope">${_banScopeCheckboxesHtml('text',b.textScopeAi,b.textScopeAi)}</div></div>
+    </section>
+
+    <section style="margin-top:12px"><div class="ne-bl-rules-head"><b>附加规则</b> <button class="btn small" data-bl-rule-add>＋ 新增规则</button></div><div data-bl-rules-host></div></section>
+    <div class="btn-row"><button class="btn primary" data-bl-save>保存禁则</button><button class="btn ghost" data-bl-reset>恢复默认</button></div>
+  </div>`;
+  openNeModal('禁则清单',html);
+  const m=$('#neModal');
+  const renderRules=()=>{
+    const cur=normalizeBanList(state.banList)||normalizeBanList(BANLIST_DEFAULT);
+    const host=m.querySelector('[data-bl-rules-host]'); if(!host)return;
+    host.innerHTML=(cur.rules||[]).map((r,i)=>`<div class="ne-bl-rule"><label>生效 AI：<select data-bl-rule-ai="${i}">${['ideaOptimization','dictmaster','dictEnrich','principal','teacher','chapter'].map(k=>`<option value="${k}" ${(r.ai||[]).includes(k)?'selected':''}>${({'ideaOptimization':'优化构想',dictmaster:'词典达人',dictEnrich:'词典充实',principal:'校长',teacher:'老师',chapter:'正文'})[k]}</option>`).join('')}</select></label><textarea data-bl-rule-text="${i}" rows="2">${esc(r.text||'')}</textarea><button class="btn small ghost" data-bl-rule-del="${i}">删除</button></div>`).join('')||'<div class="muted">暂无附加规则。</div>';
+  };
+  renderRules();
+  m.querySelector('[data-bl-rule-add]')?.addEventListener('click',()=>{const cur=normalizeBanList(state.banList)||normalizeBanList(BANLIST_DEFAULT);cur.rules.push({text:'',ai:['chapter']});state.banList=cur;renderRules();});
+  m.querySelector('[data-bl-rule-rules]');
+}
 function handleBanListAction(e){
-  const m=$('#neModal'); if(!m || m.style.display==='none' && m.classList&&m.classList.contains('hidden')) return false;
-  if(!m.contains(e.target)) return false;
-  const naming=e.target.closest('[data-bl-character-naming]'); if(naming){ renderCharacterNamingPanel(); return true; }
-  const en=e.target.closest('[data-bl-enabled]'); if(en){ /* 保存时统一读回，此处仅占位避免误关面板 */ return false; }
-  const add=e.target.closest('[data-bl-rule-add]'); if(add){
-    const b=banListRaw();
-    const cur=normalizeBanList(b)||{enabled:true,chars:[],names:[],phrases:[],rules:[],scopeAi:[]};
-    cur.rules.push({ text:'', ai:['chapter'] });
-    state.banList=cur; renderBanListPanel(); return true;
-  }
-  const del=e.target.closest('[data-bl-rule-del]'); if(del){
-    const i=+del.dataset.blRuleDel; const cur=normalizeBanList(state.banList)||{enabled:true,chars:[],names:[],phrases:[],rules:[],scopeAi:[]};
-    (cur.rules||[]).splice(i,1); state.banList=cur; renderBanListPanel(); return true;
-  }
+  const m=$('#neModal'); if(!m || (m.style.display==='none'&&m.classList?.contains('hidden')) || !m.contains(e.target)) return false;
+  const naming=e.target.closest('[data-bl-character-naming]'); if(naming){renderCharacterNamingPanel();return true;}
+  const del=e.target.closest('[data-bl-rule-del]'); if(del){const cur=normalizeBanList(state.banList)||normalizeBanList(BANLIST_DEFAULT);const i=+del.dataset.blRuleDel;cur.rules.splice(i,1);state.banList=cur;renderBanListPanel();return true;}
   const save=e.target.closest('[data-bl-save]'); if(save){
-    const cur=normalizeBanList(state.banList)||{enabled:true,chars:[],names:[],phrases:[],rules:[],scopeAi:(BANLIST_DEFAULT.scopeAi||['chapter','dictmaster','dictEnrich','principal']).slice()};
-    const gv=el=>m.querySelector(el); const val=el=>{const x=gv(el); return x?x.value.trim():'';};
-    cur.enabled = !!(m.querySelector('[data-bl-enabled]')&&m.querySelector('[data-bl-enabled]').checked);
-    cur.chars = val('[data-bl-chars]').split(/[,，]/).map(s=>s.trim()).filter(Boolean);
-    cur.names = val('[data-bl-names]').split(/[,，\n]/).map(s=>s.trim()).filter(Boolean);
-    cur.phrases = val('[data-bl-phrases]').split(/[,，]/).map(s=>s.trim()).filter(Boolean);
-    m.querySelectorAll('[data-bl-rule-text]').forEach(t=>{ const i=+t.dataset.blRuleText; const aiSel=m.querySelector('[data-bl-rule-ai="'+i+'"]'); const ai=aiSel?aiSel.value.split(',') : []; if(cur.rules[i]){ cur.rules[i].text=t.value.trim(); cur.rules[i].ai=ai; } });
-    cur.rules=cur.rules.filter(r=>r&&r.text);
-    const scope=[];
-    if(m.querySelector('[data-bl-scope="chapter"]')&&m.querySelector('[data-bl-scope="chapter"]').checked) scope.push('chapter');
-    if(m.querySelector('[data-bl-scope="dictmaster"]')&&m.querySelector('[data-bl-scope="dictmaster"]').checked) scope.push('dictmaster');
-    if(m.querySelector('[data-bl-scope="dictEnrich"]')&&m.querySelector('[data-bl-scope="dictEnrich"]').checked) scope.push('dictEnrich');
-    if(m.querySelector('[data-bl-scope="principal"]')&&m.querySelector('[data-bl-scope="principal"]').checked) scope.push('principal');
-    cur.scopeAi = scope.length?scope:BANLIST_DEFAULT.scopeAi.slice();
-    state.banList=cur; persist(); renderNarrativeEngineMenu();
-    toast('禁则清单已保存'); return true;
+    const cur=normalizeBanList(state.banList)||normalizeBanList(BANLIST_DEFAULT), val=k=>{const x=m.querySelector(`[data-bl-list="${k}"]`);return x?x.value.trim():'';}, arr=k=>val(k).split(/[,，\n]/).map(x=>x.trim()).filter(Boolean);
+    cur.enabled=!!m.querySelector('[data-bl-enabled]')?.checked;
+    cur.entity.enabled=!!m.querySelector('[data-bl-entity-enabled]')?.checked;
+    cur.entity.person.enabled=!!m.querySelector('[data-bl-person-enabled]')?.checked;
+    cur.entity.place.enabled=!!m.querySelector('[data-bl-place-enabled]')?.checked;
+    cur.entity.properNoun.enabled=!!m.querySelector('[data-bl-proper-enabled]')?.checked;
+    cur.entity.person.names=arr('personNames'); cur.entity.place.names=arr('placeNames'); cur.entity.properNoun.names=arr('properNames');
+    cur.entity.person.chars=arr('personChars'); cur.entity.place.chars=arr('placeChars');
+    cur.entity.person.charRulesEnabled=!!m.querySelector('[data-bl-person-char]')?.checked; cur.entity.place.charRulesEnabled=!!m.querySelector('[data-bl-place-char]')?.checked;
+    cur.text.enabled=!!m.querySelector('[data-bl-text-enabled]')?.checked; cur.text.words.enabled=!!m.querySelector('[data-bl-word-enabled]')?.checked; cur.text.phrases.enabled=!!m.querySelector('[data-bl-phrase-enabled]')?.checked; cur.text.sentences.enabled=!!m.querySelector('[data-bl-sentence-enabled]')?.checked;
+    cur.text.words.items=arr('words'); cur.text.phrases.items=arr('phrases'); cur.text.sentences.items=arr('sentences');
+    const readScope=p=>{const out=[];m.querySelectorAll(`[data-bl-${p}-scope]`).forEach(x=>{if(x.checked)out.push(x.dataset.blScope)});return out;};
+    cur.entityScopeAi=readScope('entity'); cur.textScopeAi=readScope('text');
+    m.querySelectorAll('[data-bl-rule-text]').forEach(t=>{const i=+t.dataset.blRuleText;const sel=m.querySelector(`[data-bl-rule-ai="${i}"]`);if(cur.rules[i]){cur.rules[i].text=t.value.trim();cur.rules[i].ai=sel&&sel.value?[sel.value]:[];}});cur.rules=cur.rules.filter(r=>r&&r.text);
+    // 兼容旧字段：把新数据同步到旧字段，但运行时只读取新结构。
+    cur.names=cur.entity.person.names.slice();cur.chars=cur.entity.person.chars.slice();cur.phrases=[...new Set([...cur.text.words.items,...cur.text.phrases.items,...cur.text.sentences.items])];cur.scopeAi=cur.entityScopeAi.slice();
+    // 保存链路：读取 UI → 规范化 → 落盘 → 重新读取最终状态，确保总开关与空范围不会被迁移逻辑覆盖。
+    state.banList=normalizeBanList(cur);
+    persist();
+    state.banList=normalizeBanList(state.banList);
+    renderNarrativeEngineMenu();
+    toast(stateBanEnabled()?'禁则清单已保存并全局生效':'禁则清单已保存：总开关已关闭');
+    return true;
   }
-  const reset=e.target.closest('[data-bl-reset]'); if(reset){
-    state.banList=null; persist(); renderNarrativeEngineMenu();
-    toast('已恢复默认禁则清单'); return true;
-  }
+  const reset=e.target.closest('[data-bl-reset]');if(reset){state.banList=null;persist();renderNarrativeEngineMenu();toast('已恢复默认禁则清单');return true;}
   return false;
 }
 function renderIronPanel(){
@@ -20828,64 +21156,6 @@ function renderCharacterNamingPanel(){
   const refresh=m.querySelector('[data-cn-refresh]'); if(refresh) refresh.onclick=()=>renderCharacterNamingPanel();
 }
 
-function renderBanListPanel(){
-  const b = banListRaw();
-  const enabled = stateBanEnabled();
-  const chars = banListChars().map(esc).join(', ');
-  const names = banListNames().map(esc).join(', ');
-  const advisoryChars = banListAdvisoryChars().map(esc).join('、');
-  const advisoryNames = banListAdvisoryNames().map(esc).join('、');
-  const bRaw = banListRaw();
-  const phrases = (Array.isArray(bRaw.phrases)?bRaw.phrases:[]).map(esc).join(', ');
-  const rules = (Array.isArray(bRaw.rules)?bRaw.rules:[]).map((r,i)=>`
-    <div class="ne-bl-rule">
-      <label>生效 AI：<select data-bl-rule-ai="${i}">
-        ${['chapter', 'dictmaster', 'dictEnrich', 'principal'].map(r2=>`<option value="${r2}" ${(Array.isArray(r.ai)&&r.ai.indexOf(r2)>=0)?'selected':''}>${r2==='chapter'?'正文':r2==='planner'?'规划师':r2==='outline'?'大纲':'标题'}</option>`).join('')}
-      </select></label>
-      <textarea data-bl-rule-text="${i}" rows="2">${esc(r.text||'')}</textarea>
-      <button class="btn small ghost" data-bl-rule-del="${i}">删除</button>
-    </div>`).join('');
-  const aiScope = banListAiScopeLabels();
-  const html = `
-    <div class="ne-body ne-bl-body">
-      <div class="ne-bl-enable">
-        <label class="mini-check"><input type="checkbox" data-bl-enabled ${enabled?'checked':''}> <b>总开关：启用「禁则清单」作为全书长期约束</b></label>
-      </div>
-      <div class="bl-note muted"><b>姓名命名现在分两层：</b>系统默认的高频姓名/姓氏只做提醒，不会卡住词典达人或词典充实；只有用户在下面明确填写的“禁用字/禁用姓名”才是硬禁则。人物正式姓名可在正文生成前统一修改。</div>
-      <div style="margin:10px 0;padding:10px 12px;border-radius:12px;background:rgba(245,158,11,.10);border:1px solid rgba(245,158,11,.25)"><b>🟡 系统高频姓名提醒（不拦截）</b><div class="muted" style="margin-top:5px;line-height:1.6">高频姓名：${advisoryNames}<br>高频提醒字：${advisoryChars}<br>命中只提示用户，词典达人/词典充实仍可继续创作。</div></div>
-      <div class="btn-row"><button class="btn primary" data-bl-character-naming>👤 打开人物定名台</button></div>
-      <label class="kv"><span class="k">禁用字</span>
-        <input data-bl-chars value="${chars}" placeholder="逗号分隔，如：晚,砚,秋,檐"/>
-      </label>
-      <label class="kv"><span class="k">禁用姓名</span>
-        <textarea data-bl-names rows="3">${names}</textarea>
-      </label>
-      <label class="kv"><span class="k">禁用短语/模板词（正文 + 词典达人 + 词典充实 + 校长）</span>
-        <input data-bl-phrases value="${phrases}" placeholder="逗号分隔，如：倏然,眸光"/>
-      </label>
-      <div class="ne-bl-rules-head">附加规则 <button class="btn small" data-bl-rule-add>＋ 新增规则</button></div>
-      ${rules || '<div class="muted">暂无附加规则。</div>'}
-      <div class="ne-bl-scope-head"><b>附加规则生效范围（按 AI）</b></div>
-      <div class="ne-bl-scope">
-        <label class="mini-check"><input type="checkbox" data-bl-scope="chapter" ${aiScope.chapter?'checked':''}> 正文</label>
-        <label class="mini-check"><input type="checkbox" data-bl-scope="dictmaster" ${aiScope.dictmaster ? 'checked' : ''}> 词典达人</label>
-        <label class="mini-check"><input type="checkbox" data-bl-scope="dictEnrich" ${aiScope.dictEnrich ? 'checked' : ''}> 词典充实</label>
-        <label class="mini-check"><input type="checkbox" data-bl-scope="principal" ${aiScope.principal ? 'checked' : ''}> 校长</label>
-      </div>
-      <div class="btn-row">
-        <button class="btn primary" data-bl-save>保存</button>
-        <button class="btn ghost" data-bl-reset>恢复默认</button>
-      </div>
-    </div>`;
-  openNeModal('禁则清单', html);
-}
-function banListAiScopeLabels(){
-  const b=banListRaw(); const sc=Array.isArray(b.scopeAi)?b.scopeAi:(BANLIST_DEFAULT.scopeAi||[]);
-  return { chapter: sc.indexOf('chapter')>=0, dictmaster: sc.indexOf('dictmaster') >= 0,
-    dictEnrich: sc.indexOf('dictEnrich') >= 0,
-    principal: sc.indexOf('principal') >= 0 };
-}
-
 function renderTitleCandidates(candidates, onSelect){
   if(!Array.isArray(candidates) || candidates.length<2){ onSelect && onSelect(0); return; }
   const cards=candidates.map((cand,i)=>`
@@ -20920,14 +21190,14 @@ function closeSettings(){ $('#settingsModal').classList.add('hidden'); }
 
 function echoTemps(){
   const c = editCfg || getCfg();
-  $('#cfgTemp').value = (c.temperature==null ? '' : c.temperature);
+  $('#cfgTemp').value = (c.temperature==null ? 0.6 : c.temperature);
 }
 
 function saveTemps(){
   const rd = (id, def)=>{ const v=parseFloat($(id) && $(id).value); return isNaN(v)?def:v; };
-  editCfg.temperature = rd('#cfgTemp', 0.7);
+  editCfg.temperature = rd('#cfgTemp', 0.6);
   const live = getCfg();
-  const TM_FIELDS = ['ideaTemp','principalTemp','teacherTemp','dictmasterTemp','dictEnrichTemp','assetsTemp','titleTemp','chapterTemp','qcTemp','stripTemp','subplotTemp','rollingTemp','contentAdviseTemp','aiRecipeTemp'];
+  const TM_FIELDS = ['ideaTemp','dictmasterTemp','dictEnrichTemp','principalTemp','teacherTemp','chapterTemp','aiRecipeTemp','stripTemp','subplotTemp','qcTemp','rollingTemp','contentAdviseTemp','assetsTemp','titleTemp','chapterAuditTemp','chapterRepairTemp','chapterStateTemp','principalContextTemp','timeAnchorTemp','recipeAnalysisTemp'];
   TM_FIELDS.forEach(f=>{ if(live && typeof live[f]==='number') editCfg[f]=live[f]; });
 }
 
@@ -20954,45 +21224,42 @@ function updateCfgBadge(){
 }
 
 const TM_GROUPS = [
-  { title:'🧠 前置 · 构想（项目起点）', keys:[
-    ['idea','故事构想 / 优化构想','生成与优化故事点子、多方向方案比选']
+  { title:'⭐ 一级核心 · 主创链（最重要）', keys:[
+    ['idea','优化构想','WHAT / WHY：故事战略、核心冲突与创作方向'],
+    ['dictmaster','词典达人','建立核心人物、关系、世界规则与基础万物词典'],
+    ['dictEnrich','词典充实','在核心词典之上补充次级人物与世界生态'],
+    ['principal','校长总控','统领全量材料，产出全书与章节级规划'],
+    ['teacher','老师备课','把章节规划转成场景级推进教案'],
+    ['chapter','正文生成','正式小说正文生成，创作链温度核心'],
+    ['recipe','写作配方','写作风格/方法组合与配方设计']
   ]},
-  { title:'🏛️ 学校统筹与设定架构（核心大脑，建议主力模型）', keys:[
-    ['principal','👑 校长总控','长篇小说治学总舵手：统领全量材料，产出全校守则、组级框架与章节标题'],
-    ['teacher','🎓 老师备课','任课教师分段教案：逐章备好推进骨架、情境推进与微拍融合'],
-    ['dictmaster','📖 词典达人','全局设定架构师：AI 生成万物词典（人物十维+人物关系表+地名关联表+专名关联表+世界观规则）'],
-    ['dictEnrich','🗂 词典充实','设定细化工坊：为正文补充人物感官特征、地名场景禁忌与氛围路人龙套']
+  { title:'🔧 二级任务 · 高频维护与质量控制', keys:[
+    ['strip','本章梗概（速读）','每章生成后的快速压缩'],
+    ['subplot','副线追踪','小型结构化进度更新'],
+    ['glossary','词典提取','从正文抽取结构化词典信息'],
+    ['rolling','滚动摘要','长篇记忆层与批次摘要'],
+    ['contentAdvice','章节内容 AI 建议','章节层面的补充建议'],
+    ['assets','封面/人物/场景/分镜','提示词与创作资产'],
+    ['titleAdvice','标题建议','章节/标题类建议']
   ]},
-  { title:'✍️ 正文重创作（费用大头，建议主力模型）', keys:[
-    ['chapter','正文生成','全书正文质量与费用大头；所选模型须支持流式（stream）']
-  ]},
-  { title:'🔧 每章/每批 · 轻维护（高频小请求，建议 flash 省钱）', keys:[
-    ['strip','本章梗概（速读）','每章生成后都会调用'],
-    ['subplot','副线追踪','小 JSON 追踪任务'],
-    ['glossary','词典提取','JSON 严谨任务；换弱模型解析失败率会升高（有校验兜底，不阻断）'],
-    ['rolling','滚动摘要','长篇记忆层，每批正文后调用']
-  ]},
-  { title:'💡 写作补充与资产', keys:[
-    ['contentAdvice','章节内容 AI 建议','JSON 任务'],
-    ['assets','封面/人物/场景/分镜','提示词类产出'],
-    ['recipe','AI 配方助手','候选配方需判断力；写风配方卡']
+  { title:'🧩 二级任务 · 内部质量/校准 AI', keys:[
+    ['chapterAudit','正文审计','正文事实、逻辑与质量账本审计'],
+    ['chapterRepair','正文修复','根据审计结果进行局部修复'],
+    ['chapterState','正文状态结算','提取章末事实状态'],
+    ['principalContext','校长上下文整理','校长流程内部上下文整理'],
+    ['timeAnchor','时间锚点','从正文抽取时间状态'],
+    ['recipeAnalysis','配方输入理解','写作配方的前置需求分析']
   ]}
 ];
 
+// 第二列数字就是当前代码的标准/推荐值。用户修改后的值才是运行时唯一任务温度。
 const TM_TEMP = {
-  idea:['ideaTemp',0.45],
-  principal:['principalTemp',0.4],
-  teacher:['teacherTemp',0.4],
-  dictmaster:['dictmasterTemp',0.4],
-  dictEnrich:['dictEnrichTemp',0.45],
-  chapter:['chapterTemp',0.5],
-  strip:['stripTemp',0.8],
-  subplot:['subplotTemp',0.25],
-  glossary:['qcTemp',0.2],
-  rolling:['rollingTemp',0.3],
-  contentAdvice:['contentAdviseTemp',0.6],
-  assets:['assetsTemp',0.7],
-  recipe:['aiRecipeTemp',0.85]
+  idea:['ideaTemp',0.45], dictmaster:['dictmasterTemp',0.40], dictEnrich:['dictEnrichTemp',0.45],
+  principal:['principalTemp',0.40], teacher:['teacherTemp',0.40], chapter:['chapterTemp',0.50], recipe:['aiRecipeTemp',0.85],
+  strip:['stripTemp',0.80], subplot:['subplotTemp',0.25], glossary:['qcTemp',0.20], rolling:['rollingTemp',0.30],
+  contentAdvice:['contentAdviseTemp',0.60], assets:['assetsTemp',0.70], titleAdvice:['titleTemp',0.50],
+  chapterAudit:['chapterAuditTemp',0.05], chapterRepair:['chapterRepairTemp',0.20], chapterState:['chapterStateTemp',0.10],
+  principalContext:['principalContextTemp',0.15], timeAnchor:['timeAnchorTemp',0.20], recipeAnalysis:['recipeAnalysisTemp',0.20]
 };
 let editTM = null;          // 面板暂存：保存前绝不落盘（对齐设置弹窗 editCfg 模式）
 let editTemps = {};
@@ -21000,11 +21267,11 @@ let _tmEscHandler = null;   // ESC 关闭挂钩（现有 modal 无全局 ESC，�
 function tmCustomCount(tm){ return TM_KEYS.filter(k=> tm && tm[k]).length; }
 function updateTmBadge(){
   const n = tmCustomCount(getCfg().taskModels);
-  const el = $('#tmBadge'); if(el) el.textContent = n ? ('已自定义 '+n+' 项') : '全部跟随全局';
+  const el = $('#tmBadge'); if(el) el.textContent = n ? ('模型自定义 '+n+' 项 · 温度独立') : '模型跟随全局 · 温度独立';
   const b = $('#cfgBadge'); if(b) b.classList.toggle('tm-on', n>0);
 }
 function tmResolvePreview(triple){
-  if(!triple) return '跟随全局';
+  if(!triple) return '跟随全局模型';
   const cfg = getCfg();
   const g = cfg.groups.find(x=>x.id===triple.groupId);
   if(!g) return '⚠️ 服务组不存在（保存后仍会回落全局）';
@@ -21038,7 +21305,7 @@ function refreshTmResetBtn(){
   const btn=$('#btnTmReset'); if(!btn) return;
   const n = tmCustomCount(editTM||{});
   btn.classList.toggle('hidden', n===0);
-  btn.textContent = '全部恢复跟随全局（'+n+' 项自定义）';
+  btn.textContent = '仅重置任务模型覆盖（'+n+' 项）';
 }
 function renderTaskModelPanel(){
   const body = $('#tmBody'); if(!body) return;
@@ -21060,11 +21327,11 @@ function renderTaskModelPanel(){
     const tval = tf ? (editTemps[tf[0]]==null ? tf[1] : editTemps[tf[0]]) : '';
     return `<div class="tm-row${tm?' tm-custom':''}" data-tm-row="${key}">
       <div class="tm-head"><span class="tm-name">${esc(name)}</span><span class="tm-note">${esc(note||'')}</span>
-        ${tf?`<input type="number" inputmode="decimal" step="0.05" min="0" max="2" class="tm-temp" data-tm-temp="${key}" value="${tval}" placeholder="温度 ${tf[1]}" title="${esc(name)} 的 AI 温度（留空并保存＝恢复建议值）">`:'<span class="tm-temp-void"></span>'}
+        ${tf?`<input type="number" inputmode="decimal" step="0.05" min="0" max="2" class="tm-temp" data-tm-temp="${key}" value="${tval}" placeholder="温度 ${tf[1]}" title="${esc(name)} 的 AI 温度（推荐值仅供参考；保存后以任务温度为准）">`:'<span class="tm-temp-void"></span>'}
       </div>
       <div class="tm-sels">
         <select data-tm-sel="group" data-tm-key="${key}">
-          <option value="">跟随全局</option>
+          <option value="">跟随全局模型</option>
           ${cfg.groups.map(g=>`<option value="${esc(g.id)}" ${gid===g.id?'selected':''}>${esc(g.label)}</option>`).join('')}
         </select>
         <select data-tm-sel="key" data-tm-key="${key}" ${grp?'':'disabled'}>${optHtml((grp?(grp.keys||[]):[]).map(k=>({v:k.id,t:k.label||'账号'})), kid, '（该组无账号）')}</select>
@@ -21074,9 +21341,9 @@ function renderTaskModelPanel(){
     </div>`;
   };
   body.innerHTML = `
-    <div class="cv-div">可按任务独立指定模型与 AI 温度，灵活平衡质量与效率。留空温度表示跟随建议值。</div>
+    <div class="cv-div">每个任务都有独立温度。输入框中的数值就是该任务实际 API 温度；括号内为修改前代码的推荐值，仅供参考。全局温度不会覆盖已配置的任务温度。</div>
     <div class="set-block">
-      <div class="set-block-head"><span>◆ 全局默认（未单独设置的任务都用它）</span></div>
+      <div class="set-block-head"><span>◆ 全局模型默认（仅用于未单独指定模型的任务）</span></div>
       <div class="tm-preview">${esc((curGroup.label||'AI') + ' · ' + (curKey?(curKey.label||'账号'):'⚠️ 无账号') + ' · ' + (curModel?curModel.name:'⚠️ 无模型'))}（只读；去上方「AI 模型配置」修改）</div>
     </div>
     ${TM_GROUPS.map(gr=>`<div class="set-block"><div class="set-block-head"><span>${esc(gr.title)}</span></div>${gr.keys.map(k=>row(k[0],k[1],k[2])).join('')}</div>`).join('')}`;
@@ -21125,7 +21392,7 @@ function saveTaskModels(){
   const nT = Object.keys(TM_TEMP).filter(k=>{ const f=TM_TEMP[k][0]; return f && editTemps && editTemps[f]!=null; }).length;
   closeTaskModelPanel();
   updateCfgBadge();
-  toast(n ? ('分任务模型已保存：'+n+' 项自定义，其余跟随全局') : '分任务模型已保存：全部跟随全局')+(nT?('；已同步 '+nT+' 项任务温度'):'');
+  toast(n ? ('分任务设置已保存：'+n+' 项模型覆盖；温度按任务独立生效') : '分任务设置已保存：模型跟随全局；温度按任务独立生效')+(nT?('；已同步 '+nT+' 项任务温度'):'');
 }
 
 function renderGroupsList(){
@@ -21351,53 +21618,50 @@ document.addEventListener('DOMContentLoaded', init);
 
 
 /* ===================== 禁则清单：词典达人 / 词典充实 / 校长 / 正文统一生效保障 ===================== */
-function isScopeBanned(scopeKey){
-  const raw = (typeof banListRaw === 'function') ? banListRaw() : (state.banList || {});
-  if(!raw || raw.enabled === false) return false;
-  const scopes = Array.isArray(raw.scopeAi) ? raw.scopeAi : (BANLIST_DEFAULT.scopeAi || []);
-  return scopes.includes(scopeKey);
-}
-function banTextViolations(text){
-  if(!stateBanEnabled()) return [];
-  const src = String(text||'');
-  const b = banListRaw();
-  const hits = [];
-  banListNames().forEach(n=>{ if(n && src.includes(n)) hits.push({type:'name',value:n}); });
-  (Array.isArray(b.phrases)?b.phrases:[]).forEach(w=>{ if(w && src.includes(w)) hits.push({type:'phrase',value:w}); });
+function isScopeBanned(scopeKey, type='entity'){ return banListAiActive(scopeKey,type); }
+function banEntityTextViolations(text, role){
+  if(!banEntityEnabled() || (role && !banListAiActive(role,'entity'))) return [];
+  const src=String(text||''), hits=[], b=banListRaw();
+  if(b.entity.person.enabled!==false) banListNames('person').forEach(n=>{if(n&&src.includes(n))hits.push({type:'name',value:n,entityType:'person'});});
+  if(b.entity.place.enabled!==false) banListNames('place').forEach(n=>{if(n&&src.includes(n))hits.push({type:'name',value:n,entityType:'place'});});
+  if(b.entity.properNoun.enabled!==false) banListNames('properNoun').forEach(n=>{if(n&&src.includes(n))hits.push({type:'name',value:n,entityType:'properNoun'});});
   return hits;
 }
-function scrubBannedPhrases(text){
-  let out = String(text||'');
-  if(!stateBanEnabled()) return out;
-  const phrases = Array.isArray(banListRaw().phrases) ? banListRaw().phrases : [];
-  phrases.slice().sort((a,b)=>String(b).length-String(a).length).forEach(w=>{
-    const needle=String(w||'').trim(); if(!needle) return;
-    out = out.split(needle).join('');
-  });
+function banTextViolations(text, role){
+  if(!banTextEnabled() || (role && !banListAiActive(role,'text'))) return [];
+  const src=String(text||''), hits=[];
+  banListAllTextItems().forEach(w=>{ if(w && src.includes(w)) hits.push({type:'text',value:w}); });
+  return hits;
+}
+function scrubBannedPhrases(text, role){
+  let out=String(text||'');
+  if(!banTextEnabled() || (role && !banListAiActive(role,'text'))) return out;
+  const items=banListAllTextItems();
+  items.slice().sort((a,b)=>String(b).length-String(a).length).forEach(w=>{ const needle=String(w||'').trim(); if(needle) out=out.split(needle).join(''); });
   return out;
 }
-function bannedEntityName(name){
-  const s=String(name||'').trim();
-  if(!s) return '';
-  return nmNameRuleViolation(s) || banListViolation(s);
+function bannedEntityName(name, type='person'){
+  const s=String(name||'').trim(); if(!s) return '';
+  return type==='person' ? nmNameRuleViolation(s) || banListViolation(s,'person') : banListViolation(s,type);
 }
-function filterDictMasterEntry(entry){
-  if(!entry || !isScopeBanned('dictmaster')) return entry;
-  return bannedEntityName(entry.name) ? null : entry;
+function filterDictMasterEntry(entry, category){
+  if(!entry || !isScopeBanned('dictmaster','entity')) return entry;
+  const type=category==='places'?'place':category==='propernouns'?'properNoun':'person';
+  return bannedEntityName(entry.name,type) ? null : entry;
 }
 function filterDictEnrichList(list){
-  if(!isScopeBanned('dictEnrich') || !Array.isArray(list)) return list || [];
+  if(!isScopeBanned('dictEnrich','entity') || !Array.isArray(list)) return list || [];
   return list.filter(item=>!bannedEntityName(item && (item.name||item.title||item.entity)));
 }
 function sanitizePrincipalText(text){
-  if(!isScopeBanned('principal')) return String(text||'');
-  return scrubBannedPhrases(text);
+  if(!isScopeBanned('principal','text')) return String(text||'');
+  return scrubBannedPhrases(text, 'principal');
 }
 function sanitizePrincipalChapter(ch){
-  if(!isScopeBanned('principal')) return ch;
+  if(!isScopeBanned('principal','text')) return ch;
   const out=Object.assign({}, ch||{});
-  out.title=scrubBannedPhrases(String(out.title||''));
-  out.summary=scrubBannedPhrases(String(out.summary||''));
+  out.title=scrubBannedPhrases(String(out.title||''), 'principal');
+  out.summary=scrubBannedPhrases(String(out.summary||''), 'principal');
   return Object.assign({}, out, { title:String(out.title||'').trim() || '新章节', summary:String(out.summary||'').trim() });
 }
 
