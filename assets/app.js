@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.438';
+const APP_VERSION = '1.0.436';
 // Version line: app1.0.428.js — 老师阶段去除质检/验收门槛；AI非空返回即完成，教案立即落盘查看；正文与多老师对接保留。
-const APP_FILE_VERSION = 'app1.0.438.js';
+const APP_FILE_VERSION = 'app1.0.436.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -76,8 +76,6 @@ const state = {
   idea: '',
   polishMode: 'single',
   polishStatus: 'empty',
-  // 1.0.437/438：优化构想严格质检开关，默认关闭。关闭时不触发 validation/repair retry。
-  ideaOptimizationStrictQc: false,
   strategyStage1Status: 'empty',
   strategyStage2Status: 'empty',
   polishSelectedId: null,
@@ -1213,7 +1211,6 @@ function projectSnapshot(){
     polishAdopted: state.polishAdopted,
     polishMode: state.polishMode,
     polishStatus: state.polishStatus,
-    ideaOptimizationStrictQc: state.ideaOptimizationStrictQc === true,
     strategyStage1Status: state.strategyStage1Status,
     strategyStage2Status: state.strategyStage2Status,
     polishSelectedId: state.polishSelectedId,
@@ -1321,7 +1318,6 @@ function applyProject(p){
   state.strategyStage1Status = ['empty','generating','ready','error'].includes(p.strategyStage1Status) ? p.strategyStage1Status : (state.originalIdeaAnchors && state.strategicDimensions?.length ? 'ready' : 'empty');
   state.strategyStage2Status = ['empty','generating','ready','adopted','error'].includes(p.strategyStage2Status) ? p.strategyStage2Status : (state.polishAdopted ? 'adopted' : (state.polishOptions?.length ? 'ready' : 'empty'));
   state.polishStatus = ['empty','generating','ready_single','waiting_selection','adopted'].includes(p.polishStatus) ? p.polishStatus : ((state.polishAdopted && state.polishOptions?.length) ? 'adopted' : (state.polishOptions?.length>1?'waiting_selection':state.polishOptions?.length?'ready_single':'empty'));
-  state.ideaOptimizationStrictQc = p.ideaOptimizationStrictQc === true;
   state.polishHistory = Array.isArray(p.polishHistory) ? p.polishHistory : undefined;
   state.polishRawFallback = typeof p.polishRawFallback === 'string' ? p.polishRawFallback : '';
   state.chapters = p.chapters || [];
@@ -3385,17 +3381,6 @@ async function callValidatedWithRepair(kind, extra, callOpts, ctx, maxRepair=VAL
   throw e;
 }
 
-async function generateOptimizationRaw(callOpts, ctx){
-  const kind='ideaOptimization';
-  const system=getSystemPrompt(kind,ctx)+globalCreativeConstraintBlock(kind);
-  const user=buildAIPrompt(kind,ctx);
-  const result=await callDeepSeek(system,user,Object.assign({},callOpts||{}, {taskKey:kind, retry: undefined}));
-  const raw=String(unwrapAIResult(result)||'').trim();
-  if(!raw) throw new Error('AI未返回内容');
-  if(result?.finishReason==='length') addGenerationDiagnostic('ideaOptimization',{type:'RUNTIME_OUTPUT',code:'OUTPUT_TRUNCATED',details:'AI返回在输出上限处被截断；严格质检关闭，不触发验证重试。',blocking:false});
-  return {raw,attempts:0,finishReason:result?.finishReason||null};
-}
-
 async function generateOptimizationConcept(btn, force){
   const idea=(state.idea||'').trim();
   if(!idea){ toast('请先输入故事构想'); return false; }
@@ -3414,30 +3399,9 @@ async function generateOptimizationConcept(btn, force){
   markAIRunning('ideaOptimization'); markAIRunning('idea');
   try{
     const ctx={multi};
-    const callOpts={temperature:resolveActiveSpec().ideaTemp,maxTokens:Math.max(4500,clampMaxTokens('polish'))};
-    const strictQc=state.ideaOptimizationStrictQc===true;
-    // 关闭严格质检：只做一次 AI 生成；不触发 validation/repair retry。
-    // callDeepSeek 自身的网络层 retry 仍保留，不属于质检重试。
-    const v=strictQc
-      ? await callValidatedWithRepair('ideaOptimization',ctx,callOpts,ctx)
-      : await generateOptimizationRaw(callOpts,ctx);
-    state.polishRawFallback=String(v.raw||'').trim();
+    const v=await callValidatedWithRepair('ideaOptimization',ctx,{temperature:resolveActiveSpec().ideaTemp,maxTokens:Math.max(4500,clampMaxTokens('polish'))},ctx);
     const parsed=parseOptimizationPlainText(v.raw,multi);
-    if(!parsed.ok){
-      if(strictQc) throw new Error(parsed.error||'优化构想纯文本解析失败');
-      addGenerationDiagnostic('ideaOptimization',{type:'STRUCTURE',code:'OPTIMIZATION_PARSE_PARTIAL',details:parsed.error||'优化构想纯文本解析失败；已保留原始AI输出，质检关闭不阻挡完成。',blocking:false});
-      const rawText=String(v.raw||'').trim();
-      state.polishOptions=rawText ? [{_id:'polish-'+Date.now(),name:'AI原始方案',text:rawText,optimizedIdea:rawText,_rawFallback:true}] : [];
-      state.polishSelectedId=multi?null:(state.polishOptions[0]?state.polishOptions[0]._id:null);
-      state.polishAdopted=multi?null:(state.polishOptions[0]?state.polishOptions[0].name:null);
-      state.polishStatus=multi?'waiting_selection':'ready_single';
-      state.strategyStage1Status='ready';
-      state.strategyStage2Status='ready';
-      markAIDone('ideaOptimization'); markAIDone('idea');
-      persist(); refreshPolishUi(); queueGenerationFocus('#polishBox',120);
-      toast('优化构想已生成：严格质检关闭，已保留AI原始结果');
-      return true;
-    }
+    if(!parsed.ok) throw new Error(parsed.error||'优化构想纯文本解析失败');
     state.originalIdeaAnchors=parsed.analysis.originalAnchors;
     state.strategicDimensions=parsed.analysis.strategicDimensions;
     state.strategicDiversityProfile=parsed.analysis.diversityProfile;
@@ -3927,11 +3891,6 @@ function bindPolishIdea(){
     setTimeout(()=>b.classList.remove('app-opt-btn-pressed'),320);
     await generateOptimizationConcept(b, true);
   };
-  const strictChk = $('#chkPolishStrictQc');
-  if(strictChk){
-    strictChk.checked = state.ideaOptimizationStrictQc === true;
-    strictChk.onchange = ()=>{ state.ideaOptimizationStrictQc = !!strictChk.checked; persist(); toast(state.ideaOptimizationStrictQc?'已开启优化构想严格质检与自动修复重试':'已关闭优化构想严格质检与自动修复重试'); };
-  }
   const chk = $('#chkPolishMulti');
   if(chk){
     const sync = ()=>{
@@ -12917,9 +12876,8 @@ function viewStory(){
           <div class="btn-row" style="display:grid;grid-template-columns:1fr;gap:10px">
             <button id="btnOptimizationConcept" class="btn ghost ${polishIdle()?'first':''}">${(state.strategyStage1Status==='ready'&&state.strategyStage2Status==='ready')?'🔄 重新生成优化构想':'✨ 生成优化构想'}</button>
           </div>
-          <div style="margin:7px 0 10px;font-size:12px;line-height:1.7;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="flex:1 1 auto">${(state.strategyStage1Status==='ready'&&state.strategyStage2Status==='ready')?'✅ 已完成：战略分析已融入优化构想生成':'AI会先在内部分析动态战略维度，再直接生成最终优化构想；战略分析不会作为独立操作步骤。'}</span>
-            <label title="开启后：严格质检失败会触发定向自动修复重试；关闭后：不做质检驱动重试，仅保留网络层重试。" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer;font-size:11px;opacity:.82"><input type="checkbox" id="chkPolishStrictQc" ${state.ideaOptimizationStrictQc===true?'checked':''}> 严格质检</label>
+          <div style="margin:7px 0 10px;font-size:12px;line-height:1.7;color:var(--muted)">
+            <span>${(state.strategyStage1Status==='ready'&&state.strategyStage2Status==='ready')?'✅ 已完成：战略分析已融入优化构想生成':'AI会先在内部分析动态战略维度，再直接生成最终优化构想；战略分析不会作为独立操作步骤。'}</span>
           </div>
           <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}">
             <div class="pol-head"><b>✨ 方案比选</b>
