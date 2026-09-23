@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.420';
-// Version line: app1.0.420.js — 当前成果单一来源、版本/指纹锁定、非阻塞质检、一键老师路由与正文独立失败隔离。
-const APP_FILE_VERSION = 'app1.0.420.js';
+const APP_VERSION = '1.0.421';
+// Version line: app1.0.421.js — 词典达人/词典充实阻塞式质检已移除；一键开学、词典入库与卡片展示保留。
+const APP_FILE_VERSION = 'app1.0.421.js';
 const KEY_CFG = nsKey('cfg');
 
 let _principalQcRun = null;
@@ -16973,97 +16973,7 @@ function normalizeDictMasterEntities(j){
   return j;
 }
 
-function validateDictMasterOutput(j){
-  if(!j || typeof j !== 'object') return '返回不是对象';
-  if(!Array.isArray(j.characters) || !j.characters.length) return '词典达人至少需要 1 位核心人物';
-
-  const personIds=new Set();
-  const personNames=new Set();
-  for(const c of j.characters){
-    if(!c || !String(c.name||'').trim()) return '存在核心人物缺少正式姓名';
-    const nm=String(c.name).trim();
-    const cid=String(c.id||'').trim().toUpperCase();
-    if(cid){
-      if(!/^CHAR_\d{3,}$/.test(cid)) return `人物「${nm}」id 必须是 CHAR_001 形式`;
-      if(personIds.has(cid)) return `人物ID「${cid}」重复`;
-      personIds.add(cid);
-    }
-    const banReason=banListViolation(nm);
-    if(stateBanEnabled() && banReason) return `人物「${nm}」命中禁则：${banReason}`;
-    if(!String(c.identity||'').trim()) c.identity='未知';
-    if(!String(c.trait||'').trim()) c.trait='未知';
-    for(const kk of ['age','gender','appearance','hobby','relation','catchphrase']){
-      if(!String(c[kk]||'').trim()) c[kk]='未知';
-    }
-    const tier = String(c.tier||'main').trim().toLowerCase();
-    c.tier = tier==='support' ? 'support' : 'main';
-    const rawOrigin = String(c.origin||'').trim();
-    const rawCoreRole = String(c.coreRole||'').trim();
-    if(!rawOrigin) c.origin='dictionary_master';
-    if(!rawCoreRole) c.coreRole='核心人物长期故事职责待补充';
-    // Foundation 中的主要人物没有可靠的后续 AI 补全步骤，因此九项基础人物字段必须在本次正式入典时完成。
-    if(c.tier==='main'){
-      const missingCore = CHAR_FIELDS.filter(k=>!String(c[k]||'').trim());
-      if(missingCore.length) return `主要人物「${nm}」九项人物基础未完成：缺少 ${missingCore.map(k=>CHAR_FIELD_LABEL[k]||k).join('、')}`;
-      const placeholder = CHAR_FIELDS.filter(k=>{ const v=String(c[k]||'').trim(); return ['待补充','以后再定','待定','未知待定'].includes(v); });
-      if(placeholder.length) return `主要人物「${nm}」存在未完成占位字段：${placeholder.map(k=>CHAR_FIELD_LABEL[k]||k).join('、')}`;
-      if(!rawCoreRole) return `主要人物「${nm}」缺少长期故事职责 coreRole`;
-      if(!rawOrigin) c.origin='dictionary_master';
-    }
-    personNames.add(nm);
-  }
-
-  // 只要求 Blueprint 真正定义的人物 ID 完成正式姓名映射；禁止扫描整份 Blueprint 文本。
-  for(const def of canonicalPersonDefinitions()){
-    if(!personIds.has(def.id)) return `词典达人未为优化构想人物ID「${def.id}」建立正式姓名映射${def.where?'（来源：'+def.where+'）':''}`;
-  }
-
-  if(!Array.isArray(j.relationshipTable)) return '缺少 relationshipTable 数组';
-  const rels=j.relationshipTable||[];
-  for(const e of rels){
-    const a=String(e&&e.a||'').trim(), b=String(e&&e.b||'').trim();
-    if(a&&b && (!personNames.has(a)||!personNames.has(b))) return `人物关系表引用了未定义人物：「${a}」或「${b}」`;
-    if(a&&b&&a===b) return `人物关系表「${a}」两端相同`;
-  }
-
-  // Blueprint 明确给出的核心关系必须至少在关系表中保留；关系文字允许自然改写。
-  const norm=x=>String(x||'').replace(/[\s，。！？；：:,.!?、]/g,'').toLowerCase();
-  for(const need of canonicalCoreRelationships()){
-    const na=norm(need.a), nb=norm(need.b), nr=norm(need.relation);
-    const found=rels.some(e=>{
-      const a=norm(e?.a), b=norm(e?.b), r=norm(e?.relation);
-      const samePair=(a===na&&b===nb)||(a===nb&&b===na);
-      return samePair && (!nr || r.includes(nr) || nr.includes(r));
-    });
-    if(!found) return `词典达人丢失了蓝本明确的核心人物关系：「${need.a} ↔ ${need.b}｜${need.relation}」`;
-  }
-
-  // 基本世界/舞台必须可用，但不要求地点卡、组织、专名等必须存在。
-  if(!String(j.summary||'').trim()) return '词典达人缺少基本世界/故事舞台摘要（WORLD.summary）';
-
-  // Blueprint 明确写过世界规则时，至少必须保留世界规则层；没有明确规则则允许为空。
-  const sourceRules=canonicalWorldRules();
-  const outRules=Array.isArray(j.worldRules)?j.worldRules:[];
-  if(sourceRules.length && !outRules.length) return '词典达人丢失了蓝本明确的世界规则';
-  for(const r of outRules){
-    if(!r || !String(r.cat||'').trim()) r.cat='通用规则';
-    if(!String(r.rule||'').trim()) r.rule='未进一步细化；以后续蓝本与正文事实为准';
-  }
-
-  // 其他类别全部是可选 Foundation 资产：有则收录，缺失不阻断整次生成。
-  for(const arr of ['places','propernouns','organizations','institutions','items','terms','events','lifeSettings']){
-    if(!Array.isArray(j[arr])) j[arr]=[];
-  }
-  for(const e of (j.placeContacts||[])){
-    const a=String(e?.from||'').trim(), b=String(e?.to||'').trim();
-    if(a&&b && (!new Set(j.places.map(x=>String(x?.name||'').trim())).has(a)||!new Set(j.places.map(x=>String(x?.name||'').trim())).has(b))) return `地名关联表引用了未定义地名：「${a}」或「${b}」`;
-  }
-  for(const e of (j.properContacts||[])){
-    const a=String(e?.from||'').trim(), b=String(e?.to||'').trim();
-    if(a&&b && (!new Set(j.propernouns.map(x=>String(x?.name||'').trim())).has(a)||!new Set(j.propernouns.map(x=>String(x?.name||'').trim())).has(b))) return `专名关联表引用了未定义专名：「${a}」或「${b}」`;
-  }
-  return '';
-}
+// 421：已移除词典达人的阻塞式质量质检函数；保留解析、规范化与安全写入保护。
 function refreshGlossaryCardOnly(){
   const card = document.querySelector('.gs-card');
   if(!card) return false;
@@ -17146,8 +17056,7 @@ async function genDictMaster(btn){
       throw new Error(looksJson ? 'AI 返回了 JSON，但词典达人当前契约只接受结构式纯文本；请重试' : 'AI 未返回可用的词典结构式纯文本');
     }
     normalizeDictMasterEntities(j);
-    const v = validateDictMasterOutput(j);
-    if(v) throw new Error('词典校验失败：'+v);
+    // 421：移除词典达人的阻塞式质量质检；结构解析、规范化以及后续名称禁则/安全写入保护仍保留。
     o.glossary = ensureGlossaryKnowledgeShape(o.glossary || { characters:[], places:[], propernouns:[], subplots:[] });
     const snapKeys = { characters:['id','name','identity','age','gender','appearance','hobby','relation','trait','catchphrase'], places:['name','type','note'], propernouns:['name','note'] };
     const entryJson = (x,k)=>{ const o2={}; (snapKeys[k]||[]).forEach(f=> o2[f]=String((x && x[f])!=null ? x[f] : '').trim()); try{ return JSON.stringify(o2); }catch(e){ return ''; } };
@@ -18515,7 +18424,7 @@ async function genDictEnrich(btn, opts){
       const bad = allNamed.flatMap(arr=>(arr||[]).map(x=>({name:String(x&&x.name||'').trim(),bad:bannedEntityName(x&&x.name)}))).find(x=>x.bad);
       if(bad) throw new Error(`词典充实命中禁则姓名/名称「${bad.name}」：${bad.bad}；已拒绝本次扩充，请按现有重试机制重新生成`);
     }
-    if(!(parsed.characters.length || parsed.walkons.length || parsed.places.length || parsed.propernouns.length || parsed.organizations.length || parsed.institutions.length || parsed.items.length || parsed.rules.length || parsed.terms.length || parsed.events.length || parsed.lifeSettings.length)) throw new Error('未识别到有效条目，请重试');
+    // 421：移除词典充实的阻塞式质量质检/有效条目数量闸门；解析结果可为空时仍安全结束，不影响已有词典与后续流程。
     const n = mergeDictEnrich(parsed);
     ssEnsureCanonEntities();
     ssProtectMasterCanon();
