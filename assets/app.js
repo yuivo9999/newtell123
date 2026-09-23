@@ -7444,12 +7444,13 @@ function normalizePrincipalPlans(parsed){
 function principalPlanContractAudit(plans,total){
   const count=Number(total||0);
   const missing=[];
+  const invalid=[];
   for(let n=1;n<=count;n++){
     const p=plans?.[n];
     if(!p) { missing.push(n); continue; }
-    if(!p.progressionSkeleton || !p.midStrategy.primaryMode || !p.midStrategy.coreChange || !p.midStrategy.driver || !p.ending.lastEffectiveEvent) missing.push(n);
+    if(!p.progressionSkeleton || !p.midStrategy.primaryMode || !p.midStrategy.coreChange || !p.midStrategy.driver || !p.ending.lastEffectiveEvent) invalid.push(n);
   }
-  return {missing};
+  return {missing, invalid};
 }
 function auditPrincipalPlanLogic(plans,total){
   const count=Number(total||0);
@@ -18690,7 +18691,7 @@ async function genDictEnrich(btn, opts){
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, organizations:n.organizations||0, institutions:n.institutions||0, items:n.items||0, rules:n.rules||0, terms:n.terms||0, events:n.events||0, lifeSettings:n.lifeSettings||0, relationshipTable:n.relationshipTable||0, placeContacts:n.placeContacts||0, properContacts:n.properContacts||0, worldRules:n.worldRules||0, ts:Date.now() };
     // 数据已经安全写入词典后，先完成 AI 状态，再做非核心 UI 刷新；避免 render 异常导致“内容已入库但 UI 仍显示未完成”。
-    // 1.0.447：词典充实成功后必须向公共学校状态层发出完成信号，供校长/一键老师读取；UI 仍只刷新词典充实自己的卡片。
+    // 1.0.448：词典充实成功后必须向公共学校状态层发出完成信号，供校长/一键老师读取；UI 仍只刷新词典充实自己的卡片。
     scMark('dictEnrich', true, false);
     persist();
     markAIDone('dictEnrich');
