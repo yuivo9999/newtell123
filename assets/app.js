@@ -1,8 +1,9 @@
 'use strict';
 
-const APP_VERSION = '1.0.456';
+const APP_VERSION = '1.0.457';
 // Version line: app1.0.455.js — 校长退出中段战略；推进骨架保留为上游硬约束；老师负责中段调度与施工并与骨架节点逐拍融合。
-const APP_FILE_VERSION = 'app1.0.456.js';
+const APP_FILE_VERSION = 'app1.0.457.js';
+// Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -657,7 +658,12 @@ const CHAPTER_AUDIT_SYS=`你是长篇小说“状态与叙事质量审计AI”�
 审计必须区分“自然重复/必要回顾”和“重复解释”；不能为了追求零重复而破坏人物回忆、强调或因果承接。
 输出严格JSON：
 {"status":"PASS|WARN|FAIL","issues":[{"type":"time|location|character|relationship|object|rule|knowledge|event|entity|causal|logic|contradiction|repetition|dialogue_exposition|character_flat|character_layer|character_voice|character_knowledge|sentence_pattern","severity":"warn|fail","evidence":"正文中的明确证据","expected":"应有状态/写法","actual":"实际写法","repair":"最小修复方向"}],"summary":"一句话","qualityLedger":{"facts":[],"introducedInfo":[],"characterKnowledge":[],"relationshipChanges":[],"objects":[],"locations":[],"unresolved":[]}}
-qualityLedger只记录本章正文明确成立或明确新增的信息，禁止脑补；每项尽量≤50字，最多各20项。`;
+qualityLedger只记录本章正文明确成立或明确新增的信息，禁止脑补；每项尽量≤50字，最多各20项。
+
+【中段合法文学发挥免责】
+以下内容本身不得作为FAIL依据：局部误解、人物试探、一次性失败尝试、环境互动、短暂阻碍、潜台词、信息延迟、感官描写、节奏放慢或加速、非核心对白、人物即时心理反应、节点之间自然过桥、同一事件的不同人物反应。
+只有当这些发挥进一步造成可验证的硬冲突，例如新增持续性主线、改变核心事件、改变推进节点或顺序、提前完成章末、制造未授权世界规则/核心秘密/核心人物，或破坏时间地点人物关系等既有事实时，才可按真实问题处理。
+审计不得把“中段更丰富、更细、更慢、更有表现力”本身当作越界，也不得把“与原稿表达不同”本身当作风格失败；风格检查只关注稳定的风格DNA是否发生明显漂移。`;
 
 async function auditChapterState(i,text){
   if(!isLong()) return null; const o=state.outline||{}, ss=storyState(), c=chapterPlanAuthority(i), prev=ss.chapters?.[i-1]?.observed||null, obs=ss.chapters?.[i]?.observed||null;
@@ -7601,6 +7607,42 @@ function compileExecutionGuide(plan){
   };
 }
 
+function chapterStyleExecutionBlock(i){
+  const pr=principalCurrentResult();
+  const st=pr?.styleStrategy||null;
+  const excerpt=principalStyleExecutionExcerpt();
+  if(!st && !String(excerpt||'').trim()) return '';
+  const rows=st ? [
+    `叙事方式：${st.narrativeRule||''}`,
+    `对白方式：${st.dialogueRule||''}`,
+    `人物呈现：${st.characterRule||''}`,
+    `节奏方式：${st.rhythmRule||''}`,
+    `场景描写：${st.sceneRule||''}`,
+    `情绪表达：${st.emotionRule||''}`,
+    `特殊写法机制：${st.specialMechanism||''}`,
+    `风格绝对禁止：${st.absoluteProhibitions||''}`,
+    `风格漂移风险：${st.driftRisks||''}`,
+    `冲突表达优先级：${st.conflictPriority||''}`
+  ].filter(x=>!x.endsWith('：')) : [];
+  return `【本书写作风格｜正文执行底座】
+这是本书既定文学风格，不是参考意见。正文必须100%继承本书的风格DNA，但不得复制原句、固定句式或已经出现过的表达。
+
+【风格DNA】
+${rows.join('\n')}
+
+【校长已裁决的风格施工层】
+${excerpt}
+
+【100%继承的正确含义】
+- 必须稳定继承：叙事视角、叙事距离、语言气质、句法倾向、对白气质、人物声音、情绪表达、场景描写、信息呈现方式、节奏习惯、留白习惯、作品时代感以及已明确的禁用表达。
+- 不要求复制：原句、固定句式、段落模板、既有修辞、既有动作反应或既有表达。
+- 中段越自由，越不能发生风格漂移；剧情可以变化，人物可以变化，场景可以变化，节奏可以变化，但“怎么写”始终属于同一部小说。
+- 风格负责决定“怎么写”，老师施工负责决定“发生什么变化、如何抵达节点”；二者不能互相替代。
+
+【正文内部风格自检｜不输出】
+动笔前快速确认：如果删掉剧情事实，只看表达方式，这一段仍应像同一部小说；不要为了证明“有风格”而机械重复任何固定表达。`;
+}
+
 function chapterExecutionGuideBlock(i){
   const plan=chapterPlanAuthority(i);
   const g=plan?.executionGuide;
@@ -11576,7 +11618,8 @@ function chapterSysBase(){
 3. 再确定第一段的真实承接点、人物当前状态、信息边界与事件因果。
 4. 再按老师教案的事件顺序写成连续小说，不输出分析、计划、节拍标签或后台术语。
 5. 写作过程中，在不改变既定节点、顺序、核心事件、已成立事实和章末状态的前提下，充分利用老师中段施工战术进行文学现场创作；允许自然增加人物反应、对白、潜台词、信息延迟、局部误解、失败尝试、环境互动、短障碍、感官细节与节奏变化，不重新设计主线。
-6. 一旦本章最后一个必要事件完成且章末状态成立，立即停止；不要为了字数继续。
+6. 【正文动笔前内部自检｜不输出】先确认五件事：章头从哪里开始；progressionSkeleton必须经过哪些节点及其顺序；章末必须抵达什么状态；老师施工路线如何连接节点；本书风格DNA如何约束表达。确认后再动笔。该自检只用于理解与执行，不得把合法文学发挥机械化。
+7. 一旦本章最后一个必要事件完成且章末状态成立，立即停止；不要为了字数继续。
 
 你的目标不是“写够多少字”，而是“把已经确定的故事写完整、写自然、写得像真正发生过”。
 
@@ -19181,7 +19224,16 @@ function splitChapterCastout(prose){
   }
   return { body: bodyLines.join('\n').replace(/\s+$/, '').trim(), castOut };
 }
-const USER_PRIO_BILL = '\n\n【优先级契约（按维度裁决，禁止把不同维度混成一个选择题）】\n1. 表达层：本章具体写法以老师教案中的写作执行要求为准；不得在正文阶段重新发明一套独立风格方案。\n2. 剧情层最高权威：本章老师教案；章末只服从唯一CHAPTER_ENDING_CONTRACT，老师不得另立结尾口令。\n3. 全书一致性权威：万物词典 + 上一章已落地事实 + 校长/老师已裁决的连续性规则。\n4. 人工干预只能在不破坏以上三层的前提下补充；若与老师教案冲突，不得擅改教案核心事件。\n5. 优化构想只是创意建议：不得在正文阶段自行把优化构想升级成新的剧情、设定或风格权威。\n设定词典中有台词/有戏份/反复出现的重要人地专名一致性为不可逾越红线；仅作氛围的临时路人/小地名/小专名（见正文【临时闲人】段）不属红线，可现场点缀、不入词典；上一章已落地状态与小说状态链是承接类事实依据，任何要求不得使其违背已成立事实。';
+const USER_PRIO_BILL = `
+
+【优先级契约（按维度裁决，禁止把不同维度混成一个选择题）】
+1. 表达层最高权威：本书既定STYLE_STRATEGY与正文写作风格底座；正文必须100%继承风格DNA，但不得复制原句、固定句式或既有表达。
+2. 路线层：本章老师教案与中段施工战术决定节点之间发生什么、如何连接；老师不得借施工权限改写风格DNA，正文也不得借文学发挥改写剧情路线。
+3. 剧情层最高权威：本章老师教案；章末只服从唯一CHAPTER_ENDING_CONTRACT，老师不得另立结尾口令。
+4. 全书一致性权威：万物词典 + 上一章已落地事实 + 校长/老师已裁决的连续性规则。
+5. 人工干预只能在不破坏以上四层的前提下补充；若与老师教案冲突，不得擅改教案核心事件。
+6. 优化构想只是创意建议：不得在正文阶段自行把优化构想升级成新的剧情、设定或风格权威。
+设定词典中有台词/有戏份/反复出现的重要人地专名一致性为不可逾越红线；仅作氛围的临时路人/小地名/小专名（见正文【临时闲人】段）不属红线，可现场点缀、不入词典；上一章已落地状态与小说状态链是承接类事实依据，任何要求不得使其违背已成立事实。`;
 let _dictRedlineOver = false;
 function budgetChapterContext(parts, maxChars=18000){
   // 正文上下文必须有“硬预算”。旧版只压缩少数不存在的标签，导致
@@ -19195,6 +19247,7 @@ function budgetChapterContext(parts, maxChars=18000){
     if(s.length > n) src[i] = s.slice(0,n) + '\n…【为稳定性省略非核心上下文】';
   };
   // 先保留硬事实，再压缩解释性材料。
+  take('【本书写作风格｜正文执行底座', 3000);
   take('【第二层 · 中观层', 7000);
   take('【本章中段推进施工卡', 2600);
   take('◆ 上一章末尾', 3200);
@@ -19219,6 +19272,7 @@ function budgetChapterContext(parts, maxChars=18000){
   // 第二轮：压缩低风险重复信息；优先保留老师教案主体与当前状态数据。
   take('【第三层 · 微观层', 3600);
   take('【第一层 · 宏观层', 1000);
+  take('【本书写作风格｜正文执行底座', 1800);
   take('【第一层附录 · 已裁决风格施工层', 900);
   take('【第一层附录 · 因果闭环锁', 1000);
   take('【结尾多样性审计', 700);
@@ -19333,6 +19387,9 @@ function buildChapterUser(i, opt={}){
   if(_closed){
     const hasT = String(chap.title||'').trim();
     parts.push(`【长篇小说与章节定位】\n书名：${o.title || '（未定书名）'}\n定位：第 ${curN} 章${hasT ? `《${chap.title}》` : ''}`);
+
+    const _styleGuide=chapterStyleExecutionBlock(i);
+    if(_styleGuide) parts.push(_styleGuide);
 
     const _execGuide=chapterExecutionGuideBlock(i);
     if(!_execGuide) throw new Error('当前章节缺少有效的本章执行指引，请先完成对应老师备课。');
