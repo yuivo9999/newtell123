@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.434';
+const APP_VERSION = '1.0.436';
 // Version line: app1.0.428.js — 老师阶段去除质检/验收门槛；AI非空返回即完成，教案立即落盘查看；正文与多老师对接保留。
-const APP_FILE_VERSION = 'app1.0.434.js';
+const APP_FILE_VERSION = 'app1.0.436.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -5604,15 +5604,10 @@ function ssTeacherCardCurrent(card, gi){
 }
 function scTeacherGroupComplete(gi){
   const sc=state.school;
-  // 老师是否完成，只看 AI 是否已经成功生成并落地本组完整教案。
-  // 章节机器卡是下游使用的数据，不再作为老师完成的门槛。
+  // 436 QC_DECOUPLE：finished.t* 只表示老师 AI 已成功返回并落盘；plans/machine 是可选结构化缓存。
   const t=sc && Array.isArray(sc.teachers) ? sc.teachers[gi] : null;
   const g=teacherAssignmentGroups()[gi];
   if(!t || !g || !String(t.raw||'').trim() || (sc.stale && sc.stale['t'+gi])) return false;
-  const plans=t.plans && typeof t.plans==='object' ? t.plans : {};
-  for(let n=g.first;n<=g.last;n++){
-    if(!plans[n] || Number(plans[n]?.identity?.chapter)!==Number(n)) return false;
-  }
   return true;
 }
 function scTeacherPipelineComplete(){
@@ -5648,6 +5643,15 @@ function scState(){
   scHealState();
   return state.school;
 }
+function addGenerationDiagnostic(key, info){
+  const sc = scState();
+  sc.generationDiagnostics = sc.generationDiagnostics || {};
+  sc.generationDiagnostics[key] = sc.generationDiagnostics[key] || [];
+  sc.generationDiagnostics[key].push(Object.assign({ts:Date.now(), key, blocking:false}, info||{}));
+  if(sc.generationDiagnostics[key].length > 50) sc.generationDiagnostics[key] = sc.generationDiagnostics[key].slice(-50);
+  return sc.generationDiagnostics[key][sc.generationDiagnostics[key].length-1];
+}
+function clearGenerationDiagnostics(key){ const sc=scState(); if(sc.generationDiagnostics) delete sc.generationDiagnostics[key]; }
 function scError(key){ return scState().errors[key] || null; }
 function scSetError(key, info, save=true, refresh=true){
   const sc=scState(); sc.errors=sc.errors||{};
@@ -7781,21 +7785,25 @@ async function genPrincipal(btn, opts){
         const sc = scState();
         const _parse0 = performance.now();
         const principalProtocol = inspectPrincipalMachineProtocol(txt);
-        const principalStrategy = parsePrincipalStrategyMachine(txt, targetChapterCount, teacherAssignment);
+        let principalStrategy;
+        try{ principalStrategy = parsePrincipalStrategyMachine(txt, targetChapterCount, teacherAssignment); }
+        catch(parseErr){ principalStrategy={valid:false,errors:[String(parseErr?.message||parseErr)],book:null,schoolRules:null,styleStrategy:null,stages:[],teacherGroups:[]}; }
         if(!principalStrategy.valid){
-          const err = new Error('校长四层战略契约失败：'+principalStrategy.errors.join('；'));
-          err.principalValidation = true;
-          err.principalFailure = {category:'PRINCIPAL_STRATEGY_CONTRACT_INVALID',code:'PRINCIPAL_STRATEGY_CONTRACT_INVALID',details:principalStrategy.errors.join('；'),expected:'BOOK_STRATEGY×1 + STAGE_STRATEGY×系统阶段数 + TEACHER_GROUP_STRATEGY×系统老师组数 + PRINCIPAL_CHAPTER×目标章节数',actual:'四层战略结构未完整返回'};
-          throw err;
+          console.warn('[Principal] 四层战略契约诊断未通过，但不阻止校长结果入库：', principalStrategy.errors);
+          addGenerationDiagnostic('principal',{type:'STRUCTURE',code:'PRINCIPAL_STRATEGY_PARTIAL',details:principalStrategy.errors});
+          _tp.principalStrategyWarnings = principalStrategy.errors.length;
         }
-        const principalMachine = parsePrincipalMachine(txt, targetChapterCount);
+        let principalMachine;
+        try{ principalMachine = parsePrincipalMachine(txt, targetChapterCount); }
+        catch(parseErr){ principalMachine=null; addGenerationDiagnostic('principal',{type:'STRUCTURE',code:'PRINCIPAL_MACHINE_PARSE_ERROR',details:String(parseErr?.message||parseErr)}); }
         _tp.actualChapterCount = Number(principalMachine?.rawCount || 0);
         _tp.uniqueChapterCount = Number(principalMachine?.uniqueCount || 0);
         _tp.parseMs = Math.round(performance.now()-_parse0);
         const _sanitize0 = performance.now();
         let principalTxt = sanitizePrincipalText(txt);
         _tp.sanitizeMs = Math.round(performance.now()-_sanitize0);
-        let _middleMissing, _endingCheck, _principalBridge=null;
+        let _middleMissing=[], _endingCheck={missing:[],audit:{risk:'low',maxConsecutive:0,repeatedFunctions:[]}}, _principalBridge=null;
+        let principalPlans={};
         if(principalMachine){
           const countMismatch = Number(principalMachine.rawCount||0) !== targetChapterCount
             || Number(principalMachine.uniqueCount||0) !== targetChapterCount
@@ -7803,29 +7811,27 @@ async function genPrincipal(btn, opts){
             || principalMachine.missing.length>0;
           if(countMismatch || principalMachine.invalid.length || principalMachine.duplicate.length){
             const badChapters=[...principalMachine.missing,...principalMachine.invalid.map(x=>x.chapter),...principalMachine.duplicate,...principalMachine.unexpected].filter((v,i,a)=>a.indexOf(v)===i).sort((a,b)=>a-b);
-            let detail;
-            let code='MACHINE_CONTRACT_INVALID';
-            if(countMismatch){
-              code='PRINCIPAL_CHAPTER_COUNT_MISMATCH';
-              detail=`章节数量不符：目标${targetChapterCount}章，AI返回${principalMachine.rawCount}个结构块（唯一chapter ${principalMachine.uniqueCount}个）${principalMachine.unexpected.length ? `；越界章节：${principalMachine.unexpected.join('、')}` : ''}${principalMachine.missing.length ? `；缺少章节：${principalMachine.missing.join('、')}` : ''}`;
-            }else if(principalMachine.invalid.length){
-              detail=`字段不完整：${principalMachine.invalid.map(x=>x.chapter).join('、')}`;
-            }else if(principalMachine.duplicate.length){
-              detail=`章节重复：${principalMachine.duplicate.join('、')}`;
-            }else{
-              detail=`存在越界章节：${principalMachine.unexpected.join('、')}`;
-            }
-            const err = new Error('校长新章节契约失败：'+detail);
-            err.principalValidation = true;
-            err.principalFailure = {category:'PRINCIPAL_VALIDATION_ERROR',code,chapters:badChapters,details:'新的唯一 [PRINCIPAL_CHAPTER] 章节契约未通过结构检查',expected:`必须且只能返回${targetChapterCount}个唯一章节计划，chapter范围为1-${targetChapterCount}，字段必须完整`,actual:`AI 返回 ${principalMachine.rawCount} 个结构块；唯一章节 ${principalMachine.uniqueCount} 个；文本 ${String(txt||'').trim().length.toLocaleString()} 字`};
-            throw err;
+            const detail = countMismatch
+              ? `章节数量不符：目标${targetChapterCount}章，AI返回${principalMachine.rawCount}个结构块（唯一chapter ${principalMachine.uniqueCount}个）${principalMachine.unexpected.length ? `；越界章节：${principalMachine.unexpected.join('、')}` : ''}${principalMachine.missing.length ? `；缺少章节：${principalMachine.missing.join('、')}` : ''}`
+              : principalMachine.invalid.length
+                ? `字段不完整：${principalMachine.invalid.map(x=>x.chapter).join('、')}`
+                : principalMachine.duplicate.length
+                  ? `章节重复：${principalMachine.duplicate.join('、')}`
+                  : `存在越界章节：${principalMachine.unexpected.join('、')}`;
+            console.warn('[Principal] 章节结构诊断未通过，但保留可用章节并继续入库：', detail, badChapters);
+            _tp.principalChapterWarnings = badChapters.length;
           }
           _tp.compileMs = 0;
           // 校长最终内容保持结构式纯文本；不再追加旧版Markdown章节卡。
           const _middle0 = performance.now();
-          const principalPlans = normalizePrincipalPlans(principalMachine);
+          principalPlans = normalizePrincipalPlans(principalMachine);
           const _middleNormalized = principalPlanContractAudit(principalPlans, targetChapterCount);
-          _principalBridge = principalManagementBridge(teacherAssignment, targetChapterCount, principalPlans, principalStrategy);
+          if(_middleNormalized.missing.length || _middleNormalized.invalid.length) addGenerationDiagnostic('principal',{type:'STRUCTURE',code:'PRINCIPAL_PLANS_PARTIAL',details:{missing:_middleNormalized.missing,invalid:_middleNormalized.invalid}});
+          if(principalStrategy.valid){
+            _principalBridge = principalManagementBridge(teacherAssignment, targetChapterCount, principalPlans, principalStrategy);
+          }else{
+            _principalBridge = null;
+          }
           _middleMissing = _middleNormalized.missing;
           const _principalLogicAudit = auditPrincipalPlanLogic(principalPlans, targetChapterCount);
           _tp.principalLogicWarnings = _principalLogicAudit.warnings.length;
@@ -7841,10 +7847,11 @@ async function genPrincipal(btn, opts){
           _endingCheck = {missing:[],audit:buildEndingDiversityAudit(principalEndingPlans)};
           _tp.endingAuditMs = Math.round(performance.now()-_endAudit0);
         }else{
-          const err = new Error(`校长结构式章节计划解析失败：${principalProtocol?.message||'未知结构协议错误'}`);
-          err.principalValidation = true;
-          err.principalFailure = {category:'PRINCIPAL_PROTOCOL_ERROR',code:principalProtocol?.code||'MACHINE_CONTRACT_MISSING',details:principalProtocol?.message||'新的校长唯一章节契约缺失',expected:'每章一个完整、成对闭合的[PRINCIPAL_CHAPTER]结构块',actual:`AI 已返回 ${String(txt||'').trim().length.toLocaleString()} 字`,opens:principalProtocol?.opens||0,closes:principalProtocol?.closes||0};
-          throw err;
+          // 436 QC_DECOUPLE：章节机器协议解析失败只记录诊断；原始校长文本仍允许入库。
+          principalPlans = {};
+          console.warn('[Principal] 结构式章节计划解析失败，但不阻止原始校长结果入库：', principalProtocol?.message||'未知结构协议错误');
+          _tp.principalProtocolWarning = principalProtocol?.code || 'MACHINE_CONTRACT_MISSING';
+          _tp.principalProtocolMessage = principalProtocol?.message || '新的校长唯一章节契约缺失';
         }
         _tp.validationMs = (_tp.middleValidationMs||0) + (_tp.endingValidationMs||0) + (_tp.endingAuditMs||0);
         // 多样性审计是诊断信息，不再作为整次校长生成的致命失败条件，避免已有可用规划被迫重新调用AI。
@@ -7852,7 +7859,7 @@ async function genPrincipal(btn, opts){
           risk:'high', maxConsecutive:_endingCheck.audit.maxConsecutive,
           repeatedFunctions:_endingCheck.audit.repeatedFunctions||[]
         } : null;
-        if(_principalBridge){
+        if(_principalBridge && principalStrategy.valid){
           principalTxt = principalTxt.trimEnd() + '\n' + principalStrategyText(principalStrategy) + '\n' + principalManagementBridgeText(_principalBridge);
         }
         const _title0 = performance.now();
@@ -7868,7 +7875,7 @@ async function genPrincipal(btn, opts){
         const principalLogicAudit = auditPrincipalPlanLogic(principalPlans, targetChapterCount);
         const _principalVersion = Math.max(1, Number(storyState().versions.principal)||Number(sc.principal?.version)||1);
         const _principalHash = principalContentFingerprint(principalTxt);
-        sc.principal = { machine: true, protocolVersion:'v425', targetChapterCount, status:'ADOPTED', qcStatus:'NOT_REQUIRED', bookStrategy: principalStrategy.book, schoolRules: principalStrategy.schoolRules, styleStrategy: principalStrategy.styleStrategy, stageStrategies: principalStrategy.stages, teacherGroupStrategies: principalStrategy.teacherGroups, strategyAudit: principalStrategyAudit(principalStrategy, targetChapterCount, teacherAssignment), plans: principalPlans, managementBridge: _principalBridge, logicAudit: principalLogicAudit, ts:Date.now(), folded:false, version:_principalVersion, contentHash:_principalHash, teacherAssignment: JSON.parse(JSON.stringify(teacherAssignment)), groups: teacherAssignment.groups.map((g,gi)=>({ gi, teacherGroupId:g.teacherGroupId, teacherCode:g.teacherCode, teacherIndex:g.teacherIndex, role:g.role, stage:g.stage, startChapter:g.startChapter, endChapter:g.endChapter, chapterCount:g.chapterCount, previousTeacherGroupId:g.previousTeacherGroupId, nextTeacherGroupId:g.nextTeacherGroupId, previousEndChapter:g.previousEndChapter, nextStartChapter:g.nextStartChapter })), raw:principalTxt, titles, chapterEndingAudit: _endingCheck.audit };
+        sc.principal = { machine: !!principalMachine, parseStatus: principalMachine ? ((principalStrategy.valid && !_middleMissing.length) ? 'complete' : 'partial') : 'raw-only', protocolVersion:'v425', targetChapterCount, status:'ADOPTED', qcStatus:'NOT_REQUIRED', bookStrategy: principalStrategy.book, schoolRules: principalStrategy.schoolRules, styleStrategy: principalStrategy.styleStrategy, stageStrategies: principalStrategy.stages, teacherGroupStrategies: principalStrategy.teacherGroups, strategyAudit: principalStrategyAudit(principalStrategy, targetChapterCount, teacherAssignment), plans: principalPlans, managementBridge: _principalBridge, logicAudit: principalLogicAudit, ts:Date.now(), folded:false, version:_principalVersion, contentHash:_principalHash, teacherAssignment: JSON.parse(JSON.stringify(teacherAssignment)), groups: teacherAssignment.groups.map((g,gi)=>({ gi, teacherGroupId:g.teacherGroupId, teacherCode:g.teacherCode, teacherIndex:g.teacherIndex, role:g.role, stage:g.stage, startChapter:g.startChapter, endChapter:g.endChapter, chapterCount:g.chapterCount, previousTeacherGroupId:g.previousTeacherGroupId, nextTeacherGroupId:g.nextTeacherGroupId, previousEndChapter:g.previousEndChapter, nextStartChapter:g.nextStartChapter })), raw:principalTxt, titles, chapterEndingAudit: _endingCheck.audit };
         if(_principalEndingWarning) sc.principal.chapterEndingAuditWarning = _principalEndingWarning; else delete sc.principal.chapterEndingAuditWarning;
         storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={version:_principalVersion,protocolVersion:'v425',contentHash:_principalHash,source:'principal-current-result',status:'ADOPTED',qcStatus:'NOT_REQUIRED',ts:Date.now(),targetChapterCount,groups:sc.principal.groups,bookStrategy:principalStrategy.book,schoolRules:principalStrategy.schoolRules,styleStrategy:principalStrategy.styleStrategy,stageStrategies:principalStrategy.stages,teacherGroupStrategies:principalStrategy.teacherGroups,managementBridge:_principalBridge,teacherAssignment:JSON.parse(JSON.stringify(teacherAssignment)),titles,plans:principalPlans,logicAudit:principalLogicAudit};
         _tp.stateWriteMs = Math.round(performance.now()-_state0);
@@ -7897,23 +7904,9 @@ async function genPrincipal(btn, opts){
         console.error('[genPrincipal] 第'+attempt+'次校长流程失败：', lastPrincipalError);
         if(e && e.name === 'AbortError'){ setScRetry('principal', attempt); toast('已停止校长统筹'); return false; }
         if(e && e.principalValidation){
-          const _elapsed = Math.round(performance.now()-_tp0);
-          _tp.totalLocalMs = Math.max(0, _elapsed - (_tp.aiReturnMs||0));
-          _tp.totalMs = _elapsed;
-          _tp.status='validation_error';
-          principalPerfRecord(_tp);
-          const scErr = scState();
-          scErr.errors = scErr.errors || {};
-          scErr.errors.principal = Object.assign({ts:Date.now()}, e.principalFailure || {category:'PRINCIPAL_VALIDATION_ERROR',code:'VALIDATION_ERROR',details:String(e.message||e),expected:'校长结果通过必要结构契约',actual:'未通过必要结构契约'}, {attempt, retrying:false, manualRetry:true});
-          scErr.retries.principal = Math.max(0, Math.min(SCHOOL_RETRY_MAX, attempt));
-          scErr.failed = scErr.failed || {};
-          scErr.failed.principal = true;
-          delete scErr.finished.principal;
-          persist();
-          refreshSchoolProgressUi();
-          scRefreshBadge(document.querySelector('[data-scp-step="principal"]'),'principal');
-          toast(`校长内容已返回，但未通过必要结构检查：${e.message || '请查看校长步骤下方的错误说明'}`);
-          return false;
+          addGenerationDiagnostic('principal',{type:'LEGACY_VALIDATION',code:e?.principalFailure?.code||'PRINCIPAL_VALIDATION',details:String(e.message||e)});
+          console.warn('[genPrincipal] legacy principal validation downgraded to diagnostic:', e);
+          continue;
         }
         setScRetry('principal', attempt); scRefreshBadge(btn,'principal');
         if(attempt < PRINCIPAL_AUTO_RETRY_MAX) await new Promise(r=>setTimeout(r,1500));
@@ -8884,7 +8877,9 @@ async function genTeacher(btn, gi){
   if(!scDone('dictEnrich')){toast('老师备课需要先接收完整词典，请先完成“词典充实”');return false;}
   if(!scDone('principal')){toast('请先生成校长');return false;}
   const principalPlans=state.school?.principal?.plans||{};
-  for(let n=g.first;n<=g.last;n++){if(!principalPlans[n]){toast(`第${n}章缺少校长标准章节计划，请先重新生成校长`);return false;}}
+  const missingPrincipalPlans=[];
+  for(let n=g.first;n<=g.last;n++){ if(!principalPlans[n]) missingPrincipalPlans.push(n); }
+  if(missingPrincipalPlans.length){ addGenerationDiagnostic('t'+gi,{type:'UPSTREAM_STRUCTURE',code:'PRINCIPAL_PLANS_PARTIAL',details:`校长结构化 plans 缺少章节：${missingPrincipalPlans.join('、')}`}); }
   const key='t'+gi; markAIRunning(key); if(btn)busy(btn,true,'备课中…'); if(btn&&btn.parentNode)showStopBtn(btn.parentNode);
   try{
     const spec=resolveActiveSpec('teacher'),temp=(spec&&spec.teacherTemp!=null)?spec.teacherTemp:0.4;
@@ -8916,6 +8911,11 @@ async function genTeacher(btn, gi){
     const _parseStart=performance.now();
     const machine=parseTeacherMachine(String(txt),g.first,g.last);
     _tp.parseMs=Math.round(performance.now()-_parseStart);
+    if(!machine){
+      addGenerationDiagnostic(key,{type:'STRUCTURE',code:'TEACHER_MACHINE_UNPARSEABLE',details:'老师结构协议无法完整解析；原始 AI 内容仍将入库。'});
+    }else if(machine.missing.length || machine.invalid.length || machine.duplicate.length || machine.unexpected.length || machine.handoffs?.length!==1){
+      addGenerationDiagnostic(key,{type:'STRUCTURE',code:'TEACHER_MACHINE_PARTIAL',details:{missing:machine.missing,invalid:machine.invalid,duplicate:machine.duplicate,unexpected:machine.unexpected,handoffs:machine.handoffs?.length||0}});
+    }
     let plans={};
     const _compileStart=performance.now();
     // 结构化解析/编译仅用于正文对接，不再作为老师任务完成条件，也不再触发质检或验收门槛。
@@ -8936,6 +8936,7 @@ async function genTeacher(btn, gi){
     // 老师 AI 只要成功返回非空内容，即视为本次备课任务完成并立即落盘。
     // plans/machine 是正文对接的结构化缓存；能编译则提交章节卡，不能编译也不否定老师任务完成。
     const structurallyUsable=!!(machine && !machine.missing.length && !machine.invalid.length && !machine.duplicate.length && !machine.unexpected.length && machine.handoffs?.length===1 && Object.keys(plans).length === (g.last-g.first+1));
+    sc.teachers[gi].parseStatus = structurallyUsable ? 'complete' : (machine ? 'partial' : 'raw-only');
     if(structurallyUsable) commitTeacherChapterCards(plans,g,gi);
     scSetFailed(key,false);
     scSetError(key,null,false,false);
@@ -9060,6 +9061,7 @@ function refreshSchoolProgressUi(){
     tb.disabled=!!st.running;
     tb.innerHTML=st.running ? `🎓 一键老师进行中（${st.completed}/${st.total}）…` : (st.allDone ? '✓ 一键老师已完成' : '🎓 一键老师');
   }
+  refreshPrincipalQcUi();
 }
 
 async function genSchoolAll(btn){
@@ -17354,13 +17356,22 @@ async function genDictMaster(btn){
     const spec = resolveActiveSpec('dictmaster');
     const temp = (spec && spec.dictmasterTemp != null) ? spec.dictmasterTemp : 0.4;
     const txt = await callAIGuarded('dictmaster', {}, {temperature: temp, maxTokens: 16384, signal: _abortCtl?.signal});
-    const j = parseDictMasterPlainText(txt);
+    let j = parseDictMasterPlainText(txt);
     if(!j){
       const rawTrim=String(txt||'').trim();
       const looksJson=/^[\[{]/.test(rawTrim);
-      throw new Error(looksJson ? 'AI 返回了 JSON，但词典达人当前契约只接受结构式纯文本；请重试' : 'AI 未返回可用的词典结构式纯文本');
+      addGenerationDiagnostic('dictMaster',{type:'STRUCTURE',code:'DICTMASTER_PARSE_PARTIAL',details:looksJson?'AI返回JSON但当前解析器未识别为结构式词典；原文仍保存。':'AI未识别出完整词典结构式；原文仍保存。'});
+      state.dictmasterLatest={ts:Date.now(),book:(o.title)||'',raw:rawTrim,parseStatus:'partial'};
+      state.dictmasterHistory=Array.isArray(state.dictmasterHistory)?state.dictmasterHistory:[];
+      state.dictmasterHistory.unshift(state.dictmasterLatest); if(state.dictmasterHistory.length>6) state.dictmasterHistory=state.dictmasterHistory.slice(0,6);
+      state.dictmasterRan=true; markAIDone('dictmaster'); scMark('dictMaster',true); persist(); refreshSchoolProgressUi();
+      toast('万物词典已生成并保存原文；结构化解析未完整，但不再作为生成失败。'); return true;
     }
-    normalizeDictMasterEntities(j);
+    try{ normalizeDictMasterEntities(j); }catch(normErr){
+      addGenerationDiagnostic('dictMaster',{type:'STRUCTURE',code:'DICTMASTER_NORMALIZE_PARTIAL',details:String(normErr?.message||normErr)});
+      state.dictmasterLatest={ts:Date.now(),book:(o.title)||'',raw:String(txt||'').trim(),parseStatus:'partial'}; state.dictmasterRan=true; markAIDone('dictmaster'); scMark('dictMaster',true); persist(); refreshSchoolProgressUi();
+      toast('万物词典已生成并保存原文；结构化规范化未完整，但不再作为生成失败。'); return true;
+    }
     // 421：移除词典达人的阻塞式质量质检；结构解析、规范化以及后续名称禁则/安全写入保护仍保留。
     o.glossary = ensureGlossaryKnowledgeShape(o.glossary || { characters:[], places:[], propernouns:[], subplots:[] });
     const snapKeys = { characters:['id','name','identity','age','gender','appearance','hobby','relation','trait','catchphrase'], places:['name','type','note'], propernouns:['name','note'] };
@@ -17410,6 +17421,7 @@ async function genDictMaster(btn){
     o.glossary._worldRules = (j.worldRules||[]).map(x=>({ cat:String(x.cat||'').trim(), scope:String(x.scope||'').trim(), rule:String(x.rule||'').trim(), sourceType:'dictionary_foundation' }));
     const dmText = x => isScopeBanned('dictmaster','text') ? scrubBannedPhrases(String(x||''), 'dictmaster') : String(x||'');
     const result = { ts: Date.now(), book: (o.title)||'', summary:dmText(j.summary), nChar:(j.characters||[]).length, nPlace:(j.places||[]).length, nProp:(j.propernouns||[]).length, nRel:(j.relationshipTable||[]).length, nPC:(j.placeContacts||[]).length, nPRC:(j.properContacts||[]).length, nWR:(j.worldRules||[]).length, nOrg:(j.organizations||[]).length, nInst:(j.institutions||[]).length, nItem:(j.items||[]).length, nTerm:(j.terms||[]).length, nEvent:(j.events||[]).length, nLife:(j.lifeSettings||[]).length, characters:j.characters||[], rel:j.relationshipTable||[], places:j.places||[], pc:j.placeContacts||[], props:j.propernouns||[], prc:j.properContacts||[], wr:j.worldRules||[], organizations:j.organizations||[], institutions:j.institutions||[], items:j.items||[], terms:j.terms||[], events:j.events||[], lifeSettings:j.lifeSettings||[] };
+    result.parseStatus='complete';
     state.dictmasterLatest = result;
     state.dictmasterHistory = Array.isArray(state.dictmasterHistory) ? state.dictmasterHistory : [];
     state.dictmasterHistory.unshift(result);
@@ -18723,7 +18735,9 @@ async function genDictEnrich(btn, opts){
     if(!res.ok) throw new Error(res.error || '生成失败');
     const txt = String(res.text || '').trim();
     if(!txt) throw new Error('未返回词典充实内容');
-    const parsed = parseDictEnrichText(txt);
+    const parsed = parseDictEnrichText(txt) || {};
+    const parsedCounts = Object.values(parsed).reduce((n,v)=>n+(Array.isArray(v)?v.length:0),0);
+    if(!parsedCounts) addGenerationDiagnostic('dictEnrich',{type:'STRUCTURE',code:'DICTENRICH_PARSE_PARTIAL',details:'词典充实原文已返回，但未解析出结构化条目；仍允许任务完成并保存原文。'});
     if(isScopeBanned('dictEnrich','entity')){
       const allNamed = [parsed.characters,parsed.walkons,parsed.places,parsed.propernouns,parsed.organizations,parsed.institutions,parsed.items,parsed.rules,parsed.terms,parsed.events,parsed.lifeSettings];
       const bad = allNamed.flatMap(arr=>(arr||[]).map(x=>({name:String(x&&x.name||'').trim(),bad:bannedEntityName(x&&x.name)}))).find(x=>x.bad);
