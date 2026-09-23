@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.450';
+const APP_VERSION = '1.0.451';
 // Version line: app1.0.440.js — 老师阶段去除质检/验收门槛；AI非空返回即完成，教案立即落盘查看；正文与多老师对接保留。
-const APP_FILE_VERSION = 'app1.0.440.js';
+const APP_FILE_VERSION = 'app1.0.451.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -9170,6 +9170,11 @@ function getFieldTagClass(k){
 }
 
 function teacherContentFingerprint(raw){
+  const s=String(raw||''); let h=2166136261;
+  for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).padStart(8,'0')+'-'+s.length;
+}
+function principalContentFingerprint(raw){
   const s=String(raw||''); let h=2166136261;
   for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
   return (h>>>0).toString(16).padStart(8,'0')+'-'+s.length;
