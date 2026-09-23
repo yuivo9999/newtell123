@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.420';
-// Version line: app1.0.420.js — 当前成果单一来源、版本/指纹锁定、非阻塞质检、一键老师路由与正文独立失败隔离。
-const APP_FILE_VERSION = 'app1.0.420.js';
+const APP_VERSION = '1.0.422';
+// Version line: app1.0.422.js — 统一四阶段质检结果展示链路；质检独立旁路，不阻塞正式成果。
+const APP_FILE_VERSION = 'app1.0.422.js';
 const KEY_CFG = nsKey('cfg');
 
 let _principalQcRun = null;
@@ -978,7 +978,7 @@ function openToastBoard(){
           <button class="gs-x" data-tb-close>✕</button>
         </span></div>
       <div class="cv-body">
-        ${list.length ? list.map(x=>`<div class="tb-row"><span class="tb-ts">${new Date(x.ts).toLocaleString('zh-CN',{hour12:false})}</span><span class="tb-msg">${esc(x.msg)}</span></div>`).join('') : '<p class="muted">暂无消息记录。</p>'}
+        ${list.length ? list.map(x=>`<div class="tb-row"><span class="tb-ts">${new Date(x.ts).toLocaleString('zh-CN',{hour12:false})}</span><pre class="tb-msg" style="margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:transparent;color:inherit;">${esc(x.msg)}</pre></div>`).join('') : '<p class="muted">暂无消息记录。</p>'}
       </div>
     </div>`;
   ov.addEventListener('click', e=>{
@@ -1254,6 +1254,7 @@ function projectSnapshot(){
     dictmasterHistory: Array.isArray(state.dictmasterHistory) ? state.dictmasterHistory : [],
     dictmasterLatest: state.dictmasterLatest || null,
     dictmasterRan: !!state.dictmasterRan,
+    dictEnrichCurrent: state.dictEnrichCurrent || null,
     originalIdeaSnapshot: state.originalIdeaSnapshot || '',
     school: (state.school && typeof state.school === 'object') ? state.school : null,   // 学校模式：校长/老师 产出 + 各步重试/完成标记（随项目持久化）
     longMemory: state.longMemory || { uiOpen:false, foreshadow:[], lastAuditAt:0 },
@@ -1354,6 +1355,7 @@ function applyProject(p){
   state.dictmasterHistory = Array.isArray(p.dictmasterHistory) ? p.dictmasterHistory : [];
   state.dictmasterLatest = (p.dictmasterLatest && typeof p.dictmasterLatest === 'object') ? p.dictmasterLatest : null;
   state.dictmasterRan = !!p.dictmasterRan;
+  state.dictEnrichCurrent = (p.dictEnrichCurrent && typeof p.dictEnrichCurrent === 'object') ? p.dictEnrichCurrent : null;
   state.originalIdeaSnapshot = (typeof p.originalIdeaSnapshot === 'string') ? p.originalIdeaSnapshot : '';
   state.school = (p.school && typeof p.school === 'object') ? p.school : null;   // 学校模式恢复（校长/老师 产出 + 重试/完成标记）
   if(!state.school || typeof state.school !== 'object') state.school = {};
@@ -1383,6 +1385,7 @@ function clearState(){
   state.dictmasterHistory = [];
   state.dictmasterLatest = null;
   state.dictmasterRan = false;
+  state.dictEnrichCurrent = null;
   state.originalIdeaSnapshot = '';
   state.school = null;   // 学校模式：新项目/重置清空（校长/老师产出 + 重试/完成标记）
   state.longMemory = { uiOpen:false, foreshadow:[], lastAuditAt:0 };
@@ -5576,6 +5579,7 @@ function scState(){
   state.school.noAutoRetry = state.school.noAutoRetry || {};
   state.school.stale    = state.school.stale || {};
   state.school.teacherQc = state.school.teacherQc && typeof state.school.teacherQc === 'object' ? state.school.teacherQc : {};
+  state.school.qcReports = state.school.qcReports && typeof state.school.qcReports === 'object' ? state.school.qcReports : {};
   if(state.school.principalQc && state.school.principalQc.status==='RUNNING' && !_principalQcRun){ state.school.principalQc.status='INTERRUPTED'; state.school.principalQc.runtimeAlive=false; state.school.principalQc.stage='上次质检因页面刷新/离开而中断'; state.school.principalQc.message='质检未完成，但不影响老师接管当前校长成果。'; }
   Object.keys(state.school.teacherQc).forEach(k=>{ const q=state.school.teacherQc[k]; if(q&&q.status==='RUNNING'&&!q.runtimeAlive){ q.status='INTERRUPTED'; q.stage='上次老师质检因页面刷新/离开而中断'; q.message='质检未完成，但不影响正文启动。'; } });
   state.school.teachers = Array.isArray(state.school.teachers) ? state.school.teachers : [];
@@ -5715,6 +5719,7 @@ function schoolTeacherBtn(g, i){
       <span class="sc-tc-stage">${esc(sc)}</span>
       <span class="sc-tc-ch">${esc(range)} (${nCh}章)</span>
       <span class="sc-tc-st ${done?'done':'todo'}">${done?'✓ 已备':'⏳ 未备'}</span>
+      <span style="margin-left:auto">${teacherQcUiHtml(i)}</span>
     </div>
     <div class="sc-tc-b">
       <button type="button" class="sc-step sc-teacher ${done?'done':''}" data-scp-step="teacherSingle" data-scp-teacher="${i}" title="${label}：负责第 ${g.first}-${g.last} 章（${esc(g.stage||'')}），一次备完全组逐章教案">${done?'重新备课':`🎓 ${label}备课`}${scBadge(key)}</button>
@@ -7430,6 +7435,7 @@ async function genPrincipal(btn, opts){
         const _principalHash = principalContentFingerprint(principalTxt);
         sc.principal = { machine: true, targetChapterCount, status:'ADOPTED', qcStatus:'PENDING', plans: principalPlans, logicAudit: principalLogicAudit, ts:Date.now(), folded:false, version:_principalVersion, contentHash:_principalHash, groups: groups.map((g,gi)=>({ gi, teacherCode:g.teacherCode||teacherCodeForIndex(gi), stage:g.stage, first:g.first, last:g.last })), raw:principalTxt, titles, chapterEndingAudit: _endingCheck.audit };
         sc.principalQc={status:'STALE',progress:0,stage:'等待质检',forVersion:_principalVersion,contentHash:_principalHash,message:'新校长成果已保存；质检为独立旁路，可随时开始。'};
+        publishQcReport('principal',{label:'校长',status:'STALE',progress:0,forVersion:_principalVersion,contentHash:_principalHash,checks:[],message:'新校长正式成果已保存；上一轮质检不再代表当前版本。'},{messageBoard:false});
         if(_principalEndingWarning) sc.principal.chapterEndingAuditWarning = _principalEndingWarning; else delete sc.principal.chapterEndingAuditWarning;
         storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={version:_principalVersion,contentHash:_principalHash,source:'principal-current-result',status:'ADOPTED',qcStatus:'PENDING',ts:Date.now(),targetChapterCount,groups:sc.principal.groups,titles,plans:principalPlans,logicAudit:principalLogicAudit};
         _tp.stateWriteMs = Math.round(performance.now()-_state0);
@@ -8380,13 +8386,93 @@ function buildTeacherQcReport(gi,g,raw,teacherMachine,planMap,elapsedMs){
   return {version:2,gi,ts:Date.now(),elapsedMs:Number(elapsedMs||0),chapters,checks,warnCount,failCount,status:failCount?'review':'pass'};
 }
 
+/* ===== 统一质检结果展示链路（词典达人 / 词典充实 / 校长 / 老师） ===== */
+function qcResultStore(){
+  const sc=scState(); sc.qcReports=sc.qcReports||{}; return sc.qcReports;
+}
+function qcReportPlainText(stage,label,status,version,contentHash,checks,message){
+  const lines=[
+    `[QC_REPORT]`,
+    `阶段：${label}`,
+    `状态：${status||'未知'}`,
+    `版本：V${version||1}`,
+    `内容指纹：${contentHash||'无'}`,
+    `性质：独立旁路质检；不阻塞后续流程。`,
+    `用户决策：是否重新生成由用户自行决定。`,
+    ''
+  ];
+  (checks||[]).forEach((c,i)=>lines.push(`${String(i+1).padStart(2,'0')}. ${c.status==='pass'?'✓':c.status==='warn'?'△':'✕'} ${c.stage||'检查'}｜${c.detail||''}`));
+  if(message) lines.push('',`说明：${message}`);
+  lines.push(`[/QC_REPORT]`);
+  return lines.join('\n');
+}
+function publishQcReport(stage, data, opts){
+  const store=qcResultStore();
+  const report=Object.assign({},data,{stage,updatedAt:Date.now()});
+  if(!report.reportText) report.reportText=qcReportPlainText(stage,report.label||stage,report.status,report.forVersion,report.contentHash,report.checks,report.message);
+  store[stage]=report;
+  persist();
+  refreshQcResultReportUi();
+  if(opts && opts.messageBoard!==false) toastLogPush(report.reportText);
+  return report;
+}
+function qcStageUiHtml(stage,label,current,q){
+  const status=q?.status||'NONE';
+  const running=status==='RUNNING';
+  const done=['PASSED','ISSUES','DONE','FAILED'].includes(status);
+  const cls=running?'running':done?'done':'';
+  const text=running?'质检中':status==='FAILED'?'质检异常':done?'质检完成':status==='STALE'?'重新质检':'质检';
+  const meta=q?.stage?`${esc(q.stage)} · ${Number(q.progress||0)}%`:`V${current?.version||1} · 质检不影响正式成果。`;
+  const teacherAttr=/^teacher:\d+$/.test(stage)?` data-teacher-qc="${stage.split(':')[1]}"`:'';
+  return `<div class="unified-qc-wrap ${cls}"><button type="button" class="unified-qc-btn ${cls}" data-unified-qc="${esc(stage)}"${teacherAttr} ${(running||!current)?'disabled':''}>${text}</button><div class="unified-qc-progress"><span style="width:${Math.max(0,Math.min(100,Number(q?.progress)||0))}%"></span></div><div class="unified-qc-meta">${meta}${q?.message?`<br>${esc(q.message)}`:''}</div></div>`;
+}
+function unifiedQcReportPlain(stageKey,q){
+  if(!q) return '';
+  if(q.reportText) return q.reportText;
+  return qcReportPlainText(stageKey,q.label||stageKey,q.status,q.forVersion,q.contentHash,q.checks,q.message);
+}
+function qcResultReportHtml(){
+  const store=qcResultStore();
+  const groups=[];
+  const dm=store.dictMaster; if(dm) groups.push(['词典达人',unifiedQcReportPlain('dictMaster',dm)]);
+  const de=store.dictEnrich; if(de) groups.push(['词典充实',unifiedQcReportPlain('dictEnrich',de)]);
+  const pr=store.principal; if(pr) groups.push(['校长',unifiedQcReportPlain('principal',pr)]);
+  const teacherKeys=Object.keys(store).filter(k=>/^teacher:\d+$/.test(k)).sort((a,b)=>Number(a.split(':')[1])-Number(b.split(':')[1]));
+  teacherKeys.forEach(k=>groups.push([store[k].label||`老师${Number(k.split(':')[1])+1}`,unifiedQcReportPlain(k,store[k])]));
+  if(!groups.length) return `<pre class="sc-tqc-text" style="margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:transparent;">暂无质检结果。各阶段正式成果生成成功后，可按需执行质检。</pre>`;
+  return `<div class="sc-tqc-text-head" style="padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid var(--line);font-weight:600">质检结果报告（结构式纯文本）</div>${groups.map(([label,text])=>`<pre class="sc-tqc-text" data-qc-report-stage="${esc(label)}" style="margin:0;padding:10px 0 12px;border-bottom:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text);background:transparent;">${esc(text)}</pre>`).join('')}`;
+}
+function refreshQcResultReportUi(){ const el=document.querySelector('#qcResultReportPanel'); if(el) el.innerHTML=qcResultReportHtml(); }
+function bindUnifiedQcButtons(){
+  document.querySelectorAll('[data-unified-qc]').forEach(b=>{ if(b._uqcBound) return; b._uqcBound=true; b.onclick=()=>runUnifiedQc(String(b.dataset.unifiedQc||'')); });
+}
+async function runUnifiedQc(stage){
+  if(stage==='dictMaster') return runDictMasterQc();
+  if(stage==='dictEnrich') return runDictEnrichQc();
+  if(stage==='principal') return runPrincipalQc();
+  const m=stage.match(/^teacher:(\d+)$/); if(m) return runTeacherQc(Number(m[1]));
+}
+
+function ensureUnifiedQcStyles(){
+  if(document.getElementById('unifiedQcStyles')) return;
+  const st=document.createElement('style'); st.id='unifiedQcStyles'; st.textContent=`
+    .unified-qc-wrap{display:flex;flex-direction:column;align-items:stretch;min-width:150px;gap:4px}
+    .unified-qc-btn{border:0;border-radius:9px;padding:7px 14px;color:#fff;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#20a95a,#62d98a);box-shadow:0 3px 10px rgba(32,169,90,.22);transition:.2s}
+    .unified-qc-btn.running{background:linear-gradient(135deg,#e53935,#ff6b57);box-shadow:0 3px 10px rgba(229,57,53,.25);cursor:wait}
+    .unified-qc-btn.done{background:linear-gradient(135deg,#1976ff,#55a8ff);box-shadow:0 3px 10px rgba(25,118,255,.25)}
+    .unified-qc-progress{height:5px;border-radius:99px;background:var(--panel2);overflow:hidden}.unified-qc-progress span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#1976ff,#61b0ff);transition:width .25s}
+    .unified-qc-meta{font-size:11px;line-height:1.45;color:var(--muted,#8994a6);max-width:280px;text-align:right}
+  `; document.head.appendChild(st);
+}
+
 function ensureTeacherQcStyles(){
+  ensureUnifiedQcStyles();
   if(document.getElementById('teacherQcStyles')) return;
   const st=document.createElement('style'); st.id='teacherQcStyles'; st.textContent=`
     .teacher-qc-wrap{display:flex;flex-direction:column;align-items:stretch;min-width:150px;gap:4px}
-    .teacher-qc-btn{border:0;border-radius:9px;padding:7px 14px;color:#fff;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#1976ff,#55a8ff);box-shadow:0 3px 10px rgba(25,118,255,.25)}
+    .teacher-qc-btn{border:0;border-radius:9px;padding:7px 14px;color:#fff;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#20a95a,#62d98a);box-shadow:0 3px 10px rgba(32,169,90,.22)}
     .teacher-qc-btn.running{background:linear-gradient(135deg,#e53935,#ff6b57);cursor:wait}
-    .teacher-qc-btn.done{background:linear-gradient(135deg,#d39b18,#ffd65a);color:#3b2b00}
+    .teacher-qc-btn.done{background:linear-gradient(135deg,#1976ff,#55a8ff)}
     .teacher-qc-progress{height:5px;border-radius:99px;background:var(--panel2);overflow:hidden}.teacher-qc-progress span{display:block;height:100%;background:linear-gradient(90deg,#1976ff,#61b0ff);transition:width .25s}
     .teacher-qc-meta{font-size:11px;line-height:1.45;color:var(--muted,#8994a6);text-align:right;max-width:260px}
   `; document.head.appendChild(st);
@@ -8397,11 +8483,9 @@ function teacherQcSnapshot(gi){
   return q;
 }
 function teacherQcUiHtml(gi){
-  const t=teacherCurrentResult(gi), q=teacherQcSnapshot(gi); const status=q.status||'NONE';
-  const cls=status==='RUNNING'?'running':(['PASSED','ISSUES','DONE'].includes(status)?'done':'');
-  const label=status==='RUNNING'?'质检中':(['PASSED','ISSUES','DONE'].includes(status)?'质检完成':status==='FAILED'?'质检异常':status==='STALE'?'需重新质检':'质检');
-  const meta=q.stage?`${esc(q.stage)} · ${Number(q.progress||0)}%`:`V${t?.version||1} · 质检独立旁路，不影响正文。`;
-  return `<div class="teacher-qc-wrap"><button type="button" class="teacher-qc-btn ${cls}" data-teacher-qc="${gi}" ${status==='RUNNING'?'disabled':''}>${label}</button><div class="teacher-qc-progress"><span style="width:${Math.max(0,Math.min(100,Number(q.progress)||0))}%"></span></div><div class="teacher-qc-meta">${meta}${q.message?`<br>${esc(q.message)}`:''}</div></div>`;
+  ensureUnifiedQcStyles();
+  const t=teacherCurrentResult(gi), q=teacherQcSnapshot(gi);
+  return qcStageUiHtml(`teacher:${gi}`, schoolStageGroups().length>1?`老师${gi+1}（${schoolStageGroups()[gi]?.teacherCode||teacherCodeForIndex(gi)}）`:'老师', t, q);
 }
 async function runTeacherQc(gi){
   const t=teacherCurrentResult(gi); if(!t){toast('暂无当前老师教案可质检');return;}
@@ -8410,17 +8494,11 @@ async function runTeacherQc(gi){
   try{
     const g=schoolStageGroups()[gi], machine=parseTeacherMachine(t.raw,g.first,g.last), plans=t.plans||{};
     const stages=[['结构协议',25,()=>!!machine&&!machine.missing.length&&!machine.invalid.length&&!machine.duplicate.length&&!machine.unexpected.length],['章节完整性',55,()=>Object.keys(plans).length===(g.last-g.first+1)],['当前版本绑定',75,()=>{const cur=teacherCurrentResult(gi);return !!cur&&cur.version===t.version&&cur.contentHash===t.contentHash}],['完成',100,()=>true]];
-    for(const [stage,pct,fn] of stages){ await new Promise(r=>setTimeout(r,100)); const cur=teacherCurrentResult(gi); if(!cur||cur.version!==t.version||cur.contentHash!==t.contentHash){sc.teacherQc[gi]={status:'STALE',progress:pct,stage:'教案已更新，当前质检失效',forVersion:cur?.version||0,contentHash:cur?.contentHash||'',message:'当前正式教案已改变。'};persist();refreshTeacherQcUi();return;} const ok=fn(); sc.teacherQc[gi].progress=pct;sc.teacherQc[gi].stage=stage;sc.teacherQc[gi].checks.push({stage,status:ok?'pass':'warn',detail:ok?'检查通过':'检查发现问题'});persist();refreshTeacherQcUi();}
-    const bad=(sc.teacherQc[gi].checks||[]).some(x=>x.status==='warn'&&x.stage!=='完成'); sc.teacherQc[gi].status=bad?'ISSUES':'PASSED';sc.teacherQc[gi].runtimeAlive=false;sc.teacherQc[gi].message=bad?'质检发现问题，仅供人工复核。':'质检完成；不影响正文启动。';persist();refreshTeacherQcUi();
-  }catch(e){sc.teacherQc[gi].status='FAILED';sc.teacherQc[gi].runtimeAlive=false;sc.teacherQc[gi].message='质检异常，但不影响正文启动。';sc.teacherQc[gi].error=String(e?.message||e);persist();refreshTeacherQcUi();}
+    for(const [stage,pct,fn] of stages){ await new Promise(r=>setTimeout(r,100)); const cur=teacherCurrentResult(gi); if(!cur||cur.version!==t.version||cur.contentHash!==t.contentHash){sc.teacherQc[gi]={status:'STALE',progress:pct,stage:'教案已更新，当前质检失效',forVersion:cur?.version||0,contentHash:cur?.contentHash||'',message:'当前正式教案已改变。'}; publishQcReport(`teacher:${gi}`,{label:schoolStageGroups().length>1?`老师${gi+1}（${schoolStageGroups()[gi]?.teacherCode||teacherCodeForIndex(gi)}）`:'老师',status:'STALE',progress:pct,forVersion:cur?.version||0,contentHash:cur?.contentHash||'',checks:[],message:'当前正式教案已改变。'}); refreshTeacherQcUi();return;} const ok=fn(); sc.teacherQc[gi].progress=pct;sc.teacherQc[gi].stage=stage;sc.teacherQc[gi].checks.push({stage,status:ok?'pass':'warn',detail:ok?'检查通过':'检查发现问题'});persist();refreshTeacherQcUi();}
+    const bad=(sc.teacherQc[gi].checks||[]).some(x=>x.status==='warn'&&x.stage!=='完成'); sc.teacherQc[gi].status=bad?'ISSUES':'PASSED';sc.teacherQc[gi].runtimeAlive=false;sc.teacherQc[gi].message=bad?'质检发现问题，仅供人工复核。':'质检完成；不影响正文启动。'; const _tq=teacherCurrentResult(gi); publishQcReport(`teacher:${gi}`,{label:schoolStageGroups().length>1?`老师${gi+1}（${schoolStageGroups()[gi]?.teacherCode||teacherCodeForIndex(gi)}）`:'老师',status:sc.teacherQc[gi].status,progress:100,forVersion:t.version,contentHash:t.contentHash,checks:sc.teacherQc[gi].checks,message:sc.teacherQc[gi].message}); refreshTeacherQcUi();
+  }catch(e){sc.teacherQc[gi].status='FAILED';sc.teacherQc[gi].runtimeAlive=false;sc.teacherQc[gi].message='质检异常，但不影响正文启动。';sc.teacherQc[gi].error=String(e?.message||e); publishQcReport(`teacher:${gi}`,{label:schoolStageGroups().length>1?`老师${gi+1}（${schoolStageGroups()[gi]?.teacherCode||teacherCodeForIndex(gi)}）`:'老师',status:'FAILED',progress:100,forVersion:t.version,contentHash:t.contentHash,checks:sc.teacherQc[gi].checks,message:sc.teacherQc[gi].message}); refreshTeacherQcUi();}
 }
-function teacherQcStatusIcon(status){ return status==='pass'?'✓':status==='warn'?'△':'✕'; }
-function teacherQcReportHtml(){
-  const sc=scState(),groups=schoolStageGroups(),qcs=sc.teacherQc||{},rows=[];
-  groups.forEach((g,i)=>{const q=qcs[i];if(!q)return;const label=groups.length>1?`老师${i+1}（${g.teacherCode}）`:'老师';const lines=[`${label} · 第${g.first}-${g.last}章`,`状态：${q.status||'未知'}`,`版本：V${q.forVersion||teacherCurrentResult(i)?.version||1} · 内容指纹：${q.contentHash||teacherCurrentResult(i)?.contentHash||''}`,'质检为旁路，不阻塞正文；是否重生成由用户决定',''];(q.checks||[]).forEach((c,n)=>lines.push(`${String(n+1).padStart(2,'0')}. ${teacherQcStatusIcon(c.status)} ${c.stage}｜${c.detail}`));rows.push(`<pre class="sc-tqc-text" style="margin:0;padding:10px 0 12px;border-bottom:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text);background:transparent;">${esc(lines.join('\n'))}</pre>`);});
-  return rows.length?`<div class="sc-tqc-text-head" style="padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid var(--line);font-weight:600">老师质检报告（结构式纯文本）</div>${rows.join('')}`:`<pre class="sc-tqc-text" style="margin:0;white-space:pre-wrap;">老师生成后，这里会显示质检报告。质检不阻塞正文。</pre>`;
-}
-function refreshTeacherQcUi(){ const el=document.querySelector('#scTeacherQcPanel'); if(el) el.innerHTML=teacherQcReportHtml(); document.querySelectorAll('[data-teacher-qc]').forEach(b=>{b.onclick=()=>runTeacherQc(Number(b.dataset.teacherQc));}); }
+function refreshTeacherQcUi(){ refreshQcResultReportUi(); document.querySelectorAll('[data-teacher-qc]').forEach(b=>{b.onclick=()=>runTeacherQc(Number(b.dataset.teacherQc));}); bindUnifiedQcButtons(); }
 
 async function genTeacher(btn, gi){
   if(!isLong()){toast('仅长篇小说模式支持老师施教');return false;}
@@ -8697,6 +8775,7 @@ async function genSchoolTeachersBatch(){
 }
 
 function bindSchoolSteps(){
+  ensureUnifiedQcStyles(); bindUnifiedQcButtons(); refreshQcResultReportUi();
   const all = $('[data-scp-all]'); if(all) all.onclick = ()=> genSchoolAll(all);
   const teacherAllBtn=$('[data-scp-teacher-all]'); if(teacherAllBtn && !teacherAllBtn._bound){ teacherAllBtn._bound=true; teacherAllBtn.onclick=()=>genSchoolTeachersBatch(); }
   const applyBtn = $('[data-scp-apply-titles]');
@@ -8776,7 +8855,7 @@ function bindSchoolSteps(){
   $$('[data-scp-plan]').forEach(b=>{ b.onclick = ()=> openSchoolPlanReader(+b.dataset.scpPlan); });
   const pv = $('[data-scp-plan-pr]');
   if(pv) pv.onclick = ()=> openSchoolPrincipalReader();
-  const qcPanel = $('#scTeacherQcPanel');
+  const qcPanel = $('#qcResultReportPanel');
   if(qcPanel && !qcPanel._bound){
     qcPanel._bound = true;
     qcPanel.addEventListener('click', async e=>{
@@ -8818,6 +8897,7 @@ function invalidateTeacherQc(gi, reason){
   const sc=scState(); sc.teacherQc=sc.teacherQc||{};
   const t=teacherCurrentResult(gi); if(!t) return;
   sc.teacherQc[gi]={status:'STALE',progress:0,stage:'等待重新质检',forVersion:t.version,contentHash:t.contentHash,message:reason||'老师当前教案已更新，上一轮质检结果自动失效。',checks:[]};
+  publishQcReport(`teacher:${gi}`,{label:schoolStageGroups().length>1?`老师${gi+1}（${schoolStageGroups()[gi]?.teacherCode||teacherCodeForIndex(gi)}）`:'老师',status:'STALE',progress:0,forVersion:t.version,contentHash:t.contentHash,checks:[],message:reason||'老师当前教案已更新，上一轮质检结果自动失效。'},{messageBoard:false});
 }
 function touchTeacherCurrentResult(gi, reason){
   const sc=scState(), t=sc.teachers&&sc.teachers[gi]; if(!t) return null;
@@ -9069,9 +9149,9 @@ function ensurePrincipalQcStyles(){
   if(document.getElementById('principalQcStyles')) return;
   const st=document.createElement('style'); st.id='principalQcStyles'; st.textContent=`
     .principal-qc-wrap{display:flex;flex-direction:column;align-items:stretch;min-width:150px;gap:4px}
-    .principal-qc-btn{border:0;border-radius:9px;padding:7px 14px;color:#fff;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#1976ff,#55a8ff);box-shadow:0 3px 10px rgba(25,118,255,.25);transition:.2s}
+    .principal-qc-btn{border:0;border-radius:9px;padding:7px 14px;color:#fff;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#20a95a,#62d98a);box-shadow:0 3px 10px rgba(32,169,90,.22);transition:.2s}
     .principal-qc-btn.running{background:linear-gradient(135deg,#e53935,#ff6b57);box-shadow:0 3px 10px rgba(229,57,53,.25);cursor:wait}
-    .principal-qc-btn.done{background:linear-gradient(135deg,#d39b18,#ffd65a);color:#3b2b00;box-shadow:0 3px 10px rgba(211,155,24,.25)}
+    .principal-qc-btn.done{background:linear-gradient(135deg,#1976ff,#55a8ff);box-shadow:0 3px 10px rgba(25,118,255,.25)}
     .principal-qc-progress{height:5px;border-radius:99px;background:var(--panel2);overflow:hidden}
     .principal-qc-progress span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#1976ff,#61b0ff);transition:width .25s}
     .principal-qc-meta{font-size:11px;line-height:1.45;color:var(--muted,#8994a6);max-width:280px;text-align:right}
@@ -9113,6 +9193,7 @@ function saveCurrentPrincipalResult(raw, reason){
   sc.principalQc=sc.principalQc||{};
   sc.principalQc.status='STALE'; sc.principalQc.forVersion=nextVersion; sc.principalQc.contentHash=sc.principal.contentHash;
   sc.principalQc.message='校长成果已更新，上一轮质检结果不再代表当前版本。'; sc.principalQc.progress=0; sc.principalQc.stage='等待重新质检';
+  publishQcReport('principal',{label:'校长',status:'STALE',progress:0,forVersion:nextVersion,contentHash:sc.principal.contentHash,checks:[],message:'校长正式成果已更新；上一轮质检不再代表当前版本。'},{messageBoard:false});
   sc.stale.principal=false;
   sc.finished.principal=true;
   persist();
@@ -9122,12 +9203,13 @@ function principalQcSnapshot(){
   const p=principalCurrentResult();
   if(!p) return {status:'NONE',progress:0,stage:'等待校长成果'};
   const q=scState().principalQc||{};
+  if(q.contentHash && q.contentHash!==p.contentHash) return {status:'STALE',progress:0,stage:'等待重新质检',forVersion:p.version,contentHash:p.contentHash,message:'当前校长成果已变化，旧质检已失效。'};
   return q;
 }
 function refreshPrincipalQcUi(){
-  const wrap=document.querySelector('.principal-qc-wrap'); if(!wrap) return;
-  const holder=wrap.parentElement; const old=wrap; old.outerHTML=principalQcUiHtml();
-  const b=holder?.querySelector('[data-principal-qc]'); if(b){ b.onclick=async()=>{await runPrincipalQc();}; }
+  document.querySelectorAll('.principal-qc-wrap').forEach(w=>{ const holder=w.parentElement; if(holder) w.outerHTML=principalQcUiHtml(); });
+  document.querySelectorAll('[data-principal-qc]').forEach(b=>{ b.onclick=async()=>{await runPrincipalQc();}; });
+  bindUnifiedQcButtons(); refreshQcResultReportUi();
 }
 async function runPrincipalQc(){
   if(_principalQcRun){ toast('校长质检正在进行中，请稍候'); return; }
@@ -9153,7 +9235,7 @@ async function runPrincipalQc(){
       const cur=principalCurrentResult();
       if(!cur || cur.version!==p.version || cur.contentHash!==p.contentHash){
         sc.principalQc={status:'STALE',progress,stage:'成果已更新，当前质检自动失效',startedAt:Date.now(),forVersion:cur?.version||0,contentHash:cur?.contentHash||'',runtimeAlive:false,message:'质检期间校长成果发生变化，旧质检不再适用于新成果。'};
-        persist(); refreshSchoolProgressUi(); refreshPrincipalQcUi(); return;
+        publishQcReport('principal',{label:'校长',status:'STALE',progress,forVersion:cur?.version||0,contentHash:cur?.contentHash||'',checks:[],message:'质检期间校长成果发生变化，旧质检不再适用于新成果。'}); refreshSchoolProgressUi(); refreshPrincipalQcUi(); return;
       }
       const result=fn();
       sc.principalQc.progress=progress; sc.principalQc.stage=stage; sc.principalQc.checks.push({stage,progress,status:result.ok?'pass':'warn',detail:result.detail});
@@ -9161,20 +9243,20 @@ async function runPrincipalQc(){
     }
     const fails=(sc.principalQc.checks||[]).filter(x=>x.status==='warn' && !/完成/.test(x.stage));
     sc.principalQc.status=fails.length?'ISSUES':'PASSED'; sc.principalQc.progress=100; sc.principalQc.stage='质检完成'; sc.principalQc.runtimeAlive=false; sc.principalQc.completedAt=Date.now(); sc.principalQc.message=fails.length?`发现${fails.length}项需要人工关注的问题。`:'质检通过；仍以用户人工审核为最终依据。';
-    persist(); refreshSchoolProgressUi(); refreshPrincipalQcUi();
+    publishQcReport('principal',{label:'校长',status:sc.principalQc.status,progress:100,forVersion:p.version,contentHash:p.contentHash,checks:sc.principalQc.checks,message:sc.principalQc.message}); refreshSchoolProgressUi(); refreshPrincipalQcUi();
   }catch(e){
-    sc.principalQc.status='FAILED'; sc.principalQc.runtimeAlive=false; sc.principalQc.stage='质检异常'; sc.principalQc.message='质检本身发生异常，但不影响校长成果和老师接管。'; sc.principalQc.error=String(e?.message||e); persist(); refreshSchoolProgressUi(); refreshPrincipalQcUi();
+    sc.principalQc.status='FAILED'; sc.principalQc.runtimeAlive=false; sc.principalQc.stage='质检异常'; sc.principalQc.message='质检本身发生异常，但不影响校长成果和老师接管。'; sc.principalQc.error=String(e?.message||e); publishQcReport('principal',{label:'校长',status:'FAILED',progress:100,forVersion:p.version,contentHash:p.contentHash,checks:sc.principalQc.checks,message:sc.principalQc.message}); refreshSchoolProgressUi(); refreshPrincipalQcUi();
   }finally{ _principalQcRun=null; }
 }
 function principalQcUiHtml(){
   ensurePrincipalQcStyles();
   const q=principalQcSnapshot();
   const status=q.status||'NONE';
-  const cls=status==='RUNNING'||status==='FAILED'?'running':(status==='PASSED'||status==='ISSUES'?'done':'');
+  const cls=status==='RUNNING'?'running':(['PASSED','ISSUES','DONE','FAILED'].includes(status)?'done':'');
   const label=status==='RUNNING'?'质检中':(status==='PASSED'||status==='ISSUES'?'质检完成':status==='FAILED'?'质检异常':status==='STALE'?'需重新质检':'质检');
   const detail=q.stage?`${esc(q.stage)}${Number.isFinite(Number(q.progress))?` · ${Number(q.progress)}%`:''}`:'';
   return `<div class="principal-qc-wrap ${cls}">
-    <button type="button" class="principal-qc-btn ${cls}" data-principal-qc ${status==='RUNNING'?'disabled':''}>${label}</button>
+    <button type="button" class="principal-qc-btn ${cls}" data-principal-qc data-unified-qc="principal" ${status==='RUNNING'?'disabled':''}>${label}</button>
     <div class="principal-qc-progress"><span style="width:${Math.max(0,Math.min(100,Number(q.progress)||0))}%"></span></div>
     <div class="principal-qc-meta">${detail||'质检为独立旁路，不影响老师立即接管当前校长成果。'}${q.message?`<br>${esc(q.message)}`:''}</div>
   </div>`;
@@ -12179,35 +12261,32 @@ function extractPlanField(plan, names){
 }
 
 function refreshForeshadowBank(){
-  const mem=ensureLongMemory(), o=state.outline||{};
-  const plans=Array.isArray(o.chapterPlans)?o.chapterPlans:[];
-  const next=[];
-  plans.forEach((p,i)=>{
-    const f=extractPlanField(p,['埋设伏笔','伏笔','埋伏笔']);
-    if(!f || /^(无|暂无|无。|没有)$/i.test(f.trim())) return;
-    const later=(state.chapters||[]).slice(i+1).map(c=>String(c&&c.content||'')).join('\n');
-    const key=f.replace(/[「」“”【】（）()]/g,'').split(/[，,；;。]/)[0].trim().slice(0,18);
-    const recovered=key && later.includes(key);
-    next.push({id:`${i+1}-${key}`, chapter:i+1, text:f.slice(0,180), status:recovered?'suspected-recovered':'open'});
-  });
-  mem.foreshadow=next.slice(-120);
+  // P2：伏笔/未决线索的正式权威已经迁移到 storyState.current.openThreads。
+  // longMemory.foreshadow 仅保留为 UI 派生视图，不再从旧 chapterPlans + 正文扫描猜测。
+  const mem=ensureLongMemory(), ss=storyState();
+  const threads=Array.isArray(ss.current&&ss.current.openThreads)?ss.current.openThreads:[];
+  const chapter=Number.isFinite(ss.current&&ss.current.chapter) ? ss.current.chapter+1 : null;
+  mem.foreshadow=threads.map((text,n)=>({
+    id:`state-${chapter||'current'}-${n+1}`,
+    chapter:chapter||'',
+    text:String(text||'').trim().slice(0,180),
+    status:'open',
+    source:'storyState.current.openThreads'
+  })).filter(x=>x.text).slice(-120);
   mem.lastAuditAt=Date.now();
   return mem.foreshadow;
 }
 
 function longNovelMemoryData(){
-  const o=state.outline||{}, g=o.glossary||{}, idx=currentWrittenIndex();
-  const dig=Array.isArray(o._chapterDigests)?o._chapterDigests:[];
+  const o=state.outline||{}, g=o.glossary||{}, idx=currentWrittenIndex(), ss=storyState();
+  const observed=idx>=0 && ss.chapters && ss.chapters[idx] ? ss.chapters[idx].observed||null : null;
   const fc=o._factCard||{};
   const plan=idx>=0 && Array.isArray(o.chapterPlans)?o.chapterPlans[idx]:null;
   const prev=idx>=0?state.chapters[idx]:null;
-  const time=(fc.timeAnchors||[]).find(x=>x && x.ch===idx);
-  const mem=ensureLongMemory();
-  if(!mem.foreshadow.length && plansExist(o)) refreshForeshadowBank();
-  return {o,g,idx,digest:idx>=0?(dig[idx]&&dig[idx].text||''):'',fc,plan,prev,time,foreshadow:mem.foreshadow};
+  const time=observed&&observed.time ? {ch:idx,time:observed.time} : (fc.timeAnchors||[]).find(x=>x && x.ch===idx);
+  const foreshadow=refreshForeshadowBank();
+  return {o,g,idx,digest:observed?([observed.endingState, ...(observed.newFacts||[])].filter(Boolean).join('；')):'',fc,plan,prev,time,foreshadow};
 }
-
-function plansExist(o){ return !!(o && Array.isArray(o.chapterPlans) && o.chapterPlans.some(Boolean)); }
 
 function longMemoryBrief(i){
   if(!isLong() || !state.outline) return '';
@@ -14070,7 +14149,7 @@ function schoolZoneBlock(){
       </div>
       <div class="ch-right">
         ${pTitles.length ? `<button type="button" class="sc-plan-btn sc-plan-apply-t ${titlesApplied?'applied':''}" data-scp-apply-titles title="${titlesApplied ? '校长已自动选用拟定标题至全书章节；点击可再次全量覆盖同步' : '一键选用校长拟定标题至全书章节'}">${titlesApplied ? `✓ 校长标题已选用 (${pTitles.length}章)` : `✨ 选用拟定标题 (${pTitles.length}章)`}</button>` : ''}
-        <button type="button" class="sc-plan-btn sc-plan-pr" data-scp-plan-pr title="查看写作守则与章节总表">📋 读校长成果</button>
+        ${principalQcUiHtml()}<button type="button" class="sc-plan-btn sc-plan-pr" data-scp-plan-pr title="查看写作守则与章节总表">📋 读校长成果</button>
       </div>
     </div>
     <div class="cp-body">
@@ -14090,7 +14169,7 @@ function schoolZoneBlock(){
           ${tBody}
         </div>
       </div>
-      <div id="scTeacherQcPanel" class="sc-teacher-qc-panel" style="height:220px;max-height:220px;overflow:auto;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);box-sizing:border-box;">${teacherQcReportHtml()}</div>
+      <div id="qcResultReportPanel" class="sc-teacher-qc-panel" style="height:220px;max-height:220px;overflow:auto;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);box-sizing:border-box;">${qcResultReportHtml()}</div>
     </div>
   </div>`;
 }
@@ -17068,7 +17147,7 @@ function refreshGlossaryCardOnly(){
   const card = document.querySelector('.gs-card');
   if(!card) return false;
   const active = document.activeElement;
-  if(active && card.contains(active)) return false; // 不抢占用户正在编辑/操作的词典控件
+  if(active && card.contains(active) && !active.closest('[data-unified-qc]')) return false; // 质检按钮刷新允许更新自身状态；其余词典编辑控件不抢占
   const html = glossaryCardHtml();
   if(!html) return false;
   const wrap = document.createElement('div');
@@ -17085,7 +17164,7 @@ function refreshDictMasterCardOnly(){
   const card = document.querySelector('.dm-card:not(.de-card)');
   if(!card) return false;
   const active = document.activeElement;
-  if(active && card.contains(active)) return false;
+  if(active && card.contains(active) && !active.closest('[data-unified-qc]')) return false;
   const html = dictMasterBlockHtml();
   if(!html) return false;
   const wrap = document.createElement('div');
@@ -17102,7 +17181,7 @@ function refreshDictEnrichCardOnly(){
   const card = document.querySelector('.de-card');
   if(!card) return false;
   const active = document.activeElement;
-  if(active && card.contains(active)) return false;
+  if(active && card.contains(active) && !active.closest('[data-unified-qc]')) return false;
   const html = dictEnrichBlockHtml();
   if(!html) return false;
   const wrap = document.createElement('div');
@@ -17122,12 +17201,72 @@ function collapseGlossaryAfterDictionaryGeneration(save=true){
   if(save) persist();
 }
 
+function dictMasterContentFingerprint(raw){
+  const s=String(raw||''); let h=2166136261;
+  for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).padStart(8,'0')+'-'+s.length;
+}
+function dictMasterCurrentResult(){
+  const r=state.dictmasterLatest; if(!r || typeof r!=='object') return null;
+  if(!Number.isFinite(Number(r.version)) || Number(r.version)<1) r.version=Number(storyState().versions?.dictMaster)||1;
+  if(!r.contentHash) r.contentHash=dictMasterContentFingerprint(JSON.stringify(r));
+  return r;
+}
+function dictEnrichContentFingerprint(raw){
+  const s=String(raw||''); let h=2166136261;
+  for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(16).padStart(8,'0')+'-'+s.length;
+}
+function dictEnrichCurrentResult(){
+  const r=state.dictEnrichCurrent; if(!r || typeof r!=='object' || !String(r.raw||'').trim()) return null;
+  if(!Number.isFinite(Number(r.version)) || Number(r.version)<1) r.version=Number(storyState().versions?.dictEnrich)||1;
+  if(!r.contentHash) r.contentHash=dictEnrichContentFingerprint(r.raw);
+  return r;
+}
+function dictMasterQcSnapshot(){ const r=dictMasterCurrentResult(), q=qcResultStore().dictMaster||{}; if(r&&q.contentHash&&q.contentHash!==r.contentHash) return {status:'STALE',progress:0,stage:'等待重新质检',forVersion:r.version,contentHash:r.contentHash,message:'词典达人当前成果已变化，旧质检已失效。'}; return q; }
+function dictEnrichQcSnapshot(){ const r=dictEnrichCurrentResult(), q=qcResultStore().dictEnrich||{}; if(r&&q.contentHash&&q.contentHash!==r.contentHash) return {status:'STALE',progress:0,stage:'等待重新质检',forVersion:r.version,contentHash:r.contentHash,message:'词典充实当前成果已变化，旧质检已失效。'}; return q; }
+function dictMasterQcUiHtml(){ ensureUnifiedQcStyles(); const r=dictMasterCurrentResult(),q=dictMasterQcSnapshot(); return qcStageUiHtml('dictMaster','词典达人',r,q); }
+function dictEnrichQcUiHtml(){ ensureUnifiedQcStyles(); const r=dictEnrichCurrentResult(),q=dictEnrichQcSnapshot(); return qcStageUiHtml('dictEnrich','词典充实',r,q); }
+async function runDictMasterQc(){
+  const r=dictMasterCurrentResult(); if(!r){toast('暂无当前词典达人正式成果可质检');return;}
+  const sc=scState(), runId='dmqc-'+Date.now().toString(36); const q={status:'RUNNING',progress:0,stage:'准备质检',runId,forVersion:r.version,contentHash:r.contentHash,runtimeAlive:true,checks:[]};
+  sc.dictMasterQc=q; publishQcReport('dictMaster',{label:'词典达人',status:'RUNNING',progress:0,forVersion:r.version,contentHash:r.contentHash,checks:[],message:'质检进行中。'} ,{messageBoard:false}); refreshDictMasterCardOnly();
+  try{
+    const g=state.outline?.glossary||{};
+    const stages=[
+      ['正式成果存在',25,()=>!!r.summary&&Array.isArray(r.characters)&&Array.isArray(r.places)&&Array.isArray(r.propernouns)],
+      ['基础实体落地',50,()=>['characters','places','propernouns','organizations','institutions','items','terms','events','lifeSettings'].some(k=>(g[k]||[]).some(x=>x&&x._dictmaster))],
+      ['来源标记',75,()=>['characters','places','propernouns','organizations','institutions','items','terms','events','lifeSettings'].every(k=>(g[k]||[]).filter(x=>x&&x._dictmaster).every(x=>x.sourceType==='dictionary_foundation'))],
+      ['当前版本绑定',90,()=>{const cur=dictMasterCurrentResult();return !!cur&&cur.version===r.version&&cur.contentHash===r.contentHash}],
+      ['完成',100,()=>true]
+    ];
+    for(const [stage,pct,fn] of stages){ await new Promise(x=>setTimeout(x,100)); const cur=dictMasterCurrentResult(); if(!cur||cur.version!==r.version||cur.contentHash!==r.contentHash){sc.dictMasterQc={status:'STALE',progress:pct,stage:'成果已更新，当前质检失效',forVersion:cur?.version||0,contentHash:cur?.contentHash||'',message:'当前正式成果已改变。'}; publishQcReport('dictMaster',{label:'词典达人',status:'STALE',progress:pct,forVersion:cur?.version||0,contentHash:cur?.contentHash||'',checks:[],message:'当前正式成果已改变。'}); refreshDictMasterCardOnly(); return;} const ok=!!fn(); q.progress=pct;q.stage=stage;q.checks.push({stage,status:ok?'pass':'warn',detail:ok?'检查通过':'检查发现问题'}); publishQcReport('dictMaster',{label:'词典达人',status:'RUNNING',progress:pct,forVersion:r.version,contentHash:r.contentHash,checks:q.checks,message:'质检进行中。'},{messageBoard:false}); refreshDictMasterCardOnly(); }
+    const bad=q.checks.some(x=>x.status==='warn'&&x.stage!=='完成'); q.status=bad?'ISSUES':'PASSED';q.runtimeAlive=false;q.message=bad?'质检发现问题，仅供人工复核。':'质检完成；正式成果不受影响。'; sc.dictMasterQc=q; publishQcReport('dictMaster',{label:'词典达人',status:q.status,progress:100,forVersion:r.version,contentHash:r.contentHash,checks:q.checks,message:q.message}); refreshDictMasterCardOnly();
+  }catch(e){q.status='FAILED';q.runtimeAlive=false;q.message='质检异常，但不影响词典达人正式成果。';q.error=String(e?.message||e);sc.dictMasterQc=q;publishQcReport('dictMaster',{label:'词典达人',status:'FAILED',progress:100,forVersion:r.version,contentHash:r.contentHash,checks:q.checks,message:q.message});refreshDictMasterCardOnly();}
+}
+async function runDictEnrichQc(){
+  const r=dictEnrichCurrentResult(); if(!r){toast('暂无当前词典充实正式成果可质检');return;}
+  const sc=scState(), q={status:'RUNNING',progress:0,stage:'准备质检',runId:'deqc-'+Date.now().toString(36),forVersion:r.version,contentHash:r.contentHash,runtimeAlive:true,checks:[]};
+  sc.dictEnrichQc=q; publishQcReport('dictEnrich',{label:'词典充实',status:'RUNNING',progress:0,forVersion:r.version,contentHash:r.contentHash,checks:[],message:'质检进行中。'},{messageBoard:false}); refreshDictEnrichCardOnly();
+  try{
+    const g=state.outline?.glossary||{};
+    const stages=[
+      ['正式返回存在',25,()=>String(r.raw||'').trim().length>0],
+      ['扩充条目落地',50,()=>['characters','walkons','places','propernouns','organizations','institutions','items','rules','terms','events','lifeSettings'].some(k=>(g[k]||[]).some(x=>x&&x._enrich))],
+      ['来源标记',75,()=>Object.values(g).filter(Array.isArray).flat().filter(x=>x&&x._enrich).every(x=>x.sourceType==='dictionary_enrichment')],
+      ['当前版本绑定',90,()=>{const cur=dictEnrichCurrentResult();return !!cur&&cur.version===r.version&&cur.contentHash===r.contentHash}],
+      ['完成',100,()=>true]
+    ];
+    for(const [stage,pct,fn] of stages){ await new Promise(x=>setTimeout(x,100)); const cur=dictEnrichCurrentResult(); if(!cur||cur.version!==r.version||cur.contentHash!==r.contentHash){sc.dictEnrichQc={status:'STALE',progress:pct,stage:'成果已更新，当前质检失效',forVersion:cur?.version||0,contentHash:cur?.contentHash||'',message:'当前正式成果已改变。'};publishQcReport('dictEnrich',{label:'词典充实',status:'STALE',progress:pct,forVersion:cur?.version||0,contentHash:cur?.contentHash||'',checks:[],message:'当前正式成果已改变。'});refreshDictEnrichCardOnly();return;}const ok=!!fn();q.progress=pct;q.stage=stage;q.checks.push({stage,status:ok?'pass':'warn',detail:ok?'检查通过':'检查发现问题'});publishQcReport('dictEnrich',{label:'词典充实',status:'RUNNING',progress:pct,forVersion:r.version,contentHash:r.contentHash,checks:q.checks,message:'质检进行中。'},{messageBoard:false});refreshDictEnrichCardOnly();}
+    const bad=q.checks.some(x=>x.status==='warn'&&x.stage!=='完成');q.status=bad?'ISSUES':'PASSED';q.runtimeAlive=false;q.message=bad?'质检发现问题，仅供人工复核。':'质检完成；正式成果不受影响。';sc.dictEnrichQc=q;publishQcReport('dictEnrich',{label:'词典充实',status:q.status,progress:100,forVersion:r.version,contentHash:r.contentHash,checks:q.checks,message:q.message});refreshDictEnrichCardOnly();
+  }catch(e){q.status='FAILED';q.runtimeAlive=false;q.message='质检异常，但不影响词典充实正式成果。';q.error=String(e?.message||e);sc.dictEnrichQc=q;publishQcReport('dictEnrich',{label:'词典充实',status:'FAILED',progress:100,forVersion:r.version,contentHash:r.contentHash,checks:q.checks,message:q.message});refreshDictEnrichCardOnly();}
+}
+
 async function genDictMaster(btn){
   const o = state.outline;
   const st = $('#dictmasterStatus');
   if(st){ st.className='status'; st.textContent=''; }
   if(!canRunAI('dictmaster')){ toast('请先完成上游“优化构想”并选中一个方案'); return false; }
-  invalidateSchoolDownstream('dictMaster');
   if(!currentCanonicalStoryStrategy()){ toast('先在优化构想中采用一个方案，建立唯一故事战略'); return false; }
   state.originalIdeaSnapshot = String(state.idea || '').trim() || state.originalIdeaSnapshot;
   markAIRunning('dictmaster');
@@ -17196,16 +17335,21 @@ async function genDictMaster(btn){
     o.glossary._worldRules = (j.worldRules||[]).map(x=>({ cat:String(x.cat||'').trim(), scope:String(x.scope||'').trim(), rule:String(x.rule||'').trim(), sourceType:'dictionary_foundation' }));
     const dmText = x => isScopeBanned('dictmaster','text') ? scrubBannedPhrases(String(x||''), 'dictmaster') : String(x||'');
     const result = { ts: Date.now(), book: (o.title)||'', summary:dmText(j.summary), nChar:(j.characters||[]).length, nPlace:(j.places||[]).length, nProp:(j.propernouns||[]).length, nRel:(j.relationshipTable||[]).length, nPC:(j.placeContacts||[]).length, nPRC:(j.properContacts||[]).length, nWR:(j.worldRules||[]).length, nOrg:(j.organizations||[]).length, nInst:(j.institutions||[]).length, nItem:(j.items||[]).length, nTerm:(j.terms||[]).length, nEvent:(j.events||[]).length, nLife:(j.lifeSettings||[]).length, characters:j.characters||[], rel:j.relationshipTable||[], places:j.places||[], pc:j.placeContacts||[], props:j.propernouns||[], prc:j.properContacts||[], wr:j.worldRules||[], organizations:j.organizations||[], institutions:j.institutions||[], items:j.items||[], terms:j.terms||[], events:j.events||[], lifeSettings:j.lifeSettings||[] };
+    const _dmVersion=Math.max(1,(Number(state.dictmasterLatest?.version)||Number(storyState().versions?.dictMaster)||0)+1);
+    result.version=_dmVersion; result.contentHash=dictMasterContentFingerprint(JSON.stringify(result));
     state.dictmasterLatest = result;
     state.dictmasterHistory = Array.isArray(state.dictmasterHistory) ? state.dictmasterHistory : [];
     state.dictmasterHistory.unshift(result);
     if(state.dictmasterHistory.length > 6) state.dictmasterHistory = state.dictmasterHistory.slice(0, 6);   // 第 7 次最旧被挤出
     state.dictmasterRan = true;
+    invalidateSchoolDownstream('dictMaster');
     storyState().canon.dictmasterAt=Date.now(); ssEnsureCanonEntities(); ssCaptureMasterSnapshot(); storyState().versions.dictMaster=Number(storyState().versions.dictMaster||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldCanon={version:storyState().versions.dictMaster,source:'dictmaster',ts:Date.now(),counts:{characters:(o.glossary.characters||[]).length,places:(o.glossary.places||[]).length,propernouns:(o.glossary.propernouns||[]).length,worldRules:(o.glossary._worldRules||[]).length,organizations:(o.glossary.organizations||[]).length,institutions:(o.glossary.institutions||[]).length,items:(o.glossary.items||[]).length,terms:(o.glossary.terms||[]).length,events:(o.glossary.events||[]).length,lifeSettings:(o.glossary.lifeSettings||[]).length}};
     // 词典数据已经成功写入后，立即提交“完成”状态。
     // 不再让折叠/渲染等非核心 UI 操作位于完成标记之前，避免“AI 已返回、数据已落地，但界面仍卡在生成中”。
     markAIDone('dictmaster');
     scMark('dictMaster', true);
+    sc.dictMasterQc={status:'STALE',progress:0,stage:'等待重新质检',forVersion:result.version,contentHash:result.contentHash,message:'词典达人正式成果已更新；上一轮质检不再代表当前版本。'};
+    publishQcReport('dictMaster',{label:'词典达人',status:'STALE',progress:0,forVersion:result.version,contentHash:result.contentHash,checks:[],message:'词典达人正式成果已更新；上一轮质检不再代表当前版本。'},{messageBoard:false});
     collapseGlossaryAfterDictionaryGeneration(false);
     persist();
     refreshSchoolProgressUi();
@@ -17267,7 +17411,7 @@ function dictMasterBlockHtml(){
           <span class="ch-subtag ch-subtag-dict">人物 ${(g.characters||[]).length} · 地名 ${(g.places||[]).length} · 专名 ${(g.propernouns||[]).length}</span>
         </div>
         <div class="ch-right">
-          ${histN?`<button id="btnDictMasterHist" class="btn small ghost">🕘 历史(${histN}/6)</button>`:''}
+          ${dictMasterQcUiHtml()}${histN?`<button id="btnDictMasterHist" class="btn small ghost">🕘 历史(${histN}/6)</button>`:''}
         </div>
       </div>
       <div class="dm-toolbar">
@@ -17297,7 +17441,7 @@ function dictMasterBlockHtml(){
         <span class="ch-subtag ch-subtag-dict">待生成</span>
       </div>
       <div class="ch-right">
-        <span class="muted" style="font-size:12px">全局设定架构</span>
+        ${dictMasterQcUiHtml()}
       </div>
     </div>
     ${locked?`<div class="dm-locked" style="margin:6px 0;color:#2e9e5b;font-size:12px">设定已锁定，可在「编剧学院」中一键迭代。</div>`:''}
@@ -17341,6 +17485,7 @@ function openDictMasterHistoryPanel(){
   ov.querySelector('[data-dm-tab="'+idx+'"]').classList.add('on');
 }
 function bindDictMaster(){
+  bindUnifiedQcButtons();
   const hb = $('#btnDictMasterHist'); if(hb) hb.onclick = ()=> openDictMasterHistoryPanel();
   $$('.dmt-tab').forEach(t=>{
     if(t._dmt) return; t._dmt = 1;
@@ -18198,6 +18343,10 @@ function parseDictEnrichText(txt){
 function mergeDictEnrich(res){
   const o = state.outline; if(!o) return {c:0,w:0,p:0,k:0,total:0};
   const g = ensureGlossaryKnowledgeShape(o.glossary || { characters:[], places:[], propernouns:[] });
+  // 同一词典充实师重新生成时，先替换上一轮“词典充实”自己产生的条目；不碰词典达人基底、用户手工条目或正文自动入典条目。
+  const enrichKeys=['characters','walkons','places','propernouns','organizations','institutions','items','rules','terms','events','lifeSettings'];
+  enrichKeys.forEach(k=>{ if(Array.isArray(g[k])) g[k]=g[k].filter(x=>!x || !x._enrich || String(x.sourceType||'')!=='dictionary_enrichment'); });
+  ['_relationshipTable','_placeContacts','_properContacts','_worldRules'].forEach(k=>{ if(Array.isArray(g[k])) g[k]=g[k].filter(x=>!x || !x._enrich || String(x.sourceType||'')!=='dictionary_enrichment'); });
   const n = { c:0, w:0, p:0, k:0, main:0, support:0, organizations:0, institutions:0, items:0, rules:0, terms:0, events:0, lifeSettings:0, relationshipTable:0, placeContacts:0, properContacts:0, worldRules:0 };
   const findExisting = (list, targetName) => {
     const cleanT = cleanEntityName(targetName)[0];
@@ -18517,16 +18666,22 @@ async function genDictEnrich(btn, opts){
     }
     if(!(parsed.characters.length || parsed.walkons.length || parsed.places.length || parsed.propernouns.length || parsed.organizations.length || parsed.institutions.length || parsed.items.length || parsed.rules.length || parsed.terms.length || parsed.events.length || parsed.lifeSettings.length)) throw new Error('未识别到有效条目，请重试');
     const n = mergeDictEnrich(parsed);
+    const _deVersion=Math.max(1,(Number(state.dictEnrichCurrent?.version)||Number(storyState().versions?.dictEnrich)||0)+1);
+    const _deRaw=isScopeBanned('dictEnrich','text') ? scrubBannedPhrases(txt, 'dictEnrich') : txt;
+    state.dictEnrichCurrent={version:_deVersion,contentHash:dictEnrichContentFingerprint(_deRaw),raw:_deRaw,summary:buildDictEnrichSummary(parsed),counts:{...n},ts:Date.now()};
+    invalidateSchoolDownstream('dictEnrich');
     ssEnsureCanonEntities();
     ssProtectMasterCanon();
     ssEnsureCanonEntities();
-    storyState().canon.dictEnrichAt=Date.now(); storyState().versions.dictEnrich=Number(storyState().versions.dictEnrich||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldExpansion={version:storyState().versions.dictEnrich,source:'dictEnrich',ts:Date.now(),added:n};
-    state.outline._dictEnrichText = isScopeBanned('dictEnrich','text') ? scrubBannedPhrases(txt, 'dictEnrich') : txt;   // 仅存档（导入/导出时仍保留原文兜底），UI 不再直接渲染
-    state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
+    storyState().canon.dictEnrichAt=Date.now(); storyState().versions.dictEnrich=_deVersion; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldExpansion={version:storyState().versions.dictEnrich,source:'dictEnrich',ts:Date.now(),added:n};
+    state.outline._dictEnrichText = _deRaw;   // 仅存档（导入/导出时仍保留原文兜底），UI 不再直接渲染
+    state.outline._dictEnrichSummary = state.dictEnrichCurrent.summary;
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, organizations:n.organizations||0, institutions:n.institutions||0, items:n.items||0, rules:n.rules||0, terms:n.terms||0, events:n.events||0, lifeSettings:n.lifeSettings||0, relationshipTable:n.relationshipTable||0, placeContacts:n.placeContacts||0, properContacts:n.properContacts||0, worldRules:n.worldRules||0, ts:Date.now() };
     // 数据已经安全写入词典后，先完成 AI 状态，再做非核心 UI 刷新；避免 render 异常导致“内容已入库但 UI 仍显示未完成”。
     persist();
     markAIDone('dictEnrich');
+    scState().dictEnrichQc={status:'STALE',progress:0,stage:'等待重新质检',forVersion:_deVersion,contentHash:state.dictEnrichCurrent.contentHash,message:'词典充实正式成果已更新；上一轮质检不再代表当前版本。'};
+    publishQcReport('dictEnrich',{label:'词典充实',status:'STALE',progress:0,forVersion:_deVersion,contentHash:state.dictEnrichCurrent.contentHash,checks:[],message:'词典充实正式成果已更新；上一轮质检不再代表当前版本。'},{messageBoard:false});
     _refreshGlossaryAfterDictEnrich = true;
     _refreshDictEnrichCard = true;
     if(stream) stream.style.display='none';
@@ -18636,7 +18791,7 @@ function dictEnrichBlockHtml(){
         <span class="ch-subtag ch-subtag-enrich">${countTxt?`已并入：${countTxt}`:'感官特征 · 场景禁忌 · 氛围龙套'}</span>
       </div>
       <div class="ch-right">
-        ${foldBtn}
+        ${dictEnrichQcUiHtml()}${foldBtn}
       </div>
     </div>
     <div class="de-body"${deCollapsed?' style="display:none"':''}>
@@ -18653,6 +18808,7 @@ function dictEnrichBlockHtml(){
   </div>`;
 }
 function bindDictEnrich(){
+  bindUnifiedQcButtons();
   const eb = $('#btnGenDictEnrich'); if(eb) eb.onclick = ()=> genDictEnrich(eb);
   const hb = $('#btnHarvestCast'); if(hb) hb.onclick = ()=> genDictHarvest(hb);
   $$('[data-de-goto]').forEach(b=> b.onclick = e=>{
@@ -19039,9 +19195,9 @@ function principalRulesExcerpt(){
 
 function buildDynamicProtagonistLedger(i){
   if(i <= 0) return '';
-  const o = state.outline || {};
-  const digests = Array.isArray(o._chapterDigests) ? o._chapterDigests : [];
-  const prevDigest = digests[i-1] && digests[i-1].text ? digests[i-1].text : '';
+  const o = state.outline || {}, ss=storyState();
+  const prevObserved = ss.chapters && ss.chapters[i-1] ? ss.chapters[i-1].observed||null : null;
+  const prevDigest = prevObserved ? [prevObserved.time, prevObserved.location, prevObserved.endingState, ...(prevObserved.newFacts||[])].filter(Boolean).join('；') : '';
   const prevChapter = state.chapters && state.chapters[i-1] ? state.chapters[i-1] : null;
   const prevTitle = prevChapter && prevChapter.title ? `第 ${i} 章《${prevChapter.title}》` : `第 ${i} 章`;
   const protagonist = (o.navBeacon && o.navBeacon.protagonist) ? String(o.navBeacon.protagonist).split(/[，,：:（(]/)[0].trim() : '主角';
@@ -19324,22 +19480,22 @@ const ROLLING_SUMMARY_SYS = `你是长篇小说滚动摘要助手。请把以下
 function buildRollingSummary(i){
   if(i <= 0) return '';
   const o = state.outline; if(!o) return '';
-  const digests = Array.isArray(o._chapterDigests) ? o._chapterDigests : [];
+  const ss = storyState();
+  const observed = ss.chapters || {};
   const blocks  = Array.isArray(o._rollingSummaries) ? o._rollingSummaries : [];
+  const renderObserved = k => {
+    const ob=observed[k]&&observed[k].observed; if(!ob) return '';
+    const facts=[ob.time,ob.location,ob.endingState,...(ob.newFacts||[])].filter(Boolean).join('；');
+    return facts ? `第 ${k+1} 章：${facts}` : '';
+  };
   const near = [];
-  for(let k = i-2; k >= Math.max(0, i-6); k--){
-    if(digests[k] && digests[k].text) near.unshift(`第 ${k+1} 章：${digests[k].text}`);
-  }
+  for(let k = i-2; k >= Math.max(0, i-6); k--){ const x=renderObserved(k); if(x) near.unshift(x); }
   const mid = [];
-  for(let k = i-7; k >= Math.max(0, i-11); k--){
-    if(digests[k] && digests[k].text) mid.unshift(`第 ${k+1} 章：${String(digests[k].text).slice(0, 120)}`);
-  }
-  const far = blocks.filter(s=>{
-    const [a,b] = String(s.key||'').split('-').map(Number);
-    return Number.isFinite(b) && b < i - 11 && b >= i - 31;
-  }).map(s => `第 ${s.key} 章：${s.text}`).join('\n');
+  for(let k = i-7; k >= Math.max(0, i-11); k--){ const x=renderObserved(k); if(x) mid.unshift(`第 ${k+1} 章：${x.replace(/^第 \d+ 章：/,'').slice(0, 180)}`); }
+  const far = [];
+  for(let k=Math.max(0,i-31); k<=i-12; k++){ const x=renderObserved(k); if(x) far.push(x); }
   return [
-    far ? `【远期摘要（第 1 章起更早章节，5 章块）】\n${far}` : '',
+    far.length ? `【远期状态摘要（仅来自正文观测）】\n${far.join('\n')}` : '',
     mid.length ? `【中程记忆 · 十章窗远五章（第 ${Math.max(1, i-10)}~${i-6} 章，简纪要）】\n${mid.join('\n')}` : '',
     near.length ? `【近期记忆 · 五章窗近五章（第 ${Math.max(1, i-5)}~${i-1} 章，细纪要 = 承接重点）】\n${near.join('\n')}` : ''
   ].filter(Boolean).join('\n\n');
@@ -20728,6 +20884,8 @@ function renderNarrativeEngineMenu(){
   const partialN = Object.keys(state._chapterPartial||{}).length;
   box.innerHTML = `
     <div class="ne-menu-hint">AI 叙事中间件总入口，点击打开对应面板</div>
+    <!-- 叙事菜单顺序：消息看板位于流式续写状态上方 -->
+    <button class="ne-menu-item" data-ne-panel="toastboard"><span class="ne-ico">📋</span><span class="ne-lbl">消息看板</span>${(()=>{const n=toastLogGet().length; return n?`<span class="ne-badge info">${n}</span>`:'';})()}</button>
     <button class="ne-menu-item" data-ne-panel="resume"><span class="ne-ico">▶️</span><span class="ne-lbl">流式续写状态</span>${partialN?`<span class="ne-badge">${partialN}</span>`:''}</button>
     <button class="ne-menu-item" data-ne-panel="facts"><span class="ne-ico">📎</span><span class="ne-lbl">事实与一致性看板</span></button>
     <button class="ne-menu-item" data-ne-panel="resumesum"><span class="ne-ico">📜</span><span class="ne-lbl">滚动摘要</span></button>
@@ -20735,8 +20893,6 @@ function renderNarrativeEngineMenu(){
     <button class="ne-menu-item" data-ne-panel="iron"><span class="ne-ico">📌</span><span class="ne-lbl">叙事铁律（写作总纲）</span>${state._narrIron!==false?'<span class="ne-badge ok">ON</span>':'<span class="ne-badge">OFF</span>'}</button>
     <button class="ne-menu-item" data-ne-panel="naming"><span class="ne-ico">👤</span><span class="ne-lbl">人物定名台</span>${state.characterNaming&&state.characterNaming.locked?'<span class="ne-badge ok">LOCK</span>':''}</button>
     <button class="ne-menu-item" data-ne-panel="banlist"><span class="ne-ico">🚫</span><span class="ne-lbl">禁则清单</span>${stateBanEnabled()?'<span class="ne-badge ok">ON</span>':'<span class="ne-badge">OFF</span>'}</button>
-    <!-- v238/反馈①：消息看板入口移入「叙事」面板菜单（第 9 项），带历史消息条数角标；顶栏不加按钮 -->
-    <button class="ne-menu-item" data-ne-panel="toastboard"><span class="ne-ico">📋</span><span class="ne-lbl">消息看板</span>${(()=>{const n=toastLogGet().length; return n?`<span class="ne-badge info">${n}</span>`:'';})()}</button>
   `;
 }
 
