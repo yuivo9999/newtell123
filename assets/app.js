@@ -1,7 +1,7 @@
 'use strict';
 
 const APP_VERSION = '1.0.423';
-// Version line: app1.0.423.js — 修复统一质检展示链路回归；保留原UI骨架，质检入口各归各位。
+// Version line: app1.0.423.js — 以421为可信基线重新实现统一QC结果链；四阶段保留独立QC入口，QC旁路不阻塞正式成果。
 const APP_FILE_VERSION = 'app1.0.423.js';
 const KEY_CFG = nsKey('cfg');
 
@@ -978,7 +978,7 @@ function openToastBoard(){
           <button class="gs-x" data-tb-close>✕</button>
         </span></div>
       <div class="cv-body">
-        ${list.length ? list.map(x=>`<div class="tb-row"><span class="tb-ts">${new Date(x.ts).toLocaleString('zh-CN',{hour12:false})}</span><pre class="tb-msg" style="margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:transparent;color:inherit;">${esc(x.msg)}</pre></div>`).join('') : '<p class="muted">暂无消息记录。</p>'}
+        ${list.length ? list.map(x=>`<div class="tb-row"><span class="tb-ts">${new Date(x.ts).toLocaleString('zh-CN',{hour12:false})}</span><span class="tb-msg">${esc(x.msg)}</span></div>`).join('') : '<p class="muted">暂无消息记录。</p>'}
       </div>
     </div>`;
   ov.addEventListener('click', e=>{
@@ -5719,7 +5719,6 @@ function schoolTeacherBtn(g, i){
       <span class="sc-tc-stage">${esc(sc)}</span>
       <span class="sc-tc-ch">${esc(range)} (${nCh}章)</span>
       <span class="sc-tc-st ${done?'done':'todo'}">${done?'✓ 已备':'⏳ 未备'}</span>
-      <span style="margin-left:auto">${teacherQcUiHtml(i)}</span>
     </div>
     <div class="sc-tc-b">
       <button type="button" class="sc-step sc-teacher ${done?'done':''}" data-scp-step="teacherSingle" data-scp-teacher="${i}" title="${label}：负责第 ${g.first}-${g.last} 章（${esc(g.stage||'')}），一次备完全组逐章教案">${done?'重新备课':`🎓 ${label}备课`}${scBadge(key)}</button>
@@ -7435,7 +7434,6 @@ async function genPrincipal(btn, opts){
         const _principalHash = principalContentFingerprint(principalTxt);
         sc.principal = { machine: true, targetChapterCount, status:'ADOPTED', qcStatus:'PENDING', plans: principalPlans, logicAudit: principalLogicAudit, ts:Date.now(), folded:false, version:_principalVersion, contentHash:_principalHash, groups: groups.map((g,gi)=>({ gi, teacherCode:g.teacherCode||teacherCodeForIndex(gi), stage:g.stage, first:g.first, last:g.last })), raw:principalTxt, titles, chapterEndingAudit: _endingCheck.audit };
         sc.principalQc={status:'STALE',progress:0,stage:'等待质检',forVersion:_principalVersion,contentHash:_principalHash,message:'新校长成果已保存；质检为独立旁路，可随时开始。'};
-        publishQcReport('principal',{label:'校长',status:'STALE',progress:0,forVersion:_principalVersion,contentHash:_principalHash,checks:[],message:'新校长正式成果已保存；上一轮质检不再代表当前版本。'},{messageBoard:false});
         if(_principalEndingWarning) sc.principal.chapterEndingAuditWarning = _principalEndingWarning; else delete sc.principal.chapterEndingAuditWarning;
         storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={version:_principalVersion,contentHash:_principalHash,source:'principal-current-result',status:'ADOPTED',qcStatus:'PENDING',ts:Date.now(),targetChapterCount,groups:sc.principal.groups,titles,plans:principalPlans,logicAudit:principalLogicAudit};
         _tp.stateWriteMs = Math.round(performance.now()-_state0);
@@ -8421,10 +8419,11 @@ function qcStageUiHtml(stage,label,current,q){
   const running=status==='RUNNING';
   const done=['PASSED','ISSUES','DONE','FAILED'].includes(status);
   const cls=running?'running':done?'done':'';
-  const text=running?'质检中':done?'质检完成':'质检';
+  const text=running?'质检中':status==='FAILED'?'质检异常':done?'质检完成':status==='STALE'?'重新质检':'质检';
   const meta=q?.stage?`${esc(q.stage)} · ${Number(q.progress||0)}%`:`V${current?.version||1} · 质检不影响正式成果。`;
   const teacherAttr=/^teacher:\d+$/.test(stage)?` data-teacher-qc="${stage.split(':')[1]}"`:'';
-  return `<div class="unified-qc-wrap ${cls}"><button type="button" class="unified-qc-btn ${cls}" data-unified-qc="${esc(stage)}"${teacherAttr} ${(running||!current)?'disabled':''}>${text}</button><div class="unified-qc-progress"><span style="width:${Math.max(0,Math.min(100,Number(q?.progress)||0))}%"></span></div><div class="unified-qc-meta">${meta}${q?.message?`<br>${esc(q.message)}`:''}</div></div>`;
+  const principalAttr=stage==='principal'?' data-principal-qc':'';
+  return `<div class="unified-qc-wrap ${cls}"><button type="button" class="unified-qc-btn ${cls}" data-unified-qc="${esc(stage)}"${teacherAttr}${principalAttr} ${(running||!current)?'disabled':''}>${text}</button><div class="unified-qc-progress"><span style="width:${Math.max(0,Math.min(100,Number(q?.progress)||0))}%"></span></div><div class="unified-qc-meta">${meta}${q?.message?`<br>${esc(q.message)}`:''}</div></div>`;
 }
 function unifiedQcReportPlain(stageKey,q){
   if(!q) return '';
@@ -8440,7 +8439,7 @@ function qcResultReportHtml(){
   const teacherKeys=Object.keys(store).filter(k=>/^teacher:\d+$/.test(k)).sort((a,b)=>Number(a.split(':')[1])-Number(b.split(':')[1]));
   teacherKeys.forEach(k=>groups.push([store[k].label||`老师${Number(k.split(':')[1])+1}`,unifiedQcReportPlain(k,store[k])]));
   if(!groups.length) return `<pre class="sc-tqc-text" style="margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:transparent;">暂无质检结果。各阶段正式成果生成成功后，可按需执行质检。</pre>`;
-  return `<div class="sc-tqc-text-head qc-report-title" style="padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid var(--line);font-weight:600">质检结果报告（结构式纯文本）</div>${groups.map(([label,text])=>`<pre class="sc-tqc-text" data-qc-report-stage="${esc(label)}" style="margin:0;padding:10px 0 12px;border-bottom:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text);background:transparent;">${esc(text)}</pre>`).join('')}`;
+  return `<div class="sc-tqc-text-head" style="padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid var(--line);font-weight:600">质检结果报告（结构式纯文本）</div>${groups.map(([label,text])=>`<pre class="sc-tqc-text" data-qc-report-stage="${esc(label)}" style="margin:0;padding:10px 0 12px;border-bottom:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text);background:transparent;">${esc(text)}</pre>`).join('')}`;
 }
 function refreshQcResultReportUi(){ const el=document.querySelector('#qcResultReportPanel'); if(el) el.innerHTML=qcResultReportHtml(); }
 function bindUnifiedQcButtons(){
@@ -8465,14 +8464,14 @@ function ensureUnifiedQcStyles(){
   `; document.head.appendChild(st);
 }
 
+
 function ensureTeacherQcStyles(){
-  ensureUnifiedQcStyles();
   if(document.getElementById('teacherQcStyles')) return;
   const st=document.createElement('style'); st.id='teacherQcStyles'; st.textContent=`
     .teacher-qc-wrap{display:flex;flex-direction:column;align-items:stretch;min-width:150px;gap:4px}
-    .teacher-qc-btn{border:0;border-radius:9px;padding:7px 14px;color:#fff;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#20a95a,#62d98a);box-shadow:0 3px 10px rgba(32,169,90,.22)}
+    .teacher-qc-btn{border:0;border-radius:9px;padding:7px 14px;color:#fff;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#1976ff,#55a8ff);box-shadow:0 3px 10px rgba(25,118,255,.25)}
     .teacher-qc-btn.running{background:linear-gradient(135deg,#e53935,#ff6b57);cursor:wait}
-    .teacher-qc-btn.done{background:linear-gradient(135deg,#1976ff,#55a8ff)}
+    .teacher-qc-btn.done{background:linear-gradient(135deg,#d39b18,#ffd65a);color:#3b2b00}
     .teacher-qc-progress{height:5px;border-radius:99px;background:var(--panel2);overflow:hidden}.teacher-qc-progress span{display:block;height:100%;background:linear-gradient(90deg,#1976ff,#61b0ff);transition:width .25s}
     .teacher-qc-meta{font-size:11px;line-height:1.45;color:var(--muted,#8994a6);text-align:right;max-width:260px}
   `; document.head.appendChild(st);
@@ -8487,6 +8486,7 @@ function teacherQcUiHtml(gi){
   const t=teacherCurrentResult(gi), q=teacherQcSnapshot(gi);
   return qcStageUiHtml(`teacher:${gi}`, schoolStageGroups().length>1?`老师${gi+1}（${schoolStageGroups()[gi]?.teacherCode||teacherCodeForIndex(gi)}）`:'老师', t, q);
 }
+
 async function runTeacherQc(gi){
   const t=teacherCurrentResult(gi); if(!t){toast('暂无当前老师教案可质检');return;}
   const sc=scState(); const runId=`tqc-${gi}-${Date.now().toString(36)}`;
@@ -8498,7 +8498,8 @@ async function runTeacherQc(gi){
     const bad=(sc.teacherQc[gi].checks||[]).some(x=>x.status==='warn'&&x.stage!=='完成'); sc.teacherQc[gi].status=bad?'ISSUES':'PASSED';sc.teacherQc[gi].runtimeAlive=false;sc.teacherQc[gi].message=bad?'质检发现问题，仅供人工复核。':'质检完成；不影响正文启动。'; const _tq=teacherCurrentResult(gi); publishQcReport(`teacher:${gi}`,{label:schoolStageGroups().length>1?`老师${gi+1}（${schoolStageGroups()[gi]?.teacherCode||teacherCodeForIndex(gi)}）`:'老师',status:sc.teacherQc[gi].status,progress:100,forVersion:t.version,contentHash:t.contentHash,checks:sc.teacherQc[gi].checks,message:sc.teacherQc[gi].message}); refreshTeacherQcUi();
   }catch(e){sc.teacherQc[gi].status='FAILED';sc.teacherQc[gi].runtimeAlive=false;sc.teacherQc[gi].message='质检异常，但不影响正文启动。';sc.teacherQc[gi].error=String(e?.message||e); publishQcReport(`teacher:${gi}`,{label:schoolStageGroups().length>1?`老师${gi+1}（${schoolStageGroups()[gi]?.teacherCode||teacherCodeForIndex(gi)}）`:'老师',status:'FAILED',progress:100,forVersion:t.version,contentHash:t.contentHash,checks:sc.teacherQc[gi].checks,message:sc.teacherQc[gi].message}); refreshTeacherQcUi();}
 }
-function refreshTeacherQcUi(){ refreshQcResultReportUi(); document.querySelectorAll('[data-teacher-qc]').forEach(b=>{b.onclick=()=>runTeacherQc(Number(b.dataset.teacherQc));}); bindUnifiedQcButtons(); }
+
+function refreshTeacherQcUi(){ refreshQcResultReportUi(); bindUnifiedQcButtons(); document.querySelectorAll('[data-teacher-qc]').forEach(b=>{b.onclick=()=>runTeacherQc(Number(b.dataset.teacherQc));}); }
 
 async function genTeacher(btn, gi){
   if(!isLong()){toast('仅长篇小说模式支持老师施教');return false;}
@@ -8775,7 +8776,6 @@ async function genSchoolTeachersBatch(){
 }
 
 function bindSchoolSteps(){
-  ensureUnifiedQcStyles(); bindUnifiedQcButtons(); refreshQcResultReportUi();
   const all = $('[data-scp-all]'); if(all) all.onclick = ()=> genSchoolAll(all);
   const teacherAllBtn=$('[data-scp-teacher-all]'); if(teacherAllBtn && !teacherAllBtn._bound){ teacherAllBtn._bound=true; teacherAllBtn.onclick=()=>genSchoolTeachersBatch(); }
   const applyBtn = $('[data-scp-apply-titles]');
@@ -8855,7 +8855,7 @@ function bindSchoolSteps(){
   $$('[data-scp-plan]').forEach(b=>{ b.onclick = ()=> openSchoolPlanReader(+b.dataset.scpPlan); });
   const pv = $('[data-scp-plan-pr]');
   if(pv) pv.onclick = ()=> openSchoolPrincipalReader();
-  const qcPanel = $('#qcResultReportPanel');
+  const qcPanel = $('#scTeacherQcPanel');
   if(qcPanel && !qcPanel._bound){
     qcPanel._bound = true;
     qcPanel.addEventListener('click', async e=>{
@@ -8869,6 +8869,8 @@ function bindSchoolSteps(){
       }finally{ b.disabled=false; refreshSchoolProgressUi(); }
     });
   }
+
+  bindUnifiedQcButtons();
 }
 
 function getFieldTagClass(k){
@@ -8897,7 +8899,6 @@ function invalidateTeacherQc(gi, reason){
   const sc=scState(); sc.teacherQc=sc.teacherQc||{};
   const t=teacherCurrentResult(gi); if(!t) return;
   sc.teacherQc[gi]={status:'STALE',progress:0,stage:'等待重新质检',forVersion:t.version,contentHash:t.contentHash,message:reason||'老师当前教案已更新，上一轮质检结果自动失效。',checks:[]};
-  publishQcReport(`teacher:${gi}`,{label:schoolStageGroups().length>1?`老师${gi+1}（${schoolStageGroups()[gi]?.teacherCode||teacherCodeForIndex(gi)}）`:'老师',status:'STALE',progress:0,forVersion:t.version,contentHash:t.contentHash,checks:[],message:reason||'老师当前教案已更新，上一轮质检结果自动失效。'},{messageBoard:false});
 }
 function touchTeacherCurrentResult(gi, reason){
   const sc=scState(), t=sc.teachers&&sc.teachers[gi]; if(!t) return null;
@@ -9149,9 +9150,9 @@ function ensurePrincipalQcStyles(){
   if(document.getElementById('principalQcStyles')) return;
   const st=document.createElement('style'); st.id='principalQcStyles'; st.textContent=`
     .principal-qc-wrap{display:flex;flex-direction:column;align-items:stretch;min-width:150px;gap:4px}
-    .principal-qc-btn{border:0;border-radius:9px;padding:7px 14px;color:#fff;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#20a95a,#62d98a);box-shadow:0 3px 10px rgba(32,169,90,.22);transition:.2s}
+    .principal-qc-btn{border:0;border-radius:9px;padding:7px 14px;color:#fff;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#1976ff,#55a8ff);box-shadow:0 3px 10px rgba(25,118,255,.25);transition:.2s}
     .principal-qc-btn.running{background:linear-gradient(135deg,#e53935,#ff6b57);box-shadow:0 3px 10px rgba(229,57,53,.25);cursor:wait}
-    .principal-qc-btn.done{background:linear-gradient(135deg,#1976ff,#55a8ff);box-shadow:0 3px 10px rgba(25,118,255,.25)}
+    .principal-qc-btn.done{background:linear-gradient(135deg,#d39b18,#ffd65a);color:#3b2b00;box-shadow:0 3px 10px rgba(211,155,24,.25)}
     .principal-qc-progress{height:5px;border-radius:99px;background:var(--panel2);overflow:hidden}
     .principal-qc-progress span{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#1976ff,#61b0ff);transition:width .25s}
     .principal-qc-meta{font-size:11px;line-height:1.45;color:var(--muted,#8994a6);max-width:280px;text-align:right}
@@ -9203,13 +9204,14 @@ function principalQcSnapshot(){
   const p=principalCurrentResult();
   if(!p) return {status:'NONE',progress:0,stage:'等待校长成果'};
   const q=scState().principalQc||{};
-  if(q.contentHash && q.contentHash!==p.contentHash) return {status:'STALE',progress:0,stage:'等待重新质检',forVersion:p.version,contentHash:p.contentHash,message:'当前校长成果已变化，旧质检已失效。'};
   return q;
 }
 function refreshPrincipalQcUi(){
-  document.querySelectorAll('.principal-qc-wrap').forEach(w=>{ const holder=w.parentElement; if(holder) w.outerHTML=principalQcUiHtml(); });
-  document.querySelectorAll('[data-principal-qc]').forEach(b=>{ b.onclick=async()=>{await runPrincipalQc();}; });
-  refreshQcResultReportUi();
+  const b0=document.querySelector('[data-principal-qc]');
+  const wrap=b0?.closest('.unified-qc-wrap'); if(!wrap) return;
+  const holder=wrap.parentElement; const old=wrap; old.outerHTML=principalQcUiHtml();
+  const b=holder?.querySelector('[data-principal-qc]'); if(b){ b.onclick=async()=>{await runPrincipalQc();}; }
+  bindUnifiedQcButtons();
 }
 async function runPrincipalQc(){
   if(_principalQcRun){ toast('校长质检正在进行中，请稍候'); return; }
@@ -9248,19 +9250,13 @@ async function runPrincipalQc(){
     sc.principalQc.status='FAILED'; sc.principalQc.runtimeAlive=false; sc.principalQc.stage='质检异常'; sc.principalQc.message='质检本身发生异常，但不影响校长成果和老师接管。'; sc.principalQc.error=String(e?.message||e); publishQcReport('principal',{label:'校长',status:'FAILED',progress:100,forVersion:p.version,contentHash:p.contentHash,checks:sc.principalQc.checks,message:sc.principalQc.message}); refreshSchoolProgressUi(); refreshPrincipalQcUi();
   }finally{ _principalQcRun=null; }
 }
+
 function principalQcUiHtml(){
-  ensurePrincipalQcStyles();
-  const q=principalQcSnapshot();
-  const status=q.status||'NONE';
-  const cls=status==='RUNNING'?'running':(['PASSED','ISSUES','DONE','FAILED'].includes(status)?'done':'');
-  const label=status==='RUNNING'?'质检中':(status==='PASSED'||status==='ISSUES'?'质检完成':status==='FAILED'?'质检异常':status==='STALE'?'需重新质检':'质检');
-  const detail=q.stage?`${esc(q.stage)}${Number.isFinite(Number(q.progress))?` · ${Number(q.progress)}%`:''}`:'';
-  return `<div class="principal-qc-wrap ${cls}">
-    <button type="button" class="principal-qc-btn ${cls}" data-principal-qc ${status==='RUNNING'?'disabled':''}>${label}</button>
-    <div class="principal-qc-progress"><span style="width:${Math.max(0,Math.min(100,Number(q.progress)||0))}%"></span></div>
-    <div class="principal-qc-meta">${detail||'质检为独立旁路，不影响老师立即接管当前校长成果。'}${q.message?`<br>${esc(q.message)}`:''}</div>
-  </div>`;
+  ensureUnifiedQcStyles();
+  const p=principalCurrentResult(), q=principalQcSnapshot();
+  return qcStageUiHtml('principal','校长',p,q);
 }
+
 function bindPrincipalQc(ov){
   const b=ov?.querySelector('[data-principal-qc]'); if(!b) return;
   b.onclick=async()=>{ await runPrincipalQc(); if(document.body.contains(ov)){ const body=ov.querySelector('#scPrincipalBody'); if(body) renderSchoolPrincipalBody(ov,principalCurrentResult()?.raw||''); } };
@@ -14169,7 +14165,7 @@ function schoolZoneBlock(){
           ${tBody}
         </div>
       </div>
-      <div id="qcResultReportPanel" class="sc-teacher-qc-panel qc-result-report-panel" style="height:220px;max-height:220px;overflow:auto;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);box-sizing:border-box;">${qcResultReportHtml()}</div>
+      <div id="qcResultReportPanel" class="sc-teacher-qc-panel" style="height:260px;max-height:260px;overflow:auto;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);box-sizing:border-box;">${qcResultReportHtml()}</div>
     </div>
   </div>`;
 }
@@ -17147,7 +17143,7 @@ function refreshGlossaryCardOnly(){
   const card = document.querySelector('.gs-card');
   if(!card) return false;
   const active = document.activeElement;
-  if(active && card.contains(active) && !active.closest('[data-unified-qc]')) return false; // 质检按钮刷新允许更新自身状态；其余词典编辑控件不抢占
+  if(active && card.contains(active)) return false; // 不抢占用户正在编辑/操作的词典控件
   const html = glossaryCardHtml();
   if(!html) return false;
   const wrap = document.createElement('div');
@@ -17164,7 +17160,7 @@ function refreshDictMasterCardOnly(){
   const card = document.querySelector('.dm-card:not(.de-card)');
   if(!card) return false;
   const active = document.activeElement;
-  if(active && card.contains(active) && !active.closest('[data-unified-qc]')) return false;
+  if(active && card.contains(active)) return false;
   const html = dictMasterBlockHtml();
   if(!html) return false;
   const wrap = document.createElement('div');
@@ -17181,7 +17177,7 @@ function refreshDictEnrichCardOnly(){
   const card = document.querySelector('.de-card');
   if(!card) return false;
   const active = document.activeElement;
-  if(active && card.contains(active) && !active.closest('[data-unified-qc]')) return false;
+  if(active && card.contains(active)) return false;
   const html = dictEnrichBlockHtml();
   if(!html) return false;
   const wrap = document.createElement('div');
@@ -17267,6 +17263,7 @@ async function genDictMaster(btn){
   const st = $('#dictmasterStatus');
   if(st){ st.className='status'; st.textContent=''; }
   if(!canRunAI('dictmaster')){ toast('请先完成上游“优化构想”并选中一个方案'); return false; }
+  invalidateSchoolDownstream('dictMaster');
   if(!currentCanonicalStoryStrategy()){ toast('先在优化构想中采用一个方案，建立唯一故事战略'); return false; }
   state.originalIdeaSnapshot = String(state.idea || '').trim() || state.originalIdeaSnapshot;
   markAIRunning('dictmaster');
@@ -17342,14 +17339,13 @@ async function genDictMaster(btn){
     state.dictmasterHistory.unshift(result);
     if(state.dictmasterHistory.length > 6) state.dictmasterHistory = state.dictmasterHistory.slice(0, 6);   // 第 7 次最旧被挤出
     state.dictmasterRan = true;
-    invalidateSchoolDownstream('dictMaster');
+    scState().dictMasterQc={status:'STALE',progress:0,stage:'等待重新质检',forVersion:result.version,contentHash:result.contentHash,message:'词典达人正式成果已更新；上一轮质检不再代表当前版本。'};
+    publishQcReport('dictMaster',{label:'词典达人',status:'STALE',progress:0,forVersion:result.version,contentHash:result.contentHash,checks:[],message:'词典达人正式成果已更新；上一轮质检不再代表当前版本。'},{messageBoard:false});
     storyState().canon.dictmasterAt=Date.now(); ssEnsureCanonEntities(); ssCaptureMasterSnapshot(); storyState().versions.dictMaster=Number(storyState().versions.dictMaster||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldCanon={version:storyState().versions.dictMaster,source:'dictmaster',ts:Date.now(),counts:{characters:(o.glossary.characters||[]).length,places:(o.glossary.places||[]).length,propernouns:(o.glossary.propernouns||[]).length,worldRules:(o.glossary._worldRules||[]).length,organizations:(o.glossary.organizations||[]).length,institutions:(o.glossary.institutions||[]).length,items:(o.glossary.items||[]).length,terms:(o.glossary.terms||[]).length,events:(o.glossary.events||[]).length,lifeSettings:(o.glossary.lifeSettings||[]).length}};
     // 词典数据已经成功写入后，立即提交“完成”状态。
     // 不再让折叠/渲染等非核心 UI 操作位于完成标记之前，避免“AI 已返回、数据已落地，但界面仍卡在生成中”。
     markAIDone('dictmaster');
     scMark('dictMaster', true);
-    sc.dictMasterQc={status:'STALE',progress:0,stage:'等待重新质检',forVersion:result.version,contentHash:result.contentHash,message:'词典达人正式成果已更新；上一轮质检不再代表当前版本。'};
-    publishQcReport('dictMaster',{label:'词典达人',status:'STALE',progress:0,forVersion:result.version,contentHash:result.contentHash,checks:[],message:'词典达人正式成果已更新；上一轮质检不再代表当前版本。'},{messageBoard:false});
     collapseGlossaryAfterDictionaryGeneration(false);
     persist();
     refreshSchoolProgressUi();
@@ -18343,7 +18339,6 @@ function parseDictEnrichText(txt){
 function mergeDictEnrich(res){
   const o = state.outline; if(!o) return {c:0,w:0,p:0,k:0,total:0};
   const g = ensureGlossaryKnowledgeShape(o.glossary || { characters:[], places:[], propernouns:[] });
-  // 同一词典充实师重新生成时，先替换上一轮“词典充实”自己产生的条目；不碰词典达人基底、用户手工条目或正文自动入典条目。
   const enrichKeys=['characters','walkons','places','propernouns','organizations','institutions','items','rules','terms','events','lifeSettings'];
   enrichKeys.forEach(k=>{ if(Array.isArray(g[k])) g[k]=g[k].filter(x=>!x || !x._enrich || String(x.sourceType||'')!=='dictionary_enrichment'); });
   ['_relationshipTable','_placeContacts','_properContacts','_worldRules'].forEach(k=>{ if(Array.isArray(g[k])) g[k]=g[k].filter(x=>!x || !x._enrich || String(x.sourceType||'')!=='dictionary_enrichment'); });
@@ -18669,7 +18664,8 @@ async function genDictEnrich(btn, opts){
     const _deVersion=Math.max(1,(Number(state.dictEnrichCurrent?.version)||Number(storyState().versions?.dictEnrich)||0)+1);
     const _deRaw=isScopeBanned('dictEnrich','text') ? scrubBannedPhrases(txt, 'dictEnrich') : txt;
     state.dictEnrichCurrent={version:_deVersion,contentHash:dictEnrichContentFingerprint(_deRaw),raw:_deRaw,summary:buildDictEnrichSummary(parsed),counts:{...n},ts:Date.now()};
-    invalidateSchoolDownstream('dictEnrich');
+    scState().dictEnrichQc={status:'STALE',progress:0,stage:'等待重新质检',forVersion:_deVersion,contentHash:state.dictEnrichCurrent.contentHash,message:'词典充实正式成果已更新；上一轮质检不再代表当前版本。'};
+    publishQcReport('dictEnrich',{label:'词典充实',status:'STALE',progress:0,forVersion:_deVersion,contentHash:state.dictEnrichCurrent.contentHash,checks:[],message:'词典充实正式成果已更新；上一轮质检不再代表当前版本。'},{messageBoard:false});
     ssEnsureCanonEntities();
     ssProtectMasterCanon();
     ssEnsureCanonEntities();
@@ -18680,8 +18676,6 @@ async function genDictEnrich(btn, opts){
     // 数据已经安全写入词典后，先完成 AI 状态，再做非核心 UI 刷新；避免 render 异常导致“内容已入库但 UI 仍显示未完成”。
     persist();
     markAIDone('dictEnrich');
-    scState().dictEnrichQc={status:'STALE',progress:0,stage:'等待重新质检',forVersion:_deVersion,contentHash:state.dictEnrichCurrent.contentHash,message:'词典充实正式成果已更新；上一轮质检不再代表当前版本。'};
-    publishQcReport('dictEnrich',{label:'词典充实',status:'STALE',progress:0,forVersion:_deVersion,contentHash:state.dictEnrichCurrent.contentHash,checks:[],message:'词典充实正式成果已更新；上一轮质检不再代表当前版本。'},{messageBoard:false});
     _refreshGlossaryAfterDictEnrich = true;
     _refreshDictEnrichCard = true;
     if(stream) stream.style.display='none';
@@ -20884,7 +20878,6 @@ function renderNarrativeEngineMenu(){
   const partialN = Object.keys(state._chapterPartial||{}).length;
   box.innerHTML = `
     <div class="ne-menu-hint">AI 叙事中间件总入口，点击打开对应面板</div>
-    <!-- 叙事菜单顺序：消息看板位于流式续写状态上方 -->
     <button class="ne-menu-item" data-ne-panel="toastboard"><span class="ne-ico">📋</span><span class="ne-lbl">消息看板</span>${(()=>{const n=toastLogGet().length; return n?`<span class="ne-badge info">${n}</span>`:'';})()}</button>
     <button class="ne-menu-item" data-ne-panel="resume"><span class="ne-ico">▶️</span><span class="ne-lbl">流式续写状态</span>${partialN?`<span class="ne-badge">${partialN}</span>`:''}</button>
     <button class="ne-menu-item" data-ne-panel="facts"><span class="ne-ico">📎</span><span class="ne-lbl">事实与一致性看板</span></button>
