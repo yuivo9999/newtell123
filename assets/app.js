@@ -1,3 +1,4 @@
+/* 432b：AI任务启动/停止控制链修复（基线 431） */
 'use strict';
 
 const APP_VERSION = '1.0.430';
@@ -1984,6 +1985,21 @@ function installGlobalGenerationUi(){
     @keyframes app10349Press{0%{transform:scale(1)}35%{transform:scale(.965)}70%{transform:scale(1.015)}100%{transform:scale(1)}}
     @keyframes app10349GeneratingPulse{0%,100%{box-shadow:0 7px 18px rgba(180,25,35,.22),0 0 0 0 rgba(255,65,65,.20)}50%{box-shadow:0 9px 24px rgba(180,25,35,.34),0 0 0 7px rgba(255,65,65,.06)}}
     @keyframes app10349Sweep{to{transform:translateX(120%)}}
+    /* 432：AI任务统一停止按钮。使用 !important 隔离主题/全局按钮样式。 */
+    .stop-btn{
+      display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:5px !important;
+      min-height:36px !important;padding:7px 13px !important;margin-left:8px !important;
+      border:1px solid #b91c1c !important;border-radius:9px !important;
+      background:linear-gradient(135deg,#ef4444 0%,#c81e2b 58%,#991b1b 100%) !important;
+      color:#fff !important;font-weight:900 !important;font-size:13px !important;line-height:1 !important;
+      box-shadow:0 5px 14px rgba(185,28,28,.28) !important;cursor:pointer !important;
+      text-shadow:0 1px 1px rgba(0,0,0,.25) !important;z-index:20 !important;
+    }
+    .stop-btn:hover{filter:brightness(1.08) !important;box-shadow:0 7px 18px rgba(185,28,28,.36) !important;}
+    .stop-btn:active{transform:scale(.97) !important;}
+    .stop-btn[style*="display: none"]{display:none !important;}
+    @media(max-width:640px){.stop-btn{min-height:38px !important;padding:8px 12px !important;margin-left:5px !important;}}
+
     /* 三个基础设置折叠卡片 */
     .app-idea-fold{border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff);margin:10px 0;overflow:hidden;}
     .app-idea-fold>summary{list-style:none;cursor:pointer;padding:10px 12px;font-weight:800;display:flex;align-items:center;gap:8px;user-select:none;}
@@ -2080,7 +2096,7 @@ let _abortCtl = null;           // 当前 AbortController
 let _abortBtn = null;           // 当前可见的停止按钮 DOM
 function makeStopBtn(){
   const b = document.createElement('button');
-  b.type = 'button'; b.className = 'stop-btn'; b.innerHTML = '⏹';
+  b.type = 'button'; b.className = 'stop-btn'; b.innerHTML = '⏹ 停止';
   b.onclick = ()=>{
     if(_abortCtl){ _abortCtl.abort(); _abortCtl = null; }
     hideStopBtn();
@@ -9115,6 +9131,9 @@ async function genSchoolAll(btn){
       if(getSchoolStepStatus(st.key).isDone) continue;
       scSetFailed(st.key,false); scSetError(st.key,null,false,false);
       state._schoolRunning={activeKey:st.key,stepIndex:i,totalSteps:3,label:st.label}; refreshSchoolProgressUi();
+      // 432：一键开学各子任务本身没有独立按钮，因此这里必须显式建立当前任务的停止控制链。
+      const stopParent=(btn&&btn.parentNode)||document.body;
+      showStopBtn(stopParent);
       const ok=await st.run();
       if(!ok){ scSetFailed(st.key,true); toast(`一键开学中断于「${st.label}」，可单独重试`); return; }
       scMark(st.key,true,false);
@@ -9146,6 +9165,9 @@ async function genSchoolTeachersBatch(){
       if(scTeacherGroupComplete(i)) { state._teacherBatchRunning.completed++; continue; }
       state._schoolRunning={activeKey:'t'+i,teacherIndex:i,stepIndex:0,totalSteps:groups.length,label:groups.length>1?`老师${i+1}（${groups[i].teacherCode}）`:'老师'};
       refreshSchoolProgressUi();
+      // 432：一键老师同样显式建立当前老师任务的停止控制；停止后不进入下一位。
+      const stopParent=(document.querySelector('[data-scp-teacher-all]')?.parentNode)||document.body;
+      showStopBtn(stopParent);
       const ok=await genTeacher(null,i);
       if(ok){ scMark('t'+i,true,false); state._teacherBatchRunning.completed++; }
       else { scSetFailed('t'+i,true); }
@@ -18887,11 +18909,12 @@ function dictEnrichBlockHtml(){
         <span class="ch-subtag ch-subtag-enrich">${countTxt?`已并入：${countTxt}`:'感官特征 · 场景禁忌 · 氛围龙套'}</span>
       </div>
       <div class="ch-right">
+        <button type="button" id="btnGenDictEnrich" class="btn small" title="生成或重新生成词典充实">✨ 词典充实</button>
         ${foldBtn}
       </div>
     </div>
     <div class="de-body"${deCollapsed?' style="display:none"':''}>
-      <!-- v1.0.29x：词典充实入口收归「规划师④词典充实」，本卡不再放点击按钮，仅供展示生成内容 -->
+      <!-- 432：保留独立“词典充实”入口；生成期间由统一红色停止按钮接管当前 AI 请求。 -->
       ${stream}
       ${status}
       ${(t || hasWorldKnowledge) ? `<div class="dm-tables" style="margin-top:10px">
