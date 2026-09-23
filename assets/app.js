@@ -5773,9 +5773,10 @@ function getSchoolStepStatus(key){
   }
 
   let isRunning = false;
-  if(run){
-    if(run.activeKey === key) isRunning = true;
-    else if(key === 'teacher' && (run.activeKey === 'teacher' || (typeof run.activeKey === 'string' && run.activeKey.startsWith('t')))){
+  const activeSchoolRun = state._schoolRunning || null;
+  if(activeSchoolRun){
+    if(activeSchoolRun.activeKey === key) isRunning = true;
+    else if(key === 'teacher' && (activeSchoolRun.activeKey === 'teacher' || (typeof activeSchoolRun.activeKey === 'string' && activeSchoolRun.activeKey.startsWith('t')))){
       isRunning = true;
     }
   }
@@ -9045,8 +9046,9 @@ function refreshTeacherUi(i){
   if(!tBtn) return;
   const done = scDone('t'+i);
   tBtn.classList.toggle('done', done);
-  tBtn.classList.toggle('running', !!(run && run.activeKey === 't'+i));
-  tBtn.disabled = !!(run && run.activeKey === 't'+i);
+  const activeSchoolRun = state._schoolRunning || null;
+  tBtn.classList.toggle('running', !!(activeSchoolRun && activeSchoolRun.activeKey === 't'+i));
+  tBtn.disabled = !!(activeSchoolRun && activeSchoolRun.activeKey === 't'+i);
 }
 
 function refreshTeacherBatchUi(){
@@ -14310,8 +14312,8 @@ function schoolZoneBlock(){
         <h3 class="ch-title">编剧学院 · 统筹与教案</h3>
         <span class="ch-subtag ch-subtag-school">${groups.length ? `${groups.length} 位老师` : '待设定章节数'}</span>
       </div>
-      <div class="ch-right">
-        <button type="button" class="sc-step sc-principal-generate" data-scp-principal-generate title="生成/重新生成校长统筹成果">👑 生成校长</button>
+      <div class="ch-right" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn small dm-ai-action sc-principal-generate" data-scp-principal-generate style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成 / 重新生成校长统筹成果">👑 生成校长</button>
         ${pTitles.length ? `<button type="button" class="sc-plan-btn sc-plan-apply-t ${titlesApplied?'applied':''}" data-scp-apply-titles title="${titlesApplied ? '校长已自动选用拟定标题至全书章节；点击可再次全量覆盖同步' : '一键选用校长拟定标题至全书章节'}">${titlesApplied ? `✓ 校长标题已选用 (${pTitles.length}章)` : `✨ 选用拟定标题 (${pTitles.length}章)`}</button>` : ''}
         <button type="button" class="sc-plan-btn sc-plan-pr" data-scp-plan-pr title="查看写作守则与章节总表">📋 读校长成果</button>
       </div>
@@ -18688,7 +18690,7 @@ async function genDictEnrich(btn, opts){
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, organizations:n.organizations||0, institutions:n.institutions||0, items:n.items||0, rules:n.rules||0, terms:n.terms||0, events:n.events||0, lifeSettings:n.lifeSettings||0, relationshipTable:n.relationshipTable||0, placeContacts:n.placeContacts||0, properContacts:n.properContacts||0, worldRules:n.worldRules||0, ts:Date.now() };
     // 数据已经安全写入词典后，先完成 AI 状态，再做非核心 UI 刷新；避免 render 异常导致“内容已入库但 UI 仍显示未完成”。
-    // 1.0.446：词典充实成功后必须向公共学校状态层发出完成信号，供校长/一键老师读取；UI 仍只刷新词典充实自己的卡片。
+    // 1.0.447：词典充实成功后必须向公共学校状态层发出完成信号，供校长/一键老师读取；UI 仍只刷新词典充实自己的卡片。
     scMark('dictEnrich', true, false);
     persist();
     markAIDone('dictEnrich');
