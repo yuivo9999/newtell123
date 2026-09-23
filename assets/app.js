@@ -640,7 +640,7 @@ function chapterQualityPromptBlock(){
 - 鲜明不等于口癖：稳定的是反应逻辑，不是固定动作或固定句尾。`;
 }
 
-const CHAPTER_AUDIT_SYS=`你是长篇小说“状态与叙事质量审计AI”。你没有创作权，只负责检查正文是否忠实执行机器章节卡、上一章真实状态、世界词典，并检查同一章内部的逻辑与文学执行质量。
+const CHAPTER_AUDIT_SYS=`你是长篇小说“状态与叙事质量审计AI”。你没有创作权，只负责检查正文是否忠实执行机器章节卡、executionGuide、上一章真实状态、世界词典，并检查同一章内部的逻辑与文学执行质量。executionGuide是本章执行要求，不得被审计过程改写。
 只检查可验证问题，不因个人审美偏好判错。重点检查：
 1. 时间倒退/不可达、地点瞬移、人物生死与身体状态、关系变化、道具持有、世界规则、信息知情边界；
 2. 章节必做事件缺失、禁项违规、凭空出现会持续存在的新核心实体；
@@ -654,8 +654,32 @@ const CHAPTER_AUDIT_SYS=`你是长篇小说“状态与叙事质量审计AI”�
 10. 句式频繁：连续多个段落反复使用同一种语法骨架、动作+对白+总结结构或同一种情绪收束方式。只有明显影响阅读时才判问题。
 审计必须区分“自然重复/必要回顾”和“重复解释”；不能为了追求零重复而破坏人物回忆、强调或因果承接。
 输出严格JSON：
-{"status":"PASS|WARN|FAIL","issues":[{"type":"time|location|character|relationship|object|rule|knowledge|event|entity|causal|logic|contradiction|repetition|dialogue_exposition|character_flat|character_layer|character_voice|character_knowledge|sentence_pattern","severity":"warn|fail","evidence":"正文中的明确证据","expected":"应有状态/写法","actual":"实际写法","repair":"最小修复方向"}],"summary":"一句话","qualityLedger":{"facts":[],"introducedInfo":[],"characterKnowledge":[],"relationshipChanges":[],"objects":[],"locations":[],"unresolved":[]}}
+{"status":"PASS|WARN|FAIL","issues":[{"type":"time|location|character|relationship|object|rule|knowledge|event|entity|causal|logic|contradiction|repetition|dialogue_exposition|character_flat|character_layer|character_voice|character_knowledge|sentence_pattern|execution_event|execution_state|execution_causality|execution_character|execution_boundary","severity":"warn|fail","evidence":"正文中的明确证据","expected":"应有状态/写法","actual":"实际写法","repair":"最小修复方向"}],"summary":"一句话","executionEvidence":{"status":"PASS|FAIL","items":[{"source":"executionGuide中的具体要求","kind":"event|state|causality|character|ending","quote":"正文中能够直接证明已执行的原文短引","result":"实际发生的结果"}],"missing":["缺失的核心执行要求"]},"qualityLedger":{"facts":[],"introducedInfo":[],"characterKnowledge":[],"relationshipChanges":[],"objects":[],"locations":[],"unresolved":[]}}
+executionEvidence要求：只引用正文中实际存在的短语/句子作为证据；不能因为正文“提到了相关概念”就判定执行成功。核心事件、状态变化、因果结果缺一不可；若无法找到明确正文证据，则该项必须进入missing并将executionEvidence.status设为FAIL。
 qualityLedger只记录本章正文明确成立或明确新增的信息，禁止脑补；每项尽量≤50字，最多各20项。`;
+
+function chapterExecutionAuditSource(i){
+  const plan=chapterPlanAuthority(i)||{};
+  const g=plan.executionGuide||{};
+  return {
+    objective:String(g.objective||'').trim(),
+    progressionRoute:Array.isArray(g.progressionRoute)?g.progressionRoute.map(x=>({id:String(x.id||''),text:String(x.text||'')})):[],
+    midExecution:{
+      requiredStateChange:String(g.midExecution?.requiredStateChange||'').trim(),
+      coveredBeats:Array.isArray(g.midExecution?.coveredBeats)?g.midExecution.coveredBeats:[],
+      execution:String(g.midExecution?.execution||'').trim()
+    },
+    sceneExecution:Array.isArray(g.sceneExecution)?g.sceneExecution.map(x=>({scene:x.scene,event:String(x.event||''),change:String(x.change||''),mustKeep:String(x.mustKeep||''),coversBeats:Array.isArray(x.coversBeats)?x.coversBeats:[]})):[],
+    endingExecution:{
+      function:String(g.endingExecution?.function||'').trim(),
+      lastEffectiveEvent:String(g.endingExecution?.lastEffectiveEvent||'').trim(),
+      form:String(g.endingExecution?.form||'').trim(),
+      nextTransitionType:String(g.endingExecution?.nextTransitionType||'').trim(),
+      nextTransitionBasis:String(g.endingExecution?.nextTransitionBasis||'').trim()
+    },
+    hardStops:Array.isArray(g.hardStops)?g.hardStops:[]
+  };
+}
 
 async function auditChapterState(i,text){
   if(!isLong()) return null; const o=state.outline||{}, ss=storyState(), c=chapterPlanAuthority(i), prev=ss.chapters?.[i-1]?.observed||null, obs=ss.chapters?.[i]?.observed||null;
@@ -664,8 +688,9 @@ async function auditChapterState(i,text){
   const canon=`人物:${(g.characters||[]).map(x=>x.name).join('、')}\n地点:${(g.places||[]).map(x=>x.name).join('、')}\n专名:${(g.propernouns||[]).map(x=>x.name).join('、')}\n世界规则:${(g._worldRules||[]).map(x=>x.rule).join('；')}`;
   const banAudit = stateBanEnabled() ? `\n【用户全书禁则·必须审计】\n禁用实体：${banListAllEntityNames().join('、')}\n禁用文本：${banListAllTextItems().join('、')}` : '';
   const plannedTime=c.time||''; const tr=_extractPlanTimeRange({beatsText:'剧情时间落点：'+plannedTime});
-  const user=`【机器章节卡】${JSON.stringify(c)}\n【时间覆盖核验】起点=${tr.from||'未知'}；终点=${tr.to||'未知'}；跨度=${_timeDaySpan(tr.from,tr.to)==null?'未知':_timeDaySpan(tr.from,tr.to)+'天'}；时间推进安排=${c.timeCoverage||'无'}\n【上一章正文结算】${JSON.stringify(prev||{})}\n【本章正文结算】${JSON.stringify(obs)}\n【词典只读实体】${canon}${banAudit}\n【上一章质量账本】${JSON.stringify(ss.chapters?.[i-1]?.qualityLedger||{})}\n【本章已有质量账本】${JSON.stringify(ss.chapters?.[i]?.qualityLedger||{})}\n【本章正文】\n${String(text||'').slice(0,50000)}`;
-  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_AUDIT_SYS,user,{maxTokens:3200,temperature:resolveTaskTemperature('chapterAudit'),topP:0.1,signal:_abortCtl?.signal,taskKey:'chapterAudit'})); const j=parseJson(raw)||{}; const ql=j.qualityLedger&&typeof j.qualityLedger==='object'?j.qualityLedger:{}; const normList=k=>Array.isArray(ql[k])?ql[k].map(x=>String(x||'').trim()).filter(Boolean).slice(0,20):[]; const qualityLedger={facts:normList('facts'),introducedInfo:normList('introducedInfo'),characterKnowledge:normList('characterKnowledge'),relationshipChanges:normList('relationshipChanges'),objects:normList('objects'),locations:normList('locations'),unresolved:normList('unresolved'),ts:Date.now(),chapter:i}; const report={status:['PASS','WARN','FAIL'].includes(j.status)?j.status:'WARN',issues:Array.isArray(j.issues)?j.issues.slice(0,30):[],summary:String(j.summary||'').trim(),qualityLedger,ts:Date.now(),chapter:i}; ss.chapters[i].qualityLedger=qualityLedger; o._chapterQualityLedger=o._chapterQualityLedger||{}; o._chapterQualityLedger[i]=qualityLedger; const p=ss.chapters[i]?.planned||{}; const pt=_timeOrdinal(p.to), ot=_timeOrdinal(obs.time); if(pt!=null && ot!=null && ot<pt){ report.status='FAIL'; report.issues.unshift({type:'time',severity:'fail',evidence:`正文状态结算时间：${obs.time}`,expected:`本章必须抵达计划终点：${p.to}`,actual:`正文结算仍早于计划终点约${Math.max(0,pt-ot)}小时`,repair:'补足计划终点前真实发生的时间流逝/阶段性事件，并让章末状态落到计划终点。'}); } else if(pt!=null && ot==null && (p.spanDays||0)>=1){ report.status=report.status==='FAIL'?'FAIL':'WARN'; report.issues.unshift({type:'time',severity:'warn',evidence:'正文状态结算器未能确认章末日期',expected:`抵达计划终点：${p.to}`,actual:'无法确认',repair:'复核正文是否真正走到计划终点；必要时补足自然时间过桥。'}); } if(report.issues.some(x=>x.severity==='fail')) report.status='FAIL'; ss.chapters[i].audit=report; persist(); return report; }catch(e){ ss.chapters[i].audit={status:'WARN',issues:[{type:'audit',severity:'warn',evidence:'审计AI不可用',expected:'完成审计',actual:e.message,repair:'稍后重试'}],summary:'审计未完成',ts:Date.now(),chapter:i}; persist(); return ss.chapters[i].audit; }
+  const executionGuide=chapterExecutionAuditSource(i);
+  const user=`【机器章节卡】${JSON.stringify(c)}\n【本章executionGuide｜只读执行要求】${JSON.stringify(executionGuide)}\n【时间覆盖核验】起点=${tr.from||'未知'}；终点=${tr.to||'未知'}；跨度=${_timeDaySpan(tr.from,tr.to)==null?'未知':_timeDaySpan(tr.from,tr.to)+'天'}；时间推进安排=${c.timeCoverage||'无'}\n【上一章正文结算】${JSON.stringify(prev||{})}\n【本章正文结算】${JSON.stringify(obs)}\n【词典只读实体】${canon}${banAudit}\n【上一章质量账本】${JSON.stringify(ss.chapters?.[i-1]?.qualityLedger||{})}\n【本章已有质量账本】${JSON.stringify(ss.chapters?.[i]?.qualityLedger||{})}\n【本章正文】\n${String(text||'').slice(0,50000)}`;
+  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_AUDIT_SYS,user,{maxTokens:3200,temperature:resolveTaskTemperature('chapterAudit'),topP:0.1,signal:_abortCtl?.signal,taskKey:'chapterAudit'})); const j=parseJson(raw)||{}; const executionEvidence=j.executionEvidence&&typeof j.executionEvidence==='object'?j.executionEvidence:{}; const eeItems=Array.isArray(executionEvidence.items)?executionEvidence.items.map(x=>({source:String(x?.source||'').trim(),kind:String(x?.kind||'').trim(),quote:String(x?.quote||'').trim(),result:String(x?.result||'').trim()})).filter(x=>x.source&&x.kind&&x.quote&&x.result).slice(0,30):[]; const eeMissing=Array.isArray(executionEvidence.missing)?executionEvidence.missing.map(x=>String(x||'').trim()).filter(Boolean).slice(0,30):[]; const guideCoreCount=(executionGuide.progressionRoute||[]).length + (executionGuide.sceneExecution||[]).filter(x=>x.event||x.change).length + (executionGuide.midExecution?.requiredStateChange?1:0) + (executionGuide.endingExecution?.lastEffectiveEvent?1:0); const badQuotes=eeItems.filter(x=>!String(text||'').includes(x.quote)); const eeStatus=(executionEvidence.status==='PASS' && eeMissing.length===0 && (guideCoreCount===0 || eeItems.length>0) && badQuotes.length===0)?'PASS':'FAIL'; const ql=j.qualityLedger&&typeof j.qualityLedger==='object'?j.qualityLedger:{}; const normList=k=>Array.isArray(ql[k])?ql[k].map(x=>String(x||'').trim()).filter(Boolean).slice(0,20):[]; const qualityLedger={facts:normList('facts'),introducedInfo:normList('introducedInfo'),characterKnowledge:normList('characterKnowledge'),relationshipChanges:normList('relationshipChanges'),objects:normList('objects'),locations:normList('locations'),unresolved:normList('unresolved'),ts:Date.now(),chapter:i}; const report={status:['PASS','WARN','FAIL'].includes(j.status)?j.status:'WARN',issues:Array.isArray(j.issues)?j.issues.slice(0,30):[],summary:String(j.summary||'').trim(),executionEvidence:{status:eeStatus,items:eeItems,missing:eeMissing,ts:Date.now(),chapter:i},qualityLedger,ts:Date.now(),chapter:i}; if(eeStatus==='FAIL'){ report.status='FAIL'; const execMissing=[...eeMissing]; if(!eeItems.length && guideCoreCount>0) execMissing.push('未提供任何可核验的executionGuide执行证据'); badQuotes.forEach(x=>execMissing.push(`证据引用未出现在正文中：${x.quote.slice(0,80)}`)); report.issues.unshift(...execMissing.slice(0,12).map(x=>({type:'execution_event',severity:'fail',evidence:'正文执行证据未通过核验',expected:'executionGuide要求必须在正文中实际落地，并能由正文原文直接举证',actual:x,repair:'不得改写上游Guide；应重新执行本章要求并让正文产生可核验的实际事件/状态/因果结果。'}))); } ss.chapters[i].qualityLedger=qualityLedger; o._chapterQualityLedger=o._chapterQualityLedger||{}; o._chapterQualityLedger[i]=qualityLedger; const p=ss.chapters[i]?.planned||{}; const pt=_timeOrdinal(p.to), ot=_timeOrdinal(obs.time); if(pt!=null && ot!=null && ot<pt){ report.status='FAIL'; report.issues.unshift({type:'time',severity:'fail',evidence:`正文状态结算时间：${obs.time}`,expected:`本章必须抵达计划终点：${p.to}`,actual:`正文结算仍早于计划终点约${Math.max(0,pt-ot)}小时`,repair:'补足计划终点前真实发生的时间流逝/阶段性事件，并让章末状态落到计划终点。'}); } else if(pt!=null && ot==null && (p.spanDays||0)>=1){ report.status=report.status==='FAIL'?'FAIL':'WARN'; report.issues.unshift({type:'time',severity:'warn',evidence:'正文状态结算器未能确认章末日期',expected:`抵达计划终点：${p.to}`,actual:'无法确认',repair:'复核正文是否真正走到计划终点；必要时补足自然时间过桥。'}); } if(report.issues.some(x=>x.severity==='fail')) report.status='FAIL'; ss.chapters[i].audit=report; persist(); return report; }catch(e){ ss.chapters[i].audit={status:'WARN',issues:[{type:'audit',severity:'warn',evidence:'审计AI不可用',expected:'完成审计',actual:e.message,repair:'稍后重试'}],summary:'审计未完成',ts:Date.now(),chapter:i}; persist(); return ss.chapters[i].audit; }
 }
 const CHAPTER_REPAIR_SYS=`你是长篇小说“局部修复AI”。你没有改写世界和剧情的权力，只能修复审计指出的最小冲突或明显质量缺陷。
 规则：只处理FAIL问题；保持章节卡规定的事件、人物、时间、地点和文学风格；不得新增主线事件；不得整章重写。若FAIL属于多日时间跨度不足，允许在原有事件之间加入最小必要的时间过桥/阶段性推进，让正文自然抵达章节卡终点，但不得用一句“几天后”敷衍，也不得改变核心事件顺序。
@@ -676,7 +701,8 @@ const BODY_AUDIT_REPAIRABLE_TYPES = new Set([
   'repetition','dialogue_exposition','character_flat','character_layer','character_voice','sentence_pattern'
 ]);
 const BODY_AUDIT_HARD_TYPES = new Set([
-  'time','location','character','relationship','object','rule','knowledge','event','entity','causal','logic','contradiction'
+  'time','location','character','relationship','object','rule','knowledge','event','entity','causal','logic','contradiction',
+  'execution_event','execution_state','execution_causality','execution_character','execution_boundary'
 ]);
 function classifyChapterAuditFailure(report){
   const fails=(report?.issues||[]).filter(x=>x&&x.severity==='fail');
@@ -734,8 +760,10 @@ async function finalizeChapterState(i,text){
 
 async function commitChapterObservedState(i,text){
   if(!isLong()||!String(text||'').trim()) return null;
-  const o=state.outline||{}, plan=(o.chapterPlans||[])[i]||{}, ss=storyState();
-  const user=`【第${i+1}章教案】\n${String(plan.beatsText||'').slice(0,7000)}\n【本章正文】\n${String(text).slice(-40000)}`;
+  const o=state.outline||{}, plan=chapterPlanAuthority(i)||{}, ss=storyState();
+  const executionGuide=chapterExecutionAuditSource(i);
+  const planText=JSON.stringify({identity:plan.identity||{},progressionSkeleton:plan.progressionSkeleton||{},openingLink:plan.openingLink||{},midConstruction:plan.midConstruction||{},endingConstruction:plan.endingConstruction||{},executionGuide});
+  const user=`【第${i+1}章正式Teacher ChapterPlan】\n${planText.slice(0,12000)}\n【本章正文】\n${String(text).slice(-40000)}`;
   try{
     const raw=unwrapAIResult(await callDeepSeek(CHAPTER_STATE_SYS,user,{maxTokens:1800,temperature:resolveTaskTemperature('chapterState'),topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterState'}));
     const j=parseJson(raw)||{};
@@ -7494,7 +7522,13 @@ function compileTeacherChapterPlan(row, sceneRows, principalPlan){
   const source=principalPlan?.midStrategy||{};
   const plan={
     identity:{chapter:Number(row.chapter),title:String(row.title||'').trim()},
-    progressionSkeleton:{goal:String(row.goal||'').trim(),coreEvent:String(row.coreEvent||'').trim(),characters:chars,beats},
+    progressionSkeleton:{
+      source:String(principalPlan?.progressionSkeleton||'').trim(),
+      goal:String(principalPlan?.goal||'').trim(),
+      coreEvent:String(principalPlan?.coreEvent||'').trim(),
+      characters:chars,
+      beats
+    },
     midStrategy:JSON.parse(JSON.stringify(source)),
     openingLink:{previousTransition:String(row.previousTransition||'').trim(),entryState:String(row.entryState||'').trim()},
     midConstruction:{
@@ -8668,7 +8702,9 @@ function buildTeacherAuthorizationPack(g, gi){
     goal:String(p?.goal||'').trim(),
     coreEvent:String(p?.coreEvent||'').trim(),
     characterActions:String(p?.characterActions||'').trim(),
-    progressionSkeleton:String(p?.progressionSkeleton||'').trim(),
+    progressionSkeleton:p?.progressionSkeleton&&typeof p.progressionSkeleton==='object'
+      ? JSON.stringify(p.progressionSkeleton)
+      : String(p?.progressionSkeleton||'').trim(),
     narrativeRole:String(p?.narrativeRole||'').trim(),
     timeStrategy:String(p?.timeStrategy||'').trim(),
     stageTask:String(p?.stageTask||'').trim(),
@@ -20262,7 +20298,7 @@ async function continueAndFinalizeChapter(i, sourceNote){
     snapshotChapterVersion(i);
     state.chapters[i].content = content;
     updateFactCardFromChapter(i, content);
-    if(isLong()) await commitChapterObservedState(i, content);
+    if(isLong()){ const fin=await finalizeChapterState(i, content); if(fin.content!==content){ content=fin.content; assertChapterLocalHardGate(i, content); state.chapters[i].content=content; snapshotChapterVersion(i); } if(fin.blocked) throw new Error(`续写未通过正文执行/硬审核：${fin.audit?.blockReason||fin.audit?.summary||'存在未修复的审核问题'}`); }
     invalidateChapterMemory(i);
     chState[i] = 'done';
     persist(); patchChapter(i); renderNarrativeEngineMenu();
