@@ -1,9 +1,8 @@
-/* 432b：AI任务启动/停止控制链修复（基线 431） */
 'use strict';
 
-const APP_VERSION = '1.0.432b';
+const APP_VERSION = '1.0.434';
 // Version line: app1.0.428.js — 老师阶段去除质检/验收门槛；AI非空返回即完成，教案立即落盘查看；正文与多老师对接保留。
-const APP_FILE_VERSION = 'app1.0.430.js';
+const APP_FILE_VERSION = 'app1.0.434.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -641,7 +640,7 @@ function chapterQualityPromptBlock(){
 - 鲜明不等于口癖：稳定的是反应逻辑，不是固定动作或固定句尾。`;
 }
 
-const CHAPTER_AUDIT_SYS=`你是长篇小说“状态与叙事质量审计AI”。你没有创作权，只负责检查正文是否忠实执行机器章节卡、executionGuide、上一章真实状态、世界词典，并检查同一章内部的逻辑与文学执行质量。executionGuide是本章执行要求，不得被审计过程改写。
+const CHAPTER_AUDIT_SYS=`你是长篇小说“状态与叙事质量审计AI”。你没有创作权，只负责检查正文是否忠实执行机器章节卡、上一章真实状态、世界词典，并检查同一章内部的逻辑与文学执行质量。
 只检查可验证问题，不因个人审美偏好判错。重点检查：
 1. 时间倒退/不可达、地点瞬移、人物生死与身体状态、关系变化、道具持有、世界规则、信息知情边界；
 2. 章节必做事件缺失、禁项违规、凭空出现会持续存在的新核心实体；
@@ -655,32 +654,8 @@ const CHAPTER_AUDIT_SYS=`你是长篇小说“状态与叙事质量审计AI”�
 10. 句式频繁：连续多个段落反复使用同一种语法骨架、动作+对白+总结结构或同一种情绪收束方式。只有明显影响阅读时才判问题。
 审计必须区分“自然重复/必要回顾”和“重复解释”；不能为了追求零重复而破坏人物回忆、强调或因果承接。
 输出严格JSON：
-{"status":"PASS|WARN|FAIL","issues":[{"type":"time|location|character|relationship|object|rule|knowledge|event|entity|causal|logic|contradiction|repetition|dialogue_exposition|character_flat|character_layer|character_voice|character_knowledge|sentence_pattern|execution_event|execution_state|execution_causality|execution_character|execution_boundary","severity":"warn|fail","evidence":"正文中的明确证据","expected":"应有状态/写法","actual":"实际写法","repair":"最小修复方向"}],"summary":"一句话","executionEvidence":{"status":"PASS|FAIL","items":[{"source":"executionGuide中的具体要求","kind":"event|state|causality|character|ending","quote":"正文中能够直接证明已执行的原文短引","result":"实际发生的结果"}],"missing":["缺失的核心执行要求"]},"qualityLedger":{"facts":[],"introducedInfo":[],"characterKnowledge":[],"relationshipChanges":[],"objects":[],"locations":[],"unresolved":[]}}
-executionEvidence要求：只引用正文中实际存在的短语/句子作为证据；不能因为正文“提到了相关概念”就判定执行成功。核心事件、状态变化、因果结果缺一不可；若无法找到明确正文证据，则该项必须进入missing并将executionEvidence.status设为FAIL。
+{"status":"PASS|WARN|FAIL","issues":[{"type":"time|location|character|relationship|object|rule|knowledge|event|entity|causal|logic|contradiction|repetition|dialogue_exposition|character_flat|character_layer|character_voice|character_knowledge|sentence_pattern","severity":"warn|fail","evidence":"正文中的明确证据","expected":"应有状态/写法","actual":"实际写法","repair":"最小修复方向"}],"summary":"一句话","qualityLedger":{"facts":[],"introducedInfo":[],"characterKnowledge":[],"relationshipChanges":[],"objects":[],"locations":[],"unresolved":[]}}
 qualityLedger只记录本章正文明确成立或明确新增的信息，禁止脑补；每项尽量≤50字，最多各20项。`;
-
-function chapterExecutionAuditSource(i){
-  const plan=chapterPlanAuthority(i)||{};
-  const g=plan.executionGuide||{};
-  return {
-    objective:String(g.objective||'').trim(),
-    progressionRoute:Array.isArray(g.progressionRoute)?g.progressionRoute.map(x=>({id:String(x.id||''),text:String(x.text||'')})):[],
-    midExecution:{
-      requiredStateChange:String(g.midExecution?.requiredStateChange||'').trim(),
-      coveredBeats:Array.isArray(g.midExecution?.coveredBeats)?g.midExecution.coveredBeats:[],
-      execution:String(g.midExecution?.execution||'').trim()
-    },
-    sceneExecution:Array.isArray(g.sceneExecution)?g.sceneExecution.map(x=>({scene:x.scene,event:String(x.event||''),change:String(x.change||''),mustKeep:String(x.mustKeep||''),coversBeats:Array.isArray(x.coversBeats)?x.coversBeats:[]})):[],
-    endingExecution:{
-      function:String(g.endingExecution?.function||'').trim(),
-      lastEffectiveEvent:String(g.endingExecution?.lastEffectiveEvent||'').trim(),
-      form:String(g.endingExecution?.form||'').trim(),
-      nextTransitionType:String(g.endingExecution?.nextTransitionType||'').trim(),
-      nextTransitionBasis:String(g.endingExecution?.nextTransitionBasis||'').trim()
-    },
-    hardStops:Array.isArray(g.hardStops)?g.hardStops:[]
-  };
-}
 
 async function auditChapterState(i,text){
   if(!isLong()) return null; const o=state.outline||{}, ss=storyState(), c=chapterPlanAuthority(i), prev=ss.chapters?.[i-1]?.observed||null, obs=ss.chapters?.[i]?.observed||null;
@@ -689,9 +664,8 @@ async function auditChapterState(i,text){
   const canon=`人物:${(g.characters||[]).map(x=>x.name).join('、')}\n地点:${(g.places||[]).map(x=>x.name).join('、')}\n专名:${(g.propernouns||[]).map(x=>x.name).join('、')}\n世界规则:${(g._worldRules||[]).map(x=>x.rule).join('；')}`;
   const banAudit = stateBanEnabled() ? `\n【用户全书禁则·必须审计】\n禁用实体：${banListAllEntityNames().join('、')}\n禁用文本：${banListAllTextItems().join('、')}` : '';
   const plannedTime=c.time||''; const tr=_extractPlanTimeRange({beatsText:'剧情时间落点：'+plannedTime});
-  const executionGuide=chapterExecutionAuditSource(i);
-  const user=`【机器章节卡】${JSON.stringify(c)}\n【本章executionGuide｜只读执行要求】${JSON.stringify(executionGuide)}\n【时间覆盖核验】起点=${tr.from||'未知'}；终点=${tr.to||'未知'}；跨度=${_timeDaySpan(tr.from,tr.to)==null?'未知':_timeDaySpan(tr.from,tr.to)+'天'}；时间推进安排=${c.timeCoverage||'无'}\n【上一章正文结算】${JSON.stringify(prev||{})}\n【本章正文结算】${JSON.stringify(obs)}\n【词典只读实体】${canon}${banAudit}\n【上一章质量账本】${JSON.stringify(ss.chapters?.[i-1]?.qualityLedger||{})}\n【本章已有质量账本】${JSON.stringify(ss.chapters?.[i]?.qualityLedger||{})}\n【本章正文】\n${String(text||'').slice(0,50000)}`;
-  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_AUDIT_SYS,user,{maxTokens:3200,temperature:resolveTaskTemperature('chapterAudit'),topP:0.1,signal:_abortCtl?.signal,taskKey:'chapterAudit'})); const j=parseJson(raw)||{}; const executionEvidence=j.executionEvidence&&typeof j.executionEvidence==='object'?j.executionEvidence:{}; const eeItems=Array.isArray(executionEvidence.items)?executionEvidence.items.map(x=>({source:String(x?.source||'').trim(),kind:String(x?.kind||'').trim(),quote:String(x?.quote||'').trim(),result:String(x?.result||'').trim()})).filter(x=>x.source&&x.kind&&x.quote&&x.result).slice(0,30):[]; const eeMissing=Array.isArray(executionEvidence.missing)?executionEvidence.missing.map(x=>String(x||'').trim()).filter(Boolean).slice(0,30):[]; const guideCoreCount=(executionGuide.progressionRoute||[]).length + (executionGuide.sceneExecution||[]).filter(x=>x.event||x.change).length + (executionGuide.midExecution?.requiredStateChange?1:0) + (executionGuide.endingExecution?.lastEffectiveEvent?1:0); const badQuotes=eeItems.filter(x=>!String(text||'').includes(x.quote)); const eeStatus=(executionEvidence.status==='PASS' && eeMissing.length===0 && (guideCoreCount===0 || eeItems.length>0) && badQuotes.length===0)?'PASS':'FAIL'; const ql=j.qualityLedger&&typeof j.qualityLedger==='object'?j.qualityLedger:{}; const normList=k=>Array.isArray(ql[k])?ql[k].map(x=>String(x||'').trim()).filter(Boolean).slice(0,20):[]; const qualityLedger={facts:normList('facts'),introducedInfo:normList('introducedInfo'),characterKnowledge:normList('characterKnowledge'),relationshipChanges:normList('relationshipChanges'),objects:normList('objects'),locations:normList('locations'),unresolved:normList('unresolved'),ts:Date.now(),chapter:i}; const report={status:['PASS','WARN','FAIL'].includes(j.status)?j.status:'WARN',issues:Array.isArray(j.issues)?j.issues.slice(0,30):[],summary:String(j.summary||'').trim(),executionEvidence:{status:eeStatus,items:eeItems,missing:eeMissing,ts:Date.now(),chapter:i},qualityLedger,ts:Date.now(),chapter:i}; if(eeStatus==='FAIL'){ report.status='FAIL'; const execMissing=[...eeMissing]; if(!eeItems.length && guideCoreCount>0) execMissing.push('未提供任何可核验的executionGuide执行证据'); badQuotes.forEach(x=>execMissing.push(`证据引用未出现在正文中：${x.quote.slice(0,80)}`)); report.issues.unshift(...execMissing.slice(0,12).map(x=>({type:'execution_event',severity:'fail',evidence:'正文执行证据未通过核验',expected:'executionGuide要求必须在正文中实际落地，并能由正文原文直接举证',actual:x,repair:'不得改写上游Guide；应重新执行本章要求并让正文产生可核验的实际事件/状态/因果结果。'}))); } ss.chapters[i].qualityLedger=qualityLedger; o._chapterQualityLedger=o._chapterQualityLedger||{}; o._chapterQualityLedger[i]=qualityLedger; const p=ss.chapters[i]?.planned||{}; const pt=_timeOrdinal(p.to), ot=_timeOrdinal(obs.time); if(pt!=null && ot!=null && ot<pt){ report.status='FAIL'; report.issues.unshift({type:'time',severity:'fail',evidence:`正文状态结算时间：${obs.time}`,expected:`本章必须抵达计划终点：${p.to}`,actual:`正文结算仍早于计划终点约${Math.max(0,pt-ot)}小时`,repair:'补足计划终点前真实发生的时间流逝/阶段性事件，并让章末状态落到计划终点。'}); } else if(pt!=null && ot==null && (p.spanDays||0)>=1){ report.status=report.status==='FAIL'?'FAIL':'WARN'; report.issues.unshift({type:'time',severity:'warn',evidence:'正文状态结算器未能确认章末日期',expected:`抵达计划终点：${p.to}`,actual:'无法确认',repair:'复核正文是否真正走到计划终点；必要时补足自然时间过桥。'}); } if(report.issues.some(x=>x.severity==='fail')) report.status='FAIL'; ss.chapters[i].audit=report; persist(); return report; }catch(e){ ss.chapters[i].audit={status:'WARN',issues:[{type:'audit',severity:'warn',evidence:'审计AI不可用',expected:'完成审计',actual:e.message,repair:'稍后重试'}],summary:'审计未完成',ts:Date.now(),chapter:i}; persist(); return ss.chapters[i].audit; }
+  const user=`【机器章节卡】${JSON.stringify(c)}\n【时间覆盖核验】起点=${tr.from||'未知'}；终点=${tr.to||'未知'}；跨度=${_timeDaySpan(tr.from,tr.to)==null?'未知':_timeDaySpan(tr.from,tr.to)+'天'}；时间推进安排=${c.timeCoverage||'无'}\n【上一章正文结算】${JSON.stringify(prev||{})}\n【本章正文结算】${JSON.stringify(obs)}\n【词典只读实体】${canon}${banAudit}\n【上一章质量账本】${JSON.stringify(ss.chapters?.[i-1]?.qualityLedger||{})}\n【本章已有质量账本】${JSON.stringify(ss.chapters?.[i]?.qualityLedger||{})}\n【本章正文】\n${String(text||'').slice(0,50000)}`;
+  try{ const raw=unwrapAIResult(await callDeepSeek(CHAPTER_AUDIT_SYS,user,{maxTokens:3200,temperature:resolveTaskTemperature('chapterAudit'),topP:0.1,signal:_abortCtl?.signal,taskKey:'chapterAudit'})); const j=parseJson(raw)||{}; const ql=j.qualityLedger&&typeof j.qualityLedger==='object'?j.qualityLedger:{}; const normList=k=>Array.isArray(ql[k])?ql[k].map(x=>String(x||'').trim()).filter(Boolean).slice(0,20):[]; const qualityLedger={facts:normList('facts'),introducedInfo:normList('introducedInfo'),characterKnowledge:normList('characterKnowledge'),relationshipChanges:normList('relationshipChanges'),objects:normList('objects'),locations:normList('locations'),unresolved:normList('unresolved'),ts:Date.now(),chapter:i}; const report={status:['PASS','WARN','FAIL'].includes(j.status)?j.status:'WARN',issues:Array.isArray(j.issues)?j.issues.slice(0,30):[],summary:String(j.summary||'').trim(),qualityLedger,ts:Date.now(),chapter:i}; ss.chapters[i].qualityLedger=qualityLedger; o._chapterQualityLedger=o._chapterQualityLedger||{}; o._chapterQualityLedger[i]=qualityLedger; const p=ss.chapters[i]?.planned||{}; const pt=_timeOrdinal(p.to), ot=_timeOrdinal(obs.time); if(pt!=null && ot!=null && ot<pt){ report.status='FAIL'; report.issues.unshift({type:'time',severity:'fail',evidence:`正文状态结算时间：${obs.time}`,expected:`本章必须抵达计划终点：${p.to}`,actual:`正文结算仍早于计划终点约${Math.max(0,pt-ot)}小时`,repair:'补足计划终点前真实发生的时间流逝/阶段性事件，并让章末状态落到计划终点。'}); } else if(pt!=null && ot==null && (p.spanDays||0)>=1){ report.status=report.status==='FAIL'?'FAIL':'WARN'; report.issues.unshift({type:'time',severity:'warn',evidence:'正文状态结算器未能确认章末日期',expected:`抵达计划终点：${p.to}`,actual:'无法确认',repair:'复核正文是否真正走到计划终点；必要时补足自然时间过桥。'}); } if(report.issues.some(x=>x.severity==='fail')) report.status='FAIL'; ss.chapters[i].audit=report; persist(); return report; }catch(e){ ss.chapters[i].audit={status:'WARN',issues:[{type:'audit',severity:'warn',evidence:'审计AI不可用',expected:'完成审计',actual:e.message,repair:'稍后重试'}],summary:'审计未完成',ts:Date.now(),chapter:i}; persist(); return ss.chapters[i].audit; }
 }
 const CHAPTER_REPAIR_SYS=`你是长篇小说“局部修复AI”。你没有改写世界和剧情的权力，只能修复审计指出的最小冲突或明显质量缺陷。
 规则：只处理FAIL问题；保持章节卡规定的事件、人物、时间、地点和文学风格；不得新增主线事件；不得整章重写。若FAIL属于多日时间跨度不足，允许在原有事件之间加入最小必要的时间过桥/阶段性推进，让正文自然抵达章节卡终点，但不得用一句“几天后”敷衍，也不得改变核心事件顺序。
@@ -702,8 +676,7 @@ const BODY_AUDIT_REPAIRABLE_TYPES = new Set([
   'repetition','dialogue_exposition','character_flat','character_layer','character_voice','sentence_pattern'
 ]);
 const BODY_AUDIT_HARD_TYPES = new Set([
-  'time','location','character','relationship','object','rule','knowledge','event','entity','causal','logic','contradiction',
-  'execution_event','execution_state','execution_causality','execution_character','execution_boundary'
+  'time','location','character','relationship','object','rule','knowledge','event','entity','causal','logic','contradiction'
 ]);
 function classifyChapterAuditFailure(report){
   const fails=(report?.issues||[]).filter(x=>x&&x.severity==='fail');
@@ -761,10 +734,8 @@ async function finalizeChapterState(i,text){
 
 async function commitChapterObservedState(i,text){
   if(!isLong()||!String(text||'').trim()) return null;
-  const o=state.outline||{}, plan=chapterPlanAuthority(i)||{}, ss=storyState();
-  const executionGuide=chapterExecutionAuditSource(i);
-  const planText=JSON.stringify({identity:plan.identity||{},progressionSkeleton:plan.progressionSkeleton||{},openingLink:plan.openingLink||{},midConstruction:plan.midConstruction||{},endingConstruction:plan.endingConstruction||{},executionGuide});
-  const user=`【第${i+1}章正式Teacher ChapterPlan】\n${planText.slice(0,12000)}\n【本章正文】\n${String(text).slice(-40000)}`;
+  const o=state.outline||{}, plan=(o.chapterPlans||[])[i]||{}, ss=storyState();
+  const user=`【第${i+1}章教案】\n${String(plan.beatsText||'').slice(0,7000)}\n【本章正文】\n${String(text).slice(-40000)}`;
   try{
     const raw=unwrapAIResult(await callDeepSeek(CHAPTER_STATE_SYS,user,{maxTokens:1800,temperature:resolveTaskTemperature('chapterState'),topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterState'}));
     const j=parseJson(raw)||{};
@@ -1985,21 +1956,6 @@ function installGlobalGenerationUi(){
     @keyframes app10349Press{0%{transform:scale(1)}35%{transform:scale(.965)}70%{transform:scale(1.015)}100%{transform:scale(1)}}
     @keyframes app10349GeneratingPulse{0%,100%{box-shadow:0 7px 18px rgba(180,25,35,.22),0 0 0 0 rgba(255,65,65,.20)}50%{box-shadow:0 9px 24px rgba(180,25,35,.34),0 0 0 7px rgba(255,65,65,.06)}}
     @keyframes app10349Sweep{to{transform:translateX(120%)}}
-    /* 432：AI任务统一停止按钮。使用 !important 隔离主题/全局按钮样式。 */
-    .stop-btn{
-      display:inline-flex !important;align-items:center !important;justify-content:center !important;gap:5px !important;
-      min-height:36px !important;padding:7px 13px !important;margin-left:8px !important;
-      border:1px solid #b91c1c !important;border-radius:9px !important;
-      background:linear-gradient(135deg,#ef4444 0%,#c81e2b 58%,#991b1b 100%) !important;
-      color:#fff !important;font-weight:900 !important;font-size:13px !important;line-height:1 !important;
-      box-shadow:0 5px 14px rgba(185,28,28,.28) !important;cursor:pointer !important;
-      text-shadow:0 1px 1px rgba(0,0,0,.25) !important;z-index:20 !important;
-    }
-    .stop-btn:hover{filter:brightness(1.08) !important;box-shadow:0 7px 18px rgba(185,28,28,.36) !important;}
-    .stop-btn:active{transform:scale(.97) !important;}
-    .stop-btn[style*="display: none"]{display:none !important;}
-    @media(max-width:640px){.stop-btn{min-height:38px !important;padding:8px 12px !important;margin-left:5px !important;}}
-
     /* 三个基础设置折叠卡片 */
     .app-idea-fold{border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff);margin:10px 0;overflow:hidden;}
     .app-idea-fold>summary{list-style:none;cursor:pointer;padding:10px 12px;font-weight:800;display:flex;align-items:center;gap:8px;user-select:none;}
@@ -2093,13 +2049,11 @@ function busy(btn, on, label, cls){
 installGlobalGenerationUi();
 
 let _abortCtl = null;           // 当前 AbortController
-let _stopRequested = false;     // 用户是否明确点击了停止
 let _abortBtn = null;           // 当前可见的停止按钮 DOM
 function makeStopBtn(){
   const b = document.createElement('button');
-  b.type = 'button'; b.className = 'stop-btn'; b.innerHTML = '⏹ 停止';
+  b.type = 'button'; b.className = 'stop-btn'; b.innerHTML = '⏹';
   b.onclick = ()=>{
-    _stopRequested = true;
     if(_abortCtl){ _abortCtl.abort(); _abortCtl = null; }
     hideStopBtn();
   };
@@ -2107,7 +2061,6 @@ function makeStopBtn(){
   return b;
 }
 function showStopBtn(parent){
-  _stopRequested = false;
   if(!_abortBtn){ _abortBtn = makeStopBtn(); document.body.appendChild(_abortBtn); }
   _abortCtl = new AbortController();
   _abortBtn.style.display = '';
@@ -7541,13 +7494,7 @@ function compileTeacherChapterPlan(row, sceneRows, principalPlan){
   const source=principalPlan?.midStrategy||{};
   const plan={
     identity:{chapter:Number(row.chapter),title:String(row.title||'').trim()},
-    progressionSkeleton:{
-      source:String(principalPlan?.progressionSkeleton||'').trim(),
-      goal:String(principalPlan?.goal||'').trim(),
-      coreEvent:String(principalPlan?.coreEvent||'').trim(),
-      characters:chars,
-      beats
-    },
+    progressionSkeleton:{goal:String(row.goal||'').trim(),coreEvent:String(row.coreEvent||'').trim(),characters:chars,beats},
     midStrategy:JSON.parse(JSON.stringify(source)),
     openingLink:{previousTransition:String(row.previousTransition||'').trim(),entryState:String(row.entryState||'').trim()},
     midConstruction:{
@@ -8721,9 +8668,7 @@ function buildTeacherAuthorizationPack(g, gi){
     goal:String(p?.goal||'').trim(),
     coreEvent:String(p?.coreEvent||'').trim(),
     characterActions:String(p?.characterActions||'').trim(),
-    progressionSkeleton:p?.progressionSkeleton&&typeof p.progressionSkeleton==='object'
-      ? JSON.stringify(p.progressionSkeleton)
-      : String(p?.progressionSkeleton||'').trim(),
+    progressionSkeleton:String(p?.progressionSkeleton||'').trim(),
     narrativeRole:String(p?.narrativeRole||'').trim(),
     timeStrategy:String(p?.timeStrategy||'').trim(),
     stageTask:String(p?.stageTask||'').trim(),
@@ -9115,7 +9060,6 @@ function refreshSchoolProgressUi(){
     tb.disabled=!!st.running;
     tb.innerHTML=st.running ? `🎓 一键老师进行中（${st.completed}/${st.total}）…` : (st.allDone ? '✓ 一键老师已完成' : '🎓 一键老师');
   }
-  refreshPrincipalQcUi();
 }
 
 async function genSchoolAll(btn){
@@ -9134,9 +9078,6 @@ async function genSchoolAll(btn){
       if(getSchoolStepStatus(st.key).isDone) continue;
       scSetFailed(st.key,false); scSetError(st.key,null,false,false);
       state._schoolRunning={activeKey:st.key,stepIndex:i,totalSteps:3,label:st.label}; refreshSchoolProgressUi();
-      // 432：一键开学各子任务本身没有独立按钮，因此这里必须显式建立当前任务的停止控制链。
-      const stopParent=(btn&&btn.parentNode)||document.body;
-      showStopBtn(stopParent);
       const ok=await st.run();
       if(!ok){ scSetFailed(st.key,true); toast(`一键开学中断于「${st.label}」，可单独重试`); return; }
       scMark(st.key,true,false);
@@ -9168,21 +9109,11 @@ async function genSchoolTeachersBatch(){
       if(scTeacherGroupComplete(i)) { state._teacherBatchRunning.completed++; continue; }
       state._schoolRunning={activeKey:'t'+i,teacherIndex:i,stepIndex:0,totalSteps:groups.length,label:groups.length>1?`老师${i+1}（${groups[i].teacherCode}）`:'老师'};
       refreshSchoolProgressUi();
-      // 432：一键老师同样显式建立当前老师任务的停止控制；停止后不进入下一位。
-      const stopParent=(document.querySelector('[data-scp-teacher-all]')?.parentNode)||document.body;
-      showStopBtn(stopParent);
       const ok=await genTeacher(null,i);
       if(ok){ scMark('t'+i,true,false); state._teacherBatchRunning.completed++; }
-      else {
-        scSetFailed('t'+i,true);
-        // 432：用户主动停止时，当前老师停止即终止批量流程，不得自动进入下一位。
-        if(_stopRequested){
-          toast(`已停止「${groups[i].teacherCode||`老师${i+1}`}」批量任务，已完成老师的数据保留`);
-          return;
-        }
-      }
+      else { scSetFailed('t'+i,true); }
       persist(); refreshSchoolProgressUi();
-      // 非主动停止的单个老师失败仍按原有机制继续下一位。
+      // 单个老师失败只记录该老师，继续下一位，不阻塞其他老师。
     }
     const allDone=groups.every((g,i)=>scTeacherGroupComplete(i));
     if(allDone) scMark('teacher',true,false); else delete scState().finished.teacher;
@@ -18919,12 +18850,11 @@ function dictEnrichBlockHtml(){
         <span class="ch-subtag ch-subtag-enrich">${countTxt?`已并入：${countTxt}`:'感官特征 · 场景禁忌 · 氛围龙套'}</span>
       </div>
       <div class="ch-right">
-        <button type="button" id="btnGenDictEnrich" class="btn small" title="生成或重新生成词典充实">✨ 词典充实</button>
         ${foldBtn}
       </div>
     </div>
     <div class="de-body"${deCollapsed?' style="display:none"':''}>
-      <!-- 432：保留独立“词典充实”入口；生成期间由统一红色停止按钮接管当前 AI 请求。 -->
+      <!-- v1.0.29x：词典充实入口收归「规划师④词典充实」，本卡不再放点击按钮，仅供展示生成内容 -->
       ${stream}
       ${status}
       ${(t || hasWorldKnowledge) ? `<div class="dm-tables" style="margin-top:10px">
@@ -20331,7 +20261,7 @@ async function continueAndFinalizeChapter(i, sourceNote){
     snapshotChapterVersion(i);
     state.chapters[i].content = content;
     updateFactCardFromChapter(i, content);
-    if(isLong()){ const fin=await finalizeChapterState(i, content); if(fin.content!==content){ content=fin.content; assertChapterLocalHardGate(i, content); state.chapters[i].content=content; snapshotChapterVersion(i); } if(fin.blocked) throw new Error(`续写未通过正文执行/硬审核：${fin.audit?.blockReason||fin.audit?.summary||'存在未修复的审核问题'}`); }
+    if(isLong()) await commitChapterObservedState(i, content);
     invalidateChapterMemory(i);
     chState[i] = 'done';
     persist(); patchChapter(i); renderNarrativeEngineMenu();
