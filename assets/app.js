@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.451';
+const APP_VERSION = '1.0.452';
 // Version line: app1.0.440.js — 老师阶段去除质检/验收门槛；AI非空返回即完成，教案立即落盘查看；正文与多老师对接保留。
-const APP_FILE_VERSION = 'app1.0.451.js';
+const APP_FILE_VERSION = 'app1.0.453.js';
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -76,8 +76,8 @@ const state = {
   idea: '',
   polishMode: 'single',
   polishStatus: 'empty',
-  // 1.0.437/438：优化构想严格质检开关，默认关闭。关闭时不触发 validation/repair retry。
-  ideaOptimizationStrictQc: false,
+  // 1.0.453：优化构想严格质检开关，默认开启；用户手动关闭后保持关闭。
+  ideaOptimizationStrictQc: true,
   strategyStage1Status: 'empty',
   strategyStage2Status: 'empty',
   polishSelectedId: null,
@@ -1321,7 +1321,8 @@ function applyProject(p){
   state.strategyStage1Status = ['empty','generating','ready','error'].includes(p.strategyStage1Status) ? p.strategyStage1Status : (state.originalIdeaAnchors && state.strategicDimensions?.length ? 'ready' : 'empty');
   state.strategyStage2Status = ['empty','generating','ready','adopted','error'].includes(p.strategyStage2Status) ? p.strategyStage2Status : (state.polishAdopted ? 'adopted' : (state.polishOptions?.length ? 'ready' : 'empty'));
   state.polishStatus = ['empty','generating','ready_single','waiting_selection','adopted'].includes(p.polishStatus) ? p.polishStatus : ((state.polishAdopted && state.polishOptions?.length) ? 'adopted' : (state.polishOptions?.length>1?'waiting_selection':state.polishOptions?.length?'ready_single':'empty'));
-  state.ideaOptimizationStrictQc = p.ideaOptimizationStrictQc === true;
+  // 新存档/旧存档中未记录该开关时默认开启；用户明确保存为 false 时保持关闭。
+  state.ideaOptimizationStrictQc = (p.ideaOptimizationStrictQc == null) ? true : (p.ideaOptimizationStrictQc === true);
   state.polishHistory = Array.isArray(p.polishHistory) ? p.polishHistory : undefined;
   state.polishRawFallback = typeof p.polishRawFallback === 'string' ? p.polishRawFallback : '';
   state.chapters = p.chapters || [];
@@ -9178,6 +9179,47 @@ function principalContentFingerprint(raw){
   const s=String(raw||''); let h=2166136261;
   for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
   return (h>>>0).toString(16).padStart(8,'0')+'-'+s.length;
+}
+function principalCurrentResult(){
+  const sc=scState();
+  const p=sc && sc.principal;
+  if(!p || !String(p.raw||'').trim()) return null;
+  if(!p.contentHash) p.contentHash=principalContentFingerprint(p.raw);
+  if(!Number.isFinite(Number(p.version)) || Number(p.version)<1){
+    p.version=Math.max(1, Number(storyState()?.versions?.principal||1));
+  }
+  return p;
+}
+function saveCurrentPrincipalResult(raw, reason){
+  const p=principalCurrentResult();
+  if(!p) throw new Error('当前“读校长成果”不存在，无法保存');
+  const nextRaw=String(raw||'').trim();
+  if(!nextRaw) throw new Error('校长成果不能为空');
+  p.raw=nextRaw;
+  p.version=Math.max(1, Number(p.version||0)+1);
+  p.contentHash=principalContentFingerprint(nextRaw);
+  p.ts=Date.now();
+  p.updatedAt=Date.now();
+  p.updateReason=reason||'manual_edit';
+  p.parseStatus='manual_edit';
+  p.status='ADOPTED';
+  p.qcStatus='NOT_REQUIRED';
+  p.folded=false;
+  storyState().versions.principal=Number(p.version)||1;
+  storyState().canon.principalAt=Date.now();
+  storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1;
+  storyState().docs=storyState().docs||{};
+  if(storyState().docs.schoolPlan){
+    storyState().docs.schoolPlan.version=p.version;
+    storyState().docs.schoolPlan.contentHash=p.contentHash;
+    storyState().docs.schoolPlan.ts=Date.now();
+  }
+  scMark('principal',true,false);
+  markAIDone('principal',false);
+  scSetError('principal',null,false,false);
+  persist();
+  refreshPrincipalUi();
+  return p;
 }
 function teacherCurrentResult(gi){
   const sc=scState(), t=sc.teachers&&sc.teachers[gi];
