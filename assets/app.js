@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.422';
-// Version line: app1.0.422.js — 统一四阶段质检结果展示链路；质检独立旁路，不阻塞正式成果。
-const APP_FILE_VERSION = 'app1.0.422.js';
+const APP_VERSION = '1.0.423';
+// Version line: app1.0.423.js — 修复统一质检展示链路回归；保留原UI骨架，质检入口各归各位。
+const APP_FILE_VERSION = 'app1.0.423.js';
 const KEY_CFG = nsKey('cfg');
 
 let _principalQcRun = null;
@@ -8421,7 +8421,7 @@ function qcStageUiHtml(stage,label,current,q){
   const running=status==='RUNNING';
   const done=['PASSED','ISSUES','DONE','FAILED'].includes(status);
   const cls=running?'running':done?'done':'';
-  const text=running?'质检中':status==='FAILED'?'质检异常':done?'质检完成':status==='STALE'?'重新质检':'质检';
+  const text=running?'质检中':done?'质检完成':'质检';
   const meta=q?.stage?`${esc(q.stage)} · ${Number(q.progress||0)}%`:`V${current?.version||1} · 质检不影响正式成果。`;
   const teacherAttr=/^teacher:\d+$/.test(stage)?` data-teacher-qc="${stage.split(':')[1]}"`:'';
   return `<div class="unified-qc-wrap ${cls}"><button type="button" class="unified-qc-btn ${cls}" data-unified-qc="${esc(stage)}"${teacherAttr} ${(running||!current)?'disabled':''}>${text}</button><div class="unified-qc-progress"><span style="width:${Math.max(0,Math.min(100,Number(q?.progress)||0))}%"></span></div><div class="unified-qc-meta">${meta}${q?.message?`<br>${esc(q.message)}`:''}</div></div>`;
@@ -8440,7 +8440,7 @@ function qcResultReportHtml(){
   const teacherKeys=Object.keys(store).filter(k=>/^teacher:\d+$/.test(k)).sort((a,b)=>Number(a.split(':')[1])-Number(b.split(':')[1]));
   teacherKeys.forEach(k=>groups.push([store[k].label||`老师${Number(k.split(':')[1])+1}`,unifiedQcReportPlain(k,store[k])]));
   if(!groups.length) return `<pre class="sc-tqc-text" style="margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:transparent;">暂无质检结果。各阶段正式成果生成成功后，可按需执行质检。</pre>`;
-  return `<div class="sc-tqc-text-head" style="padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid var(--line);font-weight:600">质检结果报告（结构式纯文本）</div>${groups.map(([label,text])=>`<pre class="sc-tqc-text" data-qc-report-stage="${esc(label)}" style="margin:0;padding:10px 0 12px;border-bottom:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text);background:transparent;">${esc(text)}</pre>`).join('')}`;
+  return `<div class="sc-tqc-text-head qc-report-title" style="padding-bottom:8px;margin-bottom:4px;border-bottom:1px solid var(--line);font-weight:600">质检结果报告（结构式纯文本）</div>${groups.map(([label,text])=>`<pre class="sc-tqc-text" data-qc-report-stage="${esc(label)}" style="margin:0;padding:10px 0 12px;border-bottom:1px solid var(--line);white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text);background:transparent;">${esc(text)}</pre>`).join('')}`;
 }
 function refreshQcResultReportUi(){ const el=document.querySelector('#qcResultReportPanel'); if(el) el.innerHTML=qcResultReportHtml(); }
 function bindUnifiedQcButtons(){
@@ -9209,7 +9209,7 @@ function principalQcSnapshot(){
 function refreshPrincipalQcUi(){
   document.querySelectorAll('.principal-qc-wrap').forEach(w=>{ const holder=w.parentElement; if(holder) w.outerHTML=principalQcUiHtml(); });
   document.querySelectorAll('[data-principal-qc]').forEach(b=>{ b.onclick=async()=>{await runPrincipalQc();}; });
-  bindUnifiedQcButtons(); refreshQcResultReportUi();
+  refreshQcResultReportUi();
 }
 async function runPrincipalQc(){
   if(_principalQcRun){ toast('校长质检正在进行中，请稍候'); return; }
@@ -9256,7 +9256,7 @@ function principalQcUiHtml(){
   const label=status==='RUNNING'?'质检中':(status==='PASSED'||status==='ISSUES'?'质检完成':status==='FAILED'?'质检异常':status==='STALE'?'需重新质检':'质检');
   const detail=q.stage?`${esc(q.stage)}${Number.isFinite(Number(q.progress))?` · ${Number(q.progress)}%`:''}`:'';
   return `<div class="principal-qc-wrap ${cls}">
-    <button type="button" class="principal-qc-btn ${cls}" data-principal-qc data-unified-qc="principal" ${status==='RUNNING'?'disabled':''}>${label}</button>
+    <button type="button" class="principal-qc-btn ${cls}" data-principal-qc ${status==='RUNNING'?'disabled':''}>${label}</button>
     <div class="principal-qc-progress"><span style="width:${Math.max(0,Math.min(100,Number(q.progress)||0))}%"></span></div>
     <div class="principal-qc-meta">${detail||'质检为独立旁路，不影响老师立即接管当前校长成果。'}${q.message?`<br>${esc(q.message)}`:''}</div>
   </div>`;
@@ -14149,7 +14149,7 @@ function schoolZoneBlock(){
       </div>
       <div class="ch-right">
         ${pTitles.length ? `<button type="button" class="sc-plan-btn sc-plan-apply-t ${titlesApplied?'applied':''}" data-scp-apply-titles title="${titlesApplied ? '校长已自动选用拟定标题至全书章节；点击可再次全量覆盖同步' : '一键选用校长拟定标题至全书章节'}">${titlesApplied ? `✓ 校长标题已选用 (${pTitles.length}章)` : `✨ 选用拟定标题 (${pTitles.length}章)`}</button>` : ''}
-        ${principalQcUiHtml()}<button type="button" class="sc-plan-btn sc-plan-pr" data-scp-plan-pr title="查看写作守则与章节总表">📋 读校长成果</button>
+        <button type="button" class="sc-plan-btn sc-plan-pr" data-scp-plan-pr title="查看写作守则与章节总表">📋 读校长成果</button>
       </div>
     </div>
     <div class="cp-body">
@@ -14169,7 +14169,7 @@ function schoolZoneBlock(){
           ${tBody}
         </div>
       </div>
-      <div id="qcResultReportPanel" class="sc-teacher-qc-panel" style="height:220px;max-height:220px;overflow:auto;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);box-sizing:border-box;">${qcResultReportHtml()}</div>
+      <div id="qcResultReportPanel" class="sc-teacher-qc-panel qc-result-report-panel" style="height:220px;max-height:220px;overflow:auto;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);box-sizing:border-box;">${qcResultReportHtml()}</div>
     </div>
   </div>`;
 }
