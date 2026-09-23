@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.421';
-// Version line: app1.0.421.js — P1正文观测唯一事实源 + P2未决线索唯一归属，保留420正式结果链与非阻塞质检。
-const APP_FILE_VERSION = 'app1.0.421.js';
+const APP_VERSION = '1.0.420';
+// Version line: app1.0.420.js — 当前成果单一来源、版本/指纹锁定、非阻塞质检、一键老师路由与正文独立失败隔离。
+const APP_FILE_VERSION = 'app1.0.420.js';
 const KEY_CFG = nsKey('cfg');
 
 let _principalQcRun = null;
@@ -12179,32 +12179,35 @@ function extractPlanField(plan, names){
 }
 
 function refreshForeshadowBank(){
-  // P2：伏笔/未决线索的正式权威已经迁移到 storyState.current.openThreads。
-  // longMemory.foreshadow 仅保留为 UI 派生视图，不再从旧 chapterPlans + 正文扫描猜测。
-  const mem=ensureLongMemory(), ss=storyState();
-  const threads=Array.isArray(ss.current&&ss.current.openThreads)?ss.current.openThreads:[];
-  const chapter=Number.isFinite(ss.current&&ss.current.chapter) ? ss.current.chapter+1 : null;
-  mem.foreshadow=threads.map((text,n)=>({
-    id:`state-${chapter||'current'}-${n+1}`,
-    chapter:chapter||'',
-    text:String(text||'').trim().slice(0,180),
-    status:'open',
-    source:'storyState.current.openThreads'
-  })).filter(x=>x.text).slice(-120);
+  const mem=ensureLongMemory(), o=state.outline||{};
+  const plans=Array.isArray(o.chapterPlans)?o.chapterPlans:[];
+  const next=[];
+  plans.forEach((p,i)=>{
+    const f=extractPlanField(p,['埋设伏笔','伏笔','埋伏笔']);
+    if(!f || /^(无|暂无|无。|没有)$/i.test(f.trim())) return;
+    const later=(state.chapters||[]).slice(i+1).map(c=>String(c&&c.content||'')).join('\n');
+    const key=f.replace(/[「」“”【】（）()]/g,'').split(/[，,；;。]/)[0].trim().slice(0,18);
+    const recovered=key && later.includes(key);
+    next.push({id:`${i+1}-${key}`, chapter:i+1, text:f.slice(0,180), status:recovered?'suspected-recovered':'open'});
+  });
+  mem.foreshadow=next.slice(-120);
   mem.lastAuditAt=Date.now();
   return mem.foreshadow;
 }
 
 function longNovelMemoryData(){
-  const o=state.outline||{}, g=o.glossary||{}, idx=currentWrittenIndex(), ss=storyState();
-  const observed=idx>=0 && ss.chapters && ss.chapters[idx] ? ss.chapters[idx].observed||null : null;
+  const o=state.outline||{}, g=o.glossary||{}, idx=currentWrittenIndex();
+  const dig=Array.isArray(o._chapterDigests)?o._chapterDigests:[];
   const fc=o._factCard||{};
   const plan=idx>=0 && Array.isArray(o.chapterPlans)?o.chapterPlans[idx]:null;
   const prev=idx>=0?state.chapters[idx]:null;
-  const time=observed&&observed.time ? {ch:idx,time:observed.time} : (fc.timeAnchors||[]).find(x=>x && x.ch===idx);
-  const foreshadow=refreshForeshadowBank();
-  return {o,g,idx,digest:observed?([observed.endingState, ...(observed.newFacts||[])].filter(Boolean).join('；')):'',fc,plan,prev,time,foreshadow};
+  const time=(fc.timeAnchors||[]).find(x=>x && x.ch===idx);
+  const mem=ensureLongMemory();
+  if(!mem.foreshadow.length && plansExist(o)) refreshForeshadowBank();
+  return {o,g,idx,digest:idx>=0?(dig[idx]&&dig[idx].text||''):'',fc,plan,prev,time,foreshadow:mem.foreshadow};
 }
+
+function plansExist(o){ return !!(o && Array.isArray(o.chapterPlans) && o.chapterPlans.some(Boolean)); }
 
 function longMemoryBrief(i){
   if(!isLong() || !state.outline) return '';
@@ -19036,9 +19039,9 @@ function principalRulesExcerpt(){
 
 function buildDynamicProtagonistLedger(i){
   if(i <= 0) return '';
-  const o = state.outline || {}, ss=storyState();
-  const prevObserved = ss.chapters && ss.chapters[i-1] ? ss.chapters[i-1].observed||null : null;
-  const prevDigest = prevObserved ? [prevObserved.time, prevObserved.location, prevObserved.endingState, ...(prevObserved.newFacts||[])].filter(Boolean).join('；') : '';
+  const o = state.outline || {};
+  const digests = Array.isArray(o._chapterDigests) ? o._chapterDigests : [];
+  const prevDigest = digests[i-1] && digests[i-1].text ? digests[i-1].text : '';
   const prevChapter = state.chapters && state.chapters[i-1] ? state.chapters[i-1] : null;
   const prevTitle = prevChapter && prevChapter.title ? `第 ${i} 章《${prevChapter.title}》` : `第 ${i} 章`;
   const protagonist = (o.navBeacon && o.navBeacon.protagonist) ? String(o.navBeacon.protagonist).split(/[，,：:（(]/)[0].trim() : '主角';
@@ -19321,22 +19324,22 @@ const ROLLING_SUMMARY_SYS = `你是长篇小说滚动摘要助手。请把以下
 function buildRollingSummary(i){
   if(i <= 0) return '';
   const o = state.outline; if(!o) return '';
-  const ss = storyState();
-  const observed = ss.chapters || {};
+  const digests = Array.isArray(o._chapterDigests) ? o._chapterDigests : [];
   const blocks  = Array.isArray(o._rollingSummaries) ? o._rollingSummaries : [];
-  const renderObserved = k => {
-    const ob=observed[k]&&observed[k].observed; if(!ob) return '';
-    const facts=[ob.time,ob.location,ob.endingState,...(ob.newFacts||[])].filter(Boolean).join('；');
-    return facts ? `第 ${k+1} 章：${facts}` : '';
-  };
   const near = [];
-  for(let k = i-2; k >= Math.max(0, i-6); k--){ const x=renderObserved(k); if(x) near.unshift(x); }
+  for(let k = i-2; k >= Math.max(0, i-6); k--){
+    if(digests[k] && digests[k].text) near.unshift(`第 ${k+1} 章：${digests[k].text}`);
+  }
   const mid = [];
-  for(let k = i-7; k >= Math.max(0, i-11); k--){ const x=renderObserved(k); if(x) mid.unshift(`第 ${k+1} 章：${x.replace(/^第 \d+ 章：/,'').slice(0, 180)}`); }
-  const far = [];
-  for(let k=Math.max(0,i-31); k<=i-12; k++){ const x=renderObserved(k); if(x) far.push(x); }
+  for(let k = i-7; k >= Math.max(0, i-11); k--){
+    if(digests[k] && digests[k].text) mid.unshift(`第 ${k+1} 章：${String(digests[k].text).slice(0, 120)}`);
+  }
+  const far = blocks.filter(s=>{
+    const [a,b] = String(s.key||'').split('-').map(Number);
+    return Number.isFinite(b) && b < i - 11 && b >= i - 31;
+  }).map(s => `第 ${s.key} 章：${s.text}`).join('\n');
   return [
-    far.length ? `【远期状态摘要（仅来自正文观测）】\n${far.join('\n')}` : '',
+    far ? `【远期摘要（第 1 章起更早章节，5 章块）】\n${far}` : '',
     mid.length ? `【中程记忆 · 十章窗远五章（第 ${Math.max(1, i-10)}~${i-6} 章，简纪要）】\n${mid.join('\n')}` : '',
     near.length ? `【近期记忆 · 五章窗近五章（第 ${Math.max(1, i-5)}~${i-1} 章，细纪要 = 承接重点）】\n${near.join('\n')}` : ''
   ].filter(Boolean).join('\n\n');
