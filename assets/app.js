@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '1.0.440';
+const APP_VERSION = '1.0.450';
 // Version line: app1.0.440.js — 老师阶段去除质检/验收门槛；AI非空返回即完成，教案立即落盘查看；正文与多老师对接保留。
 const APP_FILE_VERSION = 'app1.0.440.js';
 const KEY_CFG = nsKey('cfg');
@@ -1807,7 +1807,9 @@ async function callAIWithContract(promise, opt={}){
     } else {
       out.text = String(res||'');
     }
-    if(out.finishReason === 'length'){ out.errorCode = AI_ERR.TRUNCATED; out.error='响应被截断'; return out; }
+    // 1.0.449：词典充实允许在输出上限处结束。该任务的协议本身允许“部分新增条目”安全收录，不能因为 finish_reason=length 把已经返回的有效内容整批判为失败。
+    const _truncated = out.finishReason === 'length';
+    if(_truncated && !opt.allowTruncated){ out.errorCode = AI_ERR.TRUNCATED; out.error='响应被截断'; return out; }
     if(opt.needJson !== false){
       try{ out.data = parseJson(out.text); }catch(e){ out.errorCode=AI_ERR.PARSE_FAIL; out.error='JSON解析失败：'+e.message; return out; }
     }
@@ -5360,7 +5362,7 @@ function clampMaxTokens(task){
     principal: 16384,   // 校长统筹总控
     teacher: 16384,     // 老师分批教案
     dictmaster: 16384,  // 万物词典生成
-    dictEnrich: 8192,   // 词典充实与收编
+    dictEnrich: 16384,  // 词典充实与收编
     glossary: 9216,
     json: 4096,         // JSON 类契约输出
     recipe: 8192,
@@ -18587,6 +18589,7 @@ async function genDictHarvest(btn, opts){
       { needJson:false, taskName:'正文收编' }
     );
     if(!res.ok) throw new Error(res.error || '生成失败');
+    if(res.finishReason === 'length') addGenerationDiagnostic('dictEnrich',{type:'RUNTIME_OUTPUT',code:'OUTPUT_TRUNCATED_PARTIAL_ACCEPTED',details:'词典充实响应达到输出上限；按增量协议保留并解析已返回内容，不因截断丢弃已有有效条目。',blocking:false});
     const txt = String(res.text || '').trim();
     if(!txt) throw new Error('未返回收编内容');
     const parsed = parseDictEnrichText(txt);
@@ -18668,7 +18671,7 @@ async function genDictEnrich(btn, opts){
     const onStream = delta => { if(stream){ stream.textContent += String(delta||''); stream.scrollTop = stream.scrollHeight; } };
     const res = await callAIWithContract(
       callDeepSeek(DICT_ENRICH_SYS, user, { temperature: temp, topP: 0.6, maxTokens: clampMaxTokens('dictEnrich'), onStream, signal:_abortCtl?.signal, taskKey:'dictEnrich' }),
-      { needJson:false, taskName:'词典充实' }
+      { needJson:false, taskName:'词典充实', allowTruncated:true }
     );
     if(!res.ok) throw new Error(res.error || '生成失败');
     const txt = String(res.text || '').trim();
@@ -18691,7 +18694,7 @@ async function genDictEnrich(btn, opts){
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, organizations:n.organizations||0, institutions:n.institutions||0, items:n.items||0, rules:n.rules||0, terms:n.terms||0, events:n.events||0, lifeSettings:n.lifeSettings||0, relationshipTable:n.relationshipTable||0, placeContacts:n.placeContacts||0, properContacts:n.properContacts||0, worldRules:n.worldRules||0, ts:Date.now() };
     // 数据已经安全写入词典后，先完成 AI 状态，再做非核心 UI 刷新；避免 render 异常导致“内容已入库但 UI 仍显示未完成”。
-    // 1.0.448：词典充实成功后必须向公共学校状态层发出完成信号，供校长/一键老师读取；UI 仍只刷新词典充实自己的卡片。
+    // 1.0.449：词典充实成功后必须向公共学校状态层发出完成信号，供校长/一键老师读取；UI 仍只刷新词典充实自己的卡片。
     scMark('dictEnrich', true, false);
     persist();
     markAIDone('dictEnrich');
