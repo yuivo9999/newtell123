@@ -5634,7 +5634,7 @@ function principalTargetChapterCount(){
 }
 // 老师阶段完成以老师 AI 成功返回并保存当前教案为准；结构化章节卡仅作为正文对接所需的编译产物。
 // 旧逻辑把 canon.teacherAt 版本快照当成唯一闸门；只要快照与版本计数出现一次不同步，
-// 即使“读取老师教案”已经能正常读出全部章节，也会被一键开学判定为未完成并停在第4步。
+// 老师完成状态以当前老师成果是否真实落盘为准，避免旧版总控流程的快照闸门误判。
 function ssTeacherCardCurrent(card, gi){
   if(!card || card.teacherGi!==gi) return false;
   const v=card.versions||{}; const ss=storyState(); const cur=ss.versions||{};
@@ -5700,7 +5700,13 @@ function scSetError(key, info, save=true, refresh=true){
     sc.errors[key]=Object.assign({ts:Date.now()}, info);
   }else delete sc.errors[key];
   if(save) persist();
-  if(refresh) refreshSchoolProgressUi();
+  if(refresh){
+    if(key==='dictMaster') refreshDictMasterCardOnly();
+    else if(key==='dictEnrich') refreshDictEnrichCardOnly();
+    else if(key==='principal') refreshPrincipalUi();
+    else if(typeof key==='string' && /^t\d+$/.test(key)) refreshTeacherUi(Number(key.slice(1)));
+    else if(key==='teacher') refreshTeacherBatchUi();
+  }
 }
 function scTeacherFailureMessage(f){
   if(!f) return '';
@@ -5756,7 +5762,6 @@ function scMark(key, done, save=true){
 }
 function getSchoolStepStatus(key){
   const sc = scState();
-  const run = state._schoolRunning;
   const groups = teacherAssignmentGroups();
 
   let isDone = false;
@@ -7930,7 +7935,7 @@ async function genPrincipal(btn, opts){
         _tp.persistMs = Math.round(performance.now()-_persist0);
         // v1.0.385：AI 成功路径禁止全局 render()。状态已持久化后只做局部学校管线刷新，避免异步流程中重建 #view、销毁控件和产生失效 DOM 引用。
         _tp.renderMs = 0;
-        refreshSchoolProgressUi();
+        refreshPrincipalUi();
         _tp.aiReturnMs = _tp.aiReturnMs || 0;
         _tp.totalLocalMs = Math.max(0, Math.round(performance.now()-_tp0) - _tp.aiReturnMs);
         _tp.totalMs = Math.round(performance.now()-_tp0);
@@ -8995,14 +9000,14 @@ async function genTeacher(btn, gi){
     teacherPerfRecord(gi,_tp);
     markAIDone(key,false);
     scMark(key,true,false);
-    refreshSchoolProgressUi();
+    refreshTeacherUi(gi);
     toast(`老师${gi+1}备课完成，教案已保存并可立即查看${structurallyUsable?'；正文章节卡已同步':'；正文将在可编译章节卡存在时使用结构化成果'}`); playDoneSound('single');
     return true;
   }catch(e){
     console.error('[genTeacher] 老师流程失败：',e);
     if(e&&e.name==='AbortError'){toast('已停止备课');return false;}
     scSetError(key,{category:'TEACHER_GENERATION_ERROR',code:e?.teacherValidation?'MACHINE_CONTRACT_INVALID':'GENERATION_ERROR',details:String(e?.message||e),expected:'新版TEACHER_CHAPTER+SCENE完整返回',actual:'本次流程未完成'});
-    setScRetry(key,1); scRefreshBadge(btn,key); refreshSchoolProgressUi(); toast('老师备课未完成：AI返回异常，请重新生成'); return false;
+    setScRetry(key,1); scRefreshBadge(btn,key); refreshTeacherUi(gi); toast('老师备课未完成：AI返回异常，请重新生成'); return false;
   }finally{state.aiNetwork.running=(state.aiNetwork.running||[]).filter(k=>k!==key);hideStopBtn();if(btn)busy(btn,false);scRefreshBadge(btn,key);}
 }
 
@@ -9025,211 +9030,111 @@ async function nailRetry(key, label, run, btn){
   return false;
 }
 
-function refreshSchoolProgressUi(){
-  const topText = document.querySelector('.sc-pipe-t');
-  const pipeIn = document.querySelector('.sc-pipe-in');
-  const pipeMeta = document.querySelector('.sc-pipe-m');
-  const allBtn = document.querySelector('[data-scp-all]');
-  const subtag = document.querySelector('.ch-subtag-school');
-  const stepKeys = ['dictMaster','dictEnrich','principal'];
-  const doneSteps = stepKeys.filter(k => getSchoolStepStatus(k).isDone).length;
-  const pct = Math.round(doneSteps / 3 * 100);
-
-  if(pipeIn) pipeIn.style.width = pct + '%';
-  if(pipeMeta) pipeMeta.textContent = `${doneSteps}/3 步就绪 · ${pct}%`;
-  if(subtag) subtag.textContent = `${doneSteps}/3 步就绪 · ${pct}%`;
-
-  if(state._schoolRunning){
-    const run = state._schoolRunning;
-    if(topText) topText.innerHTML = `⚡ <b>一键开学进行中</b>（${run.stepIndex+1}/${run.totalSteps||3} · ${esc(run.label)}）…`;
-    if(allBtn){
-      allBtn.classList.add('running');
-      allBtn.innerHTML = `⚡ 一键开学中（${run.stepIndex+1}/${run.totalSteps||3} · ${esc(run.label)}）…`;
-    }
-  } else {
-    if(topText) topText.textContent = '⏳ 设定就绪 → 一键开学止于“读校长成果”';
-    if(allBtn){
-      allBtn.classList.remove('running');
-      allBtn.innerHTML = '⚡ 一键开学';
-    }
-  }
-
-  stepKeys.forEach(k=>{
-    const el = document.querySelector(`.sc-pipe-steps [data-scp-step="${k}"]`) || document.querySelector(`[data-scp-step="${k}"]`);
-    if(el){
-      const st = getSchoolStepStatus(k);
-      el.classList.toggle('running', st.isRunning);
-      el.classList.toggle('done', st.isDone);
-      el.classList.toggle('failed', st.isFailed);
-      el.classList.toggle('sc-failed', st.isFailed);
-      el.classList.toggle('sc-step-default', !st.isRunning && !st.isDone && !st.isFailed);
-
-      let tick = el.querySelector('.sc-tick');
-      if(!tick){
-        tick = document.createElement('i');
-        tick.className = 'sc-tick';
-        el.appendChild(tick);
-      }
-      if(st.isRunning){
-        tick.className = 'sc-tick sc-tick-run';
-        tick.textContent = '⏳';
-      } else if(st.isDone){
-        tick.className = 'sc-tick sc-tick-done';
-        tick.textContent = '✓';
-      } else if(st.isFailed){
-        tick.className = 'sc-tick sc-tick-fail';
-        tick.textContent = '✕';
-      } else {
-        tick.className = 'sc-tick';
-        tick.textContent = '';
-      }
-      scRefreshBadge(el, k);
-    }
-  });
-
-  const groups = teacherAssignmentGroups();
-  groups.forEach((g, i)=>{
-    const tBtn = document.querySelector(`[data-scp-teacher="${i}"]`);
-    if(tBtn){
-      const tDone = scDone('t'+i);
-      tBtn.classList.toggle('done', tDone);
-    }
-  });
-  const tb=document.querySelector('[data-scp-teacher-all]');
-  if(tb){
-    const st=teacherBatchButtonState();
-    tb.classList.toggle('running',st.running); tb.classList.toggle('done',st.allDone && !st.running);
-    tb.disabled=!!st.running;
-    tb.innerHTML=st.running ? `🎓 一键老师进行中（${st.completed}/${st.total}）…` : (st.allDone ? '✓ 一键老师已完成' : '🎓 一键老师');
-  }
-  refreshPrincipalQcUi();
+function refreshPrincipalUi(){
+  const principalGenerateBtn = document.querySelector('[data-scp-principal-generate]');
+  if(!principalGenerateBtn) return;
+  const st = getSchoolStepStatus('principal');
+  principalGenerateBtn.classList.toggle('running', st.isRunning);
+  principalGenerateBtn.classList.toggle('done', st.isDone);
+  principalGenerateBtn.disabled = !!st.isRunning;
+  principalGenerateBtn.innerHTML = st.isRunning ? '⏳ 校长生成中…' : (st.isDone ? '👑 重新生成校长' : '👑 生成校长');
 }
 
-async function genSchoolAll(btn){
-  if(genBusy()){ toast('已有生成任务进行中，请稍候'); return; }
-  const groups=teacherAssignmentGroups(); if(!groups.length){ toast('请先填写章节数，才能一键开学'); return; }
-  const steps=[
-    {key:'dictMaster',label:'词典达人',run:()=>genDictMaster(null)},
-    {key:'dictEnrich',label:'词典充实',run:()=>genDictEnrich(null,{force:true})},
-    {key:'principal',label:'校长',run:()=>genPrincipal(null)}
-  ];
-  state._schoolRunning={activeKey:'dictMaster',stepIndex:0,totalSteps:3,label:'词典达人'};
-  refreshSchoolProgressUi();
-  try{
-    for(let i=0;i<steps.length;i++){
-      const st=steps[i];
-      if(getSchoolStepStatus(st.key).isDone) continue;
-      scSetFailed(st.key,false); scSetError(st.key,null,false,false);
-      state._schoolRunning={activeKey:st.key,stepIndex:i,totalSteps:3,label:st.label}; refreshSchoolProgressUi();
-      const ok=await st.run();
-      if(!ok){ scSetFailed(st.key,true); toast(`一键开学中断于「${st.label}」，可单独重试`); return; }
-      scMark(st.key,true,false);
-      if(st.key==='principal'){
-        const titles=state.school?.principal?.titles||[];
-        if(titles.length && !isPrincipalTitlesApplied()) doApplyTitles(titles,{silent:true});
-      }
-      refreshSchoolProgressUi();
-    }
-    toast('一键开学已完成：词典达人 → 词典充实 → 校长。老师阶段请使用右侧「一键老师」或各老师按钮。');
-  }catch(e){ console.error('[genSchoolAll]',e); toast('一键开学执行异常：'+String(e?.message||e)); }
-  finally{ state._schoolRunning=null; hideStopBtn(); refreshSchoolProgressUi(); }
+function refreshTeacherUi(i){
+  const tBtn = document.querySelector(`[data-scp-teacher="${i}"]`);
+  if(!tBtn) return;
+  const done = scDone('t'+i);
+  tBtn.classList.toggle('done', done);
+  tBtn.classList.toggle('running', !!(run && run.activeKey === 't'+i));
+  tBtn.disabled = !!(run && run.activeKey === 't'+i);
+}
+
+function refreshTeacherBatchUi(){
+  const tb=document.querySelector('[data-scp-teacher-all]');
+  if(!tb) return;
+  const st=teacherBatchButtonState();
+  tb.classList.toggle('running',st.running);
+  tb.classList.toggle('done',st.allDone && !st.running);
+  tb.disabled=!!st.running;
+  tb.innerHTML=st.running ? `🎓 一键老师进行中（${st.completed}/${st.total}）…` : (st.allDone ? '✓ 一键老师已完成' : '🎓 一键老师');
+}
+
+function refreshAllTeacherUi(){
+  const groups = teacherAssignmentGroups();
+  groups.forEach((g,i)=>refreshTeacherUi(i));
+  refreshTeacherBatchUi();
 }
 
 function teacherBatchButtonState(){
   const groups=teacherAssignmentGroups();
   const running=!!state._teacherBatchRunning;
   const allDone=groups.length>0 && groups.every((g,i)=>scTeacherGroupComplete(i));
-  return {groups,running,allDone};
+  const completed=groups.filter((g,i)=>scTeacherGroupComplete(i)).length;
+  return {groups,running,allDone,completed,total:groups.length};
 }
 async function genSchoolTeachersBatch(){
   if(genBusy() || state._teacherBatchRunning){ toast('已有生成任务进行中，请稍候'); return; }
   const groups=teacherAssignmentGroups(); if(!groups.length){toast('请先填写章节数，才能一键老师');return;}
   if(!scDone('principal')){toast('请先完成校长；老师只读取“读校长成果”当前保存版本。');return;}
   state._teacherBatchRunning={startedAt:Date.now(),total:groups.length,completed:0};
-  refreshSchoolProgressUi();
+  refreshTeacherBatchUi();
   try{
     for(let i=0;i<groups.length;i++){
-      if(scTeacherGroupComplete(i)) { state._teacherBatchRunning.completed++; continue; }
+      if(scTeacherGroupComplete(i)) { state._teacherBatchRunning.completed++; refreshTeacherUi(i); refreshTeacherBatchUi(); continue; }
       state._schoolRunning={activeKey:'t'+i,teacherIndex:i,stepIndex:0,totalSteps:groups.length,label:groups.length>1?`老师${i+1}（${groups[i].teacherCode}）`:'老师'};
-      refreshSchoolProgressUi();
+      refreshTeacherUi(i); refreshTeacherBatchUi();
       const ok=await genTeacher(null,i);
       if(ok){ scMark('t'+i,true,false); state._teacherBatchRunning.completed++; }
       else { scSetFailed('t'+i,true); }
-      persist(); refreshSchoolProgressUi();
+      persist(); refreshTeacherUi(i); refreshTeacherBatchUi();
       // 单个老师失败只记录该老师，继续下一位，不阻塞其他老师。
     }
     const allDone=groups.every((g,i)=>scTeacherGroupComplete(i));
     if(allDone) scMark('teacher',true,false); else delete scState().finished.teacher;
     persist();
+    refreshTeacherBatchUi();
     toast(allDone?'一键老师已完成全部老师教案。':'一键老师已完成可用老师；失败老师可单独重试。');
   }finally{
-    state._schoolRunning=null; state._teacherBatchRunning=null; hideStopBtn(); refreshSchoolProgressUi();
+    state._schoolRunning=null; state._teacherBatchRunning=null; hideStopBtn(); refreshAllTeacherUi();
   }
 }
 
 function bindSchoolSteps(){
-  const all = $('[data-scp-all]'); if(all) all.onclick = ()=> genSchoolAll(all);
   const teacherAllBtn=$('[data-scp-teacher-all]'); if(teacherAllBtn && !teacherAllBtn._bound){ teacherAllBtn._bound=true; teacherAllBtn.onclick=()=>genSchoolTeachersBatch(); }
   const applyBtn = $('[data-scp-apply-titles]');
   if(applyBtn) applyBtn.onclick = ()=> applyPrincipalTitles();
+  const principalGenerateBtn = $('[data-scp-principal-generate]');
+  if(principalGenerateBtn && !principalGenerateBtn._pgB){
+    principalGenerateBtn._pgB = 1;
+    principalGenerateBtn.onclick = async ()=>{
+      const btn = principalGenerateBtn;
+      if(btn.disabled) return;
+      scSetFailed('principal', false);
+      state._schoolRunning = { activeKey:'principal', stepIndex:2, totalSteps:3, label:'校长' };
+      refreshPrincipalUi();
+      try {
+        const ok = await genPrincipal(btn);
+        if(ok){
+          scMark('principal', true);
+          const titles = (state.school && state.school.principal && Array.isArray(state.school.principal.titles)) ? state.school.principal.titles : [];
+          if(titles.length && !isPrincipalTitlesApplied()) doApplyTitles(titles, { silent:true });
+          playDoneSound('single');
+        } else {
+          scSetFailed('principal', true);
+        }
+      } catch(e){
+        console.error('[principalGenerateButton]', e);
+        scSetFailed('principal', true);
+      } finally {
+        state._schoolRunning = null;
+        refreshPrincipalUi();
+      }
+    };
+  }
   $$('[data-scp-step]').forEach(btn=>{
     if(btn._sB) return; btn._sB = 1;
     btn.onclick = async ()=>{
       const step = btn.dataset.scpStep;
-      if(step === 'dictMaster'){
-        scSetFailed('dictMaster', false);
-        state._schoolRunning = { activeKey:'dictMaster', stepIndex:0, totalSteps:3, label:'词典达人' };
-        refreshSchoolProgressUi();
-        try {
-          const ok = await genDictMaster(btn);
-          if(ok){ scMark('dictMaster', true); }
-          else { scSetFailed('dictMaster', true); }
-        } catch(e){
-          scSetFailed('dictMaster', true);
-        } finally {
-          state._schoolRunning = null;
-          refreshSchoolProgressUi();
-        }
-        return;
-      }
-      if(step === 'dictEnrich'){
-        scSetFailed('dictEnrich', false);
-        state._schoolRunning = { activeKey:'dictEnrich', stepIndex:1, totalSteps:3, label:'词典充实' };
-        refreshSchoolProgressUi();
-        try {
-          const ok = await genDictEnrich(btn,{});
-          if(ok){ scMark('dictEnrich', true); }
-          else { scSetFailed('dictEnrich', true); }
-        } catch(e){
-          scSetFailed('dictEnrich', true);
-        } finally {
-          state._schoolRunning = null;
-          refreshSchoolProgressUi();
-        }
-        return;
-      }
-      if(step === 'principal'){
-        scSetFailed('principal', false);
-        state._schoolRunning = { activeKey:'principal', stepIndex:2, totalSteps:3, label:'校长' };
-        refreshSchoolProgressUi();
-        try {
-          const ok = await genPrincipal(btn);
-          if(ok){
-            scMark('principal', true);
-            const titles = (state.school && state.school.principal && Array.isArray(state.school.principal.titles)) ? state.school.principal.titles : [];
-            if(titles.length && !isPrincipalTitlesApplied()) doApplyTitles(titles, { silent:true });
-            playDoneSound('single');
-          } else {
-            scSetFailed('principal', true);
-          }
-        } catch(e){
-          scSetFailed('principal', true);
-        } finally {
-          state._schoolRunning = null;
-          refreshSchoolProgressUi();
-        }
-        return;
-      }
       if(step === 'teacher' || step === 'teacherAll'){ await genSchoolTeachersBatch(); return; }
       if(step === 'teacherSingle'){
         const gi = Number(btn.dataset.scpTeacher);
@@ -9239,7 +9144,7 @@ function bindSchoolSteps(){
           const groups = teacherAssignmentGroups();
           if(groups.every((g,i)=>scDone('t'+i))) scMark('teacher', true);
         }
-        refreshSchoolProgressUi();
+        refreshTeacherUi(gi);
         return;
       }
     };
@@ -9354,7 +9259,7 @@ function saveTeacherFieldEdit(gi, ch, k, newV){
     commitTeacherChapterCards(cur.plans,g,gi);
   }
   persist();
-  refreshSchoolProgressUi();
+  refreshTeacherUi(gi);
   toast(`第${ch}章「${k}」已保存为老师当前成果 V${cur?.version||1}。`);
   return true;
 }
@@ -9535,7 +9440,7 @@ function renderSchoolPlanBody(ov, gi, jumpCh){
 let _prCUR_VIEW = 'card';
 function openSchoolPrincipalReader(){
   const p=principalCurrentResult();
-  if(!p){ toast('校长统筹成果尚未生成，请先点击「校长统筹」或「一键开学」'); return; }
+  if(!p){ toast('校长统筹成果尚未生成，请先点击「生成校长」'); return; }
   _prCUR_VIEW='card';
   const ov=document.createElement('div'); ov.className='gs-overlay';
   ov.innerHTML=`<div class="gs-modal school-plan-modal" style="max-width:920px">
@@ -14377,19 +14282,6 @@ function microBeatBlock(){
   </div>`;
 }
 
-function schoolPipelineProgress(){
-  const run=state._schoolRunning;
-  const stepDefs=[
-    {key:'dictMaster',icon:'📖 ',label:'词典达人',title:'词典达人：设定架构。点击单独重跑'},
-    {key:'dictEnrich',icon:'🗂 ',label:'词典充实',title:'词典充实：细化与描写工坊。点击单独重跑'},
-    {key:'principal',icon:'👑 ',label:'校长',title:'校长：全局写作守则与章节总表。点击单独重跑'}
-  ];
-  const doneCount=stepDefs.filter(x=>getSchoolStepStatus(x.key).isDone).length;
-  const pct=Math.round(doneCount/3*100);
-  const msg=run?`⚡ 一键开学进行中（${run.stepIndex+1}/${run.totalSteps||3} · ${esc(run.label)}）…`:'⏳ 设定就绪 → 一键开学止于“读校长成果”';
-  return `<div class="sc-pipeline"><div class="sc-pipe-top"><span class="sc-pipe-t">${msg}</span><span class="sc-pipe-m">${doneCount}/3 步就绪 · ${pct}%</span></div><div class="sc-pipe-bar"><span class="sc-pipe-in" style="width:${pct}%"></span></div><div class="sc-pipe-steps">${stepDefs.map(s=>schoolStepBtn(s.key,s.icon,s.label,s.title)).join('')}</div>${schoolFailureHtml('principal')}</div>`;
-}
-
 function ensureSchoolActionStyles(){
   if(document.getElementById('schoolActionStyles')) return;
   const st=document.createElement('style'); st.id='schoolActionStyles'; st.textContent=`
@@ -14397,6 +14289,10 @@ function ensureSchoolActionStyles(){
     .sc-teacher-all.running{background:linear-gradient(135deg,#e53935,#ff6b57)!important;color:#fff!important;cursor:wait}
     .sc-teacher-all.done{background:linear-gradient(135deg,#20a95a,#62d98a)!important;color:#fff!important}
     .sc-teacher-all:disabled{opacity:.96}
+    .sc-principal-generate{background:linear-gradient(135deg,#7b2cff,#ff2d55,#ffc400)!important;color:#fff!important;border-color:transparent!important;font-weight:700!important;text-shadow:0 1px 1px rgba(0,0,0,.18)}
+    .sc-principal-generate.running{background:linear-gradient(135deg,#ff2d55,#ff6b57,#ffc400)!important;color:#fff!important;cursor:wait!important}
+    .sc-principal-generate.done{background:linear-gradient(135deg,#7b2cff,#ff2d55,#ffc400)!important;color:#fff!important}
+    .sc-principal-generate:disabled{opacity:.96}
   `; document.head.appendChild(st);
 }
 function schoolZoneBlock(){
@@ -14407,18 +14303,15 @@ function schoolZoneBlock(){
   const tBody = groups.length
     ? groups.map((g,i)=> schoolTeacherBtn(g,i)).join('')
     : `<div class="sc-teachers-ph">🎓 老师备课区：生成大纲后按节拍自动分配分段。</div>`;
-  const stepKeys = ['dictMaster','dictEnrich','principal'];
-  const doneSteps = stepKeys.filter(k => getSchoolStepStatus(k).isDone).length;
-  const pct = Math.round(doneSteps / 3 * 100);
-  const run = state._schoolRunning;
   return `<div class="card cp-card school-card card-theme-school">
     <div class="cp-head card-head-bar">
       <div class="ch-left">
         <span class="ch-badge ch-badge-school">🏛️</span>
         <h3 class="ch-title">编剧学院 · 统筹与教案</h3>
-        <span class="ch-subtag ch-subtag-school">${doneSteps}/3 步就绪 · ${pct}%</span>
+        <span class="ch-subtag ch-subtag-school">${groups.length ? `${groups.length} 位老师` : '待设定章节数'}</span>
       </div>
       <div class="ch-right">
+        <button type="button" class="sc-step sc-principal-generate" data-scp-principal-generate title="生成/重新生成校长统筹成果">👑 生成校长</button>
         ${pTitles.length ? `<button type="button" class="sc-plan-btn sc-plan-apply-t ${titlesApplied?'applied':''}" data-scp-apply-titles title="${titlesApplied ? '校长已自动选用拟定标题至全书章节；点击可再次全量覆盖同步' : '一键选用校长拟定标题至全书章节'}">${titlesApplied ? `✓ 校长标题已选用 (${pTitles.length}章)` : `✨ 选用拟定标题 (${pTitles.length}章)`}</button>` : ''}
         <button type="button" class="sc-plan-btn sc-plan-pr" data-scp-plan-pr title="查看写作守则与章节总表">📋 读校长成果</button>
       </div>
@@ -14429,10 +14322,8 @@ function schoolZoneBlock(){
           <span>👑 校长（总控） → 🎓 老师（分段教案） → ✍️ 正文作家</span>
           <em class="school-zone-tip">${groups.length ? (groups.length > 1 ? `${groups.length} 位老师分段` : `1 位老师全书教案`) : '待设定章节数'}</em>
         </div>
-        ${schoolPipelineProgress()}
         <div class="school-steps">
           <div class="school-steps-main" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <button type="button" class="sc-step sc-runall ${run?'running':''}" data-scp-all title="一键按序运行词典达人、词典充实、校长统筹；完成后停在读校长成果">${run ? `⚡ 一键开学中（${run.stepIndex+1}/${run.totalSteps||3} · ${esc(run.label)}）…` : '⚡ 一键开学'}</button>
             <button type="button" class="sc-step sc-teacher-all" data-scp-teacher-all title="一键启动全部老师；每位老师只读取当前校长成果中授权给自己的部分">🎓 一键老师</button>
           </div>
         </div>
@@ -14456,7 +14347,7 @@ function bindChapterPlanFold(){
   };
 }
 function bindChapterPlan(){
-  bindSchoolSteps();   // 学校模式：校长/老师/一键开学 按钮绑定
+  bindSchoolSteps();   // 学校模式：校长/老师按钮绑定
 }
 
 function bindBeatSheet(){
@@ -17406,12 +17297,12 @@ async function genDictMaster(btn){
       state.dictmasterLatest={ts:Date.now(),book:(o.title)||'',raw:rawTrim,parseStatus:'partial'};
       state.dictmasterHistory=Array.isArray(state.dictmasterHistory)?state.dictmasterHistory:[];
       state.dictmasterHistory.unshift(state.dictmasterLatest); if(state.dictmasterHistory.length>6) state.dictmasterHistory=state.dictmasterHistory.slice(0,6);
-      state.dictmasterRan=true; markAIDone('dictmaster'); scMark('dictMaster',true); persist(); refreshSchoolProgressUi();
+      state.dictmasterRan=true; markAIDone('dictmaster'); scMark('dictMaster',true); persist(); refreshDictMasterCardOnly();
       toast('万物词典已生成并保存原文；结构化解析未完整，但不再作为生成失败。'); return true;
     }
     try{ normalizeDictMasterEntities(j); }catch(normErr){
       addGenerationDiagnostic('dictMaster',{type:'STRUCTURE',code:'DICTMASTER_NORMALIZE_PARTIAL',details:String(normErr?.message||normErr)});
-      state.dictmasterLatest={ts:Date.now(),book:(o.title)||'',raw:String(txt||'').trim(),parseStatus:'partial'}; state.dictmasterRan=true; markAIDone('dictmaster'); scMark('dictMaster',true); persist(); refreshSchoolProgressUi();
+      state.dictmasterLatest={ts:Date.now(),book:(o.title)||'',raw:String(txt||'').trim(),parseStatus:'partial'}; state.dictmasterRan=true; markAIDone('dictmaster'); scMark('dictMaster',true); persist(); refreshDictMasterCardOnly();
       toast('万物词典已生成并保存原文；结构化规范化未完整，但不再作为生成失败。'); return true;
     }
     // 421：移除词典达人的阻塞式质量质检；结构解析、规范化以及后续名称禁则/安全写入保护仍保留。
@@ -17476,7 +17367,7 @@ async function genDictMaster(btn){
     scMark('dictMaster', true);
     collapseGlossaryAfterDictionaryGeneration(false);
     persist();
-    refreshSchoolProgressUi();
+    refreshDictMasterCardOnly();
     _refreshGlossaryAfterDictMaster = true;
     _refreshDictMasterCard = true;
     toast(`万物词典已生成：人物 ${result.nChar} · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系 ${result.nRel} · 规则 ${result.nWR} · 组织 ${result.nOrg} · 机构 ${result.nInst} · 道具 ${result.nItem} · 术语 ${result.nTerm} · 历史 ${result.nEvent} · 生活 ${result.nLife}（世界基底已建立）`);
@@ -18797,6 +18688,8 @@ async function genDictEnrich(btn, opts){
     state.outline._dictEnrichSummary = buildDictEnrichSummary(parsed);
     state.dictEnrichCounts = { c:n.c, w:n.w, p:n.p, k:n.k, main:n.main||0, support:n.support||0, organizations:n.organizations||0, institutions:n.institutions||0, items:n.items||0, rules:n.rules||0, terms:n.terms||0, events:n.events||0, lifeSettings:n.lifeSettings||0, relationshipTable:n.relationshipTable||0, placeContacts:n.placeContacts||0, properContacts:n.properContacts||0, worldRules:n.worldRules||0, ts:Date.now() };
     // 数据已经安全写入词典后，先完成 AI 状态，再做非核心 UI 刷新；避免 render 异常导致“内容已入库但 UI 仍显示未完成”。
+    // 1.0.446：词典充实成功后必须向公共学校状态层发出完成信号，供校长/一键老师读取；UI 仍只刷新词典充实自己的卡片。
+    scMark('dictEnrich', true, false);
     persist();
     markAIDone('dictEnrich');
     _refreshGlossaryAfterDictEnrich = true;
@@ -20453,7 +20346,6 @@ async function genManyChapters(count, fromStart){
     }
     // 正文批量任务完成只做局部管线/章节刷新，避免后台 AI 任务重建整个 #view。
     patchChapter(start);
-    refreshSchoolProgressUi();
   }catch(e){
     for(let k=0;k<n;k++){ if(chState[start+k] === 'generating'){ chState[start+k]='error'; } patchChapter(start+k); }
     if(st){ st.className='status err'; st.textContent = `第${start+1}~${start+n}章生成失败（${e.message}）。已停止本批，请修复后重试。`; }
