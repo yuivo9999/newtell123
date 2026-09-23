@@ -1,7 +1,7 @@
 /* 432b：AI任务启动/停止控制链修复（基线 431） */
 'use strict';
 
-const APP_VERSION = '1.0.430';
+const APP_VERSION = '1.0.432b';
 // Version line: app1.0.428.js — 老师阶段去除质检/验收门槛；AI非空返回即完成，教案立即落盘查看；正文与多老师对接保留。
 const APP_FILE_VERSION = 'app1.0.430.js';
 const KEY_CFG = nsKey('cfg');
@@ -2093,11 +2093,13 @@ function busy(btn, on, label, cls){
 installGlobalGenerationUi();
 
 let _abortCtl = null;           // 当前 AbortController
+let _stopRequested = false;     // 用户是否明确点击了停止
 let _abortBtn = null;           // 当前可见的停止按钮 DOM
 function makeStopBtn(){
   const b = document.createElement('button');
   b.type = 'button'; b.className = 'stop-btn'; b.innerHTML = '⏹ 停止';
   b.onclick = ()=>{
+    _stopRequested = true;
     if(_abortCtl){ _abortCtl.abort(); _abortCtl = null; }
     hideStopBtn();
   };
@@ -2105,6 +2107,7 @@ function makeStopBtn(){
   return b;
 }
 function showStopBtn(parent){
+  _stopRequested = false;
   if(!_abortBtn){ _abortBtn = makeStopBtn(); document.body.appendChild(_abortBtn); }
   _abortCtl = new AbortController();
   _abortBtn.style.display = '';
@@ -9170,9 +9173,16 @@ async function genSchoolTeachersBatch(){
       showStopBtn(stopParent);
       const ok=await genTeacher(null,i);
       if(ok){ scMark('t'+i,true,false); state._teacherBatchRunning.completed++; }
-      else { scSetFailed('t'+i,true); }
+      else {
+        scSetFailed('t'+i,true);
+        // 432：用户主动停止时，当前老师停止即终止批量流程，不得自动进入下一位。
+        if(_stopRequested){
+          toast(`已停止「${groups[i].teacherCode||`老师${i+1}`}」批量任务，已完成老师的数据保留`);
+          return;
+        }
+      }
       persist(); refreshSchoolProgressUi();
-      // 单个老师失败只记录该老师，继续下一位，不阻塞其他老师。
+      // 非主动停止的单个老师失败仍按原有机制继续下一位。
     }
     const allDone=groups.every((g,i)=>scTeacherGroupComplete(i));
     if(allDone) scMark('teacher',true,false); else delete scState().finished.teacher;
