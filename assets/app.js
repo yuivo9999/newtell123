@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.461';
-// Version line: app1.0.461.js — 校长退出中段战略；推进骨架保留为上游硬约束；老师负责中段调度与施工并与骨架节点逐拍融合。
-const APP_FILE_VERSION = 'app1.0.461.js';
+const APP_VERSION = '1.0.466';
+// Version line: app1.0.466.js — 全量架构复查：确认旧 chapterPlans 不再参与运行时权威链路，仅保留迁移/兼容读取；移除其非必要运行时写入。
+const APP_FILE_VERSION = 'app1.0.466.js';
 // Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
 const KEY_CFG = nsKey('cfg');
 
@@ -479,6 +479,20 @@ function buildPlannedStateFromChapterPlan(plan,gi,teacherTs){
   };
 }
 
+function teacherResultForAssignmentGroup(g){
+  const sc=scState(), list=Array.isArray(sc.teachers)?sc.teachers:[];
+  if(!g) return {t:null,teacherIndex:-1};
+  const code=String(g.teacherCode||'').trim();
+  const groupId=String(g.teacherGroupId||'').trim();
+  let idx=-1;
+  if(groupId) idx=list.findIndex(x=>String(x?.teacherGroupId||'').trim()===groupId);
+  if(idx<0 && code) idx=list.findIndex(x=>String(x?.teacherCode||'').trim().toUpperCase()===code.toUpperCase());
+  // 兼容极旧成果：只有在没有稳定身份字段时，才允许使用 assignment 的组序号。
+  if(idx<0 && Number.isInteger(Number(g.gi))) idx=Number(g.gi);
+  const t=idx>=0?list[idx]:null;
+  return {t,teacherIndex:idx};
+}
+
 function ensureChapterTeacherPlan(i){
   const ss=storyState();
   const groups=teacherAssignmentGroups();
@@ -486,12 +500,14 @@ function ensureChapterTeacherPlan(i){
   const g=groups.find(x=>target>=x.first && target<=x.last);
   if(!g) return null;
   const gi=groups.indexOf(g);
-  const sc=scState();
-  const t=sc.teachers&&sc.teachers[gi];
+  const resolved=teacherResultForAssignmentGroup(g);
+  const t=resolved.t;
+  const teacherIndex=resolved.teacherIndex;
+  // 本章教案的真实来源是“当前章节所属老师”的当前成果；chapter.card 只是可重建缓存。
   if(!t || !String(t.raw||'').trim()) return null;
   const title=String(state.chapters?.[i]?.title||'').trim();
   const currentCard=ss.chapters?.[i]?.card;
-  if(currentCard && Number(currentCard.teacherGi)===Number(gi) && Number(currentCard.teacherTs||0)===Number(t.ts||0)) return currentCard;
+  if(currentCard && String(currentCard.teacherCode||'').trim().toUpperCase()===String(g.teacherCode||'').trim().toUpperCase() && Number(currentCard.teacherTs||0)===Number(t.ts||0)) return currentCard;
   try{
     let plans=(t.plans&&typeof t.plans==='object')?t.plans:{};
     // 第一优先：已有逐章机器计划。即使旧 card 丢失，也从当前老师计划重新恢复本章 card。
@@ -522,14 +538,14 @@ function ensureChapterTeacherPlan(i){
       }
     }
     if(!found.plan) return null;
-    const cards=commitTeacherChapterCards(plans,g,gi);
+    const cards=commitTeacherChapterCards(plans,g,teacherIndex>=0?teacherIndex:gi);
     const hit=cards.find(c=>Number(c.identity?.chapter||c.chapter)===target);
     if(hit) return hit;
     // 最后仅写入当前目标章节，避免一个章节恢复失败影响其它章节。
     const card=JSON.parse(JSON.stringify(found.plan));
     card.identity=card.identity||{}; card.identity.chapter=target;
     if(!String(card.identity.title||'').trim()) card.identity.title=title;
-    card.teacherGi=gi; card.teacherTs=Number(t.ts)||Date.now();
+    card.teacherGi=teacherIndex>=0?teacherIndex:gi; card.teacherCode=g.teacherCode; card.teacherGroupId=g.teacherGroupId; card.teacherTs=Number(t.ts)||Date.now();
     ss.chapters[i]=ss.chapters[i]||{}; ss.chapters[i].card=card;
     ss.chapters[i].planned=buildPlannedStateFromChapterPlan(card,gi,card.teacherTs);
     try{ persist(); }catch(e){}
@@ -819,8 +835,9 @@ async function finalizeChapterState(i,text){
 
 async function commitChapterObservedState(i,text){
   if(!isLong()||!String(text||'').trim()) return null;
-  const o=state.outline||{}, plan=(o.chapterPlans||[])[i]||{}, ss=storyState();
-  const user=`【第${i+1}章教案】\n${String(plan.beatsText||'').slice(0,7000)}\n【本章正文】\n${String(text).slice(-40000)}`;
+  const o=state.outline||{}, plan=chapterPlanAuthority(i), ss=storyState();
+  const planText=plan ? String(chapterPlanReadableText(plan)||'').slice(0,9000) : '';
+  const user=`【第${i+1}章老师当前教案】\n${planText}\n【本章正文】\n${String(text).slice(-40000)}`;
   try{
     const raw=unwrapAIResult(await callDeepSeek(CHAPTER_STATE_SYS,user,{maxTokens:1800,temperature:resolveTaskTemperature('chapterState'),topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterState'}));
     const j=parseJson(raw)||{};
@@ -2062,7 +2079,7 @@ function installGlobalGenerationUi(){
     .app-idea-section>summary{cursor:pointer;padding:11px 13px;font-weight:800;list-style:none;display:flex;align-items:center;gap:8px;background:linear-gradient(90deg,rgba(255,255,255,.82),rgba(244,246,255,.62))}.app-idea-section>summary::-webkit-details-marker{display:none}.app-idea-section>summary:after{content:'＋';margin-left:auto;opacity:.55}.app-idea-section[open]>summary:after{content:'−'}
     .app-idea-section-body{padding:11px 13px;line-height:1.75}.app-idea-kv{display:grid;grid-template-columns:92px 1fr;gap:10px;padding:5px 0}.app-idea-kv b{color:#5967a8}.app-idea-chip{display:inline-block;margin:4px 5px 4px 0;padding:5px 9px;border-radius:999px;background:linear-gradient(135deg,rgba(99,102,241,.10),rgba(45,177,199,.10));border:1px solid rgba(99,102,241,.14);font-size:12px}
     .app-idea-readable{border-radius:15px!important;background:linear-gradient(180deg,rgba(255,255,255,.78),rgba(248,249,253,.72))!important;line-height:1.82!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.9)}
-    /* 1.0.402：优化构想/全书节拍阅读区固定白底黑字，隔离深色主题覆盖 */
+    /* 历史主题兼容：优化构想/全书节拍阅读区固定白底黑字，隔离深色主题覆盖 */
     .app-idea-ui .app-idea-readable,.app-idea-readable,.app-idea-ui .ai-book-beat-brief,.ai-book-beat-brief,.app-idea-ui .app-idea-section-body,.app-idea-section-body,.app-idea-section>summary{background:#fff!important;color:#000!important;}
     .app-idea-ui .app-idea-readable *,.app-idea-readable *,.app-idea-ui .ai-book-beat-brief *,.ai-book-beat-brief *,.app-idea-ui .app-idea-section-body *,.app-idea-section-body *,.app-idea-section>summary,.app-idea-section>summary *{color:#000!important;}
     .app-idea-ui .ai-book-beat-brief,.ai-book-beat-brief{border-color:#d8d8d8!important;box-shadow:0 4px 14px rgba(0,0,0,.06)!important;}
@@ -5493,7 +5510,7 @@ function chapterActBlock(i){
   if(!stages.length) return '';
   const st = stages.find(s => (i+1) >= s.first && (i+1) <= s.last) || null;
   if(!st) return '';
-  return `【本章结构定位】本章（第 ${i+1} 章）落在全书「${currentBookBeatCfg().label}」的「${st.name}」阶段（第 ${st.first}—${st.last} 章）。本章节拍事件须落在此阶段内、服务该阶段走向；属于本阶段的节拍事件必须兑现，不属于本阶段的事件不得越过阶段提前兑现。`;
+  return `【本章结构定位】本章（第 ${i+1} 章）落在全书「${currentBookBeatCfg().label}」的「${st.name}」阶段（第 ${st.first}—${st.last} 章）。本章推进事件须落在此阶段内、服务该阶段走向；属于本阶段的关键事件必须兑现，不属于本阶段的事件不得越过阶段提前兑现。`;
 }
 function bookStagePlan(chapterCount){
   const full = beatStageNames();
@@ -5536,7 +5553,7 @@ function _buildTeacherGroupsRaw(){
   // 少量章节不人为拆老师：10章及以下默认一位老师完成全书。
   if(N <= SCHOOL_GROUP_MAX) return withTeacherCodes([{stage:'全书', first:1, last:N}]);
 
-  // 先尊重全书剧情节拍。bookStagePlan 是全书节拍的权威来源；
+  // 先尊重全书宏观阶段推进。bookStagePlan 是全书阶段映射的权威来源；
   // 每个主要节拍优先由一位老师负责（铺垫/推进/高潮/收尾等），
   // 但不是死板固定4位：实际节拍数由当前小说的全书结构决定。
   let plan = null;
@@ -5990,18 +6007,17 @@ function scGlossaryBrief(maxChar){
   return s || '（暂无词典，正文将在老师教案中按需自洽）';
 }
 function scGroupBeats(g, maxChar){
-  const plans = (state.outline && Array.isArray(state.outline.chapterPlans)) ? state.outline.chapterPlans : [];
-  const out = [];
+  const out=[];
   for(let i=g.first-1;i<g.last;i++){
-    const ch = i+1;
-    const title = (state.outline && state.outline.chapters && state.outline.chapters[i] && String(state.outline.chapters[i].title||'').trim()) || '';
-    const bt = plans[i] && String(plans[i].beatsText||'').trim();
-    out.push(`第${ch}章${title?('《'+title+'》'):''}${bt?('\n'+bt):''}`);
+    const ch=i+1;
+    const title=(state.outline?.chapters?.[i] && String(state.outline.chapters[i].title||'').trim())||'';
+    const plan=chapterPlanAuthority(i);
+    const txt=plan?String(chapterPlanReadableText(plan)||'').trim():'';
+    out.push(`第${ch}章${title?('《'+title+'》'):''}${txt?'\n'+txt:''}`);
   }
-  let s = out.join('\n\n');
-  const m = maxChar || 6000;
-  if(s.length > m) s = s.slice(0, m) + '…（已截断）';
-  return s || '（本章节拍为空，老师依全校守则与本组框架自拟）';
+  let s=out.join('\n\n'); const m=maxChar||6000;
+  if(s.length>m) s=s.slice(0,m)+'…（已截断）';
+  return s||'（本组当前老师教案尚未生成）';
 }
 function scAllGroupsBeats(groups, maxChar){
   const parts = groups.map((g,i)=>`— 组${i+1}·老师${i+1}（第${g.first}-${g.last}章${g.stage?('·'+g.stage):''}） —\n${scGroupBeats(g, 5000)}`);
@@ -6296,28 +6312,21 @@ function principalNarrativeShapeSource(){
   }catch(e){ return ''; }
 }
 function principalTimeSystemSource(targetCount){
-  const o=state.outline||{}, chapters=Array.isArray(o.chapters)?o.chapters:[], plans=Array.isArray(o.chapterPlans)?o.chapterPlans:[];
-  const n=Math.min(Number(targetCount)||chapters.length||plans.length, Math.max(chapters.length,plans.length));
+  const o=state.outline||{}, chapters=Array.isArray(o.chapters)?o.chapters:[];
+  const plans=state.school?.principal?.plans&&typeof state.school.principal.plans==='object' ? state.school.principal.plans : {};
+  const n=Math.min(Number(targetCount)||chapters.length||Object.keys(plans).length, Math.max(chapters.length,Object.keys(plans).length));
   const rows=[];
   for(let i=0;i<n;i++){
-    const c=chapters[i]||{};
-    const plan=plans[i]||{};
-    const raw=extractPlanField(plan,['剧情时间落点','时间推进安排','时间覆盖安排']);
-    const tr=_extractPlanTimeRange(plan);
-    if(raw||tr.from||tr.to) rows.push({chapter:i+1,from:tr.from||'',to:tr.to||'',timePlan:raw||tr.raw||''});
+    const plan=plans[i+1]||{};
+    const entry=String(plan?.openingLink?.entryState||plan?.entryState||'').trim();
+    const raw=entry.match(/(?:剧情时间落点|时间推进安排|时间覆盖安排)[：:]\s*([^\n]+)/)?.[1]?.trim()||'';
+    const tr=_extractPlanTimeRange(entry);
+    if(raw||tr.from||tr.to) rows.push({chapter:i+1,from:tr.from||'',to:tr.to||'',timePlan:raw||tr.raw||entry});
   }
   const anchors=Array.isArray(o._factCard?.timeAnchors)?o._factCard.timeAnchors.filter(x=>x&&x.ch).slice(-30).map(x=>({chapter:x.ch,time:String(x.time||'').trim()})).filter(x=>x.time):[];
   const spans=rows.map(x=>_timeDaySpan(x.from,x.to)).filter(x=>x!=null);
   const totalSpan=spans.length?Math.max(...spans):null;
-  return {
-    schema:'principal-time-strategy-source-v1',
-    enabled:_timeAnchorOn(),
-    rule:'校长只接收全书/阶段级时间推进信息；章节级时间合同仍由老师/正文执行。',
-    plannedChapters:rows,
-    observedAnchors:anchors,
-    maxExplicitChapterSpanDays:totalSpan,
-    strategyFocus:['阶段时间跨度','关键时间跳跃','连续发生区间','需要自然过桥的时间断点']
-  };
+  return {schema:'principal-time-strategy-source-v2',enabled:_timeAnchorOn(),rule:'校长只接收全书/阶段级时间推进信息；章节级时间合同来自当前校长章节计划/正文状态结算。',plannedChapters:rows,observedAnchors:anchors,maxExplicitChapterSpanDays:totalSpan,strategyFocus:['阶段时间跨度','关键时间跳跃','连续发生区间','需要自然过桥的时间断点']};
 }
 function principalSourceBlocks(groups, targetCount){
   const o=state.outline||{}, out=[];
@@ -9473,6 +9482,10 @@ function teacherCurrentResult(gi){
   return t;
 }
 
+function teacherCurrentResultForGroup(g){
+  return teacherResultForAssignmentGroup(g).t || null;
+}
+
 function touchTeacherCurrentResult(gi, reason){
   const sc=scState(), t=sc.teachers&&sc.teachers[gi]; if(!t) return null;
   t.version=Math.max(1,Number(t.version||0)+1);
@@ -9494,7 +9507,7 @@ function lockTeacherSource(gi, chapterNo){
   const ownerGi=chapterOfPlan(Number(chapterNo)-1);
   if(ownerGi<0 || Number(ownerGi)!==Number(gi)) return null;
   const owner=assignment.groups[ownerGi];
-  const t=teacherCurrentResult(ownerGi); if(!t || !owner) return null;
+  const t=teacherCurrentResultForGroup(owner); if(!t || !owner) return null;
   const lock={gi:ownerGi,teacherGroupId:owner.teacherGroupId,teacherCode:owner.teacherCode,teacherIndex:owner.teacherIndex,role:owner.role,startChapter:owner.startChapter,endChapter:owner.endChapter,version:Number(t.version)||1,contentHash:String(t.contentHash||teacherContentFingerprint(t.raw||'')),chapter:Number(chapterNo),lockedAt:Date.now()};
   state._chapterRunLocks=state._chapterRunLocks||{}; state._chapterRunLocks[chapterNo]=lock;
   return lock;
@@ -9507,7 +9520,7 @@ function assertTeacherSourceStillLocked(lock){
     const e=new Error(`第${lock.chapter}章的TEACHER_ASSIGNMENT所有权已变化，本次正文必须停止并重新读取当前老师分配。`);
     e.code='TEACHER_ASSIGNMENT_CHANGED_AFTER_LOCK'; e.lock=lock; throw e;
   }
-  const t=teacherCurrentResult(lock.gi);
+  const t=teacherCurrentResultForGroup(owner);
   if(!t || Number(t.version)!==Number(lock.version) || String(t.contentHash)!==String(lock.contentHash)){
     const e=new Error(`第${lock.chapter}章正文启动后老师教案已发生变化：原版本V${lock.version}，当前V${t?.version||'未知'}。本次正文继续使用启动时锁定版本。`);
     e.code='TEACHER_SOURCE_CHANGED_AFTER_LOCK';
@@ -10564,12 +10577,15 @@ const AIBus = {
     const c = state.chapters[idx];
     const prev = state.chapters[idx-1];
     const next = state.chapters[idx+1];
-    const plan = (o.chapterPlans||[])[idx] || {};
+    const plan = chapterPlanAuthority(idx);
+    const skeleton = plan?.progressionSkeleton || {};
+    const middle = plan?.midConstruction || {};
+    const executionGuide = plan ? String(chapterPlanReadableText(plan)||'').slice(0,9000) : '';
     return {
       mode: state.mode, longMode: isLong(),
       navBeacon: o.navBeacon || '',
       L1_outline: { title: o.title, logline: o.logline, tone: o.tone, total: (o.chapters||[]).length, idx: idx+1 },
-      L2_chapter: { title: c?.title, beatsText: (plan && String(plan.beatsText||'').trim()) ? plan.beatsText : '', emotionalArc: plan.emotionalArc, requiredEntities: plan.requiredEntities },
+      L2_chapter: { title: c?.title, teacherPlan: executionGuide, progressionSkeleton: skeleton, midConstruction: middle, requiredEntities: skeleton.requiredEntities || plan?.requiredEntities || [] },
       L3_neighbor: { prevTitle: prev?.title, prevTail: prev?.content?.slice(-300), nextTitle: next?.title, lastScene: o._factCard?.lastScene },
       L4_context: { rollingSummaries: buildRollingSummary(idx), relevantGlossary: relevantGlossaryForChapter(idx) }
     };
@@ -12697,13 +12713,10 @@ function consistencyReportHtml(){
   } else {
     rows.push(`<div class="chk-item ok">✓ 词典无同名重复（人物 ${(g.characters||[]).length} · 地名 ${(g.places||[]).length} · 专名 ${(g.propernouns||[]).length}）</div>`);
   }
-  const noBeat = [];
-  for(let i=0;i<totalN;i++){
-    const p = (Array.isArray(o.chapterPlans) && o.chapterPlans[i]) || null;
-    if(!String(p && p.beatsText || '').trim()) noBeat.push(i+1);
-  }
-  if(noBeat.length) rows.push(`<div class="chk-item bad">✗ 章节拍悬空：第 ${noBeat.join('、')} 章节拍表为空（缺节拍）</div>`);
-  else if(totalN) rows.push(`<div class="chk-item ok">✓ 全部 ${totalN} 章均有节拍表，无悬空</div>`);
+  const noPlan = [];
+  for(let i=0;i<totalN;i++) if(!chapterPlanAuthority(i)) noPlan.push(i+1);
+  if(noPlan.length) rows.push(`<div class="chk-item bad">✗ 当前老师教案缺失：第 ${noPlan.join('、')} 章尚无可用本章教案</div>`);
+  else if(totalN) rows.push(`<div class="chk-item ok">✓ 全部 ${totalN} 章均可读取当前老师本章教案</div>`);
   rows.push(`<div class="chk-item ok">✓ 时间承接以当前老师教案的“剧情时间落点”与正文状态结算为依据；不再依赖全局时间线。</div>`);
   return rows.join('');
 }
@@ -12736,27 +12749,28 @@ function extractPlanField(plan, names){
 }
 
 function refreshForeshadowBank(){
-  const mem=ensureLongMemory(), o=state.outline||{};
-  const plans=Array.isArray(o.chapterPlans)?o.chapterPlans:[];
+  const mem=ensureLongMemory();
+  const total=realChapterCount()||((state.outline?.chapters||[]).length)||0;
   const next=[];
-  plans.forEach((p,i)=>{
-    const f=extractPlanField(p,['埋设伏笔','伏笔','埋伏笔']);
-    if(!f || /^(无|暂无|无。|没有)$/i.test(f.trim())) return;
+  for(let i=0;i<total;i++){
+    const p=chapterPlanAuthority(i); if(!p) continue;
+    const text=JSON.stringify(p);
+    const m=text.match(/(?:埋设伏笔|伏笔|埋伏笔)[\s\S]{0,180}?([^，,；;。\n]{2,60})/);
+    const f=String(m?.[1]||'').trim();
+    if(!f || /^(无|暂无|没有)$/i.test(f)) continue;
     const later=(state.chapters||[]).slice(i+1).map(c=>String(c&&c.content||'')).join('\n');
     const key=f.replace(/[「」“”【】（）()]/g,'').split(/[，,；;。]/)[0].trim().slice(0,18);
     const recovered=key && later.includes(key);
-    next.push({id:`${i+1}-${key}`, chapter:i+1, text:f.slice(0,180), status:recovered?'suspected-recovered':'open'});
-  });
-  mem.foreshadow=next.slice(-120);
-  mem.lastAuditAt=Date.now();
-  return mem.foreshadow;
+    next.push({id:`${i+1}-${key}`,chapter:i+1,text:f.slice(0,180),status:recovered?'suspected-recovered':'open'});
+  }
+  mem.foreshadow=next.slice(-120); mem.lastAuditAt=Date.now(); return mem.foreshadow;
 }
 
 function longNovelMemoryData(){
   const o=state.outline||{}, g=o.glossary||{}, idx=currentWrittenIndex();
   const dig=Array.isArray(o._chapterDigests)?o._chapterDigests:[];
   const fc=o._factCard||{};
-  const plan=idx>=0 && Array.isArray(o.chapterPlans)?o.chapterPlans[idx]:null;
+  const plan=idx>=0 ? chapterPlanAuthority(idx) : null;
   const prev=idx>=0?state.chapters[idx]:null;
   const time=(fc.timeAnchors||[]).find(x=>x && x.ch===idx);
   const mem=ensureLongMemory();
@@ -12764,7 +12778,7 @@ function longNovelMemoryData(){
   return {o,g,idx,digest:idx>=0?(dig[idx]&&dig[idx].text||''):'',fc,plan,prev,time,foreshadow:mem.foreshadow};
 }
 
-function plansExist(o){ return !!(o && Array.isArray(o.chapterPlans) && o.chapterPlans.some(Boolean)); }
+function plansExist(o){ const total=(o?.chapters||[]).length||realChapterCount()||0; for(let i=0;i<total;i++) if(chapterPlanAuthority(i)) return true; return false; }
 
 function longMemoryBrief(i){
   if(!isLong() || !state.outline) return '';
@@ -12795,12 +12809,12 @@ function longMemoryPromptBlock(i){
 }
 
 function causalityMapHtml(){
-  const o=state.outline||{}; const plans=Array.isArray(o.chapterPlans)?o.chapterPlans:[]; const written=writtenChapterCount();
+  const o=state.outline||{}; const total=(o.chapters||[]).length||0; const written=writtenChapterCount();
   const rows=[];
-  plans.slice(0, Math.min(plans.length, written+4)).forEach((p,i)=>{
-    const b=extractPlanField(p,['承接点','承接']); const a=extractPlanField(p,['逐拍推进','场景链与切换','场景链']); const z=extractPlanField(p,['收束设计','收束']);
+  for(let i=0;i<Math.min(total,written+4);i++){
+    const p=chapterPlanAuthority(i); const b=String(p?.openingLink?.previousTransition||p?.endingConstruction?.nextTransitionBasis||'').trim(); const a=String(p?.midConstruction?.constructionSteps||p?.midConstruction?.midExecution||'').trim(); const z=String(p?.endingConstruction?.lastEffectiveEvent||'').trim();
     if(b||a||z) rows.push(`<div class="lm-causal-row"><span>第${i+1}章</span><div><b>${esc(b||'承接既有状态')}</b><span>→ ${esc(a||'推进本章教案事件')}</span><span>→ ${esc(z||'形成下一章接口')}</span></div></div>`);
-  });
+  }
   return rows.length?rows.join(''):'<div class="muted">尚无足够章节教案可形成因果地图。</div>';
 }
 
@@ -12812,11 +12826,11 @@ function relationshipTrajectoryHtml(){
 
 function seamAuditHtml(){
   const written=writtenChapterCount(); if(written<2) return '<div class="muted">至少完成 2 章后才能进行章间接缝检查。</div>';
-  const rows=[]; const o=state.outline||{};
+  const rows=[];
   for(let i=Math.max(1,written-5);i<written;i++){
-    const prev=state.chapters[i-1], cur=state.chapters[i];
-    const tail=String(prev&&prev.content||'').trim().slice(-120); const plan=Array.isArray(o.chapterPlans)?o.chapterPlans[i]:null;
-    const conn=extractPlanField(plan,['承接点','承接','连续性']);
+    const prev=state.chapters[i-1];
+    const tail=String(prev&&prev.content||'').trim().slice(-120); const plan=chapterPlanAuthority(i);
+    const conn=String(plan?.openingLink?.previousTransition||plan?.endingConstruction?.nextTransitionBasis||'').trim();
     const ok=!!tail && !!conn;
     rows.push(`<div class="lm-seam-row"><b>第${i}→第${i+1}章</b><span class="pill ${ok?'tag-ok':'tag-warn'}">${ok?'✓ 有物理接缝':'△ 需要检查'}</span><small>${esc(conn||'教案未提供明确承接点')}</small></div>`);
   }
@@ -12827,8 +12841,8 @@ function openConsistencyCheck(){ openNeModal('一致性自检（阶段4）', con
 
 function longNovelHealthHtml(){
   const o=state.outline||{}, total=(o.chapters||[]).length||chapterCountVal()||0, written=writtenChapterCount();
-  const plans=Array.isArray(o.chapterPlans)?o.chapterPlans:[];
-  const noPlan=Math.max(0,total-plans.filter(Boolean).length), noDigest=Math.max(0,written-(Array.isArray(o._chapterDigests)?o._chapterDigests.filter(Boolean).length:0));
+  let planCount=0; for(let i=0;i<total;i++) if(chapterPlanAuthority(i)) planCount++;
+  const noPlan=Math.max(0,total-planCount), noDigest=Math.max(0,written-(Array.isArray(o._chapterDigests)?o._chapterDigests.filter(Boolean).length:0));
   const fo=refreshForeshadowBank(); const open=fo.filter(x=>x.status==='open').length;
   const scores={连续性:Math.max(55,100-Math.min(35,noDigest*4)),因果:Math.max(55,100-Math.min(35,noPlan*3)),伏笔:open?Math.max(60,96-Math.min(30,open*2)):96,记忆:written?Math.max(65,100-Math.min(30,noDigest*5)):60};
   return `<div class="lm-health-grid">${Object.entries(scores).map(([k,v])=>`<div class="lm-score"><b>${k}</b><strong>${v}</strong><span>/100</span></div>`).join('')}</div><div class="lm-health-notes"><span>已写 ${written}/${total||'?'} 章</span><span>缺教案 ${noPlan}</span><span>缺细摘要 ${noDigest}</span><span>未确认回收伏笔 ${open}</span></div>`;
@@ -12889,7 +12903,7 @@ function openCreationProgressModal(){
     const body = String(ch.body || ch.content || '').trim();
     const len = body.length;
     if(len > 0) totalChars += len;
-    const hasPlan = Array.isArray(o.chapterPlans) && !!o.chapterPlans[i];
+    const hasPlan = !!chapterPlanAuthority(i);
     chRows.push({
       idx: i + 1,
       title,
@@ -14499,19 +14513,14 @@ function applyTitleCandidate(cand, n, isRegen){
     snapshotTitleBatch('重生成前');
     const cnt = setAllTitles(titles);
     snapshotTitleBatch('本次重生成结果');
-    const o = state.outline;
-    if(Array.isArray(o.chapterPlans) && o.chapterPlans.some(Boolean)){
-      toast(`已重生成 ${cnt} 个标题；节拍表可能与新标题不匹配，建议重生成规划师`);
-    } else toast(`已重生成 ${cnt} 个章节标题`);
+    toast(`已重生成 ${cnt} 个章节标题`);
   } else {
     const o0 = state.outline; if(!o0) { toast('请先生成大纲'); return; }
     o0.chapters = titles.map(t=>({ title: t }));
     state.chapters = titles.map((t,i)=>({ title:t, content:'', strip:'', confirmed:false }));
     setAllTitles(titles);
     persist(); render();
-    if(Array.isArray(o0.chapterPlans) && o0.chapterPlans.some(Boolean)){
-      toast(`已生成 ${titles.length} 个章节标题；节拍表可能与新标题不匹配，建议重生成规划师`);
-    } else toast(`已生成 ${titles.length} 个章节标题`);
+    toast(`已生成 ${titles.length} 个章节标题`);
   }
 }
 
@@ -15475,10 +15484,7 @@ function syncNameEverywhere(oldName, newName){
   const o = state.outline; if(!o || !oldName || !newName || oldName === newName) return 0;
   let n = 0;
   const rep = s => { if(s === oldName){ n++; return newName; } return s; };
-  if(Array.isArray(o.chapterPlans)) o.chapterPlans.forEach(p => {
-    if(!p) return;
-    if(Array.isArray(p.requiredEntities)) p.requiredEntities = p.requiredEntities.map(rep);
-  });
+  // 旧 chapterPlans 已降级为迁移/兼容存储，不再参与运行时写入。
   if(o.navBeacon && typeof o.navBeacon.protagonist === 'string'){
     const pr = o.navBeacon.protagonist;
     if(pr === oldName){ o.navBeacon.protagonist = newName; n++; }
@@ -15689,7 +15695,7 @@ function chCardHtml(c, i){
   return `<div class="card ch-card" data-ch-card="${i}" style="background:var(--panel);border:1px solid var(--line)">
         <div class="ch-head" data-fold="${i}" role="button" tabindex="0" aria-expanded="true">
           <span class="ch-fold-ico">▾</span>
-          <h3 style="margin:0;flex:1;word-break:break-word;line-height:1.35" title="第${i+1}章 · ${esc(cleanChapterTitle(c.title))}">第${i+1}章 · ${esc(cleanChapterTitle(c.title))}${c._titleByAI?'<i class="tbd-title-tag" style="font-style:normal;font-size:11px;font-weight:400;opacity:.55;margin-left:6px" title="本章标题已由章节正文 AI 定稿">正文定稿</i>':(!state.plannerFinalized?'<i class="tbd-title-tag" style="font-style:normal;font-size:11px;font-weight:400;opacity:.55;margin-left:6px" title="标题尚未由全书规划师定稿，当前沿用第二步参考稿">参考稿</i>':'')}</h3>
+          <h3 style="margin:0;flex:1;word-break:break-word;line-height:1.35" title="第${i+1}章 · ${esc(cleanChapterTitle(c.title))}">第${i+1}章 · ${esc(cleanChapterTitle(c.title))}${c._titleByAI?'<i class="tbd-title-tag" style="font-style:normal;font-size:11px;font-weight:400;opacity:.55;margin-left:6px" title="本章标题已由章节正文 AI 定稿">正文定稿</i>':(!state.plannerFinalized?'<i class="tbd-title-tag" style="font-style:normal;font-size:11px;font-weight:400;opacity:.55;margin-left:6px" title="标题尚未由规划阶段定稿，当前沿用第二步参考稿">参考稿</i>':'')}</h3>
           ${wcBadge(c.content, `data-wc-ch="${i}"`)}
         </div>
         <div class="ch-meta ch-status-wrap" data-ch-status="${i}">${chapterBadgesHtml(i)}</div>
@@ -15893,52 +15899,16 @@ function bindReader(){
   if(synBtn && synPop && synCard){
     synBtn.onclick = (e)=>{
       e.stopPropagation();
-      const o = state.outline || {};
-      const ch = (Array.isArray(state.chapters) && state.chapters[readerCur]) ? state.chapters[readerCur] : null;
-      const strip = ch && String(ch.strip||'').trim();
-      const plans = Array.isArray(o.chapterPlans) ? o.chapterPlans : [];
-      const plan = plans[readerCur];
-      const btTxt = (plan && typeof plan.beatsText === 'string' && plan.beatsText.trim()) ? plan.beatsText.trim() : '';
-      const SEC_NAMES = ['承接点','承接','场景链与切换','场景链','逐拍推进','情绪弧','心情弧','情绪基调','必须使用实体','必须实体','出场实体','埋设伏笔','收束设计','收束','设定'];
-      const secOf = (name, alias)=>{
-        const lines = btTxt.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-        const re = new RegExp('^(?:'+(alias?name+'|'+alias:name)+')[：:\\s]*(.*)$');
-        for(let i=0;i<lines.length;i++){
-          const m = lines[i].match(re);
-          if(!m) continue;
-          const buf = [(m[1]||'').trim()].filter(Boolean);
-          for(let j=i+1;j<lines.length;j++){
-            if(SEC_NAMES.some(n=>new RegExp('^(?:'+n+')[：:\\s]').test(lines[j]))) break;   // 下一小节标题即止
-            buf.push(lines[j]);
-          }
-          const v = buf.join('；').replace(/\s+/g,' ').trim();
-          if(v) return v.slice(0, 200);
-        }
-        return null;
-      };
-      let title, body;
-      const _canonicalPlan = chapterPlanAuthority(readerCur);
-      const _lesson = _canonicalPlan ? chapterPlanReadableText(_canonicalPlan) : '';
-      if(_lesson && String(_lesson).trim()){
-        title = `第${toCnNum(readerCur+1)}章 · 本章教案`;
-        body = `<div class="syn-body"><div style="font-size:12px;color:var(--muted);margin-bottom:6px">🎓 老师教案（本章正文的唯一权威内容体）· 原始稿：</div><pre class="sc-plan-raw">${esc(_lesson)}</pre></div>`;
-      } else if(btTxt){
-        const cj = secOf('承接点','承接'); const ss = secOf('收束设计','收束');
-        const _te = _timelineEssenceOf((Array.isArray(o.chapterPlans)?o.chapterPlans[readerCur]:null));
-        title = `第${toCnNum(readerCur+1)}章 · 本章概览`;
-        body = `<div class="syn-body rb-overview">
-          ${_te?`<div class="rb-ov-sec"><b class="rb-ov-lb">⏱ 时间线要点（将注入全书时间线）</b><div>${esc(_te)}</div></div>`:''}
-          ${cj||ss?`<div class="rb-ov-sec"><b class="rb-ov-lb">承接点</b><div>${cj?esc(cj):'<span class="muted">（本章编排未单列承接点）</span>'}</div></div>
-          ${ss?`<div class="rb-ov-sec"><b class="rb-ov-lb">收束设计</b><div>${esc(ss)}</div></div>`:''}`:`<div class="rb-ov-sec"><b class="rb-ov-lb">本章编排</b><div>${esc(clipText(btTxt, 180))}</div></div>`}
-        </div>`;
-      } else if(strip){
-        title = `第${toCnNum(readerCur+1)}章 · 本章梗概`;
-        body = `<div class="syn-body">${esc(strip)}</div>`;
-      } else {
-        title = `第${toCnNum(readerCur+1)}章 · 节拍表`;
-        body = `<div class="syn-body muted">本章暂无节拍表：请先在「全书规划师」生成①节拍表。</div>`;
+      // 正文阅读“概”只服务于当前章节老师教案；旧版章节规划链路已退出正文侧。
+      const chapterNo=readerCur+1;
+      const plan=chapterPlanAuthority(readerCur);
+      if(plan){
+        const text=chapterPlanReadableText(plan);
+        const title=String(plan.identity?.title||plan.title||state.chapters?.[readerCur]?.title||'').trim();
+        synCard.innerHTML=`<h4>第${toCnNum(chapterNo)}章 · 本章概览</h4><div class="syn-body"><div style="font-size:12px;color:var(--muted);margin-bottom:6px">🎓 当前正文第${chapterNo}章老师教案概览 · 与「教案」及「重生成」使用同一份本章权威教案</div><pre class="sc-plan-raw">${esc(text)}</pre></div>`;
+      }else{
+        synCard.innerHTML=`<h4>第${toCnNum(chapterNo)}章 · 本章概览</h4><div class="syn-body muted">当前第${chapterNo}章暂无可用的老师教案，请先完成对应老师备课。</div>`;
       }
-      synCard.innerHTML = `<h4>${title}</h4>${body}`;
       synPop.classList.remove('hidden');
     };
     synPop.onclick = (e)=>{ if(e.target === synPop) synPop.classList.add('hidden'); };  // 点遮罩关闭
@@ -16599,7 +16569,6 @@ function bindView(){
           if(v < oldLen){
             _o.chapters = _o.chapters.slice(0, v);
             if(Array.isArray(state.chapters)) state.chapters = state.chapters.slice(0, v);
-            if(Array.isArray(_o.chapterPlans)) _o.chapterPlans = _o.chapterPlans.slice(0, v);
           } else {
             while(_o.chapters.length < v){
               _o.chapters.push({ title: '', summary: '' });
@@ -16613,9 +16582,8 @@ function bindView(){
           toast(`全书章节数已平滑调整为 ${v} 章，既有内容已保留`);
         }
         else if(_o && Array.isArray(_o.chapters) && _o.chapters.length>0 && _o.chapters.length !== v){
-          const _hasPlans = Array.isArray(_o.chapterPlans) && _o.chapterPlans.some(Boolean);
-          if(_hasPlans && !confirm(`规划师已生成过本章锚点/节拍表。章节数改为 ${v} 将按新数量重建章节占位（旧正文将清空重建）。继续？`)){ render(); return; }
-          if(_hasPlans){ _o.chapterPlans = new Array(v).fill(null); }
+          // 464：章节数变化不再重建旧 chapterPlans；当前校长/老师成果若存在则作废并需重新生成。
+          if(state.school?.principal?.raw && typeof invalidateSchoolDownstream==='function') invalidateSchoolDownstream('principal');
           _o.chapters = Array.from({length:v}, ()=>({title:'', summary:''}));
           state.chapterCount = v;
         } else {
@@ -16842,7 +16810,7 @@ function applyOutlineObject(o, opts){
     }
   }
   if(!o.userIdea) o.userIdea = state.idea;
-  if(!Array.isArray(o.chapterPlans)) o.chapterPlans = [];
+  // 不再初始化旧 chapterPlans；新运行态只使用当前老师章节教案。
   if(o.chapters.length){
     const _prev = (Array.isArray(state.chapters) && state.chapters.length === o.chapters.length) ? state.chapters : null;
     state.chapters = o.chapters.map((c,ci)=>{
@@ -19609,10 +19577,10 @@ function buildChapterUser(i, opt={}){
 
   } else {
     parts.push(`【小说简介】书名：${o.title||''}\n${o.logline||''}`);
-    const plan = (Array.isArray(o.chapterPlans) && o.chapterPlans[i]) || null;
-    if(plan && String(plan.beatsText||'').trim()){
-      const _l1txt = cleanBeatDividerTrailer(plan.beatsText);
-      if(_l1txt) parts.push(`【本章节拍编排】\n${_l1txt}\n`);
+    const plan = chapterPlanAuthority(i);
+    if(plan){
+      const _teacherPlanText = String(chapterPlanReadableText(plan)||'').trim();
+      if(_teacherPlanText) parts.push(`【本章老师教案执行指引】\n${_teacherPlanText}\n`);
     }
     if(i > 0){
       const ledger = buildDynamicProtagonistLedger(i);
@@ -19706,10 +19674,13 @@ function relevantGlossaryForChapter(i){
   if(!o) return {characters:[], places:[], propernouns:[]};
   if(o._relGlossCache && o._relGlossCache[i] && !o._relGlossCache[i]._stale) return o._relGlossCache[i];
   const g = o.glossary || {};
-  const plan = (Array.isArray(o.chapterPlans) && o.chapterPlans[i]) || {};
+  const plan = chapterPlanAuthority(i) || {};
+  const skeleton = plan.progressionSkeleton || {};
   const prev = i > 0 ? state.chapters[i-1] : null;
   const keywords = new Set();
-  (plan.requiredEntities||[]).forEach(e => keywords.add(String(e).trim()));
+  const entityList = Array.isArray(skeleton.requiredEntities) ? skeleton.requiredEntities : (Array.isArray(plan.requiredEntities) ? plan.requiredEntities : []);
+  entityList.forEach(e => keywords.add(String(e).trim()));
+  if(Array.isArray(skeleton.characters)) skeleton.characters.forEach(e => keywords.add(String(e).trim()));
   const _aliasMap = glossaryAliases();
   if(_aliasMap.size) _aliasMap.forEach((cur, al) => { if(keywords.has(al)) keywords.add(cur); });
   if(o.navBeacon && o.navBeacon.protagonist){
@@ -19952,7 +19923,7 @@ function patchChapter(i){
       if(c._titleByAI){
         badgeHtml = '<i class="tbd-title-tag" style="font-style:normal;font-size:11px;font-weight:400;opacity:.55;margin-left:6px" title="本章标题已由章节正文 AI 定稿">正文定稿</i>';
       } else if(!state.plannerFinalized){
-        badgeHtml = '<i class="tbd-title-tag" style="font-style:normal;font-size:11px;font-weight:400;opacity:.55;margin-left:6px" title="标题尚未由全书规划师定稿，当前沿用第二步参考稿">参考稿</i>';
+        badgeHtml = '<i class="tbd-title-tag" style="font-style:normal;font-size:11px;font-weight:400;opacity:.55;margin-left:6px" title="标题尚未由规划阶段定稿，当前沿用第二步参考稿">参考稿</i>';
       }
       h3.innerHTML = titleTxt + badgeHtml;
     }
@@ -20504,7 +20475,7 @@ async function continueTruncatedChapter(i, firstPart, resumeFrom){
 ${tail}
 
 【续写要求】
-从上文中断处无缝继续，不要重复任何已有内容，不要重新开头。优先完成当前未完成的本章节拍；一旦抵达【章末状态】立即停止，不得为了输出长度继续推进新的剧情。保持与原文一致的叙事节奏、人物称谓和风格。`;
+从上文中断处无缝继续，不要重复任何已有内容，不要重新开头。优先完成当前未完成的本章推进节点；一旦抵达【章末状态】立即停止，不得为了输出长度继续推进新的剧情。保持与原文一致的叙事节奏、人物称谓和风格。`;
   let secondPartial = '';
   const res = await callDeepSeek(longChapterSys(), user, {maxTokens: clampMaxTokens('continue'), taskKey:'chapter', onStream: (delta)=>{
     secondPartial += delta;
@@ -20600,13 +20571,6 @@ function bindRangeGen(){
     if(!validate()) return;
     const sv = parseInt(s.value), ev = parseInt(e.value);
     const n = ev - sv + 1;
-    {
-      const _o = state.outline || {};
-      const miss = [];
-      (_o.chapters||[]).forEach((c,i)=>{ const p=(_o.chapterPlans||[])[i];
-        if(!p || !String(p.beatsText||'').trim()) miss.push(i+1); });
-      if(miss.length && !confirm(`第 ${miss.join('、')} 章缺节拍表，这些章将按大纲直接裸写。继续？`)) return;
-    }
     btn.disabled = true; btn.textContent = '生成中…';
     try{
       await genNChapters(sv - 1, n);   // 0-based start，genNChapters 内每章 snapshotChapterVersion + 覆盖
@@ -20624,13 +20588,6 @@ function bindRangeGen(){
 }
 
 async function genManyChapters(count, fromStart){
-  {
-    const _o = state.outline || {};
-    const miss = [];
-    (_o.chapters||[]).forEach((c,i)=>{ const p=(_o.chapterPlans||[])[i];
-      if(!p || !String(p.beatsText||'').trim()) miss.push(i+1); });
-    if(miss.length && !confirm(`第 ${miss.join('、')} 章缺节拍表，这些章将按大纲直接裸写。继续？`)) return;
-  }
   const btn = $('#btnGenMany'); if(btn) busy(btn,true,'逐章生成中…');
   const st = $('#chStatus'); if(st){ st.className='status'; st.textContent=''; }
   const genCtl = $('#btnGenAllChapters');
