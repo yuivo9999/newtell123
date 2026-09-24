@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.483';
+const APP_VERSION = '1.0.484';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.482.js';
+const APP_FILE_VERSION = 'app1.0.484.js';
 // Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
 const KEY_CFG = nsKey('cfg');
 
@@ -753,7 +753,8 @@ function getCurrentChapterStructuredPlan(i){
       // raw-only chapterCard 可以供正文作为本章教案原文使用，但不能冒充 canonical ChapterPlan。
       const isStructured=entry.structuredAvailable!==false && !!(plan.progressionSkeleton && plan.identity);
       plan.structuredAvailable=isStructured; plan.source='teacherChapterCard'; plan.teacherSourceHash=currentHash;
-      if(!isStructured) return null;
+      // 1.0.484：raw-only chapterCard 仍然是“本章教案”的正式来源；
+      // structuredAvailable 只描述结构化程度，不再把 raw-only 卡判定为“没有教案”。
       return plan;
     }
   }
