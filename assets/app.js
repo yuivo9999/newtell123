@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.459';
-// Version line: app1.0.455.js — 校长退出中段战略；推进骨架保留为上游硬约束；老师负责中段调度与施工并与骨架节点逐拍融合。
-const APP_FILE_VERSION = 'app1.0.459.js';
+const APP_VERSION = '1.0.460';
+// Version line: app1.0.460.js — 校长退出中段战略；推进骨架保留为上游硬约束；老师负责中段调度与施工并与骨架节点逐拍融合。
+const APP_FILE_VERSION = 'app1.0.460.js';
 // Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
 const KEY_CFG = nsKey('cfg');
 
@@ -479,7 +479,7 @@ function buildPlannedStateFromChapterPlan(plan,gi,teacherTs){
   };
 }
 
-function ensureCurrentTeacherCards(i){
+function ensureChapterTeacherPlan(i){
   const ss=storyState();
   const groups=teacherAssignmentGroups();
   const target=i+1;
@@ -488,27 +488,58 @@ function ensureCurrentTeacherCards(i){
   const gi=groups.indexOf(g);
   const sc=scState();
   const t=sc.teachers&&sc.teachers[gi];
-  const existing=ss.chapters?.[i]?.card;
-  if(t && existing && Number(existing.teacherGi)===Number(gi) && Number(existing.teacherTs||0)===Number(t.ts||0)) return existing;
-  if(!t?.plans) return null;
+  if(!t || !String(t.raw||'').trim()) return null;
+  const title=String(state.chapters?.[i]?.title||'').trim();
+  const currentCard=ss.chapters?.[i]?.card;
+  if(currentCard && Number(currentCard.teacherGi)===Number(gi) && Number(currentCard.teacherTs||0)===Number(t.ts||0)) return currentCard;
   try{
-    const title=state.chapters?.[i]?.title||'';
-    const found=teacherPlanForChapter(t.plans,target,g,title);
-    if(found.plan){
-      const cards=commitTeacherChapterCards(t.plans,g,gi);
-      const hit=cards.find(c=>Number(c.identity?.chapter||c.chapter)===target);
-      if(hit) return hit;
-      const card=JSON.parse(JSON.stringify(found.plan));
-      card.identity=card.identity||{}; card.identity.chapter=target;
-      if(!String(card.identity.title||'').trim()) card.identity.title=String(title||'').trim();
-      card.teacherGi=gi; card.teacherTs=Number(t.ts)||Date.now();
-      ss.chapters[i]=ss.chapters[i]||{}; ss.chapters[i].card=card;
-      ss.chapters[i].planned=buildPlannedStateFromChapterPlan(card,gi,card.teacherTs);
-      return card;
+    let plans=(t.plans&&typeof t.plans==='object')?t.plans:{};
+    // 第一优先：已有逐章机器计划。即使旧 card 丢失，也从当前老师计划重新恢复本章 card。
+    let found=teacherPlanForChapter(plans,target,g,title);
+    // 第二优先：老师原始机器教案仍在，但逐章 plans 缓存缺失/残缺时，按当前版本重新解析并编译。
+    // raw 是老师实际成果来源；chapter card 只是可重建缓存，不应因为缓存丢失而把老师判定为未备课。
+    if(!found.plan){
+      const machine=parseTeacherMachine(String(t.raw),g.first,g.last);
+      if(machine){
+        const rebuilt={...plans};
+        for(let n=g.first;n<=g.last;n++){
+          if(rebuilt[n]) continue;
+          const row=machine.rows[n];
+          const scenes=machine.scenes.filter(x=>Number(String(x.chapter||'').trim())===n);
+          if(!row || !scenes.length) continue;
+          const principalPlans=principalCurrentResult()?.plans||{};
+          const principalFound=principalPlanForChapter(principalPlans,n,g,String(state.chapters?.[n-1]?.title||''));
+          if(!principalFound.plan) continue;
+          try{ rebuilt[n]=compileTeacherChapterPlan(row,scenes,principalFound.plan); }catch(e){}
+        }
+        if(Object.keys(rebuilt).length){
+          t.plans=rebuilt;
+          plans=rebuilt;
+          found=teacherPlanForChapter(plans,target,g,title);
+          // 只恢复结构化缓存，不改变老师原始成果版本/完成状态。
+          try{ persist(); }catch(e){}
+        }
+      }
     }
-  }catch(e){ return null; }
-  return null;
+    if(!found.plan) return null;
+    const cards=commitTeacherChapterCards(plans,g,gi);
+    const hit=cards.find(c=>Number(c.identity?.chapter||c.chapter)===target);
+    if(hit) return hit;
+    // 最后仅写入当前目标章节，避免一个章节恢复失败影响其它章节。
+    const card=JSON.parse(JSON.stringify(found.plan));
+    card.identity=card.identity||{}; card.identity.chapter=target;
+    if(!String(card.identity.title||'').trim()) card.identity.title=title;
+    card.teacherGi=gi; card.teacherTs=Number(t.ts)||Date.now();
+    ss.chapters[i]=ss.chapters[i]||{}; ss.chapters[i].card=card;
+    ss.chapters[i].planned=buildPlannedStateFromChapterPlan(card,gi,card.teacherTs);
+    try{ persist(); }catch(e){}
+    return card;
+  }catch(e){
+    console.warn('[ensureChapterTeacherPlan] 本章机器教案恢复失败',e);
+    return null;
+  }
 }
+function ensureCurrentTeacherCards(i){ return ensureChapterTeacherPlan(i); }
 
 function chapterCard(i){ return ensureCurrentTeacherCards(i); }
 function chapterPlanAuthority(i){ return chapterCard(i)||null; }
