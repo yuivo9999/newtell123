@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.481';
+const APP_VERSION = '1.0.482';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.481.js';
+const APP_FILE_VERSION = 'app1.0.482.js';
 // Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
 const KEY_CFG = nsKey('cfg');
 
@@ -555,7 +555,7 @@ function teacherChapterCutStatus(gi){
   let ready=0;
   for(let n=g.first;n<=g.last;n++){
     const c=cards[n];
-    if(c && c.status==='ready' && String(c.sourceHash||'')===currentHash && c.plan) ready++;
+    if(c && c.status==='ready' && String(c.sourceHash||'')===currentHash && (c.plan || String(c.rawText||'').trim())) ready++;
   }
   if(ready===total && total>0) return {status:'ready',ready,total,sourceHash:currentHash,cards,cutAt:Number(cc.cutAt)||0};
   if(ready>0) return {status:'partial',ready,total,sourceHash:currentHash,cards,cutAt:Number(cc?.cutAt)||0};
@@ -587,7 +587,7 @@ function renderTeacherCutUi(gi){
   }
   const detail=card.querySelector('[data-scp-cut-detail]');
   if(detail){
-    detail.textContent=st.status==='ready' ? `单章机器教案已就绪：${st.ready}/${st.total}` : st.status==='partial' ? `单章机器教案：${st.ready}/${st.total}，可重新切割补齐` : st.status==='stale' ? '总教案已更新，旧单章卡已失效，请重新切割' : st.status==='no-teacher' ? '请先完成本老师总教案' : `单章机器教案：0/${st.total}，点击“切割教案”后生成`;
+    detail.textContent=st.status==='ready' ? `单章教案已就绪：${st.ready}/${st.total}（机器结构化按章可用时自动增强）` : st.status==='partial' ? `单章教案：${st.ready}/${st.total}，可重新切割补齐` : st.status==='stale' ? '总教案已更新，旧单章卡已失效，请重新切割' : st.status==='no-teacher' ? '请先完成本老师总教案' : `单章机器教案：0/${st.total}，点击“切割教案”后生成`;
   }
   const list=card.querySelector('[data-scp-cut-list]');
   if(list) list.innerHTML=renderTeacherCutChapterList(gi);
@@ -610,7 +610,7 @@ function openTeacherCutConfirm(gi){
         <div>负责章节：<b>第${g.first}—${g.last}章</b></div>
         <div>共 <b>${Math.max(0,g.last-g.first+1)} 章</b> · 当前有效单章卡：<b>${st.ready}/${st.total}</b></div>
       </div>
-      <div style="margin-top:12px;font-size:12px;line-height:1.7;color:var(--muted)">将根据当前老师总教案中的 <code>TEACHER_CHAPTER / SCENE</code> 机器协议，由前端确定性生成每一章的独立机器教案卡。不会再次调用 AI，也不会修改其他老师。</div>
+      <div style="margin-top:12px;font-size:12px;line-height:1.7;color:var(--muted)">将直接读取当前老师“读教案”中的完整原始纯文本，按“第X章”章节边界确定性切出本老师负责的每一章。不会再次调用 AI，也不会修改其他老师；切出后再尝试把机器协议编译成结构化教案，机器协议缺失也不会阻止原始单章教案保存。</div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
         <button type="button" class="btn small" data-tcut-cancel>取消</button>
         <button type="button" class="btn primary sc-teacher-cut-confirm" data-tcut-start>✂️ 开始切割</button>
@@ -630,8 +630,8 @@ function renderTeacherCutChapterList(gi){
   const items=[];
   for(let n=g.first;n<=g.last;n++){
     const c=st.cards?.[n];
-    const ok=c&&c.status==='ready'&&String(c.sourceHash||'')===String(st.sourceHash||'')&&c.plan;
-    items.push(`<span class="sc-tc-cut-item ${ok?'ready':'todo'}">${ok?'✓':'○'} 第${n}章</span>`);
+    const ok=c&&c.status==='ready'&&String(c.sourceHash||'')===String(st.sourceHash||'')&&(c.plan||String(c.rawText||'').trim());
+    items.push(`<span class="sc-tc-cut-item ${ok?'ready':'todo'}">${ok?'✓':'○'} 第${n}章${ok&&c?.structuredAvailable===false?'（原文）':''}</span>`);
   }
   return items.join(' ');
 }
@@ -640,41 +640,87 @@ async function cutTeacherChapterCardsManually(gi){
   const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
   const t=teacherCurrentResult(Number(gi));
   if(!g||!t){toast(`老师${Number(gi)+1}总教案尚未生成，请先完成备课`);return false;}
+  const raw=String(t.raw||'').trim();
+  if(!raw){toast('当前老师没有可读取的总教案原始纯文本');return false;}
   state._teacherCutting=state._teacherCutting||{}; state._teacherCutting[gi]=true; renderTeacherCutUi(gi);
   try{
-    const sourceHash=String(t.contentHash||teacherContentFingerprint(t.raw||''));
-    const machineText=String(t.machineText||t.raw||'');
-    const machine=parseTeacherMachine(machineText,g.first,g.last);
-    if(!machine) throw new Error('当前老师成果没有可识别的 TEACHER_CHAPTER 机器教案协议。');
+    const sourceHash=String(t.contentHash||teacherContentFingerprint(raw));
+    // 1.0.482：人工切割的第一事实来源改为“读教案”中的完整 raw 总教案。
+    // 不再要求 TEACHER_CHAPTER / SCENE 机器协议先解析成功；章节边界由确定性标题解析完成。
+    const rawChapters=parseTeacherRawChapters(raw,g.first,g.last);
+    const machineText=String(t.machineText||'');
+    let machine=null;
+    try{ if(machineText.trim()) machine=parseTeacherMachine(machineText,g.first,g.last); }catch(e){ console.warn('[manualTeacherChapterCut] machine parse skipped',e); }
     const principalPlans=state.school?.principal?.plans||{};
-    const built={}; const errors=[];
+    const built={}; const errors=[]; const structuredMissing=[];
     for(let n=g.first;n<=g.last;n++){
-      const row=machine.rows[n];
-      const scenes=machine.scenes.filter(x=>Number(String(x.chapter||'').trim())===n);
-      const principalFound=principalPlanForChapter(principalPlans,n,g,String(state.chapters?.[n-1]?.title||''));
-      if(!row||!scenes.length){errors.push(`第${n}章缺少TEACHER_CHAPTER或SCENE`);continue;}
-      if(!principalFound?.plan){errors.push(`第${n}章缺少对应校长推进骨架`);continue;}
-      try{
-        const plan=compileTeacherChapterPlan(row,scenes,principalFound.plan);
-        built[n]={chapter:n,title:String(row.title||state.chapters?.[n-1]?.title||'').trim(),status:'ready',sourceHash,cutAt:Date.now(),plan};
-      }catch(e){errors.push(`第${n}章切割失败：${String(e?.message||e)}`);}
+      const rawChapter=rawChapters[n];
+      if(!rawChapter?.rawText){ errors.push(`第${n}章未在总教案纯文本中识别到章节标题`); continue; }
+      let plan=null;
+      let structuredAvailable=false;
+      // 2. 机器协议只是“结构化增强”，成功则编译；失败绝不否定原始单章切割。
+      if(machine){
+        const row=machine.rows?.[n];
+        const scenes=(machine.scenes||[]).filter(x=>Number(String(x.chapter||'').trim())===n);
+        const principalFound=principalPlanForChapter(principalPlans,n,g,String(state.chapters?.[n-1]?.title||rawChapter.title||''));
+        if(row&&scenes.length&&principalFound?.plan){
+          try{
+            plan=compileTeacherChapterPlan(row,scenes,principalFound.plan);
+            structuredAvailable=!!plan;
+          }catch(e){
+            structuredMissing.push(`第${n}章结构化编译失败：${String(e?.message||e)}`);
+          }
+        }else{
+          structuredMissing.push(`第${n}章暂未形成完整机器结构（保留原始单章教案）`);
+        }
+      }else{
+        structuredMissing.push(`第${n}章未识别到机器协议（保留原始单章教案）`);
+      }
+      // 3. 无论结构化是否成功，raw 单章教案都必须成为正式 chapterCard。
+      if(!plan){
+        plan={
+          identity:{chapter:n,title:String(rawChapter.title||state.chapters?.[n-1]?.title||'').trim()},
+          rawTeacherPlan:String(rawChapter.rawText||'').trim(),
+          rawText:String(rawChapter.rawText||'').trim(),
+          structuredAvailable:false,
+          source:'teacherChapterCardRaw'
+        };
+      }else{
+        plan.rawTeacherPlan=String(rawChapter.rawText||'').trim();
+        plan.rawText=String(rawChapter.rawText||'').trim();
+        plan.structuredAvailable=structuredAvailable;
+        plan.source='teacherChapterCard';
+      }
+      built[n]={
+        chapter:n,
+        title:String(rawChapter.title||plan.identity?.title||state.chapters?.[n-1]?.title||'').trim(),
+        status:'ready', sourceHash, cutAt:Date.now(),
+        structuredAvailable:!!plan.structuredAvailable,
+        rawText:String(rawChapter.rawText||'').trim(),
+        rawTeacherPlan:String(rawChapter.rawText||'').trim(),
+        plan
+      };
     }
-    if(!Object.keys(built).length) throw new Error(errors.length ? errors.join('；') : '当前老师总教案没有可切割的完整章节。');
+    if(!Object.keys(built).length) throw new Error(errors.length ? errors.join('；') : '当前老师总教案中没有可识别的负责章节。');
     const now=Date.now();
-    t.chapterCards={version:1,sourceHash,teacherVersion:Number(t.version)||1,cutAt:now,total:g.last-g.first+1,ready:Object.keys(built).length,chapters:built,errors:errors.slice(0,30)};
-    // 保留旧 plans 兼容层；正式逐章来源改由 chapterCards 控制。
-    const plans={}; Object.keys(built).forEach(n=>{plans[n]=built[n].plan;}); t.plans=plans; t.plansSourceHash=sourceHash;
-    // 同步正文章节缓存，但只写当前老师负责范围。
+    t.chapterCards={version:2,sourceHash,teacherVersion:Number(t.version)||1,cutAt:now,total:g.last-g.first+1,ready:Object.keys(built).length,structured:Object.values(built).filter(x=>x.structuredAvailable).length,chapters:built,errors:[...errors,...structuredMissing].slice(0,30)};
+    // 保留旧 plans 兼容层：只有结构化卡才同步进去；raw-only 卡不伪装成完整机器 plan。
+    const plans={}; Object.keys(built).forEach(n=>{if(built[n].structuredAvailable&&built[n].plan) plans[n]=built[n].plan;});
+    t.plans=plans; t.plansSourceHash=sourceHash;
     const ss=storyState(); ss.chapters=ss.chapters||{};
     Object.keys(built).forEach(n=>{
       const card=JSON.parse(JSON.stringify(built[n].plan));
       card.identity=card.identity||{}; card.identity.chapter=Number(n); card.teacherGi=gi; card.teacherTs=Number(t.ts)||now; card.teacherSourceHash=sourceHash;
-      const idx=Number(n)-1; ss.chapters[idx]=ss.chapters[idx]||{}; ss.chapters[idx].card=card; ss.chapters[idx].planned=buildPlannedStateFromChapterPlan(card,gi,Number(t.ts)||now);
+      const idx=Number(n)-1; ss.chapters[idx]=ss.chapters[idx]||{};
+      // 只有结构化计划才进入旧的 planned-state 链，raw-only 卡仍作为正文原始教案来源。
+      ss.chapters[idx].card=card;
+      if(built[n].structuredAvailable) ss.chapters[idx].planned=buildPlannedStateFromChapterPlan(card,gi,Number(t.ts)||now);
     });
     persist();
     renderTeacherCutUi(gi);
-    const total=g.last-g.first+1, ready=Object.keys(built).length;
-    toast(`${groups.length>1?`老师${gi+1}`:'老师'}单章教案切割${ready===total?'完成':'完成部分切割'}：${ready}/${total}${errors.length?'；'+errors.slice(0,2).join('；'):''}`);
+    const total=g.last-g.first+1, ready=Object.keys(built).length, structured=Object.values(built).filter(x=>x.structuredAvailable).length;
+    const suffix=structured<ready?`；原始单章教案${ready-structured}章已保留，机器结构化待补齐`:'';
+    toast(`${groups.length>1?`老师${gi+1}`:'老师'}单章教案切割${ready===total?'完成':'完成部分切割'}：${ready}/${total}${suffix}`);
     return ready===total;
   }catch(e){
     console.error('[manualTeacherChapterCut]',e);
@@ -695,7 +741,7 @@ function getCurrentChapterStructuredPlan(i){
   const currentHash=String(t.contentHash||teacherContentFingerprint(t.raw||''));
   const cc=t.chapterCards&&typeof t.chapterCards==='object'?t.chapterCards:null;
   const entry=cc?.chapters?.[chapterNo];
-  // 1.0.480：正文正式读取路径——当前老师有效 chapterCards；旧版本缓存或过期卡一律不作为正式机器教案。
+  // 1.0.482：正文正式读取路径——当前老师有效 chapterCards；旧版本缓存或过期卡一律不作为正式机器教案。
   if(entry && entry.status==='ready' && String(entry.sourceHash||'')===currentHash && entry.plan){
     let plan=null; try{plan=JSON.parse(JSON.stringify(entry.plan));}catch(e){plan=null;}
     if(plan){
