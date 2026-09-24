@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.470';
+const APP_VERSION = '1.0.473';
 // Version line: app1.0.471.js — 第三阶段封口：canonical 原始本章教案、结构化增强与故障隔离最终收口。
-const APP_FILE_VERSION = 'app1.0.471.js';
+const APP_FILE_VERSION = 'app1.0.473.js';
 // Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
 const KEY_CFG = nsKey('cfg');
 
@@ -7755,21 +7755,55 @@ function parseTeacherBeats(text){
   return String(text||'').split(/(?=①|②|③|④|⑤|⑥|⑦|⑧|⑨|⑩)/).map(x=>x.trim()).filter(Boolean).map((x,i)=>({id:`P${String(i+1).padStart(2,'0')}`,text:x.replace(/^(?:①|②|③|④|⑤|⑥|⑦|⑧|⑨|⑩)\s*/,'').trim()}));
 }
 function parseRefList(text){ const t=String(text||''); const circ=[...t.matchAll(/[①②③④⑤⑥⑦⑧⑨⑩]/g)].map(m=>`P${String('①②③④⑤⑥⑦⑧⑨⑩'.indexOf(m[0])+1).padStart(2,'0')}`); const rest=t.replace(/[①②③④⑤⑥⑦⑧⑨⑩]/g,' ').split(/[、,，;；|\s]+/).map(x=>x.trim()).filter(Boolean); return [...new Set([...circ,...rest])]; }
+function parsePrincipalProgressionBeats(text){
+  const t=String(text||'').trim(); if(!t) return [];
+  const circ='①②③④⑤⑥⑦⑧⑨⑩';
+  const marks=[...t.matchAll(/[①②③④⑤⑥⑦⑧⑨⑩]/g)];
+  if(marks.length){
+    return marks.map((m,i)=>({id:`P${String(circ.indexOf(m[0])+1).padStart(2,'0')}`,text:t.slice(m.index,i+1<marks.length?marks[i+1].index:t.length).replace(/^[①②③④⑤⑥⑦⑧⑨⑩]\s*/,'').trim()}));
+  }
+  const pmarks=[...t.matchAll(/\bP(\d{1,2})\b/gi)];
+  if(pmarks.length){
+    return pmarks.map((m,i)=>({id:`P${String(Number(m[1])).padStart(2,'0')}`,text:t.slice(m.index,i+1<pmarks.length?pmarks[i+1].index:t.length).trim()}));
+  }
+  const lines=t.split(/\n+/).map(x=>x.replace(/^[-*•\d.、]+\s*/,'').trim()).filter(Boolean);
+  return lines.map((x,i)=>({id:`P${String(i+1).padStart(2,'0')}`,text:x}));
+}
+function normalizePrincipalSkeleton(principalPlan){
+  const raw=String(principalPlan?.progressionSkeleton||'').trim();
+  const beats=parsePrincipalProgressionBeats(raw);
+  return {goal:String(principalPlan?.goal||'').trim(),coreEvent:String(principalPlan?.coreEvent||'').trim(),sourceText:raw,characters:Array.isArray(principalPlan?.characters)?principalPlan.characters:[],beats};
+}
+function parseCoveredBeatRefs(text, skeletonBeats){
+  const t=String(text||'').trim(); const beats=Array.isArray(skeletonBeats)?skeletonBeats:[];
+  const ids=beats.map(x=>x.id); const circ='①②③④⑤⑥⑦⑧⑨⑩'; const out=[];
+  const add=(id)=>{id=String(id||'').toUpperCase(); if(ids.includes(id)&&!out.includes(id)) out.push(id);};
+  for(const m of t.matchAll(/([①②③④⑤⑥⑦⑧⑨⑩])\s*[-~—至到]\s*([①②③④⑤⑥⑦⑧⑨⑩])/g)){ const a=circ.indexOf(m[1])+1,b=circ.indexOf(m[2])+1; for(let n=Math.min(a,b);n<=Math.max(a,b);n++) add(`P${String(n).padStart(2,'0')}`); }
+  for(const m of t.matchAll(/P(\d{1,2})\s*[-~—至到]\s*P?(\d{1,2})/gi)){ const a=Number(m[1]),b=Number(m[2]); for(let n=Math.min(a,b);n<=Math.max(a,b);n++) add(`P${String(n).padStart(2,'0')}`); }
+  parseRefList(t).forEach(add);
+  return out;
+}
 function compileTeacherChapterPlan(row, sceneRows, principalPlan){
-  const beats=parseTeacherBeats(row.beats);
+  const principalSkeleton=normalizePrincipalSkeleton(principalPlan);
+  const teacherBeats=parseTeacherBeats(row.beats);
   const chars=parseRefList(row.characters);
-  const covered=parseRefList(row.coveredBeats);
+  const covered=parseCoveredBeatRefs(row.coveredBeats||row.beatRange,principalSkeleton.beats);
+  const coveredIndexes=covered.map(id=>principalSkeleton.beats.findIndex(x=>x.id===id)).filter(x=>x>=0).sort((a,b)=>a-b);
+  const transitions=[];
+  for(let k=0;k<coveredIndexes.length-1;k++){ const a=coveredIndexes[k],b=coveredIndexes[k+1]; if(b===a+1) transitions.push({fromBeatId:principalSkeleton.beats[a].id,toBeatId:principalSkeleton.beats[b].id}); }
+  const teacherBeatNotes=teacherBeats.map((x,i)=>({beatId:principalSkeleton.beats[i]?.id||'',note:x.text})).filter(x=>x.beatId);
   const plan={
     identity:{chapter:Number(row.chapter),title:String(row.title||'').trim()},
-    progressionSkeleton:{goal:String(row.goal||'').trim(),coreEvent:String(row.coreEvent||'').trim(),characters:chars,beats},
+    progressionSkeleton:{goal:principalSkeleton.goal,coreEvent:principalSkeleton.coreEvent,sourceText:principalSkeleton.sourceText,characters:principalSkeleton.characters,beats:principalSkeleton.beats},
     openingLink:{previousTransition:String(row.previousTransition||'').trim(),entryState:String(row.entryState||'').trim()},
     midConstruction:{
       constructionBoundary:String(row.constructionBoundary||'').trim(),
-      coveredBeats:covered,constructionSteps:String(row.constructionSteps||'').trim(),requiredStateChange:String(row.requiredStateChange||'').trim(),midExecution:String(row.midExecution||'').trim(),
+      coveredBeats:covered,beatRange:{fromBeatId:covered[0]||'',toBeatId:covered[covered.length-1]||''},transitions,teacherBeatNotes,teacherCharacters:chars,
+      constructionSteps:String(row.constructionSteps||'').trim(),requiredStateChange:String(row.requiredStateChange||'').trim(),midExecution:String(row.midExecution||'').trim(),
       informationMotion:String(row.informationMotion||'').trim(),characterMotion:String(row.characterMotion||'').trim(),conflictMotion:String(row.conflictMotion||'').trim(),rhythmScene:String(row.rhythmScene||'').trim(),difference:String(row.difference||'').trim(),forbidden:String(row.forbidden||'').trim()
     },
     endingConstruction:{function:String(row.endingFunction||'').trim(),intensity:Number(row.endingIntensity),lastEffectiveEvent:String(row.lastEffectiveEvent||'').trim(),form:String(row.endingForm||'').trim(),nextTransitionType:String(row.nextTransitionType||'').trim(),nextTransitionBasis:String(row.nextTransitionBasis||'').trim(),forbiddenAfter:String(row.forbiddenAfter||'').trim().split(/[；;|]/).map(x=>x.trim()).filter(Boolean)},
-    sceneConstruction:sceneRows.map((x,i)=>({scene:Number(x.scene)||i+1,location:String(x.location||'').trim(),characters:parseRefList(x.characters),purpose:String(x.purpose||'').trim(),event:String(x.event||'').trim(),change:String(x.change||'').trim(),emotion:String(x.emotion||'').trim(),mustKeep:String(x.mustKeep||'').trim(),coversBeats:parseRefList(x.coversBeats)})),
+    sceneConstruction:sceneRows.map((x,i)=>({scene:Number(x.scene)||i+1,location:String(x.location||'').trim(),characters:parseRefList(x.characters),purpose:String(x.purpose||'').trim(),event:String(x.event||'').trim(),change:String(x.change||'').trim(),emotion:String(x.emotion||'').trim(),mustKeep:String(x.mustKeep||'').trim(),coversBeats:parseCoveredBeatRefs(x.coversBeats,principalSkeleton.beats)})),
     executionGuide:null,
     coverage:null
   };
@@ -7778,16 +7812,23 @@ function compileTeacherChapterPlan(row, sceneRows, principalPlan){
   return plan;
 }
 function buildTeacherCoverage(plan, principalPlan){
+  const principalBeats=normalizePrincipalSkeleton(principalPlan).beats;
   const beats=(plan.progressionSkeleton?.beats||[]).map(x=>x.id);
-  const covered=(plan.midConstruction?.coveredBeats||[]).map(x=>String(x).replace(/^P/i,'P'));
+  const covered=(plan.midConstruction?.coveredBeats||[]).map(x=>String(x).toUpperCase());
   const sceneText=(plan.sceneConstruction||[]).map(x=>`${x.purpose} ${x.event} ${x.change} ${x.mustKeep}`).join(' ');
-  const sceneCovered=[...new Set((plan.sceneConstruction||[]).flatMap(x=>x.coversBeats||[]).map(x=>String(x).replace(/^P/i,'P')))];
-  const strategyOk=!!(principalPlan?.progressionSkeleton && plan.midConstruction?.requiredStateChange && plan.midConstruction?.constructionSteps);
-  const strategyToConstruction=[{strategy:'progressionSkeleton',construction:'midConstruction',ok:strategyOk}];
-  const missingScene=beats.filter(id=>!sceneCovered.includes(id));
+  const sceneCovered=[...new Set((plan.sceneConstruction||[]).flatMap(x=>x.coversBeats||[]).map(x=>String(x).toUpperCase()))];
+  const principalIds=principalBeats.map(x=>x.id);
+  const skeletonMatches=beats.length===principalIds.length && beats.every((id,i)=>id===principalIds[i] && (plan.progressionSkeleton.beats[i]?.text||'')===(principalBeats[i]?.text||''));
+  const coveredIndexes=covered.map(id=>principalIds.indexOf(id)).filter(x=>x>=0).sort((a,b)=>a-b);
+  const contiguous=coveredIndexes.length>0 && coveredIndexes.every((x,i)=>i===0||x===coveredIndexes[i-1]+1);
+  const transitionPairs=Array.isArray(plan.midConstruction?.transitions)?plan.midConstruction.transitions:[];
+  const transitionsValid=transitionPairs.every(x=>{const a=principalIds.indexOf(x.fromBeatId),b=principalIds.indexOf(x.toBeatId);return a>=0&&b===a+1;});
+  const strategyOk=!!(principalBeats.length && skeletonMatches && covered.length && contiguous && transitionsValid && plan.midConstruction?.requiredStateChange && plan.midConstruction?.constructionSteps);
+  const strategyToConstruction=[{strategy:'principal.progressionSkeleton',construction:'midConstruction',ok:strategyOk,skeletonMatches,coveredExists:covered.every(id=>principalIds.includes(id)),contiguous,transitionsValid}];
+  const missingScene=covered.filter(id=>!sceneCovered.includes(id));
   const constructionToScene=[{construction:'midConstruction',scenes:plan.sceneConstruction.map(x=>x.scene),coveredBeats:sceneCovered,missingBeats:missingScene,ok:plan.sceneConstruction.length>0 && !!sceneText && missingScene.length===0}];
-  const requiredCoverage=beats.map(id=>({beat:id,covered:covered.includes(id)&&sceneCovered.includes(id)}));
-  return {strategyToConstruction,constructionToScene,requiredCoverage};
+  const requiredCoverage=covered.map(id=>({beat:id,covered:sceneCovered.includes(id)}));
+  return {strategyToConstruction,constructionToScene,requiredCoverage,principalBeats:principalIds,midRange:plan.midConstruction?.beatRange||null};
 }
 function compileExecutionGuide(plan){
   const sk=plan.progressionSkeleton||{}, op=plan.openingLink||{}, mid=plan.midConstruction||{}, en=plan.endingConstruction||{};
@@ -7925,7 +7966,7 @@ function=章节功能
 goal=本章战略目标
 coreEvent=本章必须实现的核心事件
 characterActions=允许人物/资源及行动方向
-progressionSkeleton=本章从章头到章末的完整推进骨架；写明不可改变的关键状态/事件节点、节点顺序及关键因果连接；中间节点之间的具体调度由负责老师完成
+progressionSkeleton=本章从章头到章末的唯一战略推进骨架；写明不可改变的关键状态/事件节点、节点顺序及关键因果连接。它是老师中段和正文共同读取的唯一目的地来源，老师不得重新生成第二套骨架。中间节点之间的具体叙事施工由负责老师完成，正文负责选择具体戏剧形式
 endingFunction=章末功能
 endingIntensity=0-4
 lastEffectiveEvent=最后有效事件
@@ -7978,9 +8019,9 @@ coreEvent=本章核心事件
 characters=本章核心人物/出场名单
 previousTransition=章头承接方式
 entryState=本章进入时必须成立的状态
-beats=本章推进骨架；用①②③…列出连续推进节点
+beats=仅用于标识与校长推进骨架对应的固定节点；不得重新设计节点，不得新增、删除、合并、拆分或改名
 constructionBoundary=明确本中段只能连接章头、progressionSkeleton节点与章末，不得改变节点、顺序、核心事件或章末状态
-coveredBeats=中段施工覆盖的推进节点编号，例如①②③
+coveredBeats=中段施工引用校长推进骨架的固定节点编号，例如①②③；必须真实存在于校长骨架且形成连续范围
 constructionSteps=中段连续施工步骤，说明事件如何把战略落实到行动
 requiredStateChange=中段施工完成后必须形成的状态变化
 midExecution=中段实际执行重点
@@ -7995,9 +8036,9 @@ forbiddenAfter=章末后禁止追加内容
 [MID_CONSTRUCTION_CARD]
 chapter=1
 constructionBoundary=中段不是第二套剧情骨架；只负责把固定推进节点逐个连接起来
-beatRange=本章推进骨架中本卡负责变化的节拍范围，例如①-③或②④
+beatRange=本章推进骨架中本卡负责施工的连续节拍范围，例如①-③；这是引用范围，不是老师新建的剧情骨架
 coveredBeats=与推进骨架对应的节拍编号，例如①②③
-constructionSteps=在固定推进骨架内，这几个节拍如何连续施工
+constructionSteps=在固定推进骨架内，这几个节拍之间必须完成什么叙事施工；规定信息落点、状态变化和因果连接，但不得规定正文唯一戏剧写法
 requiredStateChange=施工完成后必须形成的可验证状态变化
 midExecution=中段实际执行重点
 informationMotion=信息如何新增、修正、隐藏或释放
@@ -8931,6 +8972,10 @@ function validateTeacherChapterPlan(plan, principalPlan){
   if(principalPlan && !String(principalPlan.progressionSkeleton||'').trim()) miss.push('principal.progressionSkeleton');
   if(!en.lastEffectiveEvent||!en.form||!en.nextTransitionBasis) miss.push('endingConstruction');
   if(!Array.isArray(plan.sceneConstruction)||!plan.sceneConstruction.length) miss.push('sceneConstruction');
+  const audit=plan.coverage?.strategyToConstruction?.[0];
+  if(!audit?.skeletonMatches) miss.push('progressionSkeletonAuthority');
+  if(!audit?.contiguous) miss.push('midBeatContinuity');
+  if(!audit?.transitionsValid) miss.push('midTransitions');
   const cov=plan.coverage?.requiredCoverage||[];
   if(cov.some(x=>x.covered===false)) miss.push('beatCoverage');
   return miss;
@@ -9010,7 +9055,7 @@ function buildTeacherAuthorizationPack(g, gi){
   }
   parts.push(`【当前正式校长成果】版本=${current?.version||1}｜指纹=${current?.contentHash||''}｜老师代号=${code}
 老师启动时以“读校长成果”当前保存版本为唯一正式输入；老师启动不设质检条件。`);
-  parts.push(`【老师任务角色边界】\n- 开章老师：重点兑现全书第1章的开场状态与开篇任务。\n- 中段推进老师：只负责本组中段推进与组内承接，不承担全书开章或最终结局。\n- 结局老师：重点兑现全书最后1章的最终状态、最后有效事件和自然终止，不得提前完成全书结局。\n- 单老师同时拥有开章与结局职责；双老师严格为第一位开章、第二位结局。\n- 角色由系统根据老师总数和位置确定，AI不得自行改变。\n\n【老师权限边界】\n- progressionSkeleton、章头与章末是校长战略输入，只能读取，不得修改关键节点、顺序、核心事件或章末状态。\n- 校长不再提供midStrategy；老师必须自己负责中段调度与施工，但只能在固定推进骨架内决定“怎么走”。\n- 老师只能生成 openingLink、midConstruction、endingConstruction、sceneConstruction。\n- 未授权事实、核心人物、核心秘密、世界规则不得自行升级。\n- requiredStateChange必须由本章推进骨架节点与施工步骤共同推导，不得凭空新增另一条主线。\n- 章末必须遵守校长 ending 战略边界。`);
+  parts.push(`【老师任务角色边界】\n- 本章推进骨架是唯一战略目的地；老师中段不是第二套骨架，而是固定节点之间的施工契约。\n- 开章老师：重点兑现全书第1章的开场状态与开篇任务。\n- 中段推进老师：只负责本组中段推进与组内承接，不承担全书开章或最终结局。\n- 结局老师：重点兑现全书最后1章的最终状态、最后有效事件和自然终止，不得提前完成全书结局。\n- 单老师同时拥有开章与结局职责；双老师严格为第一位开章、第二位结局。\n- 角色由系统根据老师总数和位置确定，AI不得自行改变。\n\n【老师权限边界】\n- progressionSkeleton、章头与章末是校长战略输入，只能读取，不得修改关键节点、顺序、核心事件或章末状态；老师的beats只能作为中段施工说明，不得重新定义progressionSkeleton。\n- 校长不再提供midStrategy；老师必须自己负责中段调度与施工，但只能在固定推进骨架内决定“怎么走”。\n- 老师只能生成 openingLink、midConstruction、endingConstruction、sceneConstruction；正文可在midConstruction约束内自由选择戏剧路径。\n- 未授权事实、核心人物、核心秘密、世界规则不得自行升级。\n- requiredStateChange必须由本章推进骨架节点与施工步骤共同推导，不得凭空新增另一条主线；老师规定信息必须在哪里出现，正文决定信息以什么戏剧形式出现。路径可以丰富，目的地不能改变。\n- 章末必须遵守校长 ending 战略边界。`);
   return parts.join('\n\n');
 }
 
@@ -9060,7 +9105,7 @@ function buildTeacherUser(g, gi){
   lines.push(`【前序正文状态】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态）'):'（首组，无前序正文）'}`);
   lines.push(prevGroupTailState(gi,g));
   if(isLong()) lines.push(`【长篇记忆层】\n${longMemoryBrief(g.first-1)||'（暂无已落地正文状态）'}\n只用于连续性，不得新增剧情。`);
-  lines.push(`请严格按唯一TEACHER_CHAPTER协议生成本组每章。你会收到校长确定的章头、progressionSkeleton关键节点和章末，但不会收到midStrategy；你的任务不是重新设计剧情，而是把固定节点之间的空隙施工出来。必须按“章头→节点①→节点②→……→章末”逐段回答：上一节点为什么会导致下一节点、人物做了什么、状态改变了什么、信息何时释放/暂缓、冲突如何变化、节奏为何这样安排。不得改变节点顺序、删节点、提前完成章末或另起一条主线。所有SCENE必须服务于本章推进骨架，并通过状态变化形成因果链。不要输出旧式自然语言章卡，不要输出executionGuide。`);
+  lines.push(`请严格按唯一TEACHER_CHAPTER协议生成本组每章。你会收到校长确定的章头、唯一progressionSkeleton关键节点和章末，但不会收到midStrategy；你的任务不是重新设计剧情，而是把固定节点之间的空隙施工出来。必须按“章头→固定节点→固定节点→……→章末”逐段回答：上一节点为什么会导致下一节点、这一段必须出现哪些信息、人物/状态/冲突必须发生什么变化、信息何时释放/暂缓、节奏为何这样安排。不得改变节点顺序、删节点、提前完成章末或另起一条主线。老师规定信息必须在哪里出现，正文决定信息以什么戏剧形式出现；路径可以丰富，目的地不能改变。所有SCENE必须服务于本章推进骨架，并通过状态变化形成因果链。不要输出旧式自然语言章卡，不要输出executionGuide。`);
   return lines.join('\n\n');
 }
 
