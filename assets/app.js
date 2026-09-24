@@ -520,9 +520,15 @@ function renderTeacherCutUi(gi){
     status.textContent=teacherChapterCutLabel(gi);
   }
   if(btn){
-    btn.disabled=!!state._teacherCutting?.[gi];
-    btn.classList.toggle('running',!!state._teacherCutting?.[gi]);
-    btn.textContent=state._teacherCutting?.[gi] ? '⏳ 切割中…' : (st.status==='ready' ? '↻ 重新切割' : '✂️ 切割教案');
+    // 492 修复：只要当前老师已有“读教案”总教案，就必须允许切割。
+    // 不再因为某个缓存状态/完成标记异常而把按钮错误锁死。
+    const hasTeacherRaw=!!teacherCurrentResult(Number(gi));
+    const cutting=!!state._teacherCutting?.[gi];
+    btn.disabled=!hasTeacherRaw || cutting;
+    btn.classList.toggle('running',cutting);
+    btn.classList.toggle('ready',st.status==='ready');
+    btn.textContent=cutting ? '⏳ 切割中…' : (st.status==='ready' ? '↻ 重新切割' : '✂️ 切割教案');
+    btn.title=hasTeacherRaw ? '仅切割本老师负责章节，不调用AI' : '请先完成本老师总教案';
   }
   const detail=card.querySelector('[data-scp-cut-detail]');
   if(detail){
@@ -6114,7 +6120,8 @@ function schoolTeacherBtn(g, i){
   const range = `${g.first}-${g.last} 章`;
   const cut=teacherChapterCutStatus(i);
   const cutText=teacherChapterCutLabel(i);
-  const cutDisabled=cut.status==='no-teacher';
+  // 492 修复：切割按钮的可用性以“当前老师总教案 raw 是否存在”为唯一前置条件。
+  const cutDisabled=!teacherCurrentResult(i);
   return `<div class="sc-teacher-card ${done?'done':'todo'}" data-scp-teacher-card="${i}">
     <div class="sc-tc-h">
       <span class="sc-tc-no">🎓 ${label}${finalLabel}</span>
@@ -9544,12 +9551,13 @@ async function genSchoolTeachersBatch(){
       const ok=await genTeacher(null,i);
       if(ok){ scMark('t'+i,true,false); state._teacherBatchRunning.completed++; }
       else { scSetFailed('t'+i,true); }
-      persist(); refreshTeacherUi(i); refreshTeacherBatchUi();
+      persist(); refreshTeacherUi(i); renderTeacherCutUi(i); refreshTeacherBatchUi();
       // 单个老师失败只记录该老师，继续下一位，不阻塞其他老师。
     }
     const allDone=groups.every((g,i)=>scTeacherGroupComplete(i));
     if(allDone) scMark('teacher',true,false); else delete scState().finished.teacher;
     persist();
+    groups.forEach((g,i)=>renderTeacherCutUi(i));
     refreshTeacherBatchUi();
     toast(allDone?'一键老师已完成全部老师教案。':'一键老师已完成可用老师；失败老师可单独重试。');
   }finally{
@@ -9607,7 +9615,18 @@ function bindSchoolSteps(){
       }
     };
   });
-  $$('[data-scp-cut-teacher]').forEach(b=>{ if(b._cutB) return; b._cutB=1; b.onclick=()=>openTeacherCutConfirm(Number(b.dataset.scpCutTeacher)); });
+  // 493：改为事件委托，避免学校卡片 render() 后按钮重新生成而丢失 click 绑定。
+  if(!document._teacherCutDelegate){
+    document._teacherCutDelegate=1;
+    document.addEventListener('click',e=>{
+      const b=e.target.closest?.('[data-scp-cut-teacher]');
+      if(!b) return;
+      if(b.disabled) return;
+      e.preventDefault(); e.stopPropagation();
+      openTeacherCutConfirm(Number(b.dataset.scpCutTeacher));
+    },true);
+  }
+  $$('[data-scp-cut-teacher]').forEach(b=>{ if(b._cutB) return; b._cutB=1; b.onclick=e=>{ e.preventDefault(); e.stopPropagation(); }; });
   $$('[data-scp-cut-more]').forEach(b=>{ if(b._moreB) return; b._moreB=1; b.onclick=()=>{ const card=b.closest('[data-scp-teacher-card]'); const list=card?.querySelector('[data-scp-cut-list]'); if(!list) return; const on=list.style.display!=='none'; list.style.display=on?'none':''; b.textContent=on?'查看详情 ▾':'收起详情 ▴'; }; });
   $$('[data-scp-plan]').forEach(b=>{ b.onclick = ()=> openSchoolPlanReader(+b.dataset.scpPlan); });
   const pv = $('[data-scp-plan-pr]');
