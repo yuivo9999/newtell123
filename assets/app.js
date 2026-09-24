@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_VERSION = '1.0.478';
+const APP_VERSION = '1.0.479';
 // Version line: app1.0.479.js — 全书终章系统级终止边界；推进骨架唯一上游：老师中段严格从校长 progressionSkeleton 的中段节点派生并施工，路径可变、目的地不变。
 const APP_FILE_VERSION = 'app1.0.479.js';
 // Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
@@ -578,7 +578,7 @@ function getCurrentChapterStructuredPlan(i){
   return plan;
 }
 
-// 1.0.478：全书终章不是4章特判，而是由“总章节数 + 当前章节 + 系统阶段划分”共同决定的全局终止事实。
+// 1.0.479：全书终章不是4章特判，而是由“总章节数 + 当前章节 + 系统阶段划分”共同决定的全局终止事实。
 function novelBoundaryFacts(totalChapterCount, currentChapter){
   const total=Math.max(0,Math.floor(Number(totalChapterCount)||0));
   const chapter=Math.max(0,Math.floor(Number(currentChapter)||0));
