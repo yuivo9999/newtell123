@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.485';
+const APP_VERSION = '1.0.486';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.485.js';
+const APP_FILE_VERSION = 'app1.0.486.js';
 // Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
 const KEY_CFG = nsKey('cfg');
 
@@ -200,9 +200,13 @@ function _extractPlanTimeRange(plan){
   return m ? {raw:t,from:m[1].trim(),to:m[2].trim()} : {raw:t,from:t,to:t};
 }
 function _plannedTimeRange(i){
-  const o=state.outline||{}, plan=getCurrentChapterStructuredPlan(i)||{}, pr=_extractPlanTimeRange(plan);
-  const from=pr.from, to=pr.to, explicit=extractPlanField(plan,['时间推进安排','时间覆盖安排']);
-  return {source:pr.raw?'teacherPlan':'',from,to,jump:'',coverage:_timeCoveragePlan(from,to,explicit)};
+  const rawChapter=typeof getCurrentChapterTeacherRaw==='function' ? getCurrentChapterTeacherRaw(i) : null;
+  const rawText=String(rawChapter?.rawText||'').trim();
+  if(!rawText) return {source:'',from:'',to:'',jump:'',coverage:''};
+  const timeText=extractPlanField({beatsText:rawText}, ['剧情时间落点','时间推进安排','时间覆盖安排']);
+  const pr=_extractPlanTimeRange({beatsText:timeText});
+  const explicit=extractPlanField({beatsText:rawText}, ['时间推进安排','时间覆盖安排']);
+  return {source:pr.raw||explicit?'teacherRaw':'',from:pr.from,to:pr.to,jump:'',coverage:_timeCoveragePlan(pr.from,pr.to,explicit)};
 }
 
 function _timeContractForChapter(i){
@@ -497,37 +501,7 @@ function parseTeacherRawChapters(raw, first, last){
   const src=String(raw||'').replace(/\r\n?/g,'\n');
   const lines=src.split('\n');
   const out={};
-  // 章节标题必须是“独立标题行”，并且明确包含“章”。
-  // 严禁把单独数字、普通列表编号、日期等当作章节边界。
-  const titleRe=/^\s*(?:#{1,6}\s+|(?:\*\*|__)?\s*)第\s*(\d{1,4}|[零〇一二三四五六七八九十百千万两]+)\s*章(?=\s|$|[《「『【\(（:\：\-–—])(?:\s*(?:\*\*|__)?\s*)(.*?)(?:\s*(?:\*\*|__))?\s*$/;
-  const chineseNumberToInt=(text)=>{
-    const s=String(text||'').trim();
-    if(/^\d+$/.test(s)) return Number(s);
-    const map={零:0,〇:0,一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9};
-    const unit={十:10,百:100,千:1000,万:10000};
-    let total=0, section=0, number=0;
-    for(const ch of s){
-      if(Object.prototype.hasOwnProperty.call(map,ch)) number=map[ch];
-      else if(ch==='十'||ch==='百'||ch==='千'){
-        const n=number||1; section+=n*unit[ch]; number=0;
-      }else if(ch==='万'){
-        section=(section+number)||1; total+=section*10000; section=0; number=0;
-      }else return NaN;
-    }
-    return total+section+number;
-  };
-  const readTitle=(line)=>{
-    const text=String(line||'').trim();
-    const m=text.match(titleRe);
-    if(!m) return null;
-    const ch=chineseNumberToInt(m[1]);
-    if(!Number.isInteger(ch)||ch<1) return null;
-    const title=String(m[2]||'')
-      .replace(/^[\s:：\-–—]+/,'')
-      .replace(/(?:\*\*|__)\s*$/,'')
-      .trim();
-    return {ch,title};
-  };
+  const re=/^\s*第\s*(\d{1,4})\s*章\s*(.*)$/;
   let cur=null;
   const finish=()=>{
     if(!cur) return;
@@ -535,10 +509,15 @@ function parseTeacherRawChapters(raw, first, last){
     if(rawText) out[cur.ch]={chapter:cur.ch,title:cur.title,rawText,startLine:cur.start+1,endLine:cur.end};
   };
   for(let i=0;i<lines.length;i++){
-    const hit=readTitle(lines[i]);
-    if(hit){
-      if(cur){ cur.end=i; finish(); }
-      cur={ch:hit.ch,title:hit.title,start:i,end:lines.length};
+    const m=String(lines[i]||'').match(re);
+    if(m){
+      if(cur){
+        cur.end=i;
+        finish();
+      }
+      const ch=Number(m[1]);
+      const title=String(m[2]||'').replace(/^[\s:：\-–—]+/,'').replace(/[《》【】（）()]/g,'').trim();
+      cur={ch,title,start:i,end:lines.length};
     }
   }
   finish();
@@ -680,7 +659,7 @@ async function cutTeacherChapterCardsManually(gi){
     const built={}; const errors=[]; const structuredMissing=[];
     for(let n=g.first;n<=g.last;n++){
       const rawChapter=rawChapters[n];
-      if(!rawChapter?.rawText){ errors.push(`第${n}章未找到可靠章节标题（要求独立标题行中明确出现“第…章”）`); continue; }
+      if(!rawChapter?.rawText){ errors.push(`第${n}章未在总教案纯文本中识别到章节标题`); continue; }
       let plan=null;
       let structuredAvailable=false;
       // 2. 机器协议只是“结构化增强”，成功则编译；失败绝不否定原始单章切割。
@@ -19725,10 +19704,8 @@ function buildChapterUser(i, opt={}){
     const _rawTeacherPlan=String(_teacherChapter?.rawText||'').trim();
     if(_rawTeacherPlan) parts.push(`【本章老师教案｜当前负责老师原始教案】\n${_rawTeacherPlan}`);
 
-    // 475：把程序已经编译好的“本章中段定位/施工地图”显式交给正文。
-    // 只读取当前章节的 structured plan；不读取全书 plans，也不让正文从 raw 教案自行猜中段。
-    const _executionGuide = chapterExecutionGuideBlock(i);
-    if(_executionGuide) parts.push(_executionGuide);
+    // 正文生成的剧情事实唯一入口是当前章节人工切割出的老师原始教案。
+    // 不要求 ChapterPlan / 旧版 plan / structuredAvailable；中段也由本章老师教案直接提供。
 
     const _timeContract = _timeContractForChapter(i);
     if(_timeContract) parts.push(_timeContract);
@@ -20469,15 +20446,9 @@ function closeComparePanel(){ const p=$('#cmpPanel'); if(p) p.remove(); }
 async function genOneChapter(i, btn, opt={}){
   try{
     if(!state.chapters?.[i]) throw new Error(`未找到第${i+1}章章节数据`);
-    if(isLong()){
-      const cc=getCurrentChapterStructuredPlan(i);
-      if(cc){
-        const ps=commitPlannedChapterState(i,cc,'teacher-chapter-card');
-        if(ps&&state.outline._storyState.chapters[i]&&state.outline._storyState.chapters[i].boundaryAudit?.rewind){
-          toast(state.outline._storyState.chapters[i].boundaryAudit.note+'；已阻止生成，请先修正教案时间。');
-          return false;
-        }
-      }
+    const teacherChapter=getCurrentChapterTeacherRaw(i);
+    if(!teacherChapter || !String(teacherChapter.rawText||'').trim()){
+      throw new Error(`第${i+1}章尚未取得人工切割后的本章教案，请先在对应老师卡片点击「✂️ 切割教案」`);
     }
   }catch(e){
     const msg=String(e?.message||e||'正文生成前置检查失败');
@@ -20575,7 +20546,14 @@ async function genNChapters(start, n){
   try{
   for(let k=0; k<n; k++){
     const idx = start + k;
-    if(isLong()){ const cc=getCurrentChapterStructuredPlan(idx); if(cc){ const ps=commitPlannedChapterState(idx,cc,'teacher-raw'); if(ps&&state.outline._storyState.chapters[idx]&&state.outline._storyState.chapters[idx].boundaryAudit?.rewind){ chState[idx]='error'; failedChapters.push({chapter:idx+1,error:state.outline._storyState.chapters[idx].boundaryAudit.note+'；请修正教案时间'}); patchChapter(idx); continue; } } }
+    const teacherChapter=getCurrentChapterTeacherRaw(idx);
+    if(!teacherChapter || !String(teacherChapter.rawText||'').trim()){
+      chState[idx]='error';
+      const msg=`第${idx+1}章尚未取得人工切割后的本章教案，请先在对应老师卡片点击「✂️ 切割教案」`;
+      failedChapters.push({chapter:idx+1,error:msg});
+      patchChapter(idx);
+      continue;
+    }
     if(!isLong() && state.chapters[idx] && state.chapters[idx].content && String(state.chapters[idx].content).trim() && state.chapters[idx].confirmed) continue;
     let attempt = 0;
     let txt = '', finishReason = '';
