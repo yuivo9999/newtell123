@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.460';
-// Version line: app1.0.460.js — 校长退出中段战略；推进骨架保留为上游硬约束；老师负责中段调度与施工并与骨架节点逐拍融合。
-const APP_FILE_VERSION = 'app1.0.460.js';
+const APP_VERSION = '1.0.461';
+// Version line: app1.0.461.js — 校长退出中段战略；推进骨架保留为上游硬约束；老师负责中段调度与施工并与骨架节点逐拍融合。
+const APP_FILE_VERSION = 'app1.0.461.js';
 // Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
 const KEY_CFG = nsKey('cfg');
 
@@ -5685,6 +5685,30 @@ function chapterOfPlan(ci){
   const groups=teacherAssignmentGroups();
   for(let gi=0; gi<groups.length; gi++){ const g=groups[gi]; if(ci+1>=g.startChapter && ci+1<=g.endChapter) return gi; }
   return -1;
+}
+function openChapterTeacherPlanReader(i){
+  const chapterNo=Number(i)+1;
+  const plan=ensureChapterTeacherPlan(Number(i));
+  if(!plan){
+    toast(`第${chapterNo}章暂无可用的当前老师教案，请先完成对应老师备课`);
+    return;
+  }
+  const text=chapterPlanReadableText(plan);
+  const title=String(plan.identity?.title||plan.title||state.chapters?.[i]?.title||'').trim();
+  const ov=document.createElement('div'); ov.className='gs-overlay';
+  ov.innerHTML=`<div class="gs-modal school-plan-modal">
+    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div><b>📖 第${toCnNum(chapterNo)}章 · 本章教案</b><span class="sc-plan-meta muted" style="margin-left:10px">${esc(title)}</span></div>
+      <button class="gs-x" data-cpt-close>✕</button>
+    </div>
+    <div class="sc-plan-body" style="max-height:72vh;overflow:auto;padding:12px 16px 20px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">🎓 当前正文第${chapterNo}章使用的老师教案 · 与「重生成」及「阅读 → 概」使用同一份本章权威教案</div>
+      <pre class="sc-plan-raw" style="user-select:text;white-space:pre-wrap">${esc(text)}</pre>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('[data-cpt-close]').onclick=()=>ov.remove();
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
 }
 function chapterPlanReadableText(plan){
   if(!plan) return '';
@@ -16738,9 +16762,7 @@ const lnER = $('#lnExportReader'); if(lnER) lnER.onclick = openExportReader;
     if(!t) return;
     if(t.hasAttribute('data-plan-ch')){
       const i = +t.dataset.planCh;
-      const gi = chapterOfPlan(i);
-      if(gi >= 0) openSchoolPlanReader(gi, i + 1);
-      else toast(`第${i+1}章暂无本章教案，请先完成老师备课`);
+      openChapterTeacherPlanReader(i);
     }
     else if(t.hasAttribute('data-ver')){ openChapterVersionPanel(+t.dataset.ver); }
     else if(t.hasAttribute('data-regen')){ openChapterRegenPanel(+t.dataset.regen); }
@@ -20299,7 +20321,7 @@ function openComparePanel(i, a, b){
 function closeComparePanel(){ const p=$('#cmpPanel'); if(p) p.remove(); }
 
 async function genOneChapter(i, btn, opt={}){
-  if(isLong()){ const cc=chapterPlanAuthority(i); if(!cc){ toast('第'+(i+1)+'章没有老师机器教案卡，请先完成对应老师备课。'); return false; } const ps=commitPlannedChapterState(i,cc,'teacher-card'); if(ps&&state.outline._storyState.chapters[i]&&state.outline._storyState.chapters[i].boundaryAudit?.rewind){ toast(state.outline._storyState.chapters[i].boundaryAudit.note+'；已阻止生成，请先修正教案时间。'); return false; } }
+  if(isLong()){ const cc=chapterPlanAuthority(i); if(!cc){ toast('第'+(i+1)+'章没有可用的当前老师教案，请先完成对应老师备课。'); return false; } const ps=commitPlannedChapterState(i,cc,'teacher-card'); if(ps&&state.outline._storyState.chapters[i]&&state.outline._storyState.chapters[i].boundaryAudit?.rewind){ toast(state.outline._storyState.chapters[i].boundaryAudit.note+'；已阻止生成，请先修正教案时间。'); return false; } }
   chState[i] = 'generating'; state.generating = true; patchChapter(i);
   if(btn) busy(btn,true,'生成中…');
   const stopParent = btn && btn.closest('.btn-row') ? btn.closest('.btn-row') : null;
