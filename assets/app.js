@@ -1,8 +1,8 @@
 'use strict';
 
 const APP_VERSION = '1.0.470';
-// Version line: app1.0.470.js — 第三阶段封口：canonical 原始本章教案、结构化增强与故障隔离最终收口。
-const APP_FILE_VERSION = 'app1.0.470.js';
+// Version line: app1.0.471.js — 第三阶段封口：canonical 原始本章教案、结构化增强与故障隔离最终收口。
+const APP_FILE_VERSION = 'app1.0.471.js';
 // Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
 const KEY_CFG = nsKey('cfg');
 
@@ -526,7 +526,9 @@ function canonicalTeacherChapterPlan(i, g, t){
   const rawIndex=parseTeacherRawChapters(t.raw,g?.first,g?.last);
   const rawChapter=rawIndex[target];
   if(!rawChapter) return null;
-  let plans=(t.plans&&typeof t.plans==='object')?t.plans:{};
+  const rawFingerprint=teacherContentFingerprint(t.raw);
+  const plansCurrent=String(t.plansSourceHash||'')===rawFingerprint;
+  let plans=plansCurrent && t.plans&&typeof t.plans==='object' ? t.plans : {};
   let found=teacherPlanForChapter(plans,target,g,String(state.chapters?.[i]?.title||''));
   let plan=found?.plan||null;
   if(plan){
@@ -573,8 +575,11 @@ function ensureChapterTeacherPlan(i){
   const resolved=teacherResultForAssignmentGroup(g);
   const t=resolved.t;
   if(!t || !String(t.raw||'').trim()) return null;
+  const rawIndex=parseTeacherRawChapters(t.raw,g.first,g.last);
+  const rawChapter=rawIndex[target];
+  if(!rawChapter) return null;
   const currentCard=ss.chapters?.[i]?.card;
-  if(currentCard && String(currentCard.teacherGroupId||'')===String(g.teacherGroupId||'') && Number(currentCard.teacherTs||0)===Number(t.ts||0) && String(currentCard.rawText||'').trim()) return currentCard;
+  if(currentCard && String(currentCard.teacherGroupId||'')===String(g.teacherGroupId||'') && Number(currentCard.teacherTs||0)===Number(t.ts||0) && String(currentCard.rawText||'').trim()===String(rawChapter.rawText||'').trim()) return currentCard;
   try{
     const plan=canonicalTeacherChapterPlan(i,g,t);
     if(!plan) return null;
@@ -589,9 +594,7 @@ function ensureChapterTeacherPlan(i){
     return null;
   }
 }
-function ensureCurrentTeacherCards(i){ return ensureChapterTeacherPlan(i); }
-function chapterCard(i){ return ensureCurrentTeacherCards(i); }
-function chapterPlanAuthority(i){ return chapterCard(i)||null; }
+function chapterPlanAuthority(i){ return ensureChapterTeacherPlan(i)||null; }
 
 // 三道保险 P1：把“本章剧情边界”从提示词变成程序可读取的契约。
 function chapterBoundaryContract(i){
@@ -5808,14 +5811,7 @@ function principalTargetChapterCount(){
 // 老师阶段完成以老师 AI 成功返回并保存当前教案为准；结构化章节卡仅作为正文对接所需的编译产物。
 // 旧逻辑把 canon.teacherAt 版本快照当成唯一闸门；只要快照与版本计数出现一次不同步，
 // 老师完成状态以当前老师成果是否真实落盘为准，避免旧版总控流程的快照闸门误判。
-function ssTeacherCardCurrent(card, gi){
-  if(!card || card.teacherGi!==gi) return false;
-  const v=card.versions||{}; const ss=storyState(); const cur=ss.versions||{};
-  return Number(v.dictMaster||0)===Number(cur.dictMaster||0) &&
-         Number(v.dictEnrich||0)===Number(cur.dictEnrich||0) &&
-         Number(v.principal||0)===Number(cur.principal||0) &&
-         String(card.raw||'').trim().length>0;
-}
+
 function scTeacherGroupComplete(gi){
   const sc=state.school;
   // 436 QC_DECOUPLE：finished.t* 只表示老师 AI 已成功返回并落盘；plans/machine 是可选结构化缓存。
@@ -9241,7 +9237,7 @@ async function genTeacher(btn, gi){
     const _oldTeacher=teacherCurrentResult(gi);
     const _teacherVersion=Math.max(1,Number(_oldTeacher?.version||0)+1);
     const _teacherHash=teacherContentFingerprint(txt);
-    sc.teachers[gi]={gi,teacherCode:_teacherCode,ts:Date.now(),updatedAt:Date.now(),version:_teacherVersion,contentHash:_teacherHash,raw:String(txt),machine:!!machine,machineText:String(txt),plans,principalSourceVersion:_teacherSourceVersion,principalSourceHash:_teacherSourceHash,actualHandoff:_groupState.handoff,groupCompletionState:_groupState.completion};
+    sc.teachers[gi]={gi,teacherCode:_teacherCode,ts:Date.now(),updatedAt:Date.now(),version:_teacherVersion,contentHash:_teacherHash,raw:String(txt),machine:!!machine,machineText:String(txt),plans,plansSourceHash:_teacherHash,principalSourceVersion:_teacherSourceVersion,principalSourceHash:_teacherSourceHash,actualHandoff:_groupState.handoff,groupCompletionState:_groupState.completion};
     // 老师 AI 只要成功返回非空内容，即视为本次备课任务完成并立即落盘。
     // plans/machine 是正文对接的结构化缓存；能编译则提交章节卡，不能编译也不否定老师任务完成。
     const chapterCardsUsable=!!(machine && Object.keys(plans).length>0);
@@ -19361,8 +19357,11 @@ function buildChapterUser(i, opt={}){
     if(_styleGuide) parts.push(_styleGuide);
 
     const _execGuide=chapterExecutionGuideBlock(i);
-    if(!_execGuide) throw new Error('当前章节缺少有效的本章执行指引，请先完成对应老师备课。');
-    parts.push(_execGuide);
+    if(_execGuide) parts.push(_execGuide);
+    else {
+      const _rawTeacherPlan=String(chapterPlanReadableText(_card)||'').trim();
+      if(_rawTeacherPlan) parts.push(`【本章老师教案｜canonical 原始教案】\n${_rawTeacherPlan}`);
+    }
 
     const _timeContract = _timeContractForChapter(i);
     if(_timeContract) parts.push(_timeContract);
