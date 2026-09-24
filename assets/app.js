@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.473';
-// Version line: app1.0.471.js — 第三阶段封口：canonical 原始本章教案、结构化增强与故障隔离最终收口。
-const APP_FILE_VERSION = 'app1.0.473.js';
+const APP_VERSION = '1.0.475';
+// Version line: app1.0.475.js — 本章中段定位接口：正文明确接收当前章节的 progressionSkeleton + midConstruction，路径可变、目的地不变。
+const APP_FILE_VERSION = 'app1.0.475.js';
 // Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
 const KEY_CFG = nsKey('cfg');
 
@@ -7889,9 +7889,14 @@ function chapterExecutionGuideBlock(i){
   const scenes=(g.sceneExecution||[]).map(x=>`场景${x.scene||''}｜地点：${x.location||''}｜人物：${(x.characters||[]).join('、')}｜目的：${x.purpose||''}｜事件：${x.event||''}｜状态变化：${x.change||''}｜情绪：${x.emotion||''}｜必须保留：${x.mustKeep||''}｜覆盖：${(x.coversBeats||[]).join('、')}`).join('\n');
   const mid=g.midExecution||{}, op=g.openingExecution||{}, en=g.endingExecution||{};
   const cov=g.coverage||{};
+  const planMid=plan?.midConstruction||{};
+  const midMapAvailable=!!(String(planMid.constructionBoundary||'').trim() && String(planMid.requiredStateChange||'').trim() && String(planMid.constructionSteps||'').trim() && Array.isArray(planMid.coveredBeats) && planMid.coveredBeats.length);
+  const midLocator = midMapAvailable
+    ? `【本章中段定位｜系统标记】\n中段不是新的战略骨架；它严格覆盖本章已存在的推进节点：${planMid.coveredBeats.join('、')}。正文可丰富这些固定节点之间的路径，但不得新增、删除、重排或提前完成战略目的地。`
+    : `【本章中段定位｜系统标记】\n当前章节没有完整的结构化中段施工地图。正文不得自行创造新的战略目的地；仅执行已经明确存在的本章推进骨架与老师原始教案。`;
   const stops=(g.hardStops||[]).join('；');
   const b=chapterBoundaryContract(i);
-  return `【本章执行指引｜唯一章节规划入口】\n章节：第${i+1}章《${plan.identity?.title||''}》\n本章目标：${g.objective||''}\n\n【推进路线】\n${route||'（无）'}\n\n【章头执行】\n承接：${op.previousTransition||''}\n进入状态：${op.entryState||''}\n\n【中段执行｜老师施工图，不是小说原稿】\n施工边界：${mid.constructionBoundary||''}\n施工步骤：${mid.steps||''}\n必须形成的状态变化：${mid.requiredStateChange||''}\n覆盖推进节点：${(mid.coveredBeats||[]).join('、')}\n\n【中段创作战术】\n信息调度：${mid.informationMotion||'未指定；正文可在不改变既定事实的前提下自然安排信息释放、延迟与局部留白。'}\n人物调度：${mid.characterMotion||'未指定；正文可通过行动、反应、对白、潜台词与心理变化自然呈现。'}\n冲突调度：${mid.conflictMotion||'未指定；正文可在既定节点之间安排局部阻碍、试探、误解、失败与升级，但不得改变核心事件。'}\n节奏与场景：${mid.rhythmScene||'未指定；正文可自主安排快慢、停顿、环境互动与场景过桥。'}\n本章中段差异：${mid.difference||'未指定；不得为了制造差异而另起主线。'}\n中段禁止越权：${mid.forbidden||'不得改变章头、推进骨架节点、节点顺序、核心事件、已成立事实或章末状态；不得另起第二主线。'}\n\n【中段自由写作总原则】\n骨架规定“必须经过哪里”，老师规定“应该怎么走”，正文负责“把这一路写得精彩”。允许增加人物反应、对白、潜台词、信息延迟、局部误解、失败尝试、环境互动、短障碍、感官细节、节奏变化和自然过桥；但任何新增表现都不得改变既定剧情状态或提前完成章末。丰富不是凑字数，应尽量产生信息、人物状态、关系、冲突、场景行动或读者认知中的有效变化。\n\n【场景执行】\n${scenes||'（无）'}\n\n【章末执行】\n功能：${en.function||''}\n最后有效事件：${en.lastEffectiveEvent||''}\n收尾方式：${en.form||''}\n下一章承接方式：${en.nextTransitionType||''}\n下一章承接依据：${en.nextTransitionBasis||''}\n\n【覆盖关系】\n推进骨架→中段施工：${(cov.strategyToConstruction||[]).map(x=>x.ok?'通过':'缺失').join('、')||'未计算'}\n施工→场景：${(cov.constructionToScene||[]).map(x=>x.ok?'通过':'缺失').join('、')||'未计算'}\n\n【硬停止】\n${stops||'无额外章末禁止项'}\n${b.isLast?'本章为全书最后一章，完成本章最终状态后立即停止。':`下一章为第${i+2}章${b.nextTitle?`《${b.nextTitle}》`:''}，不得提前展开下一章剧情。`}\n\n执行原则：以上内容已经由校长战略与老师施工编译完成。正文只执行，不重新选择剧情方案，不重排推进节点，不新增与本章执行指引冲突的重大剧情。`;
+  return `【本章执行指引｜唯一章节规划入口】\n章节：第${i+1}章《${plan.identity?.title||''}》\n${midLocator}\n本章目标：${g.objective||''}\n\n【推进路线】\n${route||'（无）'}\n\n【章头执行】\n承接：${op.previousTransition||''}\n进入状态：${op.entryState||''}\n\n【中段执行｜老师施工图，不是小说原稿】\n施工边界：${mid.constructionBoundary||''}\n施工步骤：${mid.steps||''}\n必须形成的状态变化：${mid.requiredStateChange||''}\n覆盖推进节点：${(mid.coveredBeats||[]).join('、')}\n\n【中段创作战术】\n信息调度：${mid.informationMotion||'未指定；正文可在不改变既定事实的前提下自然安排信息释放、延迟与局部留白。'}\n人物调度：${mid.characterMotion||'未指定；正文可通过行动、反应、对白、潜台词与心理变化自然呈现。'}\n冲突调度：${mid.conflictMotion||'未指定；正文可在既定节点之间安排局部阻碍、试探、误解、失败与升级，但不得改变核心事件。'}\n节奏与场景：${mid.rhythmScene||'未指定；正文可自主安排快慢、停顿、环境互动与场景过桥。'}\n本章中段差异：${mid.difference||'未指定；不得为了制造差异而另起主线。'}\n中段禁止越权：${mid.forbidden||'不得改变章头、推进骨架节点、节点顺序、核心事件、已成立事实或章末状态；不得另起第二主线。'}\n\n【中段自由写作总原则】\n骨架规定“必须经过哪里”，老师规定“应该怎么走”，正文负责“把这一路写得精彩”。允许增加人物反应、对白、潜台词、信息延迟、局部误解、失败尝试、环境互动、短障碍、感官细节、节奏变化和自然过桥；但任何新增表现都不得改变既定剧情状态或提前完成章末。丰富不是凑字数，应尽量产生信息、人物状态、关系、冲突、场景行动或读者认知中的有效变化。\n\n【场景执行】\n${scenes||'（无）'}\n\n【章末执行】\n功能：${en.function||''}\n最后有效事件：${en.lastEffectiveEvent||''}\n收尾方式：${en.form||''}\n下一章承接方式：${en.nextTransitionType||''}\n下一章承接依据：${en.nextTransitionBasis||''}\n\n【覆盖关系】\n推进骨架→中段施工：${(cov.strategyToConstruction||[]).map(x=>x.ok?'通过':'缺失').join('、')||'未计算'}\n施工→场景：${(cov.constructionToScene||[]).map(x=>x.ok?'通过':'缺失').join('、')||'未计算'}\n\n【硬停止】\n${stops||'无额外章末禁止项'}\n${b.isLast?'本章为全书最后一章，完成本章最终状态后立即停止。':`下一章为第${i+2}章${b.nextTitle?`《${b.nextTitle}》`:''}，不得提前展开下一章剧情。`}\n\n执行原则：以上内容已经由校长战略与老师施工编译完成。正文只执行，不重新选择剧情方案，不重排推进节点，不新增与本章执行指引冲突的重大剧情。`;
 }
 
 const STRUCTURED_PRINCIPAL_PROTOCOL = `
@@ -19382,6 +19387,11 @@ function buildChapterUser(i, opt={}){
 
     const _rawTeacherPlan=String(_teacherChapter?.rawText||'').trim();
     if(_rawTeacherPlan) parts.push(`【本章老师教案｜当前负责老师原始教案】\n${_rawTeacherPlan}`);
+
+    // 475：把程序已经编译好的“本章中段定位/施工地图”显式交给正文。
+    // 只读取当前章节的 structured plan；不读取全书 plans，也不让正文从 raw 教案自行猜中段。
+    const _executionGuide = chapterExecutionGuideBlock(i);
+    if(_executionGuide) parts.push(_executionGuide);
 
     const _timeContract = _timeContractForChapter(i);
     if(_timeContract) parts.push(_timeContract);
