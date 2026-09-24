@@ -1,8 +1,8 @@
 'use strict';
 
-const APP_VERSION = '1.0.484';
+const APP_VERSION = '1.0.485';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.484.js';
+const APP_FILE_VERSION = 'app1.0.485.js';
 // Version line: app1.0.457.js — 正文风格执行底座直连；中段自由发挥与硬边界保持分层。
 const KEY_CFG = nsKey('cfg');
 
@@ -497,7 +497,37 @@ function parseTeacherRawChapters(raw, first, last){
   const src=String(raw||'').replace(/\r\n?/g,'\n');
   const lines=src.split('\n');
   const out={};
-  const re=/^\s*第\s*(\d{1,4})\s*章\s*(.*)$/;
+  // 章节标题必须是“独立标题行”，并且明确包含“章”。
+  // 严禁把单独数字、普通列表编号、日期等当作章节边界。
+  const titleRe=/^\s*(?:#{1,6}\s+|(?:\*\*|__)?\s*)第\s*(\d{1,4}|[零〇一二三四五六七八九十百千万两]+)\s*章(?=\s|$|[《「『【\(（:\：\-–—])(?:\s*(?:\*\*|__)?\s*)(.*?)(?:\s*(?:\*\*|__))?\s*$/;
+  const chineseNumberToInt=(text)=>{
+    const s=String(text||'').trim();
+    if(/^\d+$/.test(s)) return Number(s);
+    const map={零:0,〇:0,一:1,二:2,两:2,三:3,四:4,五:5,六:6,七:7,八:8,九:9};
+    const unit={十:10,百:100,千:1000,万:10000};
+    let total=0, section=0, number=0;
+    for(const ch of s){
+      if(Object.prototype.hasOwnProperty.call(map,ch)) number=map[ch];
+      else if(ch==='十'||ch==='百'||ch==='千'){
+        const n=number||1; section+=n*unit[ch]; number=0;
+      }else if(ch==='万'){
+        section=(section+number)||1; total+=section*10000; section=0; number=0;
+      }else return NaN;
+    }
+    return total+section+number;
+  };
+  const readTitle=(line)=>{
+    const text=String(line||'').trim();
+    const m=text.match(titleRe);
+    if(!m) return null;
+    const ch=chineseNumberToInt(m[1]);
+    if(!Number.isInteger(ch)||ch<1) return null;
+    const title=String(m[2]||'')
+      .replace(/^[\s:：\-–—]+/,'')
+      .replace(/(?:\*\*|__)\s*$/,'')
+      .trim();
+    return {ch,title};
+  };
   let cur=null;
   const finish=()=>{
     if(!cur) return;
@@ -505,15 +535,10 @@ function parseTeacherRawChapters(raw, first, last){
     if(rawText) out[cur.ch]={chapter:cur.ch,title:cur.title,rawText,startLine:cur.start+1,endLine:cur.end};
   };
   for(let i=0;i<lines.length;i++){
-    const m=String(lines[i]||'').match(re);
-    if(m){
-      if(cur){
-        cur.end=i;
-        finish();
-      }
-      const ch=Number(m[1]);
-      const title=String(m[2]||'').replace(/^[\s:：\-–—]+/,'').replace(/[《》【】（）()]/g,'').trim();
-      cur={ch,title,start:i,end:lines.length};
+    const hit=readTitle(lines[i]);
+    if(hit){
+      if(cur){ cur.end=i; finish(); }
+      cur={ch:hit.ch,title:hit.title,start:i,end:lines.length};
     }
   }
   finish();
@@ -655,7 +680,7 @@ async function cutTeacherChapterCardsManually(gi){
     const built={}; const errors=[]; const structuredMissing=[];
     for(let n=g.first;n<=g.last;n++){
       const rawChapter=rawChapters[n];
-      if(!rawChapter?.rawText){ errors.push(`第${n}章未在总教案纯文本中识别到章节标题`); continue; }
+      if(!rawChapter?.rawText){ errors.push(`第${n}章未找到可靠章节标题（要求独立标题行中明确出现“第…章”）`); continue; }
       let plan=null;
       let structuredAvailable=false;
       // 2. 机器协议只是“结构化增强”，成功则编译；失败绝不否定原始单章切割。
