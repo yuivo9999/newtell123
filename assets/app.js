@@ -1,4 +1,5 @@
-/* v1.0.516 RAW-TEACHER-ONLY: the teacher AI return is saved verbatim; chapter reads are deterministic raw-text slices only. */
+/* v1.0.517 COMPLETE-TEACHER-CONTEXT: teacher AI receives the complete authoritative upstream context and returns a complete raw teaching plan. */
+/* v1.0.517 RAW-TEACHER-ONLY: the teacher AI return is saved verbatim; chapter reads are deterministic raw-text slices only. */
 'use strict';
 
 /* v1.0.516 IRON LAW — 本章教案传导链永久锁定：
@@ -9,9 +10,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.516';
+const APP_VERSION = '1.0.517';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.516.js';
+const APP_FILE_VERSION = 'app1.0.517.js';
 // Version line: app1.0.504.js — 第十一刀：校长→老师→正文真实运行级回归验证。
 const KEY_CFG = nsKey('cfg');
 
@@ -8168,37 +8169,60 @@ async function genPrincipal(btn, opts){
   }
 }
 
-const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师）。
+const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师），负责把校长已经裁决的全书战略、阶段战略、老师组战略、章节战略、全书恒定写作规则、章节动态执行规则、微拍结构形状、时间纪律、世界事实与连续性状态，完整转化为自己负责章节的“老师总教案原始文本”。
 
-你的任务只有一个：根据校长已经确定的必要上游信息，为自己负责的章节生成老师教案原始文本。
+【最高铁律｜原始教案唯一来源】
+你的输出本身就是“老师总教案原始内容”。系统会把你的返回内容原样保存，并只按“第X章”章头到下一章章头做确定性原文切割。
+不得输出 JSON、机器协议、结构化字段协议、章节卡、施工卡、第二套教案对象、旧结构骨架、beat列表、PlotUnit、ScenePlan 或任何供程序解析的机器结构。
+不得为了格式整齐而压缩、归纳、删减、重写已经给你的权威信息。
+不得把完整章节设计压缩成一段“章节概述”来代替真正的执行教案。
 
-【最高铁律｜原始教案】
-你的输出本身就是“老师总教案原始内容”。系统必须原样保存这份 AI 返回内容。
-不要把教案输出成 JSON、机器协议、结构化字段、章节卡、施工卡或任何第二套教案对象。
-不要输出 任何机器结构协议或旧结构骨架/beat 等机器结构协议。
-不要为了让程序解析而重写、压缩、归纳或另造一份教案。
+【完整性总要求｜不能只写摘要】
+本组每一章都必须形成真正可以交给正文AI施工的完整老师教案，而不是章节简介、剧情摘要或一句话方案。
+每章必须把“为什么写、从哪里开始、发生什么变化、人物如何行动、信息如何移动、时间地点如何连续、中段如何展开、最后在哪里真正停止、下一章凭什么承接”说清楚。
+如果某项上游信息没有被提供，必须明确写“上游未指定/待本章创作自然决定”，不得凭空发明；但不得因此省略该项。
 
-【教案内容要求】
-请用自然、清晰的纯文本 Markdown 写出负责章节的完整教案。每章可以说明：章节标题、章节功能、剧情时间落点、时间推进、地点、人物、承接、核心事件、人物行动、变化、节奏、章末状态以及必要的创作边界。
-这些内容属于老师自己的原始教案文本，不需要遵循固定字段顺序，也不需要生成第二套机器结构。
+【全书恒定规则｜必须真正执行】
+你必须把收到的【全书写作风格规则】与【全校写作守则】当作本书的恒定底座。它们不是参考意见，也不是只给正文AI看的说明；老师的施工方案本身就必须服从它们。
+风格规则决定“怎么写”：叙事、对白、人物、节奏、场景、情绪、特殊机制、绝对禁止、风格漂移风险、冲突优先级。
+全校守则决定“不能破坏什么”：因果、连续性、微拍纪律、时间、人物、风格、章节边界、创作权限、信息释放。
 
-【权限】
-校长负责全书方向、阶段结构和章级目标；老师负责自己章节的具体教案；正文 AI 负责把老师原始教案写成小说正文。
-老师不得擅自改变用户确定的世界事实、词典事实和校长已经确定的硬边界，也不得提前设计下一章的具体剧情。
+【章节动态执行规则｜必须逐章落实】
+你必须逐章读取并落实每章自己的章节战略、老师任务、时间战略、承接条件、章末设计和chapterMiddleShape。
+chapterMiddleShape只规定“章头与章末之间的中段应该如何呼吸、分段和形成结构节奏”，不规定具体剧情事件、固定人物行动、场景顺序或新的旧结构骨架。
+你可以在中段文学展开空间内自由施工，但必须让中段真正产生人物、信息、关系、冲突、情绪、目标或状态的有效变化，并最终自然抵达本章已授权的章末边界。
+
+【章末完整设计｜不得压缩】
+每章必须有完整的章末施工设计，至少明确：最后有效事件、结尾主要功能、结尾强度、具体表现形式、从上一章如何承接到本章、为什么在此处停止、下一章承接方式、下一章承接依据、本章交接条件、停止后不得追加的内容，以及读者在本章结束时已经成立的事实状态。
+章末不是一句“形成结果”“留下悬念”或“自然收尾”即可。必须说明真正停止的具体边界。
+不得为了制造吸引力增加没有上游依据的新问题、新承诺、新预告、未来期待或抽象升华。
+如果是终章，必须明确全书最终状态，并明确不存在下一章承接设计。
+
+【连续性与动态状态】
+本章必须承接上一章已经结算的真实事实。人物地点、时间、关系、伤势、道具、线索、已知信息、未决事项等，凡已成立者不得擅自重置。
+本章内部必须形成因果连续的变化链；不能只罗列事件。
 
 【时间】
-时间要求必须与本章实际剧情跨度一致。真实跨日就自然体现时间流逝；同一时间连续推进就不要虚构跨日。
+时间战略必须与实际剧情跨度一致。真实跨日才推进日期；同一时段连续发生就不要虚构跨日。必须明确本章时间落点、时间推进方式以及必要的时间过桥。
 
-【章末】
-每章必须明确本章真正结束时已经成立的状态。不要为了制造吸引力凭空增加悬念、下一章事件或未来承诺。
-如果是全书终章，只写全书结束时已经成立的最终状态，不设计下一章。
+【世界事实】
+只能使用已注入的词典/世界事实与上游授权。不得改写、重定义、创造同名替代品。词典素材只有在剧情、人物、场景或因果真正需要时才自然调用。
 
-【连续性】
-说明本章如何承接上一章已经成立的事实，并确保本章内部事件具有因果连续性。
+【输出结构｜使用自然Markdown标题即可】
+对本组每一章依次输出：
+1. 章节定位与战略目标
+2. 承接前提与开章设计
+3. 时间、地点、人物、关系与已知信息状态
+4. 本章核心变化与因果推进
+5. 中段完整文学施工设计（必须覆盖本章chapterMiddleShape的结构职责，但不得把phase变成机械beat清单；要保留足够文学发挥空间）
+6. 信息、人物、冲突、情绪与节奏的动态推进
+7. 章末完整设计（含最后有效事件、停止边界、结尾功能、表现形式、强度、承接依据、交接条件）
+8. 创作边界与禁止事项
 
-【输出】
-只输出老师教案原始纯文本 Markdown。
-禁止 JSON、代码围栏、机器标签、结构化协议和解释性开场/结尾。`;
+【重要】以上8项是内容完整性要求，不是机器字段协议。可以使用自然语言Markdown标题和段落，但每一项都必须有实质内容。不得用“章节概述”一段话替代以上完整设计。
+
+【输出边界】
+只输出老师总教案原始纯文本Markdown正文，不要解释你正在做什么，不要输出机器协议，不要输出代码围栏，不要在结尾添加与教案无关的说明。`;
 function buildEndingDiversityAudit(plans){
   const entries=Object.keys(plans||{}).map(Number).filter(Number.isFinite).sort((a,b)=>a-b).map(n=>({n,fn:String(plans[n]?.endingFunction||'未指定').trim(),form:String(plans[n]?.form||'未指定').trim()}));
   const counts={}; let maxRun=0,run=0,last='';
@@ -8247,25 +8271,56 @@ function teacherScopedGlossary(g, gi, maxChar){
 
 function buildTeacherUser(g,gi){
   const pr=principalCurrentResult()||{},lines=[],code=g.teacherCode||teacherCodeForIndex(gi),groups=teacherAssignmentGroups(),role=teacherRoleForIndex(gi,groups.length),assignment=buildTeacherAssignment(),finalFacts=teacherGroupBoundaryFacts(gi,assignment);
-  lines.push(`【本次老师备课上下文】\n老师代号=${code}\n系统角色=${role.role}（${role.roleLabel}）\n负责章节=${g.first}-${g.last}。`);
+  const plans=state.school?.principal?.plans||{};
+  const targetCount=Math.max(Number(state.outline?.chapters?.length)||0,Object.keys(plans).length,Number(state.school?.principal?.targetChapterCount)||0);
+  const stageForChapter=(n)=>{
+    const stages=Array.isArray(pr.stageStrategies)?pr.stageStrategies:[];
+    return stages.find(x=>Number(x.startChapter)<=n&&Number(x.endChapter)>=n)||null;
+  };
+  const groupStrategy=(pr.teacherGroupStrategies||[]).find(x=>String(x.teacherCode||'')===String(code))||{};
+  const middleSource=principalChapterMiddleShapeSource(targetCount);
+  const middleByChapter={};
+  (middleSource.chapters||[]).forEach(x=>{middleByChapter[String(x.chapter)]=x;});
+  const timeSource=principalTimeSystemSource(targetCount);
+  const timeByChapter={};
+  (timeSource.plannedChapters||[]).forEach(x=>{timeByChapter[String(x.chapter)]=x;});
+
+  lines.push(`【本次老师备课上下文｜权威总入口】\n老师代号=${code}\n系统角色=${role.role}（${role.roleLabel}）\n负责章节=${g.first}-${g.last}。\n本次任务必须覆盖负责范围内每一章，任何章节不得只写标题或一句话概述。`);
   lines.push(`【最终老师身份｜系统只读】\n最终老师=${finalFacts.finalTeacher}｜本老师是否最终负责者=${finalFacts.finalResponsible?'是':'否'}｜后续老师=${finalFacts.hasNextTeacher?finalFacts.nextTeacherCode:'无'}｜全书结局章节=${finalFacts.finalEndChapter}。`);
   lines.push(storyStateCanonBlock());
-  lines.push(`【全书战略】\n${JSON.stringify(pr.bookStrategy||{},null,2)}`);
-  lines.push(`【本组战略】\n${JSON.stringify((pr.teacherGroupStrategies||[]).find(x=>String(x.teacherCode||'')===String(code))||{},null,2)}`);
-  lines.push(`【本组章节标题】\n${scGroupTitles(g).join('\n')}`);
-  const plans=state.school?.principal?.plans||{};
+
+  lines.push(`【全书战略｜完整权威输入】\n${JSON.stringify(pr.bookStrategy||{},null,2)}`);
+  lines.push(`【全校写作守则｜完整权威输入】\n${JSON.stringify(pr.schoolRules||{},null,2)}\n\n${principalRulesExcerpt()}`);
+  lines.push(`【全书恒定写作风格｜完整权威输入】\n${JSON.stringify(pr.styleStrategy||{},null,2)}\n\n${chapterStyleExecutionBlock(g.first-1)}`);
+
+  const stageRows=(pr.stageStrategies||[]).filter(x=>Number(x.endChapter)>=Number(g.first)&&Number(x.startChapter)<=Number(g.last));
+  lines.push(`【本组涉及的阶段战略｜完整权威输入】\n${JSON.stringify(stageRows,null,2)}`);
+  lines.push(`【本组战略｜完整权威输入】\n${JSON.stringify(groupStrategy,null,2)}`);
+  lines.push(`【本组章节所有权与边界｜系统事实】\n${JSON.stringify(g,null,2)}\n\n【本组章节标题】\n${scGroupTitles(g).join('\n')}`);
+  lines.push(`【全书时间系统｜权威输入】\n${JSON.stringify(timeSource,null,2)}`);
+  lines.push(`【全书章末规则｜权威施工契约】\n${chapterEndingContractText()}\n\n【允许的章末表现形式】\n${chapterEndingFormText()}\n\n【章末承接方式】\n${chapterEndingTransitionText()}\n\n【章末功能说明】\n${chapterEndingFunctionText()}`);
+
   for(let n=g.first;n<=g.last;n++){
     const p=plans[n]||{};
-    lines.push(`【第${n}章章级授权】\n标题=${String(p.title||state.chapters?.[n-1]?.title||'').trim()}\n功能=${String(p.function||'').trim()}\n目标=${String(p.goal||'').trim()}\n核心事件=${String(p.coreEvent||'').trim()}\n老师任务=${String(p.teacherTask||'').trim()}\n时间战略=${String(p.timeStrategy||'').trim()}\n章末要求=${JSON.stringify(p.ending||{})}`);
+    const stage=stageForChapter(n)||{};
+    const middle=middleByChapter[String(n)]||getChapterMiddleShape(n)||null;
+    const time=timeByChapter[String(n)]||null;
+    const previousEnding=previousChapterEndingBrief(n,gi);
+    lines.push(`【第${n}章｜完整章节权威执行包】\n
+【章节身份】\n${JSON.stringify({chapter:n,title:String(p.title||state.chapters?.[n-1]?.title||'').trim()},null,2)}\n
+【阶段战略】\n${JSON.stringify(stage,null,2)}\n
+【章节战略原始授权】\n${JSON.stringify(p,null,2)}\n
+【章节中段微拍形状｜只读结构形状】\n${JSON.stringify(middle,null,2)}\n
+【本章时间战略补充】\n${JSON.stringify(time,null,2)}\n
+${previousEnding}\n
+【本章完整章末设计要求】\n必须严格落实上方章节授权中的ending全部信息：function、intensity、lastEffectiveEvent、form、nextTransitionType、nextTransitionBasis、handoff、diversityNote；不得把这些内容压缩成一句话。章末必须设计真正的停止边界，并说明最后有效事件之后什么也不能再追加。`);
   }
-  lines.push(`【本组授权词典】\n${teacherScopedGlossary(g,gi,9000)}`);
-  lines.push(`【前序正文状态】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态）'):'（首组，无前序正文）'}`);
-  lines.push(`【唯一输出要求】请直接写出本组完整的“老师总教案原始文本”。这份输出会被系统原样保存，并作为后续“读教案”和按章节切割的唯一来源。不得输出 JSON、机器标签、任何机器结构协议、旧结构骨架、beats 或任何第二套结构化教案。`);
+
+  lines.push(`【本组授权词典｜完整相关资源】\n${teacherScopedGlossary(g,gi,9000)}`);
+  lines.push(`【前序正文状态｜完整动态连续性输入】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态；不得自行假定缺失事实）'):'（首组，无前序正文）'}`);
+  lines.push(`【最终输出执行口令】\n现在必须一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。输出不得是摘要，不得是“章节概述”，不得压缩章末，不得遗漏全书恒定风格规则、全校守则、章节动态执行规则、chapterMiddleShape、时间、连续性和章末完整设计。中段必须完整可执行，同时保留章头与章末之间的文学展开空间。输出只作为原始教案保存，不需要也不允许生成任何第二套机器结构。`);
   return lines.join('\n\n');
 }
-
-
-
 
 function teacherPerfRecord(gi, metrics){
   try{
@@ -8297,7 +8352,7 @@ async function genTeacher(btn, gi){
     const _teacherUser=buildTeacherUser(g,gi);
     _tp.systemChars=String(TEACHER_SYS||'').length; _tp.inputChars=String(_teacherUser||'').length;
     const _aiStart=performance.now();
-    const txt=await callAIGuarded('teacher',TEACHER_SYS,_teacherUser,{}, {temperature:temp,maxTokens:16384,signal:_abortCtl?.signal});
+    const txt=await callAIGuarded('teacher',TEACHER_SYS,_teacherUser,{}, {temperature:temp,maxTokens:32768,signal:_abortCtl?.signal,taskKey:'teacher',runId:'teacher-'+Date.now().toString(36),attempt:1});
     _tp.aiReturnMs=Math.round(performance.now()-_aiStart);
     const raw=String(txt||'').trim();
     if(!raw) throw new Error('老师返回空');
