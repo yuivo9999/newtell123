@@ -13,8 +13,8 @@
 
 const APP_VERSION = '1.0.519';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.519.js';
-// Version line: app1.0.519.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
+const APP_FILE_VERSION = 'app1.0.520.js';
+// Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -446,28 +446,32 @@ function teacherResultForAssignmentGroup(g){
 
 function parseTeacherRawChapters(raw, first, last){
   const src=String(raw||'').replace(/\r\n?/g,'\n');
-  const lines=src.split('\n');
   const out={};
-  const re=/^\s*(?:#{1,6}\s*)?第\s*(\d{1,4})\s*章\s*(.*)$/;
-  let cur=null;
-  const finish=()=>{
-    if(!cur) return;
-    const rawText=lines.slice(cur.start,cur.end).join('\n');
-    if(rawText.trim()) out[cur.ch]={chapter:cur.ch,title:cur.title,rawText,startLine:cur.start+1,endLine:cur.end};
-  };
+  // 1.0.520：章节边界必须以“完整章标题行”的真实起点/终点为准。
+  // 不再通过标题文本重组、trim、substring 偏移来计算边界；标题行本身必须进入该章 rawText。
+  const lines=src.split('\n');
+  const re=/^[ \t]*#{1,6}[ \t]*第[ \t]*(\d{1,4})[ \t]*章(?:[ \t]*(.*))?[ \t]*$/;
+  const hits=[];
+  let offset=0;
   for(let i=0;i<lines.length;i++){
-    const m=String(lines[i]||'').match(re);
+    const line=String(lines[i]||'');
+    const m=line.match(re);
     if(m){
-      if(cur){
-        cur.end=i;
-        finish();
-      }
       const ch=Number(m[1]);
       const title=String(m[2]||'').replace(/^[\s:：\-–—]+/,'').replace(/[《》【】（）()]/g,'').trim();
-      cur={ch,title,start:i,end:lines.length};
+      hits.push({ch,title,startLine:i,startOffset:offset});
     }
+    offset += line.length + 1;
   }
-  finish();
+  for(let i=0;i<hits.length;i++){
+    const cur=hits[i];
+    const next=hits[i+1];
+    const endOffset=next ? next.startOffset : src.length;
+    // 从完整章标题行的第一个字符开始，直到下一章完整标题行的第一个字符之前。
+    // 不做首尾 trim，避免误删本章标题或第一节；只允许规范化后的 CRLF。
+    const rawText=src.slice(cur.startOffset,endOffset);
+    if(rawText.trim()) out[cur.ch]={chapter:cur.ch,title:cur.title,rawText,startLine:cur.startLine+1,endLine:next?next.startLine:lines.length};
+  }
   const lo=Number.isFinite(Number(first))?Number(first):1;
   const hi=Number.isFinite(Number(last))?Number(last):Infinity;
   const filtered={};
