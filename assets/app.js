@@ -6423,17 +6423,6 @@ function validatePlotUnitHierarchy(plan){
   phases.forEach((ph,i)=>{const listed=Array.isArray(ph.plotUnitIds)?ph.plotUnitIds:[]; listed.forEach(id=>{if(!unitIds.has(String(id))) errors.push(`phase:${i+1}:unknownPlotUnit:${id}`);});});
   return {valid:errors.length===0,errors};
 }
-function validateMiddleConstructionPlanV2(plan){
-  const p=plan||{}, errors=[];
-  if(p.schema!=='middle-construction-plan/v2') errors.push('schema');
-  if(!p.planVersion || p.planVersion!=='v2') errors.push('planVersion');
-  if(!/^chapterMiddleShape:\d+$/.test(String(p.chapterMiddleShapeRef||''))) errors.push('chapterMiddleShapeRef');
-  if(!/^chapterStrategy:\d+$/.test(String(p.chapterStrategyRef||''))) errors.push('chapterStrategyRef');
-  if(p.middleBoundary?.start!=='after_chapter_opening'||p.middleBoundary?.end!=='before_chapter_ending') errors.push('middleBoundary');
-  const legacy=['progressionSkeleton','beats','midBeatIds','midBeatRange','coveredBeats','sourceBeatIds','sourceBeatRange']; legacy.forEach(k=>{if(Object.prototype.hasOwnProperty.call(p,k)) errors.push(`legacy:${k}`);});
-  const a=validateStructurePhaseFulfillment(p), b=validatePlotUnitHierarchy(p); if(!a.valid) errors.push(...a.errors.map(x=>`phase:${x}`)); if(!b.valid) errors.push(...b.errors.map(x=>`hierarchy:${x}`));
-  return {valid:errors.length===0,errors,phaseCount:Array.isArray(p.structurePhases)?p.structurePhases.length:0,plotUnitCount:Array.isArray(p.plotUnits)?p.plotUnits.length:0,scenePlanCount:Array.isArray(p.scenePlans)?p.scenePlans.length:0,emptyConstruction:Array.isArray(p.plotUnits)&&p.plotUnits.length===0};
-}
 function storeMiddleConstructionPlansV2FromTeacher(gi,sideMachine,g){
   const o=state.outline||{}; o._middleConstructionPlansV2=(o._middleConstructionPlansV2&&typeof o._middleConstructionPlansV2==='object')?o._middleConstructionPlansV2:{};
   const first=Number(g?.first||g?.startChapter||0), last=Number(g?.last||g?.endChapter||0), out=[];
@@ -6503,16 +6492,6 @@ function buildChapterWritingPlanV2FromParts(chapter,opening,ending,middle){const
 function buildChapterWritingPlanV2(chapterNumber){const chapter=Math.max(1,Number(chapterNumber)||1),card=getCurrentChapterStructuredPlan(chapter-1);if(card?.chapterWritingPlan)return _clonePlain(card.chapterWritingPlan);const middle=getMiddleConstructionPlanV2(chapter);if(!middle||!card)return null;return buildChapterWritingPlanV2FromParts(chapter,card.openingLink,card.endingConstruction,middle);}
 function validateWritingFreedomBoundary(plan){const p=plan||{},e=[];if(p.schema!=='chapter-writing-plan/v2')e.push('schema');if(!p.chapterOpening||typeof p.chapterOpening!=='object')e.push('chapterOpening');if(!p.chapterEnding||typeof p.chapterEnding!=='object')e.push('chapterEnding');if(p.middleWritingContext?.definition!=='中段=章头与章末之间的全部区域')e.push('middleDefinition');if(!Array.isArray(p.freedomRules)||p.freedomRules.length<4)e.push('freedomRules');if(p.styleVoice?.source!=='current_selected_style')e.push('styleVoice');return {valid:!e.length,errors:e};}
 function validateChapterWritingPlanV2(plan){const p=plan||{},e=[],a=validateWritingFreedomBoundary(p);if(!a.valid)e.push(...a.errors);const phases=Array.isArray(p.middleWritingContext?.phases)?p.middleWritingContext.phases:[],shape=getChapterMiddleShape(p.chapter),expected=Array.isArray(shape?.phases)?shape.phases:[];if(phases.length!==expected.length)e.push('phaseCount');expected.forEach((x,i)=>{const y=phases[i];if(!y){e.push(`phase:${i+1}:missing`);return;}if(String(y.phaseId)!==String(x.phaseId||x.id))e.push(`phase:${i+1}:id`);if(String(y.role)!==String(x.role||''))e.push(`phase:${i+1}:role`);if(String(y.purpose)!==String(x.purpose||''))e.push(`phase:${i+1}:purpose`);});const ids=new Set(phases.map(x=>String(x.phaseId||''))),units=Array.isArray(p.middleWritingContext?.plotUnits)?p.middleWritingContext.plotUnits:[],unitIds=new Set();units.forEach((u,i)=>{const id=String(u.plotUnitId||'');if(!id||unitIds.has(id))e.push(`plotUnit:${i}:id`);else unitIds.add(id);if(!ids.has(String(u.phaseId||'')))e.push(`plotUnit:${i}:phase`);});(Array.isArray(p.middleWritingContext?.scenePlans)?p.middleWritingContext.scenePlans:[]).forEach((x,i)=>{if(!unitIds.has(String(x.plotUnitId||'')))e.push(`scene:${i}:plotUnit`);});return {valid:!e.length,errors:e,phaseCount:phases.length,plotUnitCount:units.length,scenePlanCount:Array.isArray(p.middleWritingContext?.scenePlans)?p.middleWritingContext.scenePlans.length:0};}
-function validateWritingContextAuthority(plan, legacyText=''){
-  const p=plan||{}, errors=[];
-  const primaryOk=validateChapterWritingPlanV2(p).valid;
-  if(!primaryOk) errors.push('primary:invalid');
-  const legacy=String(legacyText||'');
-  const legacyMarkers=['progressionSkeleton','midBeatIds','coveredBeats','midBeatRange','sourceBeatIds','sourceBeatRange','【本章推进骨架】'];
-  const legacyDetected=legacyMarkers.some(k=>legacy.includes(k));
-  const authority={primary:'chapterWritingPlan/v2', legacy:'READ_ONLY/NON_STRUCTURAL', opening:'ORIGINAL_READ_ONLY', ending:'ORIGINAL_READ_ONLY', style:'INDEPENDENT'};
-  return {valid:errors.length===0,errors,authority,primaryValid:primaryOk,legacyDetected,legacyMayGuideStructure:false};
-}
 function buildLegacyWritingContextBlock(rawTeacher, legacyPlan){
   const raw=String(rawTeacher||'').trim();
   const legacy=legacyPlan&&typeof legacyPlan==='object'?legacyPlan:null;
@@ -7994,18 +7973,6 @@ function compilePrincipalMachineCards(parsed){
       p.title ? `- 标题：${p.title}` : ''
     ].filter(Boolean).join('\n');
   }).join('\n\n');
-}
-function parseTeacherMachine(text,first,last){
-  const src=String(text||'');
-  const handoffRows=parseMachineBlocks(src,'CONFIRMED_TEACHER_HANDOFF');
-  const mids=parseMachineBlocks(src,'MIDDLE_CONSTRUCTION_PLAN'), opens=parseMachineBlocks(src,'OPENING_LINK'), ends=parseMachineBlocks(src,'ENDING_CONSTRUCTION'), scenes=parseMachineBlocks(src,'SCENE_PLAN');
-  const expected=[];for(let n=Number(first);n<=Number(last);n++)expected.push(n);
-  const mapBlocks=(rows)=>{const by={};rows.forEach((r,i)=>{let n=teacherChapterNo(r?.chapter);if(!Number.isInteger(n)||!expected.includes(n)){if(rows.length===expected.length)n=expected[i];}if(Number.isInteger(n)&&expected.includes(n)&&!by[n])by[n]=r;});return by};
-  const midBy=mapBlocks(mids),openBy=mapBlocks(opens),endBy=mapBlocks(ends),sceneRows={};
-  scenes.forEach((r,i)=>{let n=teacherChapterNo(r?.chapter);if(!Number.isInteger(n)||!expected.includes(n)){if(scenes.length===expected.length)n=expected[i];}if(Number.isInteger(n)&&expected.includes(n))(sceneRows[n]||(sceneRows[n]=[])).push({...r,chapter:String(n)});});
-  const missing=[],invalid=[];
-  for(const n of expected){const m=midBy[n];if(!m){missing.push(n);continue;}const miss=[];if(String(m.chapter||'').trim()==='')miss.push('chapter');if(!String(m.title||'').trim())miss.push('title');if(!String(m.chapterMiddleShapeRef||'').trim())miss.push('chapterMiddleShapeRef');if(!String(m.chapterStrategyRef||'').trim())miss.push('chapterStrategyRef');if(!String(m.middleBoundary||'').trim())miss.push('middleBoundary');if(miss.length)invalid.push({chapter:n,fields:miss});}
-  return {rows:midBy,middlePlans:midBy,openingLinks:openBy,endingPlans:endBy,scenes:sceneRows,handoffs:handoffRows,confirmedTeacherHandoff:handoffRows.length===1?handoffRows[0]:null,missing,invalid,duplicate:[],unexpected:Object.keys(midBy).map(Number).filter(n=>!expected.includes(n)),plotUnits:parseTeacherMiddleConstructionMachine(src,first,last).plotUnits,scenePlans:parseTeacherMiddleConstructionMachine(src,first,last).scenePlans};
 }
 function chapterStyleExecutionBlock(i){
   const pr=principalCurrentResult();
