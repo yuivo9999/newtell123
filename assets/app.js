@@ -1,9 +1,9 @@
 /* v1.0.509 CLEAN CUTOVER: no legacy compatibility / no migration / single principal→teacher→cut→writing chain. */
 'use strict';
 
-const APP_VERSION = '1.0.520-debug-G';
+const APP_VERSION = '1.0.509';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.520-debug-G.js';
+const APP_FILE_VERSION = 'app1.0.508.js';
 // Version line: app1.0.504.js — 第十一刀：校长→老师→正文真实运行级回归验证。
 const KEY_CFG = nsKey('cfg');
 
@@ -571,7 +571,7 @@ function openTeacherCutConfirm(gi){
   ov.querySelector('[data-tcut-close]').onclick=close;
   ov.querySelector('[data-tcut-cancel]').onclick=close;
   ov.addEventListener('click',e=>{if(e.target===ov)close();});
-  ov.querySelector('[data-tcut-start]').onclick=async()=>{close(); await cutTeacherChapterCardsManually_A(Number(gi));};
+  ov.querySelector('[data-tcut-start]').onclick=async()=>{close(); await cutTeacherChapterCardsManually(Number(gi));};
 }
 function renderTeacherCutChapterList(gi){
   const st=teacherChapterCutStatus(gi), g=teacherAssignmentGroups()[Number(gi)];
@@ -584,7 +584,7 @@ function renderTeacherCutChapterList(gi){
   }
   return items.join(' ');
 }
-async function cutTeacherChapterCardsManually_A(gi){
+async function cutTeacherChapterCardsManually(gi){
   if(state._teacherCutting?.[gi])return false;
   const groups=teacherAssignmentGroups(),g=groups[Number(gi)],t=teacherCurrentResult(Number(gi));
   if(!g||!t){toast(`老师${Number(gi)+1}总教案尚未生成，请先完成备课`);return false;}
@@ -6561,7 +6561,6 @@ function runMiddleStructureAuthorityConflictTest(){
   const phases=fake.middleWritingContext.phases.map(x=>x.phaseId);
   return {ok:primary.valid&&isolated.valid&&phases.join('→')==='accumulation→convergence',primaryPhases:phases,legacyAuthority:legacyCtx.structuralAuthority,legacyCoveredBeats:legacyCtx.legacyBeatMetadata.coveredBeats};
 }
-function chapterWritingPlanV2Block(i){let p=getChapterWritingPlanV2(i+1);if(!p||!validateChapterWritingPlanV2(p).valid)return '';const m=p.middleWritingContext;return `【本章正文新写作施工上下文｜chapterWritingPlan/v2】\n【权威中段定义】${m.definition}\n【章头】以下章头来自现有章节设计，只能原样承接，不得重写：\n${JSON.stringify(p.chapterOpening)}\n【中段结构形状】\n${JSON.stringify(m.phases)}\n【老师施工上下文】\n${JSON.stringify({plotUnits:m.plotUnits,scenePlans:m.scenePlans,rule:m.rule})}\n【章末】以下章末来自现有章节设计，只能原样承接，不得重写：\n${JSON.stringify(p.chapterEnding)}\n【写作自由边界】\n${p.freedomRules.map(x=>' - '+x).join('\n')}\n【结构权限优先级】PRIMARY = chapterWritingPlan/v2；其上游 chapterMiddleShape 仅通过本计划体现，不另立第二套正文结构。旧老师教案、progressionSkeleton、beats、midBeatIds、coveredBeats不属于正文输入，不得读取、重建或覆盖PRIMARY。`; }
 
 function buildMiddleConstructionPlan(chapterNumber, teacherRow, sceneRows){
   const chapter=Math.max(1,Number(chapterNumber)||1);
@@ -22423,6 +22422,105 @@ function openRealChapterRegressionPanel(){
 /* v1.0.504 第十一刀：完整章节管线真实运行级回归测试。
  * 只使用生产构建器，不调用AI、不写入用户真实章节；临时替换state后恢复。
  */
+function runFullChapterPipelineRegression(){
+  const snapshot={
+    outline:state.outline, chapters:state.chapters, chapterCount:state.chapterCount,
+    school:state.school, teamShape:state.teamShape, canonicalStoryStrategy:state.canonicalStoryStrategy
+  };
+  const report={version:'1.0.504',test:'full-chapter-pipeline-regression',ok:false,stages:[],assertions:[],legacyConflict:null};
+  const assert=(name,pass,detail)=>{report.assertions.push({name,pass:!!pass,detail:detail||''});if(!pass) report.ok=false;};
+  report.ok=true;
+  try{
+    // 最小安全fixture：只在内存中构造第1章，不触碰用户真实数据。
+    state.chapterCount=1;
+    state.teamShape='solo';
+    state.canonicalStoryStrategy=null;
+    state.outline={title:'REGRESSION_FIXTURE',beatCount:2,chapters:[{
+      title:'回归测试章',
+      middleBeatId:2,
+      openingLink:{state:'OPENING_ORIGINAL'},
+      endingConstruction:{state:'ENDING_ORIGINAL'}
+    }],_chapterMiddleShapes:{},_middleConstructionPlansV2:{},_chapterWritingPlansV2:{}};
+    state.chapters=[{title:'回归测试章'}];
+    const legacyTeacherPlan={
+      identity:{chapter:1},
+      progressionSkeleton:{midBeatIds:['OLD_B','OLD_A'],beats:[{id:'OLD_B'},{id:'OLD_A'}]},
+      midConstruction:{midBeatRange:[9,3],sourceBeatIds:['OLD_B','OLD_A'],coveredBeats:['OLD_B','OLD_A']},
+      openingLink:{state:'OPENING_ORIGINAL'},endingConstruction:{state:'ENDING_ORIGINAL'}
+    };
+    state.school={principal:{chapterStrategies:{}},teachers:[{
+      raw:'REGRESSION TEACHER RAW WITH OLD coveredBeats',ts:1,
+      chapterCards:{chapters:{1:{status:'ready',rawText:'REGRESSION TEACHER RAW WITH OLD coveredBeats',rawTeacherPlan:'REGRESSION',structuredAvailable:true,plan:legacyTeacherPlan}}}
+    }]};
+
+    // 1) 用户微拍 → chapterMiddleShape
+    const shape=ensureChapterMiddleShape(1,{beatId:2});
+    const shapeAudit=validateMiddleShape(shape);
+    report.stages.push({stage:'chapterMiddleShape',input:{userBeatId:2},output:{patternId:shape?.patternId,phases:(shape?.phases||[]).map(x=>x.phaseId)},legacySeen:false,authority:'chapter_microbeat_config',valid:shapeAudit.ok});
+    assert('microbeat_phase_order',shapeAudit.ok && shape.patternId==='double' && shape.phases.map(x=>x.phaseId).join('>')==='accumulation>convergence',shape?.phases?.map(x=>x.phaseId));
+
+    // 2) 校长：chapterStrategy读取chapterMiddleShape，不读取旧骨架。
+    const principalInput={1:{title:'回归测试章',function:'完成本章功能',goal:'抵达章末状态',coreEvent:'阶段目标',narrativeRole:'chapter_role',timeStrategy:'连续',stageTask:'阶段任务',teacherTask:'在中段空间内施工',handoff:'承接章末'}};
+    const strategies=buildChapterStrategiesFromPrincipal(principalInput,1);
+    state.school.principal.chapterStrategies=strategies;
+    const strategy=strategies[1];
+    report.stages.push({stage:'chapterStrategy',input:{middleShapeRef:strategy?.middleShape?.patternId},output:{middleShapeUsage:strategy?.middleShapeUsage,progressionSkeletonDependency:strategy?.progressionSkeletonDependency,phases:(strategy?.middleShape?.phases||[]).map(x=>x.phaseId)},legacySeen:false,authority:'chapterMiddleShape',valid:!!strategy});
+    assert('strategy_preserves_shape',!!strategy && strategy.middleShapeUsage==='read_only_structure' && strategy.progressionSkeletonDependency===false && strategy.middleShape.phases.map(x=>x.phaseId).join('>')==='accumulation>convergence');
+    assert('strategy_keeps_full_middle_boundary',strategy?.middleShape?.middleBoundary?.start==='after_chapter_opening'&&strategy?.middleShape?.middleBoundary?.end==='before_chapter_ending'&&strategy?.middleShape?.middleBoundary?.definition==='中段=章头与章末之间的全部区域');
+
+    // 3) 老师：真实使用生产解析器解析机器教案，再进入middleConstructionPlan/v2。
+    const teacherMachineText=`[MIDDLE_CONSTRUCTION_PLAN]\nchapter=1\nteacherFreedomNotes=允许积累阶段充分展开，兑现阶段集中回收\n[/MIDDLE_CONSTRUCTION_PLAN]\n[PLOT_UNIT]\nchapter=1\nphaseId=accumulation\npurpose=调查与积累\nevent=发现线索\nchange=信息增加\ncharacters=主角\n[/PLOT_UNIT]\n[PLOT_UNIT]\nchapter=1\nphaseId=convergence\npurpose=集中兑现\nevent=揭示关键关系\nchange=状态改变\ncharacters=主角|配角\n[/PLOT_UNIT]\n[SCENE_PLAN]\nchapter=1\nplotUnitId=PU-1-01\npurpose=调查\nevent=发现线索\nchange=获得信息\nlocation=旧屋\n[/SCENE_PLAN]`;
+    const machine=parseTeacherMiddleConstructionMachine(teacherMachineText,1,1);
+    const middle=buildMiddleConstructionPlanV2(1,machine.plans[1]||{},machine.plotUnits[1]||[],machine.scenePlans[1]||[]);
+    state.outline._middleConstructionPlansV2['1']=middle;
+    const middleAudit=validateMiddleConstructionPlanV2(middle);
+    report.stages.push({stage:'middleConstructionPlan/v2',input:{teacherPlanParsed:true,plotUnitCount:(machine.plotUnits[1]||[]).length,scenePlanCount:(machine.scenePlans[1]||[]).length},output:{phases:(middle?.structurePhases||[]).map(x=>x.phaseId),plotUnits:(middle?.plotUnits||[]).map(x=>({id:x.plotUnitId,phaseId:x.phaseId})),scenePlans:(middle?.scenePlans||[]).map(x=>({id:x.scenePlanId,plotUnitId:x.plotUnitId}))},legacySeen:JSON.stringify(middle||{}).includes('coveredBeats'),authority:'chapterMiddleShape→chapterStrategy→teacher construction',valid:middleAudit.valid});
+    assert('middle_phase_order',middleAudit.valid && middle.structurePhases.map(x=>x.phaseId).join('>')==='accumulation>convergence');
+    assert('phase_not_event_script',middle.structurePhases.every(x=>Array.isArray(x.plotUnitIds)) && middle.structurePhases.length===2);
+    assert('legacy_not_in_middle_primary',!Object.prototype.hasOwnProperty.call(middle,'coveredBeats')&&!Object.prototype.hasOwnProperty.call(middle,'sourceBeatIds'));
+
+    // 4) 正文：生产chapterWritingPlan/v2 + prompt block。
+    const writing=buildChapterWritingPlanV2(1);
+    state.outline._chapterWritingPlansV2['1']=writing;
+    const writingAudit=validateChapterWritingPlanV2(writing);
+    const writingBlock=chapterWritingPlanV2Block(0);
+    const legacyBlock=buildLegacyWritingContextBlock('REGRESSION TEACHER RAW coveredBeats=OLD_B,OLD_A',legacyTeacherPlan);
+    const authority=validateWritingContextAuthority(writing,'progressionSkeleton=OLD; coveredBeats=OLD_B,OLD_A');
+    report.stages.push({stage:'chapterWritingPlan/v2→正文prompt',input:{legacyConflict:'OLD_B→OLD_A'},output:{primaryPhases:(writing?.middleWritingContext?.phases||[]).map(x=>x.phaseId),opening:writing?.chapterOpening,ending:writing?.chapterEnding,style:writing?.styleVoice?.source,primaryBlockPresent:!!writingBlock,legacyBlockPresent:!!legacyBlock},legacySeen:legacyBlock.includes('LEGACY_CONTEXT'),authority:authority.authority,valid:writingAudit.valid&&!!writingBlock});
+    assert('writing_primary_phase_order',writingAudit.valid && writing.middleWritingContext.phases.map(x=>x.phaseId).join('>')==='accumulation>convergence');
+    assert('opening_unchanged',writing.chapterOpening.state==='OPENING_ORIGINAL');
+    assert('ending_unchanged',writing.chapterEnding.state==='ENDING_ORIGINAL');
+    assert('style_independent',writing.styleVoice.source==='current_selected_style');
+    assert('legacy_read_only',authority.authority.primary==='chapterWritingPlan/v2'&&authority.authority.legacy==='READ_ONLY/NON_STRUCTURAL'&&authority.legacyMayGuideStructure===false);
+    assert('prompt_has_primary',writingBlock.includes('PRIMARY = chapterWritingPlan/v2'));
+    assert('prompt_rejects_old_structure',writingBlock.includes('旧链不得覆盖PRIMARY'));
+    assert('legacy_block_is_non_structural',legacyBlock.includes('LEGACY_CONTEXT')&&legacyBlock.includes('不得决定本章中段结构'));
+
+    // 5) 故意制造旧coveredBeats冲突：旧顺序不能夺回PRIMARY。
+    const conflict=runMiddleStructureAuthorityConflictTest();
+    report.legacyConflict=conflict;
+    assert('legacy_conflict_cannot_override_primary',conflict.ok && conflict.primaryPhases.join('>')==='accumulation>convergence' && conflict.legacyAuthority===false);
+
+    // 6) 完整回归：新链纯度与旧元数据隔离。
+    const purity=validateNewChainPurity();
+    const legacyIso=runLegacyBeatMetadataConflictTest();
+    assert('new_chain_purity',!!purity?.ok || !!purity?.valid,JSON.stringify(purity));
+    assert('legacy_metadata_isolation',legacyIso.pass===true,JSON.stringify(legacyIso));
+    assert('no_legacy_event_script_in_prompt',!writingBlock.includes('必须覆盖') && !writingBlock.includes('逐项实现旧coveredBeats'));
+    report.summary={primaryAuthority:'chapterWritingPlan/v2',shapeAuthority:'chapterMiddleShape',legacy:'READ_ONLY/NON_STRUCTURAL',fallback:'removed',chapterOpening:'ORIGINAL',chapterEnding:'ORIGINAL'};
+    report.ok=report.assertions.every(x=>x.pass);
+    try{window.__FULL_CHAPTER_PIPELINE_REGRESSION__=report;}catch(e){}
+    return report;
+  }catch(e){
+    report.ok=false; report.error=String(e?.stack||e);
+    try{window.__FULL_CHAPTER_PIPELINE_REGRESSION__=report;}catch(_e){}
+    return report;
+  }finally{
+    state.outline=snapshot.outline; state.chapters=snapshot.chapters; state.chapterCount=snapshot.chapterCount;
+    state.school=snapshot.school; state.teamShape=snapshot.teamShape; state.canonicalStoryStrategy=snapshot.canonicalStoryStrategy;
+  }
+}
+
 /* v1.0.515 老师中段真实输出审计：只检查当前已保存老师教案，不改写生成结果。 */
 function auditLiveTeacherMiddleOutputs(){
   const groups=teacherAssignmentGroups(), report={version:'1.0.515',authority:'chapterMiddleShape→chapterStrategy→middleConstructionPlan/v2',groups:[],ok:true};
@@ -22520,20 +22618,21 @@ function compileTeacherChapterPlan(row,sceneRows,principalPlan,plotRows){
   const plan={schema:'chapter-plan/v2',chapter,identity:{chapter,title:String(row?.title||principalPlan?.title||'').trim()},openingLink:opening,middleConstructionPlanV2:middle,endingConstruction:ending,source:'teacherChapterCut/v2'};plan.chapterWritingPlan=buildChapterWritingPlanV2FromParts(chapter,opening,ending,middle);if(!validateChapterWritingPlanV2(plan.chapterWritingPlan).valid)throw new Error(`第${chapter}章chapterWritingPlan/v2校验失败`);plan.structuredAvailable=true;return plan;
 }
 function getCurrentChapterStructuredPlan(i){const chapterNo=Number(i)+1,g=teacherAssignmentGroups().find(x=>chapterNo>=Number(x.first||1)&&chapterNo<=Number(x.last||Infinity));if(!g)return null;const resolved=teacherResultForAssignmentGroup(g),t=resolved.t;if(!t)return null;const entry=t.chapterCards?.chapters?.[chapterNo];if(!entry||entry.status!=='ready')return null;const plan=_clonePlain(entry.plan||{});if(!plan?.chapterWritingPlan||!validateChapterWritingPlanV2(plan.chapterWritingPlan).valid)return null;plan.identity=plan.identity||{chapter:chapterNo,title:String(entry.title||'')};plan.identity.chapter=chapterNo;plan.rawText=String(entry.rawText||'').trim();plan.rawTeacherPlan=String(entry.rawTeacherPlan||'').trim();plan.teacherGi=resolved.teacherIndex;plan.teacherCode=g.teacherCode||'';plan.teacherGroupId=g.teacherGroupId||'';plan.teacherTs=Number(t.ts)||0;plan.structuredAvailable=true;return plan;}
-function cutTeacherChapterCardsManually_B(gi){return (async()=>{if(state._teacherCutting?.[gi])return false;const groups=teacherAssignmentGroups(),g=groups[Number(gi)],t=teacherCurrentResult(Number(gi));if(!g||!t){toast(`老师${Number(gi)+1}总教案尚未生成，请先完成备课`);return false;}const raw=String(t.raw||'').trim();if(!raw){toast('当前老师没有可读取的总教案原始纯文本');return false;}state._teacherCutting=state._teacherCutting||{};state._teacherCutting[gi]=true;renderTeacherCutUi(gi);try{const machine=parseTeacherMachine(raw,g.first,g.last);if(!machine)throw new Error('老师总教案未形成新版中段教案协议，无法切割，请重新生成老师教案。');if(machine.missing.length||machine.invalid.length)throw new Error(`新版老师教案结构不完整：${machine.missing.join('、')||'无'}；${machine.invalid.map(x=>`${x.chapter}:${x.fields.join(',')}`).join('；')||'无'}`);const principalPlans=state.school?.principal?.plans||{},built={},rawChapters=parseTeacherRawChapters(raw,g.first,g.last);for(let n=g.first;n<=g.last;n++){const row=machine.rows[n],pp=principalPlanForChapter(principalPlans,n,g,String(state.chapters?.[n-1]?.title||row?.title||'')).plan;if(!row||!pp)throw new Error(`第${n}章缺少校长战略授权`);row.chapter=String(n);row.openingLink=machine.openingLinks[n]||{};row.endingConstruction=machine.endingPlans[n]||{};row.title=String(row.title||pp.title||state.chapters?.[n-1]?.title||'');const plan=compileTeacherChapterPlan(row,machine.scenes[n]||[],pp,machine.plotUnits?.[n]||[]);plan.rawText=String(rawChapters[n]?.rawText||'').trim();plan.rawTeacherPlan=plan.rawText;built[n]={chapter:n,title:plan.identity.title,status:'ready',cutAt:Date.now(),structuredAvailable:true,rawText:plan.rawText,rawTeacherPlan:plan.rawText,plan};}const now=Date.now();t.chapterCards={cutAt:now,total:g.last-g.first+1,ready:Object.keys(built).length,structured:Object.keys(built).length,chapters:built,errors:[]};const o=state.outline||{};o._chapterWritingPlansV2=o._chapterWritingPlansV2||{};Object.values(built).forEach(x=>o._chapterWritingPlansV2[String(x.chapter)]=x.plan.chapterWritingPlan);await persistCritical('单章教案切割保存');
+function cutTeacherChapterCardsManually(gi){return (async()=>{if(state._teacherCutting?.[gi])return false;const groups=teacherAssignmentGroups(),g=groups[Number(gi)],t=teacherCurrentResult(Number(gi));if(!g||!t){toast(`老师${Number(gi)+1}总教案尚未生成，请先完成备课`);return false;}const raw=String(t.raw||'').trim();if(!raw){toast('当前老师没有可读取的总教案原始纯文本');return false;}state._teacherCutting=state._teacherCutting||{};state._teacherCutting[gi]=true;renderTeacherCutUi(gi);try{const machine=parseTeacherMachine(raw,g.first,g.last);if(!machine)throw new Error('老师总教案未形成新版中段教案协议，无法切割，请重新生成老师教案。');if(machine.missing.length||machine.invalid.length)throw new Error(`新版老师教案结构不完整：${machine.missing.join('、')||'无'}；${machine.invalid.map(x=>`${x.chapter}:${x.fields.join(',')}`).join('；')||'无'}`);const principalPlans=state.school?.principal?.plans||{},built={},rawChapters=parseTeacherRawChapters(raw,g.first,g.last);for(let n=g.first;n<=g.last;n++){const row=machine.rows[n],pp=principalPlanForChapter(principalPlans,n,g,String(state.chapters?.[n-1]?.title||row?.title||'')).plan;if(!row||!pp)throw new Error(`第${n}章缺少校长战略授权`);row.chapter=String(n);row.openingLink=machine.openingLinks[n]||{};row.endingConstruction=machine.endingPlans[n]||{};row.title=String(row.title||pp.title||state.chapters?.[n-1]?.title||'');const plan=compileTeacherChapterPlan(row,machine.scenes[n]||[],pp,machine.plotUnits?.[n]||[]);plan.rawText=String(rawChapters[n]?.rawText||'').trim();plan.rawTeacherPlan=plan.rawText;built[n]={chapter:n,title:plan.identity.title,status:'ready',cutAt:Date.now(),structuredAvailable:true,rawText:plan.rawText,rawTeacherPlan:plan.rawText,plan};}const now=Date.now();t.chapterCards={cutAt:now,total:g.last-g.first+1,ready:Object.keys(built).length,structured:Object.keys(built).length,chapters:built,errors:[]};const o=state.outline||{};o._chapterWritingPlansV2=o._chapterWritingPlansV2||{};Object.values(built).forEach(x=>o._chapterWritingPlansV2[String(x.chapter)]=x.plan.chapterWritingPlan);await persistCritical('单章教案切割保存');
     for(let n=g.first;n<=g.last;n++){
       const verified=getCurrentChapterStructuredPlan(n-1);
       if(!verified || !verified.chapterWritingPlan || !validateChapterWritingPlanV2(verified.chapterWritingPlan).valid) throw new Error(`切割结果已生成，但前台回读未确认第${n}章 chapterWritingPlan/v2 已保存`);
     }
     renderTeacherCutUi(gi);toast(`${groups.length>1?`老师${gi+1}`:'老师'}单章教案切割完成：${Object.keys(built).length}/${g.last-g.first+1}；组级 CONFIRMED_TEACHER_HANDOFF 保持独立`);return true;}catch(e){console.error('[manualTeacherChapterCut/v2]',e);toast(`切割失败：${String(e?.message||e)}`);return false;}finally{delete state._teacherCutting[gi];renderTeacherCutUi(gi);}})();}
 function validateWritingContextAuthority(plan){const p=plan||{},v=validateChapterWritingPlanV2(p);return {valid:v.valid,errors:v.errors,authority:{primary:'chapterWritingPlan/v2',opening:'ORIGINAL_READ_ONLY',ending:'ORIGINAL_READ_ONLY',style:'INDEPENDENT'},legacyDetected:false,legacyMayGuideStructure:false};}
-function chapterWritingPlanV2Block(i){let p=getChapterWritingPlanV2(i+1);if(!p||!validateChapterWritingPlanV2(p).valid)return '';const m=p.middleWritingContext;return `【本章正文唯一写作施工上下文｜chapterWritingPlan/v2】\n【中段定义】${m.definition}\n【章头】${JSON.stringify(p.chapterOpening)}\n【中段StructurePhase】${JSON.stringify(m.phases)}\n【PlotUnit】${JSON.stringify(m.plotUnits)}\n【ScenePlan】${JSON.stringify(m.scenePlans)}\n【章末】${JSON.stringify(p.chapterEnding)}\n【自由边界】${p.freedomRules.map(x=>' - '+x).join('\\n')}\n硬规则：chapterWritingPlan/v2是本章中段唯一结构入口；不得寻找或重建任何第二套推进骨架。章头与章末沿用现有机制，正文只在两者之间自由发挥。`;}
+/*正文只读取已完成切割并确认保存的 chapterWritingPlan/v2；禁止正文层自行构建/持久化教案。*/
+function chapterWritingPlanV2Block(i){const p=getChapterWritingPlanV2(i+1);if(!p||!validateChapterWritingPlanV2(p).valid)return '';const m=p.middleWritingContext;return `【本章正文唯一写作施工上下文｜chapterWritingPlan/v2】\n【中段定义】${m.definition}\n【章头】${JSON.stringify(p.chapterOpening)}\n【中段StructurePhase】${JSON.stringify(m.phases)}\n【PlotUnit】${JSON.stringify(m.plotUnits)}\n【ScenePlan】${JSON.stringify(m.scenePlans)}\n【章末】${JSON.stringify(p.chapterEnding)}\n【自由边界】${p.freedomRules.map(x=>' - '+x).join('\\n')}\n硬规则：chapterWritingPlan/v2是本章中段唯一结构入口；不得寻找或重建任何第二套推进骨架。章头与章末沿用现有机制，正文只在两者之间自由发挥。`;}
 function rollCallGlossary(i){const o=state.outline||{},g=o.glossary||{},chars=Array.isArray(g.characters)?g.characters:[],places=Array.isArray(g.places)?g.places:[],props=Array.isArray(g.propernouns)?g.propernouns:[],plan=getCurrentChapterStructuredPlan(i)||{},units=Array.isArray(plan?.chapterWritingPlan?.middleWritingContext?.plotUnits)?plan.chapterWritingPlan.middleWritingContext.plotUnits:[],names=new Set();units.forEach(u=>(Array.isArray(u.characters)?u.characters:[]).forEach(n=>names.add(String(n||'').trim())));if(o.navBeacon?.protagonist)names.add(String(o.navBeacon.protagonist).split(/[，,：:（(]/)[0].trim());const matched=new Set();chars.forEach(c=>{const n=String(c?.name||'').trim();if(n&&([...names].some(x=>x&& (n===x||n.includes(x)||x.includes(n)))))matched.add(n);});const lines=[];if(matched.size||places.length||props.length){const charLines=chars.map(c=>{const n=String(c?.name||'').trim();return matched.has(n)?`\n· ${fmtCharFullFields(c).join('，')}`:'';}).filter(Boolean);if(charLines.length)lines.push(`人物（本章PlotUnit点名范围）：${charLines.join('')}`);lines.push(`【本章出场名单】${[...names].filter(Boolean).join('、')||'（以主角为准）'}`);}return lines.length?'【闭卷·点名制设定】\n'+lines.join('\n'):'';}
 function relevantGlossaryForChapter(i){const o=state.outline;if(!o)return {characters:[],places:[],propernouns:[]};const g=o.glossary||{},plan=getCurrentChapterStructuredPlan(i)||{},units=Array.isArray(plan?.chapterWritingPlan?.middleWritingContext?.plotUnits)?plan.chapterWritingPlan.middleWritingContext.plotUnits:[],keywords=new Set();units.forEach(u=>(Array.isArray(u.characters)?u.characters:[]).forEach(x=>keywords.add(String(x||'').trim())));if(o.navBeacon?.protagonist)keywords.add(String(o.navBeacon.protagonist).split(/[，,：:（(]/)[0].trim());const chars=(g.characters||[]).filter(c=>keywords.has(String(c?.name||'').trim())),places=(g.places||[]).filter(c=>keywords.has(String(c?.name||'').trim())),propernouns=(g.propernouns||[]).filter(c=>keywords.has(String(c?.name||'').trim()));return {characters:chars,places,propernouns};}
 
-/* v1.0.513 handoff-tail regression: verify the live single-chain + teacher handoff contracts. */
+/* v1.0.517 handoff-tail regression: verify the live single-chain + teacher handoff contracts. */
 function runFullChapterPipelineRegression(){
-  const report={version:'1.0.515',ok:false,assertions:[],stages:[]};
+  const report={version:'1.0.517',ok:false,assertions:[],stages:[]};
   const assert=(name,pass,detail)=>report.assertions.push({name,pass:!!pass,detail:detail||null});
   try{
     const o=state.outline||{},groups=teacherAssignmentGroups();
