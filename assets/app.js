@@ -1,9 +1,9 @@
 /* v1.0.509 CLEAN CUTOVER: no legacy compatibility / no migration / single principal→teacher→cut→writing chain. */
 'use strict';
 
-const APP_VERSION = '1.0.509';
+const APP_VERSION = '1.0.519-debug';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.508.js';
+const APP_FILE_VERSION = 'app1.0.519-debug.js';
 // Version line: app1.0.504.js — 第十一刀：校长→老师→正文真实运行级回归验证。
 const KEY_CFG = nsKey('cfg');
 
@@ -6561,7 +6561,7 @@ function runMiddleStructureAuthorityConflictTest(){
   const phases=fake.middleWritingContext.phases.map(x=>x.phaseId);
   return {ok:primary.valid&&isolated.valid&&phases.join('→')==='accumulation→convergence',primaryPhases:phases,legacyAuthority:legacyCtx.structuralAuthority,legacyCoveredBeats:legacyCtx.legacyBeatMetadata.coveredBeats};
 }
-function chapterWritingPlanV2Block(i){let p=getChapterWritingPlanV2(i+1);if(!p){const c=buildChapterWritingPlanV2(i+1);if(c&&validateChapterWritingPlanV2(c).valid){const o=state.outline||{};o._chapterWritingPlansV2=o._chapterWritingPlansV2||{};o._chapterWritingPlansV2[String(i+1)]=c;p=c;try{persist();}catch(e){}}}if(!p||!validateChapterWritingPlanV2(p).valid)return '';const m=p.middleWritingContext;return `【本章正文新写作施工上下文｜chapterWritingPlan/v2】\n【权威中段定义】${m.definition}\n【章头】以下章头来自现有章节设计，只能原样承接，不得重写：\n${JSON.stringify(p.chapterOpening)}\n【中段结构形状】\n${JSON.stringify(m.phases)}\n【老师施工上下文】\n${JSON.stringify({plotUnits:m.plotUnits,scenePlans:m.scenePlans,rule:m.rule})}\n【章末】以下章末来自现有章节设计，只能原样承接，不得重写：\n${JSON.stringify(p.chapterEnding)}\n【写作自由边界】\n${p.freedomRules.map(x=>' - '+x).join('\n')}\n【结构权限优先级】PRIMARY = chapterWritingPlan/v2；其上游 chapterMiddleShape 仅通过本计划体现，不另立第二套正文结构。旧老师教案、progressionSkeleton、beats、midBeatIds、coveredBeats不属于正文输入，不得读取、重建或覆盖PRIMARY。`; }
+function chapterWritingPlanV2Block(i){let p=getChapterWritingPlanV2(i+1);if(!p||!validateChapterWritingPlanV2(p).valid)return '';const m=p.middleWritingContext;return `【本章正文新写作施工上下文｜chapterWritingPlan/v2】\n【权威中段定义】${m.definition}\n【章头】以下章头来自现有章节设计，只能原样承接，不得重写：\n${JSON.stringify(p.chapterOpening)}\n【中段结构形状】\n${JSON.stringify(m.phases)}\n【老师施工上下文】\n${JSON.stringify({plotUnits:m.plotUnits,scenePlans:m.scenePlans,rule:m.rule})}\n【章末】以下章末来自现有章节设计，只能原样承接，不得重写：\n${JSON.stringify(p.chapterEnding)}\n【写作自由边界】\n${p.freedomRules.map(x=>' - '+x).join('\n')}\n【结构权限优先级】PRIMARY = chapterWritingPlan/v2；其上游 chapterMiddleShape 仅通过本计划体现，不另立第二套正文结构。旧老师教案、progressionSkeleton、beats、midBeatIds、coveredBeats不属于正文输入，不得读取、重建或覆盖PRIMARY。`; }
 
 function buildMiddleConstructionPlan(chapterNumber, teacherRow, sceneRows){
   const chapter=Math.max(1,Number(chapterNumber)||1);
@@ -20775,16 +20775,6 @@ async function genManyChapters(count, fromStart){
   }
 }
 
-async function genOneChapterNoUI(i){
-  const user = buildChapterUser(i);
-  try{
-    const txt = isLong()
-      ? await writeOneChapterContent(i, user)
-      : unwrapAIResult(await callDeepSeek(PROMPTS.chapterSys, user, {temperature: resolveActiveSpec().chapterTemp, taskKey:'chapter'})).trim();
-    state.chapters[i].content = txt;
-    persist();
-  }catch(e){ /* 继续后续 */ }
-}
 
 function pushAssetHist(kind, data){
   if(data == null) return;
@@ -22636,7 +22626,7 @@ function cutTeacherChapterCardsManually(gi){return (async()=>{if(state._teacherC
     }
     renderTeacherCutUi(gi);toast(`${groups.length>1?`老师${gi+1}`:'老师'}单章教案切割完成：${Object.keys(built).length}/${g.last-g.first+1}；组级 CONFIRMED_TEACHER_HANDOFF 保持独立`);return true;}catch(e){console.error('[manualTeacherChapterCut/v2]',e);toast(`切割失败：${String(e?.message||e)}`);return false;}finally{delete state._teacherCutting[gi];renderTeacherCutUi(gi);}})();}
 function validateWritingContextAuthority(plan){const p=plan||{},v=validateChapterWritingPlanV2(p);return {valid:v.valid,errors:v.errors,authority:{primary:'chapterWritingPlan/v2',opening:'ORIGINAL_READ_ONLY',ending:'ORIGINAL_READ_ONLY',style:'INDEPENDENT'},legacyDetected:false,legacyMayGuideStructure:false};}
-function chapterWritingPlanV2Block(i){let p=getChapterWritingPlanV2(i+1);if(!p){const c=buildChapterWritingPlanV2(i+1);if(c&&validateChapterWritingPlanV2(c).valid){const o=state.outline||{};o._chapterWritingPlansV2=o._chapterWritingPlansV2||{};o._chapterWritingPlansV2[String(i+1)]=c;p=c;try{persist();}catch(e){}}}if(!p||!validateChapterWritingPlanV2(p).valid)return '';const m=p.middleWritingContext;return `【本章正文唯一写作施工上下文｜chapterWritingPlan/v2】\n【中段定义】${m.definition}\n【章头】${JSON.stringify(p.chapterOpening)}\n【中段StructurePhase】${JSON.stringify(m.phases)}\n【PlotUnit】${JSON.stringify(m.plotUnits)}\n【ScenePlan】${JSON.stringify(m.scenePlans)}\n【章末】${JSON.stringify(p.chapterEnding)}\n【自由边界】${p.freedomRules.map(x=>' - '+x).join('\\n')}\n硬规则：chapterWritingPlan/v2是本章中段唯一结构入口；不得寻找或重建任何第二套推进骨架。章头与章末沿用现有机制，正文只在两者之间自由发挥。`;}
+function chapterWritingPlanV2Block(i){let p=getChapterWritingPlanV2(i+1);if(!p||!validateChapterWritingPlanV2(p).valid)return '';const m=p.middleWritingContext;return `【本章正文唯一写作施工上下文｜chapterWritingPlan/v2】\n【中段定义】${m.definition}\n【章头】${JSON.stringify(p.chapterOpening)}\n【中段StructurePhase】${JSON.stringify(m.phases)}\n【PlotUnit】${JSON.stringify(m.plotUnits)}\n【ScenePlan】${JSON.stringify(m.scenePlans)}\n【章末】${JSON.stringify(p.chapterEnding)}\n【自由边界】${p.freedomRules.map(x=>' - '+x).join('\\n')}\n硬规则：chapterWritingPlan/v2是本章中段唯一结构入口；不得寻找或重建任何第二套推进骨架。章头与章末沿用现有机制，正文只在两者之间自由发挥。`;}
 function rollCallGlossary(i){const o=state.outline||{},g=o.glossary||{},chars=Array.isArray(g.characters)?g.characters:[],places=Array.isArray(g.places)?g.places:[],props=Array.isArray(g.propernouns)?g.propernouns:[],plan=getCurrentChapterStructuredPlan(i)||{},units=Array.isArray(plan?.chapterWritingPlan?.middleWritingContext?.plotUnits)?plan.chapterWritingPlan.middleWritingContext.plotUnits:[],names=new Set();units.forEach(u=>(Array.isArray(u.characters)?u.characters:[]).forEach(n=>names.add(String(n||'').trim())));if(o.navBeacon?.protagonist)names.add(String(o.navBeacon.protagonist).split(/[，,：:（(]/)[0].trim());const matched=new Set();chars.forEach(c=>{const n=String(c?.name||'').trim();if(n&&([...names].some(x=>x&& (n===x||n.includes(x)||x.includes(n)))))matched.add(n);});const lines=[];if(matched.size||places.length||props.length){const charLines=chars.map(c=>{const n=String(c?.name||'').trim();return matched.has(n)?`\n· ${fmtCharFullFields(c).join('，')}`:'';}).filter(Boolean);if(charLines.length)lines.push(`人物（本章PlotUnit点名范围）：${charLines.join('')}`);lines.push(`【本章出场名单】${[...names].filter(Boolean).join('、')||'（以主角为准）'}`);}return lines.length?'【闭卷·点名制设定】\n'+lines.join('\n'):'';}
 function relevantGlossaryForChapter(i){const o=state.outline;if(!o)return {characters:[],places:[],propernouns:[]};const g=o.glossary||{},plan=getCurrentChapterStructuredPlan(i)||{},units=Array.isArray(plan?.chapterWritingPlan?.middleWritingContext?.plotUnits)?plan.chapterWritingPlan.middleWritingContext.plotUnits:[],keywords=new Set();units.forEach(u=>(Array.isArray(u.characters)?u.characters:[]).forEach(x=>keywords.add(String(x||'').trim())));if(o.navBeacon?.protagonist)keywords.add(String(o.navBeacon.protagonist).split(/[，,：:（(]/)[0].trim());const chars=(g.characters||[]).filter(c=>keywords.has(String(c?.name||'').trim())),places=(g.places||[]).filter(c=>keywords.has(String(c?.name||'').trim())),propernouns=(g.propernouns||[]).filter(c=>keywords.has(String(c?.name||'').trim()));return {characters:chars,places,propernouns};}
 
