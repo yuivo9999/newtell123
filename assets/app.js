@@ -1,9 +1,9 @@
 /* v1.0.509 CLEAN CUTOVER: no legacy compatibility / no migration / single principal→teacher→cut→writing chain. */
 'use strict';
 
-const APP_VERSION = '1.0.519-debug';
+const APP_VERSION = '1.0.520-debug-A';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.519-debug.js';
+const APP_FILE_VERSION = 'app1.0.520-debug-A.js';
 // Version line: app1.0.504.js — 第十一刀：校长→老师→正文真实运行级回归验证。
 const KEY_CFG = nsKey('cfg');
 
@@ -22423,105 +22423,6 @@ function openRealChapterRegressionPanel(){
 /* v1.0.504 第十一刀：完整章节管线真实运行级回归测试。
  * 只使用生产构建器，不调用AI、不写入用户真实章节；临时替换state后恢复。
  */
-function runFullChapterPipelineRegression(){
-  const snapshot={
-    outline:state.outline, chapters:state.chapters, chapterCount:state.chapterCount,
-    school:state.school, teamShape:state.teamShape, canonicalStoryStrategy:state.canonicalStoryStrategy
-  };
-  const report={version:'1.0.504',test:'full-chapter-pipeline-regression',ok:false,stages:[],assertions:[],legacyConflict:null};
-  const assert=(name,pass,detail)=>{report.assertions.push({name,pass:!!pass,detail:detail||''});if(!pass) report.ok=false;};
-  report.ok=true;
-  try{
-    // 最小安全fixture：只在内存中构造第1章，不触碰用户真实数据。
-    state.chapterCount=1;
-    state.teamShape='solo';
-    state.canonicalStoryStrategy=null;
-    state.outline={title:'REGRESSION_FIXTURE',beatCount:2,chapters:[{
-      title:'回归测试章',
-      middleBeatId:2,
-      openingLink:{state:'OPENING_ORIGINAL'},
-      endingConstruction:{state:'ENDING_ORIGINAL'}
-    }],_chapterMiddleShapes:{},_middleConstructionPlansV2:{},_chapterWritingPlansV2:{}};
-    state.chapters=[{title:'回归测试章'}];
-    const legacyTeacherPlan={
-      identity:{chapter:1},
-      progressionSkeleton:{midBeatIds:['OLD_B','OLD_A'],beats:[{id:'OLD_B'},{id:'OLD_A'}]},
-      midConstruction:{midBeatRange:[9,3],sourceBeatIds:['OLD_B','OLD_A'],coveredBeats:['OLD_B','OLD_A']},
-      openingLink:{state:'OPENING_ORIGINAL'},endingConstruction:{state:'ENDING_ORIGINAL'}
-    };
-    state.school={principal:{chapterStrategies:{}},teachers:[{
-      raw:'REGRESSION TEACHER RAW WITH OLD coveredBeats',ts:1,
-      chapterCards:{chapters:{1:{status:'ready',rawText:'REGRESSION TEACHER RAW WITH OLD coveredBeats',rawTeacherPlan:'REGRESSION',structuredAvailable:true,plan:legacyTeacherPlan}}}
-    }]};
-
-    // 1) 用户微拍 → chapterMiddleShape
-    const shape=ensureChapterMiddleShape(1,{beatId:2});
-    const shapeAudit=validateMiddleShape(shape);
-    report.stages.push({stage:'chapterMiddleShape',input:{userBeatId:2},output:{patternId:shape?.patternId,phases:(shape?.phases||[]).map(x=>x.phaseId)},legacySeen:false,authority:'chapter_microbeat_config',valid:shapeAudit.ok});
-    assert('microbeat_phase_order',shapeAudit.ok && shape.patternId==='double' && shape.phases.map(x=>x.phaseId).join('>')==='accumulation>convergence',shape?.phases?.map(x=>x.phaseId));
-
-    // 2) 校长：chapterStrategy读取chapterMiddleShape，不读取旧骨架。
-    const principalInput={1:{title:'回归测试章',function:'完成本章功能',goal:'抵达章末状态',coreEvent:'阶段目标',narrativeRole:'chapter_role',timeStrategy:'连续',stageTask:'阶段任务',teacherTask:'在中段空间内施工',handoff:'承接章末'}};
-    const strategies=buildChapterStrategiesFromPrincipal(principalInput,1);
-    state.school.principal.chapterStrategies=strategies;
-    const strategy=strategies[1];
-    report.stages.push({stage:'chapterStrategy',input:{middleShapeRef:strategy?.middleShape?.patternId},output:{middleShapeUsage:strategy?.middleShapeUsage,progressionSkeletonDependency:strategy?.progressionSkeletonDependency,phases:(strategy?.middleShape?.phases||[]).map(x=>x.phaseId)},legacySeen:false,authority:'chapterMiddleShape',valid:!!strategy});
-    assert('strategy_preserves_shape',!!strategy && strategy.middleShapeUsage==='read_only_structure' && strategy.progressionSkeletonDependency===false && strategy.middleShape.phases.map(x=>x.phaseId).join('>')==='accumulation>convergence');
-    assert('strategy_keeps_full_middle_boundary',strategy?.middleShape?.middleBoundary?.start==='after_chapter_opening'&&strategy?.middleShape?.middleBoundary?.end==='before_chapter_ending'&&strategy?.middleShape?.middleBoundary?.definition==='中段=章头与章末之间的全部区域');
-
-    // 3) 老师：真实使用生产解析器解析机器教案，再进入middleConstructionPlan/v2。
-    const teacherMachineText=`[MIDDLE_CONSTRUCTION_PLAN]\nchapter=1\nteacherFreedomNotes=允许积累阶段充分展开，兑现阶段集中回收\n[/MIDDLE_CONSTRUCTION_PLAN]\n[PLOT_UNIT]\nchapter=1\nphaseId=accumulation\npurpose=调查与积累\nevent=发现线索\nchange=信息增加\ncharacters=主角\n[/PLOT_UNIT]\n[PLOT_UNIT]\nchapter=1\nphaseId=convergence\npurpose=集中兑现\nevent=揭示关键关系\nchange=状态改变\ncharacters=主角|配角\n[/PLOT_UNIT]\n[SCENE_PLAN]\nchapter=1\nplotUnitId=PU-1-01\npurpose=调查\nevent=发现线索\nchange=获得信息\nlocation=旧屋\n[/SCENE_PLAN]`;
-    const machine=parseTeacherMiddleConstructionMachine(teacherMachineText,1,1);
-    const middle=buildMiddleConstructionPlanV2(1,machine.plans[1]||{},machine.plotUnits[1]||[],machine.scenePlans[1]||[]);
-    state.outline._middleConstructionPlansV2['1']=middle;
-    const middleAudit=validateMiddleConstructionPlanV2(middle);
-    report.stages.push({stage:'middleConstructionPlan/v2',input:{teacherPlanParsed:true,plotUnitCount:(machine.plotUnits[1]||[]).length,scenePlanCount:(machine.scenePlans[1]||[]).length},output:{phases:(middle?.structurePhases||[]).map(x=>x.phaseId),plotUnits:(middle?.plotUnits||[]).map(x=>({id:x.plotUnitId,phaseId:x.phaseId})),scenePlans:(middle?.scenePlans||[]).map(x=>({id:x.scenePlanId,plotUnitId:x.plotUnitId}))},legacySeen:JSON.stringify(middle||{}).includes('coveredBeats'),authority:'chapterMiddleShape→chapterStrategy→teacher construction',valid:middleAudit.valid});
-    assert('middle_phase_order',middleAudit.valid && middle.structurePhases.map(x=>x.phaseId).join('>')==='accumulation>convergence');
-    assert('phase_not_event_script',middle.structurePhases.every(x=>Array.isArray(x.plotUnitIds)) && middle.structurePhases.length===2);
-    assert('legacy_not_in_middle_primary',!Object.prototype.hasOwnProperty.call(middle,'coveredBeats')&&!Object.prototype.hasOwnProperty.call(middle,'sourceBeatIds'));
-
-    // 4) 正文：生产chapterWritingPlan/v2 + prompt block。
-    const writing=buildChapterWritingPlanV2(1);
-    state.outline._chapterWritingPlansV2['1']=writing;
-    const writingAudit=validateChapterWritingPlanV2(writing);
-    const writingBlock=chapterWritingPlanV2Block(0);
-    const legacyBlock=buildLegacyWritingContextBlock('REGRESSION TEACHER RAW coveredBeats=OLD_B,OLD_A',legacyTeacherPlan);
-    const authority=validateWritingContextAuthority(writing,'progressionSkeleton=OLD; coveredBeats=OLD_B,OLD_A');
-    report.stages.push({stage:'chapterWritingPlan/v2→正文prompt',input:{legacyConflict:'OLD_B→OLD_A'},output:{primaryPhases:(writing?.middleWritingContext?.phases||[]).map(x=>x.phaseId),opening:writing?.chapterOpening,ending:writing?.chapterEnding,style:writing?.styleVoice?.source,primaryBlockPresent:!!writingBlock,legacyBlockPresent:!!legacyBlock},legacySeen:legacyBlock.includes('LEGACY_CONTEXT'),authority:authority.authority,valid:writingAudit.valid&&!!writingBlock});
-    assert('writing_primary_phase_order',writingAudit.valid && writing.middleWritingContext.phases.map(x=>x.phaseId).join('>')==='accumulation>convergence');
-    assert('opening_unchanged',writing.chapterOpening.state==='OPENING_ORIGINAL');
-    assert('ending_unchanged',writing.chapterEnding.state==='ENDING_ORIGINAL');
-    assert('style_independent',writing.styleVoice.source==='current_selected_style');
-    assert('legacy_read_only',authority.authority.primary==='chapterWritingPlan/v2'&&authority.authority.legacy==='READ_ONLY/NON_STRUCTURAL'&&authority.legacyMayGuideStructure===false);
-    assert('prompt_has_primary',writingBlock.includes('PRIMARY = chapterWritingPlan/v2'));
-    assert('prompt_rejects_old_structure',writingBlock.includes('旧链不得覆盖PRIMARY'));
-    assert('legacy_block_is_non_structural',legacyBlock.includes('LEGACY_CONTEXT')&&legacyBlock.includes('不得决定本章中段结构'));
-
-    // 5) 故意制造旧coveredBeats冲突：旧顺序不能夺回PRIMARY。
-    const conflict=runMiddleStructureAuthorityConflictTest();
-    report.legacyConflict=conflict;
-    assert('legacy_conflict_cannot_override_primary',conflict.ok && conflict.primaryPhases.join('>')==='accumulation>convergence' && conflict.legacyAuthority===false);
-
-    // 6) 完整回归：新链纯度与旧元数据隔离。
-    const purity=validateNewChainPurity();
-    const legacyIso=runLegacyBeatMetadataConflictTest();
-    assert('new_chain_purity',!!purity?.ok || !!purity?.valid,JSON.stringify(purity));
-    assert('legacy_metadata_isolation',legacyIso.pass===true,JSON.stringify(legacyIso));
-    assert('no_legacy_event_script_in_prompt',!writingBlock.includes('必须覆盖') && !writingBlock.includes('逐项实现旧coveredBeats'));
-    report.summary={primaryAuthority:'chapterWritingPlan/v2',shapeAuthority:'chapterMiddleShape',legacy:'READ_ONLY/NON_STRUCTURAL',fallback:'removed',chapterOpening:'ORIGINAL',chapterEnding:'ORIGINAL'};
-    report.ok=report.assertions.every(x=>x.pass);
-    try{window.__FULL_CHAPTER_PIPELINE_REGRESSION__=report;}catch(e){}
-    return report;
-  }catch(e){
-    report.ok=false; report.error=String(e?.stack||e);
-    try{window.__FULL_CHAPTER_PIPELINE_REGRESSION__=report;}catch(_e){}
-    return report;
-  }finally{
-    state.outline=snapshot.outline; state.chapters=snapshot.chapters; state.chapterCount=snapshot.chapterCount;
-    state.school=snapshot.school; state.teamShape=snapshot.teamShape; state.canonicalStoryStrategy=snapshot.canonicalStoryStrategy;
-  }
-}
-
 /* v1.0.515 老师中段真实输出审计：只检查当前已保存老师教案，不改写生成结果。 */
 function auditLiveTeacherMiddleOutputs(){
   const groups=teacherAssignmentGroups(), report={version:'1.0.515',authority:'chapterMiddleShape→chapterStrategy→middleConstructionPlan/v2',groups:[],ok:true};
