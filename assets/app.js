@@ -1,8 +1,9 @@
-/* v1.0.518 COMPLETE-TEACHER-CONTEXT: teacher AI receives the complete authoritative upstream context and returns a complete raw teaching plan. */
-/* v1.0.518 RAW-TEACHER-ONLY: the teacher AI return is saved verbatim; chapter reads are deterministic raw-text slices only. */
+/* v1.0.519 CHAPTER-CUT-FIX: chapter heading matcher accepts markdown heading prefixes (# through ######), so the next chapter boundary is recognized before its first section and cannot leak into the previous chapter. */
+/* v1.0.519 COMPLETE-TEACHER-CONTEXT: teacher AI receives the complete authoritative upstream context and returns a complete raw teaching plan. */
+/* v1.0.519 RAW-TEACHER-ONLY: the teacher AI return is saved verbatim; chapter reads are deterministic raw-text slices only. */
 'use strict';
 
-/* v1.0.518 IRON LAW — 本章教案传导链永久锁定：
+/* v1.0.519 IRON LAW — 本章教案传导链永久锁定：
    1) 唯一章节教案来源 = 老师总教案原始纯文本；
    2) 唯一切割方式 = parseTeacherRawChapters 按“第X章”到下一章章头直接切出完整 rawText；
    3) 正文AI、正文“教案”、阅读“概”只允许读取 chapterCards.chapters[章号].rawText；
@@ -10,10 +11,10 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.518';
+const APP_VERSION = '1.0.519';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.518.js';
-// Version line: app1.0.518.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
+const APP_FILE_VERSION = 'app1.0.519.js';
+// Version line: app1.0.519.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
 let _bgTaskCount = 0;
@@ -447,7 +448,7 @@ function parseTeacherRawChapters(raw, first, last){
   const src=String(raw||'').replace(/\r\n?/g,'\n');
   const lines=src.split('\n');
   const out={};
-  const re=/^\s*第\s*(\d{1,4})\s*章\s*(.*)$/;
+  const re=/^\s*(?:#{1,6}\s*)?第\s*(\d{1,4})\s*章\s*(.*)$/;
   let cur=null;
   const finish=()=>{
     if(!cur) return;
