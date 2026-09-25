@@ -1,9 +1,9 @@
 /* v1.0.509 CLEAN CUTOVER: no legacy compatibility / no migration / single principal→teacher→cut→writing chain. */
 'use strict';
 
-const APP_VERSION = '1.0.518';
+const APP_VERSION = '1.0.518-test-two-cutTeacher';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.518.js';
+const APP_FILE_VERSION = 'app1.0.518-test-two-cutTeacher.js';
 // Version line: app1.0.504.js — 第十一刀：校长→老师→正文真实运行级回归验证。
 const KEY_CFG = nsKey('cfg');
 
@@ -50,7 +50,12 @@ async function cutTeacherChapterCardsManually(gi){
     if(!savedTeacher?.confirmedTeacherHandoff) throw new Error('单章切割前台回读发现老师组缺少已确认的 CONFIRMED_TEACHER_HANDOFF');
     renderTeacherCutUi(gi);toast(`${groups.length>1?`老师${gi+1}`:'老师'}单章教案切割完成：${Object.keys(built).length}/${g.last-g.first+1}；组级 CONFIRMED_TEACHER_HANDOFF 保持独立`);return true;
   }catch(e){console.error('[manualTeacherChapterCut/v2]',e);toast(`切割失败：${String(e?.message||e)}`);return false;}finally{delete state._teacherCutting[gi];renderTeacherCutUi(gi);}
-}
+}function cutTeacherChapterCardsManually(gi){return (async()=>{if(state._teacherCutting?.[gi])return false;const groups=teacherAssignmentGroups(),g=groups[Number(gi)],t=teacherCurrentResult(Number(gi));if(!g||!t){toast(`老师${Number(gi)+1}总教案尚未生成，请先完成备课`);return false;}const raw=String(t.raw||'').trim();if(!raw){toast('当前老师没有可读取的总教案原始纯文本');return false;}state._teacherCutting=state._teacherCutting||{};state._teacherCutting[gi]=true;renderTeacherCutUi(gi);try{const machine=parseTeacherMachine(raw,g.first,g.last);if(!machine)throw new Error('老师总教案未形成新版中段教案协议，无法切割，请重新生成老师教案。');if(machine.missing.length||machine.invalid.length)throw new Error(`新版老师教案结构不完整：${machine.missing.join('、')||'无'}；${machine.invalid.map(x=>`${x.chapter}:${x.fields.join(',')}`).join('；')||'无'}`);const principalPlans=state.school?.principal?.plans||{},built={},rawChapters=parseTeacherRawChapters(raw,g.first,g.last);for(let n=g.first;n<=g.last;n++){const row=machine.rows[n],pp=principalPlanForChapter(principalPlans,n,g,String(state.chapters?.[n-1]?.title||row?.title||'')).plan;if(!row||!pp)throw new Error(`第${n}章缺少校长战略授权`);row.chapter=String(n);row.openingLink=machine.openingLinks[n]||{};row.endingConstruction=machine.endingPlans[n]||{};row.title=String(row.title||pp.title||state.chapters?.[n-1]?.title||'');const plan=compileTeacherChapterPlan(row,machine.scenes[n]||[],pp,machine.plotUnits?.[n]||[]);plan.rawText=String(rawChapters[n]?.rawText||'').trim();plan.rawTeacherPlan=plan.rawText;built[n]={chapter:n,title:plan.identity.title,status:'ready',cutAt:Date.now(),structuredAvailable:true,rawText:plan.rawText,rawTeacherPlan:plan.rawText,plan};}const now=Date.now();t.chapterCards={cutAt:now,total:g.last-g.first+1,ready:Object.keys(built).length,structured:Object.keys(built).length,chapters:built,errors:[]};const o=state.outline||{};o._chapterWritingPlansV2=o._chapterWritingPlansV2||{};Object.values(built).forEach(x=>o._chapterWritingPlansV2[String(x.chapter)]=x.plan.chapterWritingPlan);await persistCritical('单章教案切割保存');
+    for(let n=g.first;n<=g.last;n++){
+      const verified=getCurrentChapterStructuredPlan(n-1);
+      if(!verified || !verified.chapterWritingPlan || !validateChapterWritingPlanV2(verified.chapterWritingPlan).valid) throw new Error(`切割结果已生成，但前台回读未确认第${n}章 chapterWritingPlan/v2 已保存`);
+    }
+    renderTeacherCutUi(gi);toast(`${groups.length>1?`老师${gi+1}`:'老师'}单章教案切割完成：${Object.keys(built).length}/${g.last-g.first+1}；组级 CONFIRMED_TEACHER_HANDOFF 保持独立`);return true;}catch(e){console.error('[manualTeacherChapterCut/v2]',e);toast(`切割失败：${String(e?.message||e)}`);return false;}finally{delete state._teacherCutting[gi];renderTeacherCutUi(gi);}})();}
 function getCurrentChapterStructuredPlan(i){const chapterNo=Number(i)+1,g=teacherAssignmentGroups().find(x=>chapterNo>=Number(x.first||1)&&chapterNo<=Number(x.last||Infinity));if(!g)return null;const resolved=teacherResultForAssignmentGroup(g),t=resolved.t;if(!t)return null;const entry=t.chapterCards?.chapters?.[chapterNo];if(!entry||entry.status!=='ready')return null;const plan=_clonePlain(entry.plan||{});if(!plan?.chapterWritingPlan||!validateChapterWritingPlanV2(plan.chapterWritingPlan).valid)return null;plan.identity=plan.identity||{chapter:chapterNo,title:String(entry.title||'')};plan.identity.chapter=chapterNo;plan.rawText=String(entry.rawText||'').trim();plan.rawTeacherPlan=String(entry.rawTeacherPlan||'').trim();plan.teacherGi=resolved.teacherIndex;plan.teacherCode=g.teacherCode||'';plan.teacherGroupId=g.teacherGroupId||'';plan.teacherTs=Number(t.ts)||0;plan.structuredAvailable=true;return plan;}
 function parseTeacherMachine(text,first,last){
   const src=String(text||''),handoffRows=parseMachineBlocks(src,'CONFIRMED_TEACHER_HANDOFF'),mids=parseMachineBlocks(src,'MIDDLE_CONSTRUCTION_PLAN'),opens=parseMachineBlocks(src,'OPENING_LINK'),ends=parseMachineBlocks(src,'ENDING_CONSTRUCTION'),scenes=parseMachineBlocks(src,'SCENE_PLAN');
