@@ -17,7 +17,7 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.538';
+const APP_VERSION = '1.0.543';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
 const APP_FILE_VERSION = 'app1.0.539.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
@@ -87,8 +87,8 @@ let gglib = [];
 /* APP VERSION: app1.0.542.js — 校长风格JSON协议彻底清理。 */
 /* ================================================================
  * 【写作风格｜内部开发者说明】
- * 1. 全书风格规则来自现有“优化后写作风格”资料与校长 STYLE_STRATEGY 的自然语言规则。
- * 2. 老师直接继承并具体化这些规则，不建立第二套风格协议，不生成内部风格层级。
+ * 1. 全书风格规则只来自现有“优化后写作风格”资料及其自然语言执行规则。
+ * 2. 校长不再建立独立风格协议；老师直接继承并具体化既定风格。
  * 3. 正文只读取当前章节老师原始教案中的自然语言风格要求。
  * ================================================================ */
 
@@ -7048,7 +7048,7 @@ L0 是最高优先级。
 ━━━━━━━━━━━━━━━━━━
 【十三A、写作风格路由｜必须保持单向职责】
 ━━━━━━━━━━━━━━━━━━
-本系统只保留一套写作风格规则来源：用户已经确定的“优化后写作风格”资料，以及校长在STYLE_STRATEGY中形成的自然语言执行规则。校长不得建立第二套风格协议；老师只负责把既定规则具体化为本章可执行写法。
+本系统只保留一套写作风格规则来源：用户已经确定的“优化后写作风格”资料及其自然语言执行规则。校长不得建立第二套风格协议；老师只负责把既定规则具体化为本章可执行写法。
 
 【十三、风格裁决】
 ━━━━━━━━━━━━━━━━━━
@@ -7462,20 +7462,6 @@ creationPermission=正文拥有章头与章末之间的文学发挥权
 information=信息释放纪律
 [/SCHOOL_RULES]
 
-[STYLE_STRATEGY]
-globalStyle=【全书恒定风格】校长单独确定、向下不可改义的作品风格原规则。
-narrativeRule=叙事执行规则
-dialogueRule=对白执行规则
-characterRule=人物执行规则
-rhythmRule=节奏执行规则
-sceneRule=场景执行规则
-emotionRule=情绪执行规则
-specialMechanism=特殊写作机制
-absoluteProhibitions=绝对禁止项
-driftRisks=风格漂移风险
-conflictPriority=规则冲突优先级
-[/STYLE_STRATEGY]
-
 硬要求：BOOK_STRATEGY只能一个；STAGE_STRATEGY数量等于系统阶段数；TEACHER_GROUP_STRATEGY数量等于老师组数；PRINCIPAL_CHAPTER数量等于目标章节数。不得输出旧结构骨架、beats、midBeatIds、coveredBeats等旧结构字段。`;
 const PRINCIPAL_SYS_STRUCTURED = PRINCIPAL_SYS + STRUCTURED_PRINCIPAL_PROTOCOL;
 
@@ -7613,18 +7599,11 @@ function normalizePrincipalTeacherGroupStrategy(r, idx, canonical){
 function normalizePrincipalSchoolRules(r){
   const keys=['causality','continuity','beat','time','character','style','chapterBoundary','creationPermission','information']; const out={}; keys.forEach(k=>out[k]=String(r?.[k]||'').trim()); return out;
 }
-function normalizePrincipalStyleStrategy(r){
-  const keys=['globalStyle','narrativeRule','dialogueRule','characterRule','rhythmRule','sceneRule','emotionRule','specialMechanism','absoluteProhibitions','driftRisks','conflictPriority'];
-  const out={}; keys.forEach(k=>out[k]=String(r?.[k]||'').trim());
-  if(!out.globalStyle) out.globalStyle=[out.narrativeRule,out.dialogueRule,out.characterRule].filter(Boolean).join('；');
-  return out;
-}
 function parsePrincipalStrategyMachine(text, total, assignment){
   const bookRows=parseMachineBlocks(String(text||''),'BOOK_STRATEGY');
   const stageRows=parseMachineBlocks(String(text||''),'STAGE_STRATEGY');
   const groupRows=parseMachineBlocks(String(text||''),'TEACHER_GROUP_STRATEGY');
   const rulesRows=parseMachineBlocks(String(text||''),'SCHOOL_RULES');
-  const styleRows=parseMachineBlocks(String(text||''),'STYLE_STRATEGY');
   const book=bookRows[0]||null;
   const canonicalStages=principalCanonicalStageRows(total);
   const canonicalGroups=principalCanonicalTeacherGroups(assignment);
@@ -7632,17 +7611,14 @@ function parsePrincipalStrategyMachine(text, total, assignment){
   const groupBy={}; groupRows.forEach(r=>{const n=Number(r.groupIndex||r.teacherIndex||0); if(Number.isInteger(n)&&n>0) groupBy[n]=r;});
   const errors=[];
   if(rulesRows.length!==1) errors.push(`SCHOOL_RULES必须且只能一个，实际${rulesRows.length}`);
-  if(styleRows.length!==1) errors.push(`STYLE_STRATEGY必须且只能一个，实际${styleRows.length}`);
   if(bookRows.length!==1) errors.push(`BOOK_STRATEGY必须且只能一个，实际${bookRows.length}`);
   if(stageRows.length!==canonicalStages.length) errors.push(`STAGE_STRATEGY数量必须为${canonicalStages.length}，实际${stageRows.length}`);
   if(groupRows.length!==canonicalGroups.length) errors.push(`TEACHER_GROUP_STRATEGY数量必须为${canonicalGroups.length}，实际${groupRows.length}`);
   const requiredBook=['mainline','startingState','targetState','finalTransformation','coreConflict','longTermDrivers','majorTurningPoints','majorClimaxes','irreversibleChanges','bookRhythm','endingLogic'];
   if(book) requiredBook.forEach(k=>{if(!String(book[k]||'').trim()) errors.push(`BOOK_STRATEGY缺少${k}`);});
   const requiredRules=['causality','continuity','beat','time','character','style','chapterBoundary','creationPermission','information'];
-  const requiredStyle=['globalStyle','narrativeRule','dialogueRule','characterRule','rhythmRule','sceneRule','emotionRule','specialMechanism','absoluteProhibitions','driftRisks','conflictPriority'];
-  const rules=rulesRows[0]||null, style=styleRows[0]||null;
+  const rules=rulesRows[0]||null;
   if(rules) requiredRules.forEach(k=>{if(!String(rules[k]||'').trim()) errors.push(`SCHOOL_RULES缺少${k}`);});
-  if(style) requiredStyle.forEach(k=>{if(!String(style[k]||'').trim()) errors.push(`STYLE_STRATEGY缺少${k}`);});
   const jsonChecks=[['BOOK_STRATEGY.longTermDrivers',book?.longTermDrivers,'array'],['BOOK_STRATEGY.majorTurningPoints',book?.majorTurningPoints,'array'],['BOOK_STRATEGY.majorClimaxes',book?.majorClimaxes,'array'],['BOOK_STRATEGY.irreversibleChanges',book?.irreversibleChanges,'array'],['BOOK_STRATEGY.bookRhythm',book?.bookRhythm,'object']];
   jsonChecks.forEach(([label,val,type])=>{if(val!=null){const parsed=parsePrincipalJsonField(val,null);if(parsed==null|| (type==='array'&&!Array.isArray(parsed)) || (type==='object'&&(typeof parsed!=='object'||Array.isArray(parsed)))) errors.push(`${label}不是合法${type==='array'?'JSON数组':'JSON对象'}`);}});
   stageRows.forEach((r,i)=>{[['stageRhythm','object']].forEach(([k,type])=>{const parsed=parsePrincipalJsonField(r[k],null);if(parsed==null||typeof parsed!=='object'||Array.isArray(parsed)) errors.push(`STAGE_STRATEGY ${i+1}的${k}不是合法JSON对象`);});});
@@ -7652,8 +7628,8 @@ function parsePrincipalStrategyMachine(text, total, assignment){
     const expected={teacherGroupId:c.teacherGroupId,teacherCode:c.teacherCode,teacherIndex:c.teacherIndex,role:c.role,startChapter:c.startChapter,endChapter:c.endChapter,chapterCount:c.chapterCount,previousTeacherGroupId:c.previousTeacherGroupId||'无',nextTeacherGroupId:c.nextTeacherGroupId||'无',previousEndChapter:c.previousEndChapter==null?'无':c.previousEndChapter,nextStartChapter:c.nextStartChapter==null?'无':c.nextStartChapter};
     [['teacherGroupId',r.teacherGroupId],['teacherCode',r.teacherCode],['teacherIndex',r.teacherIndex],['role',r.role],['startChapter',r.startChapter],['endChapter',r.endChapter],['chapterCount',r.chapterCount],['previousTeacherGroupId',r.previousTeacherGroupId],['nextTeacherGroupId',r.nextTeacherGroupId],['previousEndChapter',r.previousEndChapter],['nextStartChapter',r.nextStartChapter]].forEach(([k,v])=>{if(String(v).trim()!==String(expected[k]).trim()) errors.push(`TEACHER_GROUP_STRATEGY ${i+1}的${k}必须严格等于TEACHER_ASSIGNMENT系统事实`);});
   });
-  if(errors.length) return {valid:false,errors,book:null,schoolRules:null,styleStrategy:null,stages:[],teacherGroups:[]};
-  return {valid:true,errors:[],book:normalizePrincipalBookStrategy(book),schoolRules:normalizePrincipalSchoolRules(rules),styleStrategy:normalizePrincipalStyleStrategy(style),stages:canonicalStages.map((c,i)=>normalizePrincipalStageStrategy(stageBy[i+1],i,canonicalStages)),teacherGroups:canonicalGroups.map((c,i)=>{const x=normalizePrincipalTeacherGroupStrategy(groupBy[i+1],i,canonicalGroups); x.stageId=x.stageId||canonicalStages.find(z=>z.startChapter<=x.startChapter&&z.endChapter>=x.endChapter)?.stageId||''; return x;})};
+  if(errors.length) return {valid:false,errors,book:null,schoolRules:null,stages:[],teacherGroups:[]};
+  return {valid:true,errors:[],book:normalizePrincipalBookStrategy(book),schoolRules:normalizePrincipalSchoolRules(rules),stages:canonicalStages.map((c,i)=>normalizePrincipalStageStrategy(stageBy[i+1],i,canonicalStages)),teacherGroups:canonicalGroups.map((c,i)=>{const x=normalizePrincipalTeacherGroupStrategy(groupBy[i+1],i,canonicalGroups); x.stageId=x.stageId||canonicalStages.find(z=>z.startChapter<=x.startChapter&&z.endChapter>=x.endChapter)?.stageId||''; return x;})};
 }
 function principalStrategyAudit(strategy, total, assignment){
   const errors=[]; const p=strategy||{}; const stages=Array.isArray(p.stages)?p.stages:[], tgs=Array.isArray(p.teacherGroups)?p.teacherGroups:[];
@@ -7667,15 +7643,8 @@ function principalStrategyAudit(strategy, total, assignment){
 }
 function principalStrategyText(strategy, chapterPlans){
   const p=strategy||{}, plans=chapterPlans&&typeof chapterPlans==='object'?chapterPlans:{};
-  const lines=['','━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━','【校长四层统筹战略｜v538】'];
+  const lines=['','━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━','【校长四层统筹战略｜v543】'];
   if(p.schoolRules) lines.push(`【SCHOOL_RULES】因果=${p.schoolRules.causality}｜连续=${p.schoolRules.continuity}｜节拍=${p.schoolRules.beat}｜时间=${p.schoolRules.time}｜信息=${p.schoolRules.information}`);
-  if(p.styleStrategy){
-    const st=p.styleStrategy;
-    const catalog=principalOptimizedStyleCatalog().entries||[];
-    const catalogText=catalog.map(x=>`【${x.name||x.id}】${x.note?`：${x.note}`:''}`).join('、');
-    lines.push(`【写作风格｜唯一权威来源】${catalogText||'沿用已经确定的优化后写作风格。'}`);
-    lines.push(`【STYLE_STRATEGY】全书风格=${st.globalStyle||'沿用已确定风格。'}｜叙事=${st.narrativeRule}｜对白=${st.dialogueRule}｜节奏=${st.rhythmRule}｜绝对禁止=${st.absoluteProhibitions}`);
-  }
   const b=p.book||{}; lines.push(`【BOOK_STRATEGY】主线=${b.mainline||'未填'}｜最终转变=${b.finalTransformation||'未填'}｜核心冲突=${b.coreConflict||'未填'}｜起始状态=${b.startingState||'未填'}｜目标状态=${b.targetState||'未填'}`);
   (p.stages||[]).forEach(s=>lines.push(`【STAGE_STRATEGY ${s.stageId}】${s.startChapter}-${s.endChapter}｜${s.stageName}｜目标=${s.stageGoal}｜冲突=${s.coreConflict}｜高潮=${s.stageClimax}｜解决=${s.settlement}｜新问题=${s.newProblem}｜交接=${s.nextStageLaunch}`));
   (p.teacherGroups||[]).forEach(g=>lines.push(`【TEACHER_GROUP_STRATEGY ${g.teacherGroupId}】${g.teacherCode}｜${g.startChapter}-${g.endChapter}｜阶段=${g.stageId}｜组任务=${g.groupTask}｜节奏=${JSON.stringify(g.groupRhythm)}｜情绪=${g.emotionalCurve}｜必须推进=${g.mustAdvance.join('；')}｜禁止提前解决=${g.mustNotPrematurelyResolve.join('；')}`));
@@ -7927,26 +7896,7 @@ function teacherStyleSemanticCatalog(source){
     return `- ${id} → ${x.name||id}\n  定义：${x.note||''}\n  执行动作：${Array.isArray(x.tips)?x.tips.join('；'):''}\n  禁止：${Array.isArray(x.avoid)?x.avoid.join('；'):''}\n  验收：${Array.isArray(x.check)?x.check.join('；'):''}`;
   }).join('\n');
 }
-function teacherPrincipalRuleSource(pr){
-  const p=pr||{};
-  let schoolRules=(p.schoolRules&&typeof p.schoolRules==='object')?p.schoolRules:{};
-  let styleStrategy=(p.styleStrategy&&typeof p.styleStrategy==='object')?p.styleStrategy:{};
-  const raw=String(p.raw||'').trim();
-  // Principal 机器协议即使章节计划可解析，SCHOOL_RULES/STYLE_STRATEGY 也可能因格式问题单独解析失败。
-  // 老师端不得因此丢失校长自然语言风格规则；从同一份当前校长原始成果做确定性回读。
-  if(raw){
-    try{
-      const rr=parseMachineBlocks(raw,'SCHOOL_RULES')[0];
-      const ss=parseMachineBlocks(raw,'STYLE_STRATEGY')[0];
-      if(rr && Object.keys(rr).length) schoolRules=normalizePrincipalSchoolRules(rr);
-      if(ss && Object.keys(ss).length) styleStrategy=normalizePrincipalStyleStrategy(ss);
-    }catch(e){ console.debug('[Teacher] 校长风格规则回读失败',e); }
-  }
-  return {schoolRules,styleStrategy};
-}
-/* v1.0.542：Principal→Teacher 只传递既定写作风格资料与自然语言规则；章节事实仅用于具体化，不建立第二套风格协议。 */
 function teacherStyleLayers(pr, stageRows, groupStrategy, chapterPlans){
-  const recovered=teacherPrincipalRuleSource(pr||{}), style=recovered.styleStrategy||{}, schoolRules=recovered.schoolRules||{};
   const rows=Array.isArray(chapterPlans)?chapterPlans:[];
   const catalog=principalOptimizedStyleCatalog().entries||[];
   const catalogText=catalog.map(x=>`【${x.name||x.id}】${x.note?`：${x.note}`:''}`).join('、');
@@ -7955,30 +7905,16 @@ function teacherStyleLayers(pr, stageRows, groupStrategy, chapterPlans){
     return `【第${chapter}章｜章节风格执行事实】\n【微拍情况】\n${JSON.stringify(middle||null,null,2)}\n【剧情情况】\n${JSON.stringify(plotBasis,null,2)}`;
   }).join('\n\n');
   return `【风格执行依据｜老师备课输入】
-【权威来源】优化后写作风格词条与校长 STYLE_STRATEGY 的自然语言规则是唯一风格依据；系统不再建立额外的风格 JSON 词汇池，也不要求老师回读或安装额外风格层级。
+【唯一权威来源】已经确定的优化后写作风格词条、写作风格继承资料与自然语言执行规则；系统不再建立额外风格 JSON 词汇池或三层风格安装协议。
 
 【已选写作风格】
 ${catalogText||'沿用已经确定的优化后写作风格。'}
-
-【全书风格规则】
-${String(style.globalStyle||'').trim()||'沿用已经确定的优化后写作风格。'}
-
-【叙事执行规则】${style.narrativeRule||'按已确定风格执行。'}
-【对白执行规则】${style.dialogueRule||'按已确定风格执行。'}
-【人物执行规则】${style.characterRule||'按已确定风格执行。'}
-【节奏执行规则】${style.rhythmRule||'按已确定风格执行。'}
-【场景执行规则】${style.sceneRule||'按已确定风格执行。'}
-【情绪执行规则】${style.emotionRule||'按已确定风格执行。'}
-【特殊写作机制】${style.specialMechanism||'无。'}
-【绝对禁止】${style.absoluteProhibitions||'无。'}
-【风格漂移风险】${style.driftRisks||'按既定风格保持一致。'}
-【规则冲突优先级】${style.conflictPriority||'以上游已确定事实与风格规则为准。'}
 
 【本组各章风格执行事实】
 ${chapterFacts||'无'}
 
 【老师执行边界】
-老师直接依据已经确定的写作风格与自然语言规则施工；不得创建新的风格协议、内部词条池或三层安装决定，不得改变既有词条含义，也不得因为系统中存在其他风格资料而自行扩大剧情。
+老师直接依据已经确定的写作风格资料施工；不得创建新的风格协议、内部词条池或三层安装决定，不得改变既有词条含义，也不得因为系统中存在其他风格资料而自行扩大剧情。
 `;
 }
 
@@ -8164,7 +8100,7 @@ async function genPrincipal(btn, opts){
         const principalProtocol = inspectPrincipalMachineProtocol(txt);
         let principalStrategy;
         try{ principalStrategy = parsePrincipalStrategyMachine(txt, targetChapterCount, teacherAssignment); }
-        catch(parseErr){ principalStrategy={valid:false,errors:[String(parseErr?.message||parseErr)],book:null,schoolRules:null,styleStrategy:null,stages:[],teacherGroups:[]}; }
+        catch(parseErr){ principalStrategy={valid:false,errors:[String(parseErr?.message||parseErr)],book:null,schoolRules:null,stages:[],teacherGroups:[]}; }
         if(!principalStrategy.valid){
           console.warn('[Principal] 四层战略契约诊断未通过，但不阻止校长结果入库：', principalStrategy.errors);
           addGenerationDiagnostic('principal',{type:'STRUCTURE',code:'PRINCIPAL_STRATEGY_PARTIAL',details:principalStrategy.errors});
@@ -8263,9 +8199,9 @@ async function genPrincipal(btn, opts){
         delete sc.stale.principal;
         const _principalEndingPlans = {}; Object.keys(principalPlans).forEach(n=>{ if(principalPlans[n]?.ending) _principalEndingPlans[n]=Object.assign({chapter:Number(n)},principalPlans[n].ending); });
         const principalLogicAudit = auditPrincipalPlanLogic(principalPlans, targetChapterCount);
-        sc.principal = { machine: !!principalMachine, parseStatus: principalMachine ? ((principalStrategy.valid && !_middleMissing.length) ? 'complete' : 'partial') : 'raw-only', protocolVersion:'v426', targetChapterCount, status:'ADOPTED', qcStatus:'NOT_REQUIRED', bookStrategy: principalStrategy.book, schoolRules: principalStrategy.schoolRules, styleStrategy: principalStrategy.styleStrategy, stageStrategies: principalStrategy.stages, teacherGroupStrategies: principalStrategy.teacherGroups, finalResponsibility: teacherFinalResponsibilityFacts(teacherAssignment), strategyAudit: principalStrategyAudit(principalStrategy, targetChapterCount, teacherAssignment), plans: principalPlans, chapterStrategies, managementBridge: _principalBridge, logicAudit: principalLogicAudit, ts:Date.now(), folded:false, teacherAssignment: JSON.parse(JSON.stringify(teacherAssignment)), groups: teacherAssignment.groups.map((g,gi)=>({ gi, teacherGroupId:g.teacherGroupId, teacherCode:g.teacherCode, teacherIndex:g.teacherIndex, role:g.role, stage:g.stage, startChapter:g.startChapter, endChapter:g.endChapter, chapterCount:g.chapterCount, previousTeacherGroupId:g.previousTeacherGroupId, nextTeacherGroupId:g.nextTeacherGroupId, previousEndChapter:g.previousEndChapter, nextStartChapter:g.nextStartChapter })), raw:principalTxt, titles, chapterEndingAudit: _endingCheck.audit };
+        sc.principal = { machine: !!principalMachine, parseStatus: principalMachine ? ((principalStrategy.valid && !_middleMissing.length) ? 'complete' : 'partial') : 'raw-only', protocolVersion:'v426', targetChapterCount, status:'ADOPTED', qcStatus:'NOT_REQUIRED', bookStrategy: principalStrategy.book, schoolRules: principalStrategy.schoolRules, stageStrategies: principalStrategy.stages, teacherGroupStrategies: principalStrategy.teacherGroups, finalResponsibility: teacherFinalResponsibilityFacts(teacherAssignment), strategyAudit: principalStrategyAudit(principalStrategy, targetChapterCount, teacherAssignment), plans: principalPlans, chapterStrategies, managementBridge: _principalBridge, logicAudit: principalLogicAudit, ts:Date.now(), folded:false, teacherAssignment: JSON.parse(JSON.stringify(teacherAssignment)), groups: teacherAssignment.groups.map((g,gi)=>({ gi, teacherGroupId:g.teacherGroupId, teacherCode:g.teacherCode, teacherIndex:g.teacherIndex, role:g.role, stage:g.stage, startChapter:g.startChapter, endChapter:g.endChapter, chapterCount:g.chapterCount, previousTeacherGroupId:g.previousTeacherGroupId, nextTeacherGroupId:g.nextTeacherGroupId, previousEndChapter:g.previousEndChapter, nextStartChapter:g.nextStartChapter })), raw:principalTxt, titles, chapterEndingAudit: _endingCheck.audit };
         if(_principalEndingWarning) sc.principal.chapterEndingAuditWarning = _principalEndingWarning; else delete sc.principal.chapterEndingAuditWarning;
-        storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={source:'principal-current-result',status:'ADOPTED',qcStatus:'NOT_REQUIRED',ts:Date.now(),targetChapterCount,groups:sc.principal.groups,bookStrategy:principalStrategy.book,schoolRules:principalStrategy.schoolRules,styleStrategy:principalStrategy.styleStrategy,stageStrategies:principalStrategy.stages,teacherGroupStrategies:principalStrategy.teacherGroups,finalResponsibility:teacherFinalResponsibilityFacts(teacherAssignment),managementBridge:_principalBridge,teacherAssignment:JSON.parse(JSON.stringify(teacherAssignment)),titles,plans:principalPlans,chapterStrategies,logicAudit:principalLogicAudit};
+        storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={source:'principal-current-result',status:'ADOPTED',qcStatus:'NOT_REQUIRED',ts:Date.now(),targetChapterCount,groups:sc.principal.groups,bookStrategy:principalStrategy.book,schoolRules:principalStrategy.schoolRules,stageStrategies:principalStrategy.stages,teacherGroupStrategies:principalStrategy.teacherGroups,finalResponsibility:teacherFinalResponsibilityFacts(teacherAssignment),managementBridge:_principalBridge,teacherAssignment:JSON.parse(JSON.stringify(teacherAssignment)),titles,plans:principalPlans,chapterStrategies,logicAudit:principalLogicAudit};
         _tp.stateWriteMs = Math.round(performance.now()-_state0);
         // 与老师成功路径一致：所有状态先内存落地，最后只做一次完整持久化。
         scMark('principal', true, false);
@@ -8466,7 +8402,6 @@ function saveCurrentPrincipalResult(raw, reason){
   try{
     const a=buildTeacherAssignment();
     const parsed=parsePrincipalStrategyMachine(nextRaw, Number(p.targetChapterCount||principalTargetChapterCount()||0), a);
-    if(parsed?.valid) p.styleStrategy=parsed.styleStrategy;
     const pm=parsePrincipalMachine(nextRaw, Number(p.targetChapterCount||principalTargetChapterCount()||0));
     if(pm){ p.plans=normalizePrincipalPlans(pm); p.chapterStrategies=buildChapterStrategiesFromPrincipal(p.plans, Number(p.targetChapterCount||principalTargetChapterCount()||0)); }
   }catch(e){ console.debug('[Principal save] 风格规则/章节结构同步失败，保留原结构缓存',e); }
@@ -18470,7 +18405,7 @@ function splitChapterCastout(prose){
 const USER_PRIO_BILL = `
 
 【优先级契约（按维度裁决，禁止把不同维度混成一个选择题）】
-1. 表达层最高权威：本书既定校长STYLE_STRATEGY与正文写作风格底座；正文必须100%继承风格DNA，但不得复制原句、固定句式或既有表达。
+1. 表达层最高权威：本书既定优化后写作风格与正文写作风格底座；正文必须100%继承风格DNA，但不得复制原句、固定句式或既有表达。
 2. 路线层：本章老师原始教案决定本章发生什么以及必要的因果连接；老师不得借教案权限改写风格DNA，正文也不得借文学发挥改写教案核心事实。
 3. 剧情层最高权威：本章老师教案；章末只服从唯一CHAPTER_ENDING_CONTRACT，老师不得另立结尾口令。
 4. 全书一致性权威：万物词典 + 上一章已落地事实 + 老师原始教案已明确的连续性规则。
