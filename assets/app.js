@@ -1,4 +1,6 @@
-/* v1.0.526 CHAPTER-DICT-REFERENCE-GUARD: chapter-scoped glossary/world-material injection; teacher rawText remains sole chapter-plan source; principal→正文 remains severed.
+/* v1.0.532 STYLE-BASIS-LOCK: principal/teacher dynamic style decisions must be grounded in chapter microbeat + plot situation; preserve raw-teacher-only transmission.
+ * v1.0.527 STYLE-LAYER-TRANSMISSION: principal style-layer decision + teacher three-layer execution +正文 three-layer transmission; preserve optimized writing style source and keep layer responsibilities separate.
+ * v1.0.531 STYLE-LAYER-OPTIONAL: chapter-scoped glossary/world-material injection; teacher rawText remains sole chapter-plan source; principal→正文 remains severed.
  * v1.0.524 TEACHER-STYLE-LAYER-RESTORE: restored principal generation runtime; principal→正文 remains severed.
  * v1.0.519 CHAPTER-CUT-FIX: chapter heading matcher accepts markdown heading prefixes (# through ######), so the next chapter boundary is recognized before its first section and cannot leak into the previous chapter. */
 /* v1.0.519 COMPLETE-TEACHER-CONTEXT: teacher AI receives the complete authoritative upstream context and returns a complete raw teaching plan. */
@@ -13,9 +15,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.526';
+const APP_VERSION = '1.0.532';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.526.js';
+const APP_FILE_VERSION = 'app1.0.532.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -81,6 +83,14 @@ let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ...,
 let gglib = [];
 
 /* APP VERSION: app1.0.526.js — 正文单次生成版；强化章节内部一致性、信息去重、句式多样与人物动态反应逻辑。 */
+/* ================================================================
+ * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
+ * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
+ * 2. HYBRID：动态融合风格。不是每章必有。校长只在确有需要的章节给出简洁核心方向；老师负责有限详细化为可执行写法，但不得扩写出新的风格含义。
+ * 3. CHAPTER：本章动态风格。不是每章必有。校长只在本章确有特殊风格要求时给出简洁核心方向；老师负责有限详细化，但不得新增、改写或稀释原意。
+ * 4. 三者关系：GLOBAL负责“全书必须保持什么”；HYBRID负责“本章是否需要结合当前环境调整，以及调整方向”；CHAPTER负责“本章是否有局部特殊写法，以及特殊方向”。合法组合为GLOBAL、GLOBAL+HYBRID、GLOBAL+CHAPTER、GLOBAL+HYBRID+CHAPTER。
+ * ================================================================ */
+
 const state = {
   mode: 'shortfilm',    // 'shortfilm' 短片 / 'longnovel' 经典长篇小说
   wordRange: null,      // (兼容遗留) 不再作为长篇必填；保留字段避免旧快照破坏
@@ -590,7 +600,13 @@ async function cutTeacherChapterCardsManually(gi){return (async()=>{
   if(!g||!t){toast(`老师${Number(gi)+1}总教案尚未生成，请先完成备课`);return false;}const source=String(t.raw||'').trim();
   if(!source){toast('当前老师没有可读取的总教案原始纯文本');return false;}state._teacherCutting=state._teacherCutting||{};state._teacherCutting[gi]=true;renderTeacherCutUi(gi);
   try{const rawChapters=parseTeacherRawChapters(source,g.first,g.last),built={};
-    for(let n=g.first;n<=g.last;n++){const row=rawChapters[n];if(!row||!String(row.rawText||'').trim())throw new Error(`第${n}章未能从老师总教案中按章头尾切出完整纯文本`);const rawText=String(row.rawText);built[n]={chapter:n,title:String(row.title||state.chapters?.[n-1]?.title||'').trim(),status:'ready',cutAt:Date.now(),rawText,rawTeacherPlan:rawText};}
+    for(let n=g.first;n<=g.last;n++){const row=rawChapters[n];if(!row||!String(row.rawText||'').trim())throw new Error(`第${n}章未能从老师总教案中按章头尾切出完整纯文本`);const rawText=String(row.rawText);
+      const hasGlobal=/【(?:GLOBAL｜)?全书恒定风格】/.test(rawText);
+      const hasHybrid=/【(?:HYBRID｜)?动态融合风格】/.test(rawText);
+      const hasChapter=/【(?:CHAPTER｜)?本章动态风格】/.test(rawText);
+      if(!hasGlobal) throw new Error(`第${n}章老师原始教案缺少必需的GLOBAL全书恒定风格`);
+      // HYBRID / CHAPTER 均为按本章实际需要出现的可选层：GLOBAL、GLOBAL+HYBRID、GLOBAL+CHAPTER、GLOBAL+HYBRID+CHAPTER 均合法。
+      built[n]={chapter:n,title:String(row.title||state.chapters?.[n-1]?.title||'').trim(),status:'ready',cutAt:Date.now(),rawText,rawTeacherPlan:rawText};}
     t.chapterCards={cutAt:Date.now(),total:g.last-g.first+1,ready:Object.keys(built).length,chapters:built,errors:[]};
     await persistCritical('本章纯文本教案切割保存');renderTeacherCutUi(gi);toast(`${groups.length>1?`老师${gi+1}`:'老师'}本章纯文本教案切割完成：${Object.keys(built).length}/${g.last-g.first+1}`);return true;
   }catch(e){console.error('[manualTeacherChapterCut/plain-text]',e);toast(`切割失败：${String(e?.message||e)}`);return false;}finally{delete state._teacherCutting[gi];renderTeacherCutUi(gi);}
@@ -6997,7 +7013,7 @@ L0 是最高优先级。
 ━━━━━━━━━━━━━━━━━━
 【十三A、风格三层路由｜必须保持单向职责】
 ━━━━━━━━━━━━━━━━━━
-本系统的全书恒定风格规则分为三层职责，但不允许产生第二套战略：GLOBAL=本校长输出中的STYLE_STRATEGY，是全书恒定写法底座；CHAPTER=各PRINCIPAL_CHAPTER中的章节战略、teacherTask、timeStrategy、章末边界等，是本章动态执行授权；HYBRID=不作为第三份独立校长战略重复输出，而由老师AI在注入阶段把GLOBAL与所属STAGE_STRATEGY、TEACHER_GROUP_STRATEGY合并成“当前老师如何执行全书风格”的自然语言规则。HYBRID不得绕过老师直接进入正文AI。校长输出必须保证GLOBAL与CHAPTER信息完整，老师负责形成HYBRID。
+本系统的全书恒定风格规则分为三层职责，但不允许产生第二套战略：GLOBAL=本校长输出中的STYLE_STRATEGY，是全书恒定写法底座；CHAPTER=仅在具体章节确有局部风格要求时，由对应PRINCIPAL_CHAPTER授权；HYBRID=仅在当前阶段/老师组/章节环境确有动态融合需求时，由老师AI把GLOBAL与对应环境合并成自然语言规则。HYBRID与CHAPTER均不是每章必有，老师按实际情况决定是否落入原始教案。
 
 【十三、风格裁决】
 ━━━━━━━━━━━━━━━━━━
@@ -7310,6 +7326,13 @@ diversityNote=重复风险或多样性说明
 
 const STRUCTURED_PRINCIPAL_PROTOCOL = `
 
+【新增：风格层级判定、证据依据与传导】
+GLOBAL由校长单独确定，是全书风格原规则；必须保持原义，向老师传递时不得修改、弱化、删除或稀释。HYBRID与CHAPTER不是全书固定层，也不是每章必有：校长只在对应章节确有需要时给出简洁核心方向，并且必须给出可追溯的判定依据。
+HYBRID表示“本章需要全书风格结合当前阶段/老师组/环境等动态因素调整”；校长是否启用HYBRID，必须依据该章具体微拍情况与剧情情况判断，不能只因章节标签或阶段名称机械生成。
+CHAPTER表示“本章自身的具体微拍与剧情产生了额外的局部风格执行要求”；先判断GLOBAL是否足够，再判断是否存在阶段/环境动态融合（HYBRID），只有仍有仅由本章自身微拍/剧情产生的额外写法要求时才启用CHAPTER。不得把CHAPTER当剧情计划、人物计划、场景计划或第二套教案。
+不得为了层数完整虚构动态层；合法组合为GLOBAL、GLOBAL+HYBRID、GLOBAL+CHAPTER、GLOBAL+HYBRID+CHAPTER。老师只负责把校长给出的HYBRID/CHAPTER有限详细化，不得创造新的风格含义。内部GLOBAL/HYBRID/CHAPTER仅作程序标识，下游必须收到中文执行语义。
+【判定依据硬规则】每章的hybridBasis/chapterBasis必须明确引用本章已提供的微拍情况与剧情情况。没有真实依据时，对应层必须留空。
+
 【校长唯一输出契约｜v509｜单链路】
 校长负责全书战略、阶段战略、老师分工、章节战略边界与chapterMiddleShape授权；不得设计本章中段具体事件，不得生成旧结构骨架或任何beat列表。
 
@@ -7383,6 +7406,10 @@ characterActions=允许人物/资源及行动方向
 narrativeRole=叙事职责
 timeStrategy=宏观时间要求
 stageTask=所属阶段任务
+hybridStyle=仅当本章确有动态融合需求时填写；只给简洁核心方向，不写施工细节。无需要时留空。
+hybridBasis=只有hybridStyle非空时必填；必须说明本章具体微拍情况与剧情情况为何需要GLOBAL结合当前阶段/老师组/环境动态调整；无hybridStyle时必须留空。
+chapterStyle=仅当本章确有局部特殊风格要求时填写；只给简洁核心方向，不写施工细节。无需要时留空。
+chapterBasis=只有chapterStyle非空时必填；必须说明本章自身具体微拍情况与剧情情况为何在GLOBAL/现有HYBRID之外仍需要额外局部风格要求；无chapterStyle时必须留空。
 teacherTask=给老师的章级目标与边界
 middleShapeRef=chapterMiddleShape:1
 middlePermission=老师在章头与章末之间自由施工；不得把结构化阶段协议变成固定事件清单
@@ -7409,6 +7436,9 @@ information=信息释放纪律
 [/SCHOOL_RULES]
 
 [STYLE_STRATEGY]
+globalStyle=【全书恒定风格】校长单独确定、向下不可改义的作品风格原规则。
+adaptiveStyle=可作为校长内部判断HYBRID的参考，但不得自动传给任何章节；具体章节是否需要HYBRID及其核心方向，只看对应PRINCIPAL_CHAPTER.hybridStyle。
+chapterStyle=可作为校长内部判断CHAPTER的参考，但不得自动传给任何章节；具体章节是否需要CHAPTER及其核心方向，只看对应PRINCIPAL_CHAPTER.chapterStyle。
 narrativeRule=叙事执行规则
 dialogueRule=对白执行规则
 characterRule=人物执行规则
@@ -7454,6 +7484,8 @@ function buildPrincipalUser(assignment, targetCount){
 系统已经存在 bookStagePlan 与 TEACHER_ASSIGNMENT 两个独立维度。你必须读取 TEACHER_ASSIGNMENT 中的老师数量、章节所有权、角色、前后老师及交接边界，并把这些事实用于组级战略；不得重新分配章节。`);
   lines.push(`【已有中段推进战略卡必须纳入统筹】
 校长不再生成或拥有 PrincipalChapterPlan.midStrategy。校长只需把章头、推进骨架关键节点及章末状态定义清楚；中间节点之间如何连接、如何调度人物、信息、冲突和节奏，全部交给负责老师完成。`);
+  lines.push(`【动态风格判定依据｜每章必须先证据后结论】
+校长对每章HYBRID/CHAPTER的判断，必须逐章同时查看两类已注入信息：①本章微拍情况：chapterMiddleShape的patternId、patternLabel、phase顺序、role、purpose；②本章剧情情况：本章title、summary、function、goal、coreEvent、characterActions，以及所属阶段/老师组等已注入章级事实。先判断GLOBAL是否已经足够；若不足，若缺口来自阶段/老师组/环境等动态因素，则考虑HYBRID；若仍存在由本章自身微拍/剧情产生的局部特殊写法要求，才考虑CHAPTER。不能因为“高潮、告别、战斗、重要章节”等标签本身自动生成CHAPTER。每个非空hybridStyle必须在hybridBasis中说明依据；每个非空chapterStyle必须在chapterBasis中说明依据。没有充分依据就留空。`);
   lines.push(`【新增：chapterMiddleShape 只作为结构形状输入】
 每章都可能存在一个由用户微拍选择产生的chapterMiddleShape。你必须读取其中的patternId、patternLabel、phase顺序及每个phase的结构职责，把它理解为“本章中段应该如何呼吸/组织结构”的上游约束；但不得把phase改写成具体剧情事件、具体人物行动、场景顺序、固定节点或新的旧结构骨架。不得生成第二套beat列表。chapterMiddleShape是结构形状，不是剧情清单；老师与正文的具体创作空间仍位于章头和章末之间的全部中段。`);
   lines.push(`【新增校长输出：叙事主体与时间统筹】
@@ -7559,7 +7591,13 @@ function normalizePrincipalSchoolRules(r){
   const keys=['causality','continuity','beat','time','character','style','chapterBoundary','creationPermission','information']; const out={}; keys.forEach(k=>out[k]=String(r?.[k]||'').trim()); return out;
 }
 function normalizePrincipalStyleStrategy(r){
-  const keys=['narrativeRule','dialogueRule','characterRule','rhythmRule','sceneRule','emotionRule','specialMechanism','absoluteProhibitions','driftRisks','conflictPriority']; const out={}; keys.forEach(k=>out[k]=String(r?.[k]||'').trim()); return out;
+  const keys=['globalStyle','adaptiveStyle','chapterStyle','narrativeRule','dialogueRule','characterRule','rhythmRule','sceneRule','emotionRule','specialMechanism','absoluteProhibitions','driftRisks','conflictPriority'];
+  const out={}; keys.forEach(k=>out[k]=String(r?.[k]||'').trim());
+  if(!out.globalStyle) out.globalStyle=[out.narrativeRule,out.dialogueRule,out.characterRule].filter(Boolean).join('；');
+  // HYBRID / CHAPTER 是可选层：没有明确来源时保持为空，禁止用默认值机械制造动态层。
+  if(!out.adaptiveStyle) out.adaptiveStyle='';
+  if(!out.chapterStyle) out.chapterStyle='';
+  return out;
 }
 function parsePrincipalStrategyMachine(text, total, assignment){
   const bookRows=parseMachineBlocks(String(text||''),'BOOK_STRATEGY');
@@ -7581,7 +7619,7 @@ function parsePrincipalStrategyMachine(text, total, assignment){
   const requiredBook=['mainline','startingState','targetState','finalTransformation','coreConflict','longTermDrivers','majorTurningPoints','majorClimaxes','irreversibleChanges','bookRhythm','endingLogic'];
   if(book) requiredBook.forEach(k=>{if(!String(book[k]||'').trim()) errors.push(`BOOK_STRATEGY缺少${k}`);});
   const requiredRules=['causality','continuity','beat','time','character','style','chapterBoundary','creationPermission','information'];
-  const requiredStyle=['narrativeRule','dialogueRule','characterRule','rhythmRule','sceneRule','emotionRule','specialMechanism','absoluteProhibitions','driftRisks','conflictPriority'];
+  const requiredStyle=['globalStyle','narrativeRule','dialogueRule','characterRule','rhythmRule','sceneRule','emotionRule','specialMechanism','absoluteProhibitions','driftRisks','conflictPriority'];
   const rules=rulesRows[0]||null, style=styleRows[0]||null;
   if(rules) requiredRules.forEach(k=>{if(!String(rules[k]||'').trim()) errors.push(`SCHOOL_RULES缺少${k}`);});
   if(style) requiredStyle.forEach(k=>{if(!String(style[k]||'').trim()) errors.push(`STYLE_STRATEGY缺少${k}`);});
@@ -7608,9 +7646,9 @@ function principalStrategyAudit(strategy, total, assignment){
   return {valid:errors.length===0,errors};
 }
 function principalStrategyText(strategy){
-  const p=strategy||{}; const lines=['','━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━','【校长四层统筹战略｜v426】'];
+  const p=strategy||{}; const lines=['','━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━','【校长四层统筹战略｜v527】'];
   if(p.schoolRules) lines.push(`【SCHOOL_RULES】因果=${p.schoolRules.causality}｜连续=${p.schoolRules.continuity}｜节拍=${p.schoolRules.beat}｜时间=${p.schoolRules.time}｜信息=${p.schoolRules.information}`);
-  if(p.styleStrategy) lines.push(`【STYLE_STRATEGY】叙事=${p.styleStrategy.narrativeRule}｜对白=${p.styleStrategy.dialogueRule}｜节奏=${p.styleStrategy.rhythmRule}｜绝对禁止=${p.styleStrategy.absoluteProhibitions}`);
+  if(p.styleStrategy){ lines.push(`【全书恒定风格｜校长原规则】${p.styleStrategy.globalStyle||'沿用已确定风格。'}`); lines.push(`【动态层说明】HYBRID/CHAPTER不在全书层面强制生成，具体是否出现及其核心方向以各PRINCIPAL_CHAPTER的hybridStyle/chapterStyle为准。`); lines.push(`【STYLE_STRATEGY】叙事=${p.styleStrategy.narrativeRule}｜对白=${p.styleStrategy.dialogueRule}｜节奏=${p.styleStrategy.rhythmRule}｜绝对禁止=${p.styleStrategy.absoluteProhibitions}`); }
   const b=p.book||{}; lines.push(`【BOOK_STRATEGY】主线=${b.mainline||'未填'}｜最终转变=${b.finalTransformation||'未填'}｜核心冲突=${b.coreConflict||'未填'}｜起始状态=${b.startingState||'未填'}｜目标状态=${b.targetState||'未填'}`);
   (p.stages||[]).forEach(s=>lines.push(`【STAGE_STRATEGY ${s.stageId}】${s.startChapter}-${s.endChapter}｜${s.stageName}｜目标=${s.stageGoal}｜冲突=${s.coreConflict}｜高潮=${s.stageClimax}｜解决=${s.settlement}｜新问题=${s.newProblem}｜交接=${s.nextStageLaunch}`));
   (p.teacherGroups||[]).forEach(g=>lines.push(`【TEACHER_GROUP_STRATEGY ${g.teacherGroupId}】${g.teacherCode}｜${g.startChapter}-${g.endChapter}｜阶段=${g.stageId}｜组任务=${g.groupTask}｜节奏=${JSON.stringify(g.groupRhythm)}｜情绪=${g.emotionalCurve}｜必须推进=${g.mustAdvance.join('；')}｜禁止提前解决=${g.mustNotPrematurelyResolve.join('；')}`));
@@ -7639,6 +7677,12 @@ function parsePrincipalMachine(text,total){
     const intensity=Number(r.endingIntensity);
     const required=['chapter','title','function','goal','coreEvent','characterActions','middlePermission','endingFunction','endingIntensity','lastEffectiveEvent','endingForm','nextTransitionType','nextTransitionBasis','narrativeRole','timeStrategy','stageTask','teacherTask','handoff'];
     const miss=required.filter(k=>!String(r[k]??'').trim());
+    const hybrid=String(r.hybridStyle||'').trim(), hybridBasis=String(r.hybridBasis||'').trim();
+    const chapterStyle=String(r.chapterStyle||'').trim(), chapterBasis=String(r.chapterBasis||'').trim();
+    if(hybrid && !hybridBasis) miss.push('hybridBasis');
+    if(!hybrid && hybridBasis) miss.push('hybridBasis必须在hybridStyle为空时留空');
+    if(chapterStyle && !chapterBasis) miss.push('chapterBasis');
+    if(!chapterStyle && chapterBasis) miss.push('chapterBasis必须在chapterStyle为空时留空');
     if(!Number.isInteger(intensity)||intensity<0||intensity>4) miss.push('endingIntensity(0-4)');
     if(n===Number(total||0)){const nt=String(r.nextTransitionType||'').trim(),nb=String(r.nextTransitionBasis||'').trim(),hd=String(r.handoff||'').trim();if(!/终局|全书结束|无下一章|无$/.test(nt))miss.push('终章nextTransitionType必须明确为全书结束/终局/无下一章');if(/下一阶段|阶段交接|下一章|第\s*\d+\s*章/.test(nt+' '+nb+' '+hd)&&!/无|结束|终局/.test(nt+' '+nb))miss.push('终章不得设计后续剧情');}
     if(miss.length) invalid.push({chapter:n,fields:miss});
@@ -7649,7 +7693,7 @@ function parsePrincipalMachine(text,total){
 function normalizePrincipalChapterPlan(r,fallbackChapter){
   const rawChapter=Number(r?.chapter), chapter=Number.isInteger(rawChapter)&&rawChapter>0?rawChapter:Number(fallbackChapter);
   const title=String(r?.title||'').trim();
-  return {chapter,identity:{chapter,title},title,function:String(r.function||'').trim(),goal:String(r.goal||'').trim(),coreEvent:String(r.coreEvent||'').trim(),characterActions:String(r.characterActions||'').trim(),narrativeRole:String(r.narrativeRole||'').trim(),timeStrategy:String(r.timeStrategy||'').trim(),stageTask:String(r.stageTask||'').trim(),teacherTask:String(r.teacherTask||'').trim(),middlePermission:String(r.middlePermission||'').trim(),middleShapeRef:String(r.middleShapeRef||`chapterMiddleShape:${chapter}`).trim(),middleBoundary:{start:'after_chapter_opening',end:'before_chapter_ending',definition:'中段=章头与章末之间的全部区域'},handoff:String(r.handoff||'').trim(),ending:{function:String(r.endingFunction||'').trim(),intensity:Number(r.endingIntensity),lastEffectiveEvent:String(r.lastEffectiveEvent||'').trim(),form:String(r.endingForm||'').trim(),nextTransitionType:String(r.nextTransitionType||'').trim(),nextTransitionBasis:String(r.nextTransitionBasis||'').trim(),diversityNote:String(r.diversityNote||'').trim()}};
+  return {chapter,identity:{chapter,title},title,function:String(r.function||'').trim(),goal:String(r.goal||'').trim(),coreEvent:String(r.coreEvent||'').trim(),characterActions:String(r.characterActions||'').trim(),narrativeRole:String(r.narrativeRole||'').trim(),timeStrategy:String(r.timeStrategy||'').trim(),stageTask:String(r.stageTask||'').trim(),hybridStyle:String(r.hybridStyle||'').trim(),chapterStyle:String(r.chapterStyle||'').trim(),teacherTask:String(r.teacherTask||'').trim(),middlePermission:String(r.middlePermission||'').trim(),middleShapeRef:String(r.middleShapeRef||`chapterMiddleShape:${chapter}`).trim(),middleBoundary:{start:'after_chapter_opening',end:'before_chapter_ending',definition:'中段=章头与章末之间的全部区域'},handoff:String(r.handoff||'').trim(),ending:{function:String(r.endingFunction||'').trim(),intensity:Number(r.endingIntensity),lastEffectiveEvent:String(r.lastEffectiveEvent||'').trim(),form:String(r.endingForm||'').trim(),nextTransitionType:String(r.nextTransitionType||'').trim(),nextTransitionBasis:String(r.nextTransitionBasis||'').trim(),diversityNote:String(r.diversityNote||'').trim()}};
 }
 function normalizePrincipalPlans(parsed){
   const plans={};
@@ -7852,38 +7896,34 @@ function teacherPrincipalRuleSource(pr){
   return {schoolRules,styleStrategy};
 }
 function teacherStyleLayers(pr, stageRows, groupStrategy, chapterPlans){
-  const p=pr||{};
-  const recovered=teacherPrincipalRuleSource(p);
-  const globalStyle=recovered.styleStrategy||{};
-  const schoolRules=recovered.schoolRules||{};
-  const hybrid={schoolRules,stageRules:stageRows||[],teacherGroupStrategy:groupStrategy||{}};
+  const recovered=teacherPrincipalRuleSource(pr||{}), style=recovered.styleStrategy||{}, schoolRules=recovered.schoolRules||{};
   const rows=Array.isArray(chapterPlans)?chapterPlans:[];
+  const globalText=String(style.globalStyle||'').trim() || '沿用已经确定的优化后写作风格。';
   const chapterBlocks=rows.map(({chapter,plan,middle})=>{
-    const c={chapterIdentity:{chapter,title:plan?.title||''},narrativeRole:plan?.narrativeRole||'',stageTask:plan?.stageTask||'',teacherTask:plan?.teacherTask||'',timeStrategy:plan?.timeStrategy||'',handoff:plan?.handoff||'',middleShape:middle||null,ending:plan?.ending||{}};
-    return `【第${chapter}章｜CHAPTER 本章动态执行规则】
-${JSON.stringify(c,null,2)}
-
-【本章内部风格代号的完整语义】
-${teacherStyleSemanticCatalog(c)}`;
+    const hybridText=String(plan?.hybridStyle||'').trim();
+    const hybridBasis=String(plan?.hybridBasis||'').trim();
+    const chapterText=String(plan?.chapterStyle||'').trim();
+    const chapterBasis=String(plan?.chapterBasis||'').trim();
+    const micro=middle||null;
+    const plotBasis={
+      chapter:Number(chapter),
+      title:String(plan?.title||'').trim(),
+      function:String(plan?.function||'').trim(),
+      goal:String(plan?.goal||'').trim(),
+      coreEvent:String(plan?.coreEvent||'').trim(),
+      characterActions:String(plan?.characterActions||'').trim()
+    };
+    const parts=[`【第${chapter}章｜风格传导依据】`,`【本章动态风格判定依据｜老师侧必须据此执行】
+【微拍情况】
+${JSON.stringify(micro,null,2)}
+【剧情情况】
+${JSON.stringify(plotBasis,null,2)}`,`【GLOBAL｜全书恒定风格｜校长原规则】\n${globalText}`];
+    if(hybridText) parts.push(`【HYBRID｜校长本章核心方向】\n${hybridText}\n【校长判定依据】\n${hybridBasis||'未提供有效依据，老师不得擅自扩展该层。'}\n老师职责：只能依据本章微拍与剧情把这一核心方向有限详细化为可执行写法，不得添加新的风格含义。`);
+    if(chapterText) parts.push(`【CHAPTER｜校长本章核心方向】\n${chapterText}\n【校长判定依据】\n${chapterBasis||'未提供有效依据，老师不得擅自扩展该层。'}\n老师职责：只能依据本章微拍与剧情把这一核心方向有限详细化为可执行写法，不得添加新的风格含义。`);
+    parts.push('层级选择规则：GLOBAL固定必有；HYBRID、CHAPTER仅在本章确有需要时出现。先判断GLOBAL是否足够；HYBRID用于阶段/老师组/环境动态融合；CHAPTER只用于本章自身微拍/剧情产生的额外局部风格要求。不得为了层数完整虚构动态层。');
+    return parts.join('\n\n');
   }).join('\n\n');
-  return `【风格规则三层模型｜老师必须完整吸收】
-【GLOBAL｜全书恒定风格规则】
-这是整部小说始终不变的写法底座。必须在老师原始教案中转译成正文可执行的自然语言规则，不能只留下标签或内部代号。
-${JSON.stringify(globalStyle,null,2)}
-
-【GLOBAL 中内部风格代号的完整语义】
-${teacherStyleSemanticCatalog(globalStyle)}
-
-【HYBRID｜全书规则 × 阶段/老师组动态执行】
-这一层把全书恒定规则与当前阶段、当前老师组的任务、节奏、情绪、推进边界结合；它不是新的风格，也不是代号，而是当前负责范围内“恒定风格如何随动态任务落地”的自然语言执行说明。
-${JSON.stringify(hybrid,null,2)}
-
-【HYBRID 中内部风格代号的完整语义】
-${teacherStyleSemanticCatalog(hybrid)}
-
-${chapterBlocks||'【CHAPTER｜本章动态执行规则】当前老师组暂无可读取的章节动态规则；不得凭空补造。'}
-
-【老师输出铁律】原始教案必须同时完整保留 GLOBAL、HYBRID、CHAPTER 三层规则的自然语言执行语义。任何内部代号都只能作为辅助标识，不能成为正文AI理解风格的唯一依据。`;
+  return `【风格层级传导依据｜老师备课输入】\n${chapterBlocks||`【GLOBAL｜全书恒定风格｜校长原规则】\n${globalText}`}\n\n【老师职责边界】\nGLOBAL必须原义保留，原则上直接复制校长原规则，不得改写、弱化、删除或稀释；HYBRID/CHAPTER只有校长在对应章节明确给出核心方向和依据时才出现，老师只能依据自己本章微拍与剧情进行有限详细化，不得扩写出新的风格含义。特别禁止语义升级：降低≠禁止，减少≠取消，避免直接煽情≠禁止一切情绪表达。\n【全校写作守则关联】\n${JSON.stringify(schoolRules,null,2)}`;
 }
 
 const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师），负责把校长已经裁决的全书战略、阶段战略、老师组战略、章节战略、全书恒定写作规则、章节动态执行规则、微拍结构形状、时间纪律、世界事实与连续性状态，完整转化为自己负责章节的“老师总教案原始文本”。
@@ -7899,9 +7939,16 @@ const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师），�
 每章必须把“为什么写、从哪里开始、发生什么变化、人物如何行动、信息如何移动、时间地点如何连续、中段如何展开、最后在哪里真正停止、下一章凭什么承接”说清楚。
 如果某项上游信息没有被提供，必须明确写“上游未指定/待本章创作自然决定”，不得凭空发明；但不得因此省略该项。
 
-【风格三层铁律｜必须完整落入原始教案】
-GLOBAL=全书恒定风格规则；HYBRID=全书恒定规则与当前阶段/老师组动态执行的结合；CHAPTER=当前章节动态执行规则。三层必须分别出现于原始教案中，并用自然语言解释如何执行。不得只输出 global/hybrid/chapter 字段名，不得只输出 suspense2、fast、sus3 等内部代号。
-特别要求：每一章都必须单独、明确写出本章的【GLOBAL｜全书恒定风格规则】【HYBRID｜全书规则×本阶段/本老师组动态执行】【CHAPTER｜本章动态执行规则】三个小节；不能只在整组开头写一次后由后续章节省略。GLOBAL必须说明本章如何继承全书恒定写法，HYBRID必须说明这些恒定规则如何结合本章所属阶段/老师组落地，CHAPTER必须说明本章具体动态执行授权。三层都必须有可直接交给正文AI执行的自然语言，而不是字段名、JSON摘要或内部代号。
+【风格层级铁律｜按实际需要输出，不得机械凑层】
+GLOBAL是每章必须继承的全书恒定风格底座。HYBRID与CHAPTER不是每章必有的固定格式，而是由本章实际写作需要决定是否出现。合法组合只有：GLOBAL；GLOBAL+HYBRID；GLOBAL+CHAPTER；GLOBAL+HYBRID+CHAPTER。
+- GLOBAL：说明本章必须继承的全书长期风格。
+- HYBRID：只有当全书风格需要结合当前阶段、老师组或本章环境进行动态调节时才输出；没有实际动态融合需求就不要硬写。
+- CHAPTER：只有当本章存在明确、局部、特殊的风格执行要求时才输出；没有本章特殊风格要求就不要硬写。\n- 动态层详细化必须有本章依据：老师必须同时查看本章微拍情况与剧情情况。不能脱离本章实际情况凭空扩写HYBRID/CHAPTER。\n- HYBRID的依据重点是阶段/老师组/环境动态因素如何作用于本章；CHAPTER的依据重点是本章自身微拍/剧情为何产生额外局部写法。\n- 校长给出的hybridBasis/chapterBasis是判定依据，不是第二份剧情计划；老师只能用本章微拍/剧情把它执行化。
+- 如果HYBRID和CHAPTER都没有必要，本章只输出GLOBAL即可。
+- 不得为了“层数完整”虚构HYBRID或CHAPTER，不得重复GLOBAL内容来凑格式。
+- 只要某一层出现，就必须写成可以直接交给正文AI执行的自然语言规则；内部GLOBAL/HYBRID/CHAPTER只是辅助标识。
+- GLOBAL是校长原规则，不得“润色”“换说法”“总结”或重新概括。输出GLOBAL时必须保持校长原规则的原义与完整边界，优先原样复制。
+- HYBRID/CHAPTER的详细化只能增加执行清晰度，不能增加新的风格目标、强度、比例、情绪、节奏或表现要求；若详细化会改变原核心方向，应停止扩写。
 
 【全书恒定规则｜必须真正执行】
 你必须把收到的【全书写作风格规则】与【全校写作守则】当作本书的恒定底座。它们不是参考意见，也不是只给正文AI看的说明；老师的施工方案本身就必须服从它们。
@@ -8030,6 +8077,7 @@ function buildTeacherUser(g,gi){
 【章节身份】\n${JSON.stringify({chapter:n,title:String(p.title||state.chapters?.[n-1]?.title||'').trim()},null,2)}\n
 【阶段战略】\n${JSON.stringify(stage,null,2)}\n
 【章节战略原始授权】\n${JSON.stringify(p,null,2)}\n
+【本章动态风格执行依据】\n以下两类信息是老师详细化HYBRID/CHAPTER的唯一事实依据：\n1. 本章微拍情况：${JSON.stringify(middle,null,2)}\n2. 本章剧情情况：${JSON.stringify({title:p.title||'',function:p.function||'',goal:p.goal||'',coreEvent:p.coreEvent||'',characterActions:p.characterActions||''},null,2)}\n规则：只把已经发生/已授权的微拍与剧情事实用于解释校长方向；不得由此创造新的剧情事件或新的风格目标。\n
 【章节中段微拍形状｜只读结构形状】\n${JSON.stringify(middle,null,2)}\n
 【本章时间战略补充】\n${JSON.stringify(time,null,2)}\n
 ${previousEnding}\n
@@ -8038,7 +8086,7 @@ ${previousEnding}\n
 
   lines.push(`【本组授权词典｜完整相关资源】\n${teacherScopedGlossary(g,gi,9000)}`);
   lines.push(`【前序正文状态｜完整动态连续性输入】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态；不得自行假定缺失事实）'):'（首组，无前序正文）'}`);
-  lines.push(`【最终输出执行口令】\n现在必须一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。输出不得是摘要，不得是“章节概述”，不得压缩章末，不得遗漏全书恒定风格规则、全校守则、章节动态执行规则、chapterMiddleShape、时间、连续性和章末完整设计。特别是每一章都必须分别写出GLOBAL、HYBRID、CHAPTER三个明确小节，并在每个小节中给出自然语言执行规则；不能用一组GLOBAL/HYBRID说明覆盖多章，也不能让CHAPTER只剩字段或代号。中段必须完整可执行，同时保留章头与章末之间的文学展开空间。输出只作为原始教案保存，不需要也不允许生成任何第二套机器结构。`);
+  lines.push(`【最终输出执行口令】\n现在必须一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。输出不得是摘要，不得是“章节概述”，不得压缩章末，不得遗漏全书恒定风格规则、全校守则、chapterMiddleShape、时间、连续性和章末完整设计。每一章必须有GLOBAL；HYBRID和CHAPTER必须严格按校长对该章的实际授权决定是否出现，不得机械凑成三层。合法组合为GLOBAL、GLOBAL+HYBRID、GLOBAL+CHAPTER、GLOBAL+HYBRID+CHAPTER。只要出现某一动态层，就必须给出可直接交给正文AI执行的自然语言规则；如果没有实际动态融合或本章特殊风格要求，就不要虚构对应层。中段必须完整可执行，同时保留章头与章末之间的文学展开空间。输出只作为原始教案保存，不需要也不允许生成任何第二套机器结构。`);
   return lines.join('\n\n');
 }
 
@@ -18354,13 +18402,15 @@ function buildChapterDictionaryContext(i){
 function getChapterWriterUser(i){
   const raw=getChapterTeacherRawTextDirect(i);
   const dict=buildChapterDictionaryContext(i);
+  // 1.0.531：正文不再通过第三方风格传输函数接收 GLOBAL/HYBRID/CHAPTER。
+  // GLOBAL必须存在；HYBRID/CHAPTER按本章实际需要出现。正文只读取这一份老师原始教案，不再建立第二条风格传输链。
   return `【本章老师教案｜唯一章节教案来源｜原始纯文本】\n${raw}\n\n${dict}\n\n【词典资料使用声明｜必须遵守】\n以下“本章词典/世界资料”全部是只读参考资料，不是第二份教案，不是新的剧情指令，也不是要求正文必须逐条写入的清单。它们只用于核对已经由老师教案涉及的人物、地名、专名、关系、世界事实、人物九维和世界运转规则。\n- 本章发生什么、写什么、写到哪里：只由上方老师原始教案决定。\n- 词典资料不得自行产生新事件、新人物、新地点、新关系、新秘密、新剧情任务，也不得把未命中的词典条目带入本章。\n- 词典资料不得覆盖、改写、扩展或重新规划老师教案。\n- 人物九维、地名、专名及世界事实以已命中的正式词典资料作为事实参考；如果教案没有要求该实体进入本章，不得仅因词典中存在它而主动加入。\n- “世界观规则”是全局只读约束，用于保证正文不违反既定世界运行逻辑；它不是本章剧情任务。\n- “世界素材”只有在本章教案实际命中对应词典条目时才作为参考；不得把世界素材库当百科全文阅读。\n- 词典资料与老师教案发生冲突时，不得自行改写教案；应遵守现有项目的事实/风格/路线优先级，词典只用于既定事实与设定校核。\n\n【正文资料优先级】\n1. 本章老师原始教案决定本章写什么；2. 已命中的词典资料只作为事实/设定执行参考；3. 全局世界观规则是持续有效的只读硬约束，但不是剧情指令；4. 未命中的词典条目不得自行引入；5. 人物九维必须以本章命中的词典人物卡为事实参考，不得自行补造另一套人物档案。`;
 }
 
 async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride, signal){
   const mt = chapterMaxTokens();
   const rawText=getChapterTeacherRawTextDirect(i);
-  // 正文铁律：只读取 chapterCards[n].rawText。
+  // 正文铁律：只读取 chapterCards[n].rawText；该 rawText 必须包含GLOBAL，并按本章实际需要包含HYBRID/CHAPTER。
   if(typeof persist==='function') persist();
   onPhase = onPhase || (()=>{});
   onPhase('撰写本章正文…');
@@ -18374,7 +18424,7 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
     let partial = (state._chapterPartial && state._chapterPartial[i]) || '';
     const _onStream = (delta)=>{ partial += delta; state._chapterPartial[i] = partial; if(onStream) onStream(delta); };
     try{
-      // 正文 AI 仍直接以本章老师原始教案作为唯一章节任务来源；同时附加确定性词典只读参考资料，不做AI二次理解或中间教案包。
+      // 正文 AI 直接读取本章老师原始教案；GLOBAL必须存在，HYBRID/CHAPTER按实际需要传递，不再建立第三方风格传输链。
       // getChapterWriterUser() 负责在发送前执行“教案命中 → 词典匹配 → 资料提取 → 参考资料声明”的统一链路。
       const writerUser = getChapterWriterUser(i);
       txt = unwrapAIResult(await callDeepSeek(longChapterSys(), writerUser, {maxTokens: mt, onStream: _onStream, temperature: dynamicChapterParams(i).temperature, topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'}));
