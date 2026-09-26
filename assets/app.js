@@ -1,5 +1,4 @@
-/* v1.0.537 TEACHER-STYLE-EXECUTION-CONTRACT: teacher rawText must explicitly materialize the principal-authorized GLOBAL/HYBRID/CHAPTER layers per chapter; deterministic validation enforces the authorized combination without rebuilding the teacher plan.
- * v1.0.536 STYLE-LAYER-OUTPUT-ORGANIZATION: principal first classifies selected writing-style entries into GLOBAL/HYBRID/CHAPTER pools, then assigns per chapter with teacher ownership; teacher receives GLOBAL once as locked baseline.
+/* v1.0.536 STYLE-LAYER-OUTPUT-ORGANIZATION: principal first classifies selected writing-style entries into GLOBAL/HYBRID/CHAPTER pools, then assigns per chapter with teacher ownership; teacher receives GLOBAL once as locked baseline.
  * v1.0.532 STYLE-BASIS-LOCK: principal/teacher dynamic style decisions must be grounded in chapter microbeat + plot situation; preserve raw-teacher-only transmission.
  * v1.0.527 STYLE-LAYER-TRANSMISSION: principal style-layer decision + teacher three-layer execution +正文 three-layer transmission; preserve optimized writing style source and keep layer responsibilities separate.
  * v1.0.531 STYLE-LAYER-OPTIONAL: chapter-scoped glossary/world-material injection; teacher rawText remains sole chapter-plan source; principal→正文 remains severed.
@@ -84,7 +83,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.537.js — 老师原始教案三层风格执行契约与程序校验版。 */
+/* APP VERSION: app1.0.536.js — 校长三层风格输出组织与老师精确传导版。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -501,39 +500,6 @@ function getCurrentChapterTeacherRawText(i){
   return raw;
 }
 
-function teacherStyleLayerContractForChapter(rawText, chapterNo, group){
-  const raw=String(rawText||'');
-  const n=Number(chapterNo);
-  const principal=scState()?.principal||{};
-  const resolved=principalPlanForChapter(principal.plans||{},n,group, state.chapters?.[n-1]?.title||'');
-  const plan=resolved?.plan||{};
-  const sa=plan?.styleAssignment&&typeof plan.styleAssignment==='object'?plan.styleAssignment:{};
-  const hybridAuthorized=Array.isArray(sa.hybrid)&&sa.hybrid.length>0 && String(plan.hybridStyle||'').trim();
-  const chapterAuthorized=Array.isArray(sa.chapter)&&sa.chapter.length>0 && String(plan.chapterStyle||'').trim();
-  const hasGlobal=/【(?:GLOBAL｜)?全书恒定风格(?:｜[^】]+)?】/.test(raw);
-  const hasHybrid=/【(?:HYBRID｜)?动态融合风格(?:｜[^】]+)?】/.test(raw);
-  const hasChapter=/【(?:CHAPTER｜)?本章动态风格(?:｜[^】]+)?】/.test(raw);
-  const errors=[];
-  if(!hasGlobal) errors.push(`第${n}章老师原始教案缺少必需的GLOBAL全书恒定风格执行区`);
-  if(hybridAuthorized&&!hasHybrid) errors.push(`第${n}章校长已授权HYBRID，但老师原始教案缺少HYBRID动态融合风格执行区`);
-  if(!hybridAuthorized&&hasHybrid) errors.push(`第${n}章校长未授权HYBRID，但老师原始教案擅自输出了HYBRID动态融合风格执行区`);
-  if(chapterAuthorized&&!hasChapter) errors.push(`第${n}章校长已授权CHAPTER，但老师原始教案缺少CHAPTER本章动态风格执行区`);
-  if(!chapterAuthorized&&hasChapter) errors.push(`第${n}章校长未授权CHAPTER，但老师原始教案擅自输出了CHAPTER本章动态风格执行区`);
-  // GLOBAL内容校验只做“多锚点覆盖”，避免因为换行、Markdown排版或少量标点差异而误判。
-  const globalText=String(principal?.styleStrategy?.globalStyle||'').trim();
-  if(hasGlobal&&globalText){
-    const norm=v=>String(v||'').replace(/[\s\u3000]+/g,'').replace(/[“”"'‘’]/g,'');
-    const g=norm(globalText), r=norm(raw);
-    const anchors=[];
-    if(g.length<=80) anchors.push(g);
-    else { anchors.push(g.slice(0,50),g.slice(Math.max(0,g.length-50))); const first=g.split(/[。！？；]/).find(Boolean); if(first&&first.length>=12) anchors.push(first.slice(0,60)); }
-    const hit=anchors.filter(a=>a&&r.includes(a)).length;
-    const required=Math.min(anchors.length, g.length<=80?1:2);
-    if(hit<required) errors.push(`第${n}章GLOBAL存在，但未能确认其包含校长锁定的全书恒定风格原规则（多锚点覆盖校验未通过）`);
-  }
-  return {ok:errors.length===0,errors,plan,styleAssignment:sa,hasGlobal,hasHybrid,hasChapter,hybridAuthorized,chapterAuthorized,source:resolved?.source||'none'};
-}
-
 function teacherChapterCutStatus(gi){
   const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
   const t=teacherCurrentResult(Number(gi));
@@ -636,9 +602,6 @@ async function cutTeacherChapterCardsManually(gi){return (async()=>{
   if(!source){toast('当前老师没有可读取的总教案原始纯文本');return false;}state._teacherCutting=state._teacherCutting||{};state._teacherCutting[gi]=true;renderTeacherCutUi(gi);
   try{const rawChapters=parseTeacherRawChapters(source,g.first,g.last),built={};
     for(let n=g.first;n<=g.last;n++){const row=rawChapters[n];if(!row||!String(row.rawText||'').trim())throw new Error(`第${n}章未能从老师总教案中按章头尾切出完整纯文本`);const rawText=String(row.rawText);
-      const styleCheck=teacherStyleLayerContractForChapter(rawText,n,g);
-      if(!styleCheck.ok) throw new Error(styleCheck.errors.join('；'));
-      // 1.0.537：HYBRID / CHAPTER 仍按本章实际授权可选；GLOBAL、GLOBAL+HYBRID、GLOBAL+CHAPTER、GLOBAL+HYBRID+CHAPTER 均合法。
       built[n]={chapter:n,title:String(row.title||state.chapters?.[n-1]?.title||'').trim(),status:'ready',cutAt:Date.now(),rawText,rawTeacherPlan:rawText};}
     t.chapterCards={cutAt:Date.now(),total:g.last-g.first+1,ready:Object.keys(built).length,chapters:built,errors:[]};
     await persistCritical('本章纯文本教案切割保存');renderTeacherCutUi(gi);toast(`${groups.length>1?`老师${gi+1}`:'老师'}本章纯文本教案切割完成：${Object.keys(built).length}/${g.last-g.first+1}`);return true;
@@ -8046,18 +8009,27 @@ const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师），�
 每章必须把“为什么写、从哪里开始、发生什么变化、人物如何行动、信息如何移动、时间地点如何连续、中段如何展开、最后在哪里真正停止、下一章凭什么承接”说清楚。
 如果某项上游信息没有被提供，必须明确写“上游未指定/待本章创作自然决定”，不得凭空发明；但不得因此省略该项。
 
-【风格层级铁律｜按实际需要输出，不得机械凑层】
-GLOBAL是每章必须继承的全书恒定风格底座。HYBRID与CHAPTER不是每章必有的固定格式，而是由本章实际写作需要决定是否出现。合法组合只有：GLOBAL；GLOBAL+HYBRID；GLOBAL+CHAPTER；GLOBAL+HYBRID+CHAPTER。
-- GLOBAL：说明本章必须继承的全书长期风格。
-- HYBRID：只有当全书风格需要结合当前阶段、老师组或本章环境进行动态调节时才输出；没有实际动态融合需求就不要硬写。
-- CHAPTER：只有当本章存在明确、局部、特殊的风格执行要求时才输出；没有本章特殊风格要求就不要硬写。\n- 动态层详细化必须有本章依据：老师必须同时查看本章微拍情况与剧情情况。不能脱离本章实际情况凭空扩写HYBRID/CHAPTER。\n- HYBRID的依据重点是阶段/老师组/环境动态因素如何作用于本章；CHAPTER的依据重点是本章自身微拍/剧情为何产生额外局部写法。\n- 校长给出的hybridBasis/chapterBasis是判定依据，不是第二份剧情计划；老师只能用本章微拍/剧情把它执行化。
-- 如果HYBRID和CHAPTER都没有必要，本章只输出GLOBAL即可。
-- 不得为了“层数完整”虚构HYBRID或CHAPTER，不得重复GLOBAL内容来凑格式。
-- 只要某一层出现，就必须写成可以直接交给正文AI执行的自然语言规则；内部GLOBAL/HYBRID/CHAPTER只是辅助标识。
-- 【1.0.537｜最终原始教案落地区】每一章的正式教案正文中，必须明确写出本章实际适用的风格层。GLOBAL必须使用明确标题“【GLOBAL｜全书恒定风格】”并直接落出校长锁定的完整原规则；如果本章获准HYBRID，必须出现明确标题“【HYBRID｜动态融合风格】”，同时写明“校长本章核心方向”与“老师执行化”，后者只能是有限执行说明；如果本章获准CHAPTER，必须出现明确标题“【CHAPTER｜本章动态风格】”，同时写明“校长本章核心方向”与“老师执行化”。未获准的动态层不得输出对应正式风格执行区。这样四种合法组合必须真实反映本章授权，而不是机械凑齐三层。
-- GLOBAL是校长原规则，不得“润色”“换说法”“总结”或重新概括。输出GLOBAL时必须保持校长原规则的原义与完整边界，优先原样复制。
+【风格层级铁律｜三层必须显式成书，但动态层不得机械激活】
+每一章的最终老师原始教案中，必须有一个独立、明确、不可隐藏的“【三层写作风格执行书】”正式章节，并且必须分别出现GLOBAL、HYBRID、CHAPTER三个独立层级标题。这里要求的是“三层结构显式存在”，不是要求每章实际启用三种动态风格。
+- GLOBAL：每章必须实际启用，并且必须作为“全书恒定风格执行书”完整出现。GLOBAL必须严格承接校长已经锁定的原规则；不得润色、换说法、总结、弱化、删减、强化、扩展或重新解释。优先直接复制校长原规则，并结合已经注入的【优化构想｜继承＋补充｜唯一权威资料】完整资料核对其原义、边界、属性、特征、表现和示例；不得遗漏会影响正文执行的关键内容。
+- HYBRID：必须独立出现。只有校长对本章实际分配HYBRID时，才填写“校长本章核心方向＋校长判定依据＋老师依据本章微拍与剧情形成的有限可执行规则”；若本章未分配，必须明确写“本章不使用 HYBRID（校长未授权）”，不得自行创造任何动态风格目标。
+- CHAPTER：必须独立出现。只有校长对本章实际分配CHAPTER时，才填写“校长本章核心方向＋校长判定依据＋老师依据本章微拍与剧情形成的有限可执行规则”；若本章未分配，必须明确写“本章不使用 CHAPTER（校长未授权）”，不得自行创造任何局部风格目标。
+- 三层必须在每章教案中作为正式执行内容出现，不能只存在于老师备课输入、章节其他段落或隐含语义中。
+- 动态层详细化必须有本章依据：老师必须同时查看本章微拍情况与剧情情况。不能脱离本章实际情况凭空扩写HYBRID/CHAPTER。
+- HYBRID的依据重点是阶段/老师组/环境动态因素如何作用于本章；CHAPTER的依据重点是本章自身微拍/剧情为何产生额外局部写法。
+- 校长给出的hybridBasis/chapterBasis是判定依据，不是第二份剧情计划；老师只能用本章微拍/剧情把它执行化。
+- “本章不使用”不是新的风格要求，也不改变任何上游规则；它只是明确记录该层未被授权。
+- 只要HYBRID或CHAPTER被实际启用，就必须写成可以直接交给正文AI执行的自然语言规则；内部ID只用于匹配，最终教案必须使用自然语言。
 - HYBRID/CHAPTER的详细化只能增加执行清晰度，不能增加新的风格目标、强度、比例、情绪、节奏或表现要求；若详细化会改变原核心方向，应停止扩写。
+- 特别禁止语义升级：降低≠禁止，减少≠取消，避免直接煽情≠禁止一切情绪表达。
 
+【老师三层风格执行书｜输出硬契约】
+你的输入中已经包含校长确定的三层风格资料与本章分配。你不能只“理解”它们，必须把它们实际写进最终老师原始教案rawText，因为正文只读取rawText。
+每一章必须有且只有一个明确的【GLOBAL｜全书恒定风格执行书】、一个【HYBRID｜本章动态融合执行】、一个【CHAPTER｜本章局部风格执行】。三者必须作为本章正式教案的独立区块出现，不能只在全组开头出现一次，也不能埋在其他段落。
+GLOBAL区必须写出：①本章采用的GLOBAL中文词条名称；②校长锁定的原规则；③词条定义/核心特征；④本章实际可执行的固定风格要求。GLOBAL必须忠实继承校长原规则，并以【优化构想｜继承＋补充｜唯一权威资料】作为完整资料来源进行核对；不得只写“沿用全书风格”、只写词条名称、只写一句总结或只引用内部ID。
+HYBRID区若校长已授权，必须写出：①本章HYBRID中文词条；②校长核心方向；③校长判定依据；④依据本章微拍与剧情形成的有限执行化要求。若校长未授权，必须明确写“本章不使用 HYBRID（校长未授权）”，不得补充新的动态风格目标。
+CHAPTER区若校长已授权，必须写出：①本章CHAPTER中文词条；②校长核心方向；③校长判定依据；④依据本章微拍与剧情形成的有限执行化要求。若校长未授权，必须明确写“本章不使用 CHAPTER（校长未授权）”，不得补充新的局部风格目标。
+三层执行书不是摘要、标签或内部id列表；必须有足够详细的自然语言资料，让正文AI只靠本章rawText即可执行。GLOBAL每章必须重复进入本章rawText；重复的是同一权威内容，不是重新创作。未授权的HYBRID/CHAPTER只保留“不使用”的状态说明，不得虚构动态规则。
 【全书恒定规则｜必须真正执行】
 你必须把收到的【全书写作风格规则】与【全校写作守则】当作本书的恒定底座。它们不是参考意见，也不是只给正文AI看的说明；老师的施工方案本身就必须服从它们。
 风格规则决定“怎么写”：叙事、对白、人物、节奏、场景、情绪、特殊机制、绝对禁止、风格漂移风险、冲突优先级。
@@ -8085,7 +8057,12 @@ chapterMiddleShape只规定“章头与章末之间的中段应该如何呼吸�
 只能使用已注入的词典/世界事实与上游授权。不得改写、重定义、创造同名替代品。词典素材只有在剧情、人物、场景或因果真正需要时才自然调用。
 
 【输出结构｜使用自然Markdown标题即可】
-对本组每一章依次输出：
+对本组每一章依次输出，且每一章都必须按下面顺序完整出现：
+0. 【三层写作风格执行书】
+   0.1 【GLOBAL｜全书恒定风格执行书】
+   0.2 【HYBRID｜本章动态融合执行】
+   0.3 【CHAPTER｜本章局部风格执行】
+   三层必须彼此独立。GLOBAL写完整恒定风格原规则；HYBRID/CHAPTER按校长授权详细化，未授权则明确写“不使用（校长未授权）”。
 1. 章节定位与战略目标
 2. 承接前提与开章设计
 3. 时间、地点、人物、关系与已知信息状态
@@ -8095,8 +8072,7 @@ chapterMiddleShape只规定“章头与章末之间的中段应该如何呼吸�
 7. 章末完整设计（含最后有效事件、停止边界、结尾功能、表现形式、强度、承接依据、交接条件）
 8. 创作边界与禁止事项
 
-【重要】以上8项是内容完整性要求，不是机器字段协议。可以使用自然语言Markdown标题和段落，但每一项都必须有实质内容。不得用“章节概述”一段话替代以上完整设计。
-
+【重要】第0项“三层写作风格执行书”与后面的8项都是正式内容要求，不是机器字段协议。可以使用自然语言Markdown标题和段落，但每一项都必须有实质内容。不得用“章节概述”一段话替代完整设计。
 【输出边界】
 只输出老师总教案原始纯文本Markdown正文，不要解释你正在做什么，不要输出机器协议，不要输出代码围栏，不要在结尾添加与教案无关的说明。`;
 function buildEndingDiversityAudit(plans){
@@ -8195,7 +8171,7 @@ ${previousEnding}\n
 
   lines.push(`【本组授权词典｜完整相关资源】\n${teacherScopedGlossary(g,gi,9000)}`);
   lines.push(`【前序正文状态｜完整动态连续性输入】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态；不得自行假定缺失事实）'):'（首组，无前序正文）'}`);
-  lines.push(`【最终输出执行口令】\n现在必须一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。输出不得是摘要，不得是“章节概述”，不得压缩章末，不得遗漏全书恒定风格规则、全校守则、chapterMiddleShape、时间、连续性和章末完整设计。每一章必须真实落地本章实际适用的风格层：GLOBAL必须使用明确标题“【GLOBAL｜全书恒定风格】”并直接写出校长锁定的完整原规则；若校长该章实际授权HYBRID，则必须使用明确标题“【HYBRID｜动态融合风格】”，同时写出“校长本章核心方向”和“老师执行化”；若校长该章实际授权CHAPTER，则必须使用明确标题“【CHAPTER｜本章动态风格】”，同时写出“校长本章核心方向”和“老师执行化”。未授权的HYBRID/CHAPTER不得自行创建对应执行区。合法组合为GLOBAL、GLOBAL+HYBRID、GLOBAL+CHAPTER、GLOBAL+HYBRID+CHAPTER，不得机械凑成三层。动态详细化必须严格保持原方向与强度：降低≠禁止，减少≠取消，避免直接煽情≠禁止一切情绪表达。只要出现某一动态层，就必须给出可直接交给正文AI执行的自然语言规则。中段必须完整可执行，同时保留章头与章末之间的文学展开空间。输出只作为原始教案保存，不需要也不允许生成任何第二套机器结构。`);
+  lines.push(`【最终输出执行口令】\n现在必须一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。输出不得是摘要，不得是“章节概述”，不得压缩章末，不得遗漏全书恒定风格规则、全校守则、chapterMiddleShape、时间、连续性和章末完整设计。每一章必须先正式输出【三层写作风格执行书】，并独立出现【GLOBAL｜全书恒定风格执行书】、【HYBRID｜本章动态融合执行】、【CHAPTER｜本章局部风格执行】三个层级。GLOBAL必须完整承接校长原规则；HYBRID和CHAPTER即使未被校长授权，也必须在结构上明确写出“本章不使用（校长未授权）”，但不得把未授权层写成新的风格要求。已授权动态层必须严格依据本章微拍与剧情有限详细化，不得新增风格目标或升级语义。随后依次完成章节定位、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。中段必须完整可执行，同时保留章头与章末之间的文学展开空间。输出只作为原始教案保存，不需要也不允许生成任何第二套机器结构。`);
   return lines.join('\n\n');
 }
 
