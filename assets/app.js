@@ -1,4 +1,4 @@
-/* v1.0.538 THREE-LAYER-INTEGRATION-CLEANUP: principal_chapter is the chapter strategy authority; styleAssignment is the chapter style allocation/ownership bridge; structured display and teacher handoff must use the same normalized data.
+/* v1.0.540 PRINCIPAL-RAW-ONLY: principal_chapter remains the chapter strategy authority; chapter-level style installation is being moved to the teacher layer.
  * v1.0.536 STYLE-LAYER-OUTPUT-ORGANIZATION: principal first classifies selected writing-style entries into GLOBAL/HYBRID/CHAPTER pools, then assigns per chapter with teacher ownership; teacher receives GLOBAL once as locked baseline.
  * v1.0.532 STYLE-BASIS-LOCK: principal/teacher dynamic style decisions must be grounded in chapter microbeat + plot situation; preserve raw-teacher-only transmission.
  * v1.0.527 STYLE-LAYER-TRANSMISSION: principal style-layer decision + teacher three-layer execution +正文 three-layer transmission; preserve optimized writing style source and keep layer responsibilities separate.
@@ -19,7 +19,7 @@
 
 const APP_VERSION = '1.0.538';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.538.js';
+const APP_FILE_VERSION = 'app1.0.539.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -84,7 +84,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.538.js — 三层显示/对接整顿：principal_chapter + styleAssignment 闭环版。 */
+/* APP VERSION: app1.0.540.js — 校长三层词库清理第一批：移除STYLE_STRATEGY旧动态字段。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -7368,18 +7368,15 @@ diversityNote=重复风险或多样性说明
 
 const STRUCTURED_PRINCIPAL_PROTOCOL = `
 
-【新增：风格层级判定、证据依据与传导】
-GLOBAL由校长单独确定，是全书风格原规则；必须保持原义，向老师传递时不得修改、弱化、删除或稀释。HYBRID与CHAPTER不是全书固定层，也不是每章必有：校长只在对应章节确有需要时给出简洁核心方向，并且必须给出可追溯的判定依据。
-HYBRID表示“本章需要全书风格结合当前阶段/老师组/环境等动态因素调整”；校长是否启用HYBRID，必须依据该章具体微拍情况与剧情情况判断，不能只因章节标签或阶段名称机械生成。
-CHAPTER表示“本章自身的具体微拍与剧情产生了额外的局部风格执行要求”；先判断GLOBAL是否足够，再判断是否存在阶段/环境动态融合（HYBRID），只有仍有仅由本章自身微拍/剧情产生的额外写法要求时才启用CHAPTER。不得把CHAPTER当剧情计划、人物计划、场景计划或第二套教案。
-不得为了层数完整虚构动态层；合法组合为GLOBAL、GLOBAL+HYBRID、GLOBAL+CHAPTER、GLOBAL+HYBRID+CHAPTER。老师只负责把校长给出的HYBRID/CHAPTER有限详细化，不得创造新的风格含义。内部GLOBAL/HYBRID/CHAPTER仅作程序标识，下游必须收到中文执行语义。
-【判定依据硬规则】每章的hybridBasis/chapterBasis必须明确引用本章已提供的微拍情况与剧情情况。没有真实依据时，对应层必须留空。
+【新增：三层风格词汇池建立与传导边界】
+GLOBAL由校长确定，是全书恒定风格原规则；必须保持原义，作为所有章节的继承底座。HYBRID与CHAPTER不是每章预先分配的决定，而是校长建立的“可供老师按章节需要选择”的全书词汇池。
+校长只负责完成三层词条归属、完整定义和全书层级边界：globalStyleEntries=全书GLOBAL固定词条；hybridStyleEntries=允许老师按章节需要选择的HYBRID词条；chapterStyleEntries=允许老师按章节需要选择的CHAPTER词条。不得在PRINCIPAL_CHAPTER中决定某章是否启用HYBRID/CHAPTER，也不得为某章填写动态层核心方向、依据或安装数组。
+老师收到三层词汇池及其唯一完整定义后，结合自己负责章节的微拍、剧情、阶段、老师组和环境事实，自主判断是否需要HYBRID/CHAPTER，并在老师教案中形成必要的执行性内容。校长不替老师做这个章节级选择。
+内部GLOBAL/HYBRID/CHAPTER仅作程序标识；下游最终执行必须使用中文自然语言。不得为了层数完整虚构动态层；GLOBAL始终继承，HYBRID/CHAPTER仅在老师判断确有需要时进入该章rawText。
 
-【写作风格词条先定层、再分章｜硬规则】
-校长必须先读取【优化后写作风格·已选词条完整定义】。先完成“三层词条归属与解释”，再进行章节分配。只能从这些已选词条中，先确定本书三层的“词条归属池”：globalStyleEntries=全书GLOBAL固定词条；hybridStyleEntries=允许按章节启用的HYBRID词条；chapterStyleEntries=允许按章节启用的CHAPTER词条。不得凭空创造新的风格代号，也不得把未选词条塞进三层。全部已选词条必须且只能归入一个归属池；GLOBAL至少一个。三个归属池必须各自提供对应的中文词条名与简明准确解释；解释必须忠实于优化后写作风格原词条，不得创造代号或新含义。词条解释只在三层归属区出现一次，章节分配区只引用词条ID，不重复解释。
-校长输出位置固定为：先【三层写作风格词条归属区】（只解释词条一次），再【章节三层分配总表】（只引用词条ID并绑定负责老师），最后进入各章PRINCIPAL_CHAPTER。不得在多个区域重复解释同一词条。老师收到后先按teacherGroupId+teacherCode+chapter三项匹配自己的章节，再读取该章分配和依据；只有匹配成功才执行详细化。
-随后再做章节分配：每个PRINCIPAL_CHAPTER必须填写styleAssignment，明确本章负责老师组、GLOBAL词条、HYBRID词条、CHAPTER词条。GLOBAL数组必须与STYLE_STRATEGY.globalStyleEntries完全一致；HYBRID/CHAPTER数组只能从各自词条池选择。没有实际需要的层，数组必须为空。这样老师不需要猜测“哪些词条属于自己负责的章节”，只需按teacherGroupId/teacherCode与章节号精确匹配。
-校长的hybridStyle/chapterStyle是对已分配词条的简洁核心执行方向，不得脱离词条本身另造风格；hybridBasis/chapterBasis仍必须分别引用本章微拍与剧情依据。
+【写作风格词条先定层｜硬规则】
+校长必须先读取【优化后写作风格·已选词条完整定义】。先完成“三层词条归属与解释”。只能从这些已选词条中确定本书三层词汇池，不得凭空创造新的风格代号，也不得把未选词条塞进三层。全部已选词条必须且只能归入一个归属池；GLOBAL至少一个。三个词汇池必须各自提供对应的中文词条名与简明准确解释；解释必须忠实于优化后写作风格原词条，不得创造代号或新含义。词条完整解释只在三层归属区出现一次；后续老师可按需要引用，不得要求校长再次为章节复制完整定义。
+校长输出位置固定为：【三层写作风格词条归属区】（只解释词条一次），然后进入各章PRINCIPAL_CHAPTER。不得再生成【章节三层分配总表】或任何逐章风格安装决定。
 
 【校长唯一输出契约｜v509｜单链路】
 校长负责全书战略、阶段战略、老师分工、章节战略边界与chapterMiddleShape授权；不得设计本章中段具体事件，不得生成旧结构骨架或任何beat列表。
@@ -7454,11 +7451,6 @@ characterActions=允许人物/资源及行动方向
 narrativeRole=叙事职责
 timeStrategy=宏观时间要求
 stageTask=所属阶段任务
-hybridStyle=仅当本章确有动态融合需求时填写；只给简洁核心方向，不写施工细节。无需要时留空。
-hybridBasis=只有hybridStyle非空时必填；必须说明本章具体微拍情况与剧情情况为何需要GLOBAL结合当前阶段/老师组/环境动态调整；无hybridStyle时必须留空。
-chapterStyle=仅当本章确有局部特殊风格要求时填写；只给简洁核心方向，不写施工细节。无需要时留空。
-styleAssignment=合法JSON对象：{"teacherGroupId":"TG-...","teacherCode":"A","global":["已选词条id"],"hybrid":["已选词条id"],"chapter":["已选词条id"]}；global必须与STYLE_STRATEGY.globalStyleEntries一致；hybrid/chapter只能从对应词条池中选择；没有该层时数组必须为空。它是本章三层风格分配唯一机器归属标识，不是第二套章节计划。
-chapterBasis=只有chapterStyle非空时必填；必须说明本章自身具体微拍情况与剧情情况为何在GLOBAL/现有HYBRID之外仍需要额外局部风格要求；无chapterStyle时必须留空。
 teacherTask=给老师的章级目标与边界
 middleShapeRef=chapterMiddleShape:1
 middlePermission=老师在章头与章末之间自由施工；不得把结构化阶段协议变成固定事件清单
@@ -7486,15 +7478,12 @@ information=信息释放纪律
 
 [STYLE_STRATEGY]
 globalStyle=【全书恒定风格】校长单独确定、向下不可改义的作品风格原规则。
-adaptiveStyle=可作为校长内部判断HYBRID的参考，但不得自动传给任何章节；具体章节是否需要HYBRID及其核心方向，只看对应PRINCIPAL_CHAPTER.hybridStyle。
-chapterStyle=可作为校长内部判断CHAPTER的参考，但不得自动传给任何章节；具体章节是否需要CHAPTER及其核心方向，只看对应PRINCIPAL_CHAPTER.chapterStyle。
 globalStyleEntries=JSON数组；只能填写优化后写作风格已选词条的id，表示被校长确定为全书GLOBAL的词条；至少一个。
-hybridStyleEntries=JSON数组；只能填写优化后写作风格已选词条的id，表示允许被校长按章节分配为HYBRID的词条；可以为空。
-chapterStyleEntries=JSON数组；只能填写优化后写作风格已选词条的id，表示允许被校长按章节分配为CHAPTER的词条；可以为空。
+hybridStyleEntries=JSON数组；只能填写优化后写作风格已选词条的id，表示全书可供老师依据章节需要选择安装的HYBRID词条；可以为空。
+chapterStyleEntries=JSON数组；只能填写优化后写作风格已选词条的id，表示全书可供老师依据章节需要选择安装的CHAPTER词条；可以为空。
 globalStyleDefinitions=JSON数组；必须与globalStyleEntries逐项对应，每项为{"id":"已选词条id","name":"中文词条名","meaning":"准确简明解释"}。
 hybridStyleDefinitions=JSON数组；必须与hybridStyleEntries逐项对应，结构同上。
 chapterStyleDefinitions=JSON数组；必须与chapterStyleEntries逐项对应，结构同上。
-styleAllocationRule=每章通过PRINCIPAL_CHAPTER.styleAssignment明确本章实际采用的global/hybrid/chapter词条及负责老师组；GLOBAL是全书锁定基线，HYBRID/CHAPTER按章分配。
 narrativeRule=叙事执行规则
 dialogueRule=对白执行规则
 characterRule=人物执行规则
@@ -7540,8 +7529,6 @@ function buildPrincipalUser(assignment, targetCount){
 系统已经存在 bookStagePlan 与 TEACHER_ASSIGNMENT 两个独立维度。你必须读取 TEACHER_ASSIGNMENT 中的老师数量、章节所有权、角色、前后老师及交接边界，并把这些事实用于组级战略；不得重新分配章节。`);
   lines.push(`【已有中段推进战略卡必须纳入统筹】
 校长不再生成或拥有 PrincipalChapterPlan.midStrategy。校长只需把章头、推进骨架关键节点及章末状态定义清楚；中间节点之间如何连接、如何调度人物、信息、冲突和节奏，全部交给负责老师完成。`);
-  lines.push(`【动态风格判定依据｜每章必须先证据后结论】
-校长对每章HYBRID/CHAPTER的判断，必须逐章同时查看两类已注入信息：①本章微拍情况：chapterMiddleShape的patternId、patternLabel、phase顺序、role、purpose；②本章剧情情况：本章title、summary、function、goal、coreEvent、characterActions，以及所属阶段/老师组等已注入章级事实。先判断GLOBAL是否已经足够；若不足，若缺口来自阶段/老师组/环境等动态因素，则考虑HYBRID；若仍存在由本章自身微拍/剧情产生的局部特殊写法要求，才考虑CHAPTER。不能因为“高潮、告别、战斗、重要章节”等标签本身自动生成CHAPTER。每个非空hybridStyle必须在hybridBasis中说明依据；每个非空chapterStyle必须在chapterBasis中说明依据。没有充分依据就留空。`);
   lines.push(`【新增：chapterMiddleShape 只作为结构形状输入】
 每章都可能存在一个由用户微拍选择产生的chapterMiddleShape。你必须读取其中的patternId、patternLabel、phase顺序及每个phase的结构职责，把它理解为“本章中段应该如何呼吸/组织结构”的上游约束；但不得把phase改写成具体剧情事件、具体人物行动、场景顺序、固定节点或新的旧结构骨架。不得生成第二套beat列表。chapterMiddleShape是结构形状，不是剧情清单；老师与正文的具体创作空间仍位于章头和章末之间的全部中段。`);
   lines.push(`【新增校长输出：叙事主体与时间统筹】
@@ -7647,12 +7634,9 @@ function normalizePrincipalSchoolRules(r){
   const keys=['causality','continuity','beat','time','character','style','chapterBoundary','creationPermission','information']; const out={}; keys.forEach(k=>out[k]=String(r?.[k]||'').trim()); return out;
 }
 function normalizePrincipalStyleStrategy(r){
-  const keys=['globalStyle','adaptiveStyle','chapterStyle','narrativeRule','dialogueRule','characterRule','rhythmRule','sceneRule','emotionRule','specialMechanism','absoluteProhibitions','driftRisks','conflictPriority'];
+  const keys=['globalStyle','narrativeRule','dialogueRule','characterRule','rhythmRule','sceneRule','emotionRule','specialMechanism','absoluteProhibitions','driftRisks','conflictPriority'];
   const out={}; keys.forEach(k=>out[k]=String(r?.[k]||'').trim());
   if(!out.globalStyle) out.globalStyle=[out.narrativeRule,out.dialogueRule,out.characterRule].filter(Boolean).join('；');
-  // HYBRID / CHAPTER 是可选层：没有明确来源时保持为空，禁止用默认值机械制造动态层。
-  if(!out.adaptiveStyle) out.adaptiveStyle='';
-  if(!out.chapterStyle) out.chapterStyle='';
   ['globalStyleDefinitions','hybridStyleDefinitions','chapterStyleDefinitions'].forEach(k=>{ const a=parsePrincipalJsonField(r?.[k],[]); out[k]=Array.isArray(a)?a:[]; });
   return out;
 }
@@ -7714,18 +7698,7 @@ function principalStrategyText(strategy, chapterPlans){
     lines.push(`【CHAPTER｜章节可选词条池】${styleLayerDefinitionText(st.chapterStyleEntries,st.chapterStyleDefinitions)||'无'}`);
     lines.push(`【词条使用规则】三层词条只在这里解释一次；章节分配区只引用词条，不重复解释。GLOBAL每章继承；HYBRID/CHAPTER只有本章确有需要时才分配。`);
     lines.push(`【STYLE_STRATEGY】叙事=${st.narrativeRule}｜对白=${st.dialogueRule}｜节奏=${st.rhythmRule}｜绝对禁止=${st.absoluteProhibitions}`);
-    lines.push(`【章节三层分配总表｜唯一章节归属区】`);
-    Object.keys(plans).map(Number).sort((a,b)=>a-b).forEach(n=>{
-      const cp=plans[n]||{}, sa=cp.styleAssignment||{};
-      const g=principalStyleEntryIds(sa.global).join('、')||'无';
-      const h=principalStyleEntryIds(sa.hybrid).join('、')||'无';
-      const c=principalStyleEntryIds(sa.chapter).join('、')||'无';
-      const owner=`${sa.teacherGroupId||'未标记'}/${sa.teacherCode||'未标记'}`;
-      const basis=[];
-      if(cp.hybridStyle) basis.push(`HYBRID依据=${cp.hybridBasis||'未提供'}`);
-      if(cp.chapterStyle) basis.push(`CHAPTER依据=${cp.chapterBasis||'未提供'}`);
-      lines.push(`第${n}章｜负责老师=${owner}｜GLOBAL=${g}｜HYBRID=${h}｜CHAPTER=${c}${basis.length?`｜${basis.join('｜')}`:''}`);
-    });
+    lines.push(`【章节动态风格归属】校长不再逐章安装HYBRID/CHAPTER。老师依据本章微拍、剧情、阶段、老师组与环境事实，从上述全书词汇池自主判断是否需要动态层，并将最终执行内容写入本章rawText。GLOBAL始终继承，不在校长章节块中重复分配。`);
   }
   const b=p.book||{}; lines.push(`【BOOK_STRATEGY】主线=${b.mainline||'未填'}｜最终转变=${b.finalTransformation||'未填'}｜核心冲突=${b.coreConflict||'未填'}｜起始状态=${b.startingState||'未填'}｜目标状态=${b.targetState||'未填'}`);
   (p.stages||[]).forEach(s=>lines.push(`【STAGE_STRATEGY ${s.stageId}】${s.startChapter}-${s.endChapter}｜${s.stageName}｜目标=${s.stageGoal}｜冲突=${s.coreConflict}｜高潮=${s.stageClimax}｜解决=${s.settlement}｜新问题=${s.newProblem}｜交接=${s.nextStageLaunch}`));
@@ -7743,7 +7716,7 @@ function inspectPrincipalMachineProtocol(text){
   if(!rows.length) return {code:'PRINCIPAL_CHAPTER_EMPTY_OR_UNPARSEABLE',message:'检测到PRINCIPAL_CHAPTER标记，但结构块内没有可解析的字段。',opens,closes};
   return {code:'OK',message:'PRINCIPAL_CHAPTER结构块已识别。',opens,closes,rows};
 }
-function parsePrincipalMachine(text,total,assignment,style){
+function parsePrincipalMachine(text,total){
   const protocol=inspectPrincipalMachineProtocol(text);
   if(protocol.code!=='OK') return null;
   const rows=protocol.rows, by={}, duplicate=[];
@@ -7754,12 +7727,6 @@ function parsePrincipalMachine(text,total,assignment,style){
     const intensity=Number(r.endingIntensity);
     const required=['chapter','title','function','goal','coreEvent','characterActions','middlePermission','endingFunction','endingIntensity','lastEffectiveEvent','endingForm','nextTransitionType','nextTransitionBasis','narrativeRole','timeStrategy','stageTask','teacherTask','handoff'];
     const miss=required.filter(k=>!String(r[k]??'').trim());
-    const hybrid=String(r.hybridStyle||'').trim(), hybridBasis=String(r.hybridBasis||'').trim();
-    const chapterStyle=String(r.chapterStyle||'').trim(), chapterBasis=String(r.chapterBasis||'').trim(); const sa=parsePrincipalJsonField(r.styleAssignment,{}), sg=Array.isArray(sa?.global)?sa.global.map(String):[], sh=Array.isArray(sa?.hybrid)?sa.hybrid.map(String):[], sc=Array.isArray(sa?.chapter)?sa.chapter.map(String):[], expectedGroup=principalCanonicalTeacherGroups(assignment).find(g=>Number(g.startChapter)<=n&&Number(g.endChapter)>=n); if(String(sa?.teacherGroupId||'').trim()!==String(expectedGroup?.teacherGroupId||'')) miss.push('styleAssignment.teacherGroupId必须匹配本章负责老师组'); if(String(sa?.teacherCode||'').trim()!==String(expectedGroup?.teacherCode||'')) miss.push('styleAssignment.teacherCode必须匹配本章负责老师'); const expectedGlobal=principalStyleEntryIds(style?.globalStyleEntries), allowedHybrid=principalStyleEntryIds(style?.hybridStyleEntries), allowedChapter=principalStyleEntryIds(style?.chapterStyleEntries); if(JSON.stringify(sg)!==JSON.stringify(expectedGlobal)) miss.push('styleAssignment.global必须与STYLE_STRATEGY.globalStyleEntries一致'); if(sh.some(x=>!allowedHybrid.includes(x))) miss.push('styleAssignment.hybrid含不在HYBRID词条池中的词条'); if(sc.some(x=>!allowedChapter.includes(x))) miss.push('styleAssignment.chapter含不在CHAPTER词条池中的词条'); if(!hybrid&&sh.length) miss.push('无hybridStyle时styleAssignment.hybrid必须为空'); if(hybrid&&!sh.length) miss.push('有hybridStyle时styleAssignment.hybrid不得为空'); if(!chapterStyle&&sc.length) miss.push('无chapterStyle时styleAssignment.chapter必须为空'); if(chapterStyle&&!sc.length) miss.push('有chapterStyle时styleAssignment.chapter不得为空');
-    if(hybrid && !hybridBasis) miss.push('hybridBasis');
-    if(!hybrid && hybridBasis) miss.push('hybridBasis必须在hybridStyle为空时留空');
-    if(chapterStyle && !chapterBasis) miss.push('chapterBasis');
-    if(!chapterStyle && chapterBasis) miss.push('chapterBasis必须在chapterStyle为空时留空');
     if(!Number.isInteger(intensity)||intensity<0||intensity>4) miss.push('endingIntensity(0-4)');
     if(n===Number(total||0)){const nt=String(r.nextTransitionType||'').trim(),nb=String(r.nextTransitionBasis||'').trim(),hd=String(r.handoff||'').trim();if(!/终局|全书结束|无下一章|无$/.test(nt))miss.push('终章nextTransitionType必须明确为全书结束/终局/无下一章');if(/下一阶段|阶段交接|下一章|第\s*\d+\s*章/.test(nt+' '+nb+' '+hd)&&!/无|结束|终局/.test(nt+' '+nb))miss.push('终章不得设计后续剧情');}
     if(miss.length) invalid.push({chapter:n,fields:miss});
@@ -7770,7 +7737,7 @@ function parsePrincipalMachine(text,total,assignment,style){
 function normalizePrincipalChapterPlan(r,fallbackChapter){
   const rawChapter=Number(r?.chapter), chapter=Number.isInteger(rawChapter)&&rawChapter>0?rawChapter:Number(fallbackChapter);
   const title=String(r?.title||'').trim();
-  const sa=parsePrincipalJsonField(r.styleAssignment,{}); const styleAssignment={teacherGroupId:String(sa?.teacherGroupId||'').trim(),teacherCode:String(sa?.teacherCode||'').trim(),global:Array.isArray(sa?.global)?sa.global.map(String):[],hybrid:Array.isArray(sa?.hybrid)?sa.hybrid.map(String):[],chapter:Array.isArray(sa?.chapter)?sa.chapter.map(String):[]}; return {chapter,identity:{chapter,title},title,function:String(r.function||'').trim(),goal:String(r.goal||'').trim(),coreEvent:String(r.coreEvent||'').trim(),characterActions:String(r.characterActions||'').trim(),narrativeRole:String(r.narrativeRole||'').trim(),timeStrategy:String(r.timeStrategy||'').trim(),stageTask:String(r.stageTask||'').trim(),hybridStyle:String(r.hybridStyle||'').trim(),chapterStyle:String(r.chapterStyle||'').trim(),styleAssignment,teacherTask:String(r.teacherTask||'').trim(),middlePermission:String(r.middlePermission||'').trim(),middleShapeRef:String(r.middleShapeRef||`chapterMiddleShape:${chapter}`).trim(),middleBoundary:{start:'after_chapter_opening',end:'before_chapter_ending',definition:'中段=章头与章末之间的全部区域'},handoff:String(r.handoff||'').trim(),ending:{function:String(r.endingFunction||'').trim(),intensity:Number(r.endingIntensity),lastEffectiveEvent:String(r.lastEffectiveEvent||'').trim(),form:String(r.endingForm||'').trim(),nextTransitionType:String(r.nextTransitionType||'').trim(),nextTransitionBasis:String(r.nextTransitionBasis||'').trim(),diversityNote:String(r.diversityNote||'').trim()}};
+  return {chapter,identity:{chapter,title},title,function:String(r.function||'').trim(),goal:String(r.goal||'').trim(),coreEvent:String(r.coreEvent||'').trim(),characterActions:String(r.characterActions||'').trim(),narrativeRole:String(r.narrativeRole||'').trim(),timeStrategy:String(r.timeStrategy||'').trim(),stageTask:String(r.stageTask||'').trim(),teacherTask:String(r.teacherTask||'').trim(),middlePermission:String(r.middlePermission||'').trim(),middleShapeRef:String(r.middleShapeRef||`chapterMiddleShape:${chapter}`).trim(),middleBoundary:{start:'after_chapter_opening',end:'before_chapter_ending',definition:'中段=章头与章末之间的全部区域'},handoff:String(r.handoff||'').trim(),ending:{function:String(r.endingFunction||'').trim(),intensity:Number(r.endingIntensity),lastEffectiveEvent:String(r.lastEffectiveEvent||'').trim(),form:String(r.endingForm||'').trim(),nextTransitionType:String(r.nextTransitionType||'').trim(),nextTransitionBasis:String(r.nextTransitionBasis||'').trim(),diversityNote:String(r.diversityNote||'').trim()}};
 }
 function normalizePrincipalPlans(parsed){
   const plans={};
@@ -7972,6 +7939,7 @@ function teacherPrincipalRuleSource(pr){
   }
   return {schoolRules,styleStrategy};
 }
+/* v1.0.542：Principal→Teacher 三层风格传导仅一次性传递权威词汇池；章节事实与动态选择分离，避免逐章重复复制风格定义。 */
 function teacherStyleLayers(pr, stageRows, groupStrategy, chapterPlans){
   const recovered=teacherPrincipalRuleSource(pr||{}), style=recovered.styleStrategy||{}, schoolRules=recovered.schoolRules||{};
   const rows=Array.isArray(chapterPlans)?chapterPlans:[];
@@ -7979,25 +7947,46 @@ function teacherStyleLayers(pr, stageRows, groupStrategy, chapterPlans){
   const globalEntries=principalStyleEntryIds(style.globalStyleEntries), hybridPool=principalStyleEntryIds(style.hybridStyleEntries), chapterPool=principalStyleEntryIds(style.chapterStyleEntries);
   const defMap={};
   [['globalStyleDefinitions',globalEntries],['hybridStyleDefinitions',hybridPool],['chapterStyleDefinitions',chapterPool]].forEach(([field,ids])=>{
-    const defs=Array.isArray(style[field])?style[field]:[]; defs.forEach(d=>{if(d&&d.id) defMap[String(d.id)]={name:String(d.name||d.id),meaning:String(d.meaning||'').trim()};});
-    ids.forEach(id=>{ if(!defMap[id]){const x=writeStyleById(id); defMap[id]={name:String(x?.name||id),meaning:String(x?.note||x?.name||'').trim()};} });
+    const defs=Array.isArray(style[field])?style[field]:[];
+    defs.forEach(d=>{if(d&&d.id) defMap[String(d.id)]={name:String(d.name||d.id),meaning:String(d.meaning||'').trim()};});
+    ids.forEach(id=>{
+      if(!defMap[id]){
+        const x=writeStyleById(id);
+        defMap[id]={name:String(x?.name||id),meaning:String(x?.note||x?.name||'').trim()};
+      }
+    });
   });
-  const entriesText=(ids)=>principalStyleEntryIds(ids).map(id=>{const d=defMap[id]||{};return `【${d.name||id}】${d.meaning?`：${d.meaning}`:''}`;}).join('、');
-  const chapterBlocks=rows.map(({chapter,plan,middle})=>{
-    const hybridText=String(plan?.hybridStyle||'').trim(), hybridBasis=String(plan?.hybridBasis||'').trim();
-    const chapterText=String(plan?.chapterStyle||'').trim(), chapterBasis=String(plan?.chapterBasis||'').trim();
-    const sa=plan?.styleAssignment&&typeof plan.styleAssignment==='object'?plan.styleAssignment:{};
-    const micro=middle||null;
+  const catalogText=(ids)=>principalStyleEntryIds(ids).map(id=>{
+    const d=defMap[id]||{};
+    return `【${d.name||id}】${d.meaning?`：${d.meaning}`:''}`;
+  }).join('、');
+  const chapterFacts=rows.map(({chapter,plan,middle})=>{
     const plotBasis={chapter:Number(chapter),title:String(plan?.title||'').trim(),function:String(plan?.function||'').trim(),goal:String(plan?.goal||'').trim(),coreEvent:String(plan?.coreEvent||'').trim(),characterActions:String(plan?.characterActions||'').trim()};
-    const parts=[`【第${chapter}章｜三层风格传导卡｜唯一章节匹配】`,`负责老师组=${sa.teacherGroupId||'未标记'}｜老师=${sa.teacherCode||'未标记'}｜章节号=${chapter}`,`【本章实际分配的词条】\nGLOBAL=${entriesText(sa.global)||'无'}\nHYBRID=${entriesText(sa.hybrid)||'无'}\nCHAPTER=${entriesText(sa.chapter)||'无'}`,`【本章动态风格判定依据｜老师详细化必须使用】\n【微拍情况】\n${JSON.stringify(micro,null,2)}\n【剧情情况】\n${JSON.stringify(plotBasis,null,2)}`];
-    if(hybridText) parts.push(`【HYBRID｜校长本章核心方向】\n${hybridText}\n【校长判定依据】\n${hybridBasis||'未提供有效依据，老师不得擅自扩展该层。'}\n【老师执行命令】只依据本章微拍与剧情，把校长这一核心方向有限详细化为可执行写法；不得新增风格目标、强度、比例、情绪、节奏或表现要求。`);
-    if(chapterText) parts.push(`【CHAPTER｜校长本章核心方向】\n${chapterText}\n【校长判定依据】\n${chapterBasis||'未提供有效依据，老师不得擅自扩展该层。'}\n【老师执行命令】只依据本章微拍与剧情，把校长这一核心方向有限详细化为可执行写法；不得把剧情内容本身改造成新的风格规则。`);
-    parts.push('【层级判断】GLOBAL固定必有；HYBRID只用于阶段/老师组/环境动态融合；CHAPTER只用于本章自身微拍/剧情产生的额外局部风格要求。没有实际需要就不输出。不得为了层数完整虚构动态层。');
-    return parts.join('\n\n');
+    return `【第${chapter}章｜三层动态选择事实｜老师自主判断】\n【微拍情况】\n${JSON.stringify(middle||null,null,2)}\n【剧情情况】\n${JSON.stringify(plotBasis,null,2)}`;
   }).join('\n\n');
-  return `【风格层级传导依据｜老师备课输入】\n【GLOBAL｜全书恒定风格｜校长锁定原规则｜组级基线】\n${globalText}\n\n【校长三层词条唯一解释区】\nGLOBAL=${entriesText(globalEntries)||'无'}\nHYBRID可分配=${entriesText(hybridPool)||'无'}\nCHAPTER可分配=${entriesText(chapterPool)||'无'}\n\n${chapterBlocks||`【GLOBAL｜全书恒定风格｜校长原规则】\n${globalText}`}\n\n【老师职责边界】\nGLOBAL必须原义保留，优先直接复制校长原规则，不得改写、弱化、删除或稀释；HYBRID/CHAPTER只有校长在对应章节明确分配、给出核心方向并提供依据时才出现，老师只能依据自己本章微拍与剧情进行有限详细化。特别禁止语义升级：降低≠禁止，减少≠取消，避免直接煽情≠禁止一切情绪表达。\n【全校写作守则关联】\n${JSON.stringify(schoolRules,null,2)}`;
+  return `【风格层级传导依据｜老师备课输入】
+【权威来源】校长 styleStrategy 是三层风格的唯一完整定义来源；本输入只做一次性权威传递，不建立第二套风格定义。
+
+【GLOBAL｜全书恒定风格｜永久继承】
+${globalText}
+
+【HYBRID｜全书可选词汇池｜仅供老师按章选择】
+${catalogText(hybridPool)||'无'}
+
+【CHAPTER｜全书可选词汇池｜仅供老师按章选择】
+${catalogText(chapterPool)||'无'}
+
+【GLOBAL词汇】${catalogText(globalEntries)||'无'}
+
+【本组各章动态选择事实】
+${chapterFacts||'无'}
+
+【老师章节选择边界】
+GLOBAL始终继承，不重新定义、不另造同义规则；HYBRID/CHAPTER不由校长逐章指定，只能由老师依据对应章节事实自主判断是否需要。老师若启用动态层，只能从校长对应词汇池中选择，并将唯一权威定义转化为本章必要的、有限的自然语言执行要求；不需要就不启用，不得因为三层形式完整而制造动态风格目标。
+【全校写作守则关联】
+${JSON.stringify(schoolRules,null,2)}`;
 }
-const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师），负责把校长已经裁决的全书战略、阶段战略、老师组战略、章节战略、全书恒定写作规则、章节动态执行规则、微拍结构形状、时间纪律、世界事实与连续性状态，完整转化为自己负责章节的“老师总教案原始文本”。
+const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师），负责把校长已经确定的全书战略、阶段战略、老师组战略、章节战略、三层写作风格词汇池与唯一完整定义、全书恒定写作规则、微拍结构形状、时间纪律、世界事实与连续性状态，完整转化为自己负责章节的“老师总教案原始文本”。
 
 【最高铁律｜原始教案唯一来源】
 你的输出本身就是“老师总教案原始内容”。系统会把你的返回内容原样保存，并只按“第X章”章头到下一章章头做确定性原文切割。
@@ -8010,27 +7999,27 @@ const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师），�
 每章必须把“为什么写、从哪里开始、发生什么变化、人物如何行动、信息如何移动、时间地点如何连续、中段如何展开、最后在哪里真正停止、下一章凭什么承接”说清楚。
 如果某项上游信息没有被提供，必须明确写“上游未指定/待本章创作自然决定”，不得凭空发明；但不得因此省略该项。
 
-【风格层级铁律｜三层必须显式成书，但动态层不得机械激活】
-每一章的最终老师原始教案中，必须有一个独立、明确、不可隐藏的“【三层写作风格执行书】”正式章节，并且必须分别出现GLOBAL、HYBRID、CHAPTER三个独立层级标题。这里要求的是“三层结构显式存在”，不是要求每章实际启用三种动态风格。
-- GLOBAL：每章必须实际启用，并且必须作为“全书恒定风格执行书”完整出现。GLOBAL必须严格承接校长已经锁定的原规则；不得润色、换说法、总结、弱化、删减、强化、扩展或重新解释。优先直接复制校长原规则，并结合已经注入的【优化构想｜继承＋补充｜唯一权威资料】完整资料核对其原义、边界、属性、特征、表现和示例；不得遗漏会影响正文执行的关键内容。
-- HYBRID：必须独立出现。只有校长对本章实际分配HYBRID时，才填写“校长本章核心方向＋校长判定依据＋老师依据本章微拍与剧情形成的有限可执行规则”；若本章未分配，必须明确写“本章不使用 HYBRID（校长未授权）”，不得自行创造任何动态风格目标。
-- CHAPTER：必须独立出现。只有校长对本章实际分配CHAPTER时，才填写“校长本章核心方向＋校长判定依据＋老师依据本章微拍与剧情形成的有限可执行规则”；若本章未分配，必须明确写“本章不使用 CHAPTER（校长未授权）”，不得自行创造任何局部风格目标。
+【风格层级铁律｜三层必须显式成书，但动态层由老师判断】
+每一章的最终老师原始教案中，必须有一个独立、明确、不可隐藏的“【三层写作风格执行书】”正式章节，并且必须分别出现GLOBAL、HYBRID、CHAPTER三个独立层级标题。这里要求的是“三层结构显式存在”，不是要求每章实际启用三种动态风格；校长只提供三层全书词汇池与完整定义，是否启用HYBRID/CHAPTER由老师结合本章事实自主判断。
+- GLOBAL：每章必须实际启用。必须忠实承接校长锁定的原规则，并把正文真正需要执行的固定要求转化为本章可执行的自然语言；不得改变原义、强度、边界或新增规则。不要机械复制整套校长定义，也不得重新建立第二套完整风格定义。
+- HYBRID：必须独立出现。只有老师判断本章确有阶段/老师组/环境动态融合需要时，才选择HYBRID词条，并将其唯一权威定义转化为有限可执行规则；若本章不需要，明确写“本章不使用 HYBRID”，不得创造动态目标。
+- CHAPTER：必须独立出现。只有老师判断本章自身微拍/剧情确有额外局部写法需要时，才选择CHAPTER词条，并将其唯一权威定义转化为有限可执行规则；若本章不需要，明确写“本章不使用 CHAPTER”，不得创造局部目标。
 - 三层必须在每章教案中作为正式执行内容出现，不能只存在于老师备课输入、章节其他段落或隐含语义中。
 - 动态层详细化必须有本章依据：老师必须同时查看本章微拍情况与剧情情况。不能脱离本章实际情况凭空扩写HYBRID/CHAPTER。
 - HYBRID的依据重点是阶段/老师组/环境动态因素如何作用于本章；CHAPTER的依据重点是本章自身微拍/剧情为何产生额外局部写法。
-- 校长给出的hybridBasis/chapterBasis是判定依据，不是第二份剧情计划；老师只能用本章微拍/剧情把它执行化。
+- 校长不再提供逐章hybridBasis/chapterBasis；老师必须用本章微拍、剧情、阶段、老师组与环境事实判断动态层是否需要，并把选择理由转化为简洁执行语义。
 - “本章不使用”不是新的风格要求，也不改变任何上游规则；它只是明确记录该层未被授权。
 - 只要HYBRID或CHAPTER被实际启用，就必须写成可以直接交给正文AI执行的自然语言规则；内部ID只用于匹配，最终教案必须使用自然语言。
 - HYBRID/CHAPTER的详细化只能增加执行清晰度，不能增加新的风格目标、强度、比例、情绪、节奏或表现要求；若详细化会改变原核心方向，应停止扩写。
 - 特别禁止语义升级：降低≠禁止，减少≠取消，避免直接煽情≠禁止一切情绪表达。
 
 【老师三层风格执行书｜输出硬契约】
-你的输入中已经包含校长确定的三层风格资料与本章分配。你不能只“理解”它们，必须把它们实际写进最终老师原始教案rawText，因为正文只读取rawText。
+你的输入中已经包含校长确定的三层风格词汇池、完整定义与本章微拍/剧情事实，但不再包含校长逐章HYBRID/CHAPTER分配。你不能只“理解”它们，必须把它们实际写进最终老师原始教案rawText，因为正文只读取rawText。
 每一章必须有且只有一个明确的【GLOBAL｜全书恒定风格执行书】、一个【HYBRID｜本章动态融合执行】、一个【CHAPTER｜本章局部风格执行】。三者必须作为本章正式教案的独立区块出现，不能只在全组开头出现一次，也不能埋在其他段落。
-GLOBAL区必须写出：①本章采用的GLOBAL中文词条名称；②校长锁定的原规则；③词条定义/核心特征；④本章实际可执行的固定风格要求。GLOBAL必须忠实继承校长原规则，并以【优化构想｜继承＋补充｜唯一权威资料】作为完整资料来源进行核对；不得只写“沿用全书风格”、只写词条名称、只写一句总结或只引用内部ID。
-HYBRID区若校长已授权，必须写出：①本章HYBRID中文词条；②校长核心方向；③校长判定依据；④依据本章微拍与剧情形成的有限执行化要求。若校长未授权，必须明确写“本章不使用 HYBRID（校长未授权）”，不得补充新的动态风格目标。
-CHAPTER区若校长已授权，必须写出：①本章CHAPTER中文词条；②校长核心方向；③校长判定依据；④依据本章微拍与剧情形成的有限执行化要求。若校长未授权，必须明确写“本章不使用 CHAPTER（校长未授权）”，不得补充新的局部风格目标。
-三层执行书不是摘要、标签或内部id列表；必须有足够详细的自然语言资料，让正文AI只靠本章rawText即可执行。GLOBAL每章必须重复进入本章rawText；重复的是同一权威内容，不是重新创作。未授权的HYBRID/CHAPTER只保留“不使用”的状态说明，不得虚构动态规则。
+GLOBAL区必须写出：①本章采用的GLOBAL中文词条名称；②与校长原规则一致的本章执行要求；③本章实际可执行的固定风格要求。不得只写“沿用全书风格”，但也不得机械复制整套上游定义；本章区块只承担执行，不重新定义权威规则。
+HYBRID区若老师判断确有需要，必须写出：①本章选择的HYBRID中文词条；②不改变唯一权威定义的核心执行语义；③依据本章阶段/老师组/环境事实形成的有限执行化要求。若老师判断不需要，必须明确写“本章不使用 HYBRID”，不得补充新的动态风格目标。
+CHAPTER区若老师判断确有需要，必须写出：①本章选择的CHAPTER中文词条；②不改变唯一权威定义的核心执行语义；③依据本章自身微拍/剧情形成的有限执行化要求。若老师判断不需要，必须明确写“本章不使用 CHAPTER”，不得补充新的局部风格目标。
+三层执行书不是摘要、标签或内部id列表；必须有足够的自然语言执行资料，让正文AI只靠本章rawText即可执行。但这里复制的是“本章执行要求”，不是把校长完整定义再建立一份副本。GLOBAL保持稳定继承语义；未授权的HYBRID/CHAPTER只保留“不使用”的状态说明。
 【全书恒定规则｜必须真正执行】
 你必须把收到的【全书写作风格规则】与【全校写作守则】当作本书的恒定底座。它们不是参考意见，也不是只给正文AI看的说明；老师的施工方案本身就必须服从它们。
 风格规则决定“怎么写”：叙事、对白、人物、节奏、场景、情绪、特殊机制、绝对禁止、风格漂移风险、冲突优先级。
@@ -8063,7 +8052,7 @@ chapterMiddleShape只规定“章头与章末之间的中段应该如何呼吸�
    0.1 【GLOBAL｜全书恒定风格执行书】
    0.2 【HYBRID｜本章动态融合执行】
    0.3 【CHAPTER｜本章局部风格执行】
-   三层必须彼此独立。GLOBAL写完整恒定风格原规则；HYBRID/CHAPTER按校长授权详细化，未授权则明确写“不使用（校长未授权）”。
+   三层必须彼此独立。GLOBAL写完整恒定风格原规则；HYBRID/CHAPTER由老师依据本章事实从校长提供的对应词汇池中自主选择并详细化，不需要时明确写“不使用”，不得凭空创造动态层。
 1. 章节定位与战略目标
 2. 承接前提与开章设计
 3. 时间、地点、人物、关系与已知信息状态
@@ -8163,7 +8152,7 @@ function buildTeacherUser(g,gi){
 【章节身份】\n${JSON.stringify({chapter:n,title:String(p.title||state.chapters?.[n-1]?.title||'').trim()},null,2)}\n
 【阶段战略】\n${JSON.stringify(stage,null,2)}\n
 【章节战略原始授权】\n${JSON.stringify(p,null,2)}\n
-【本章动态风格执行依据】\n以下两类信息是老师详细化HYBRID/CHAPTER的唯一事实依据：\n1. 本章微拍情况：${JSON.stringify(middle,null,2)}\n2. 本章剧情情况：${JSON.stringify({title:p.title||'',function:p.function||'',goal:p.goal||'',coreEvent:p.coreEvent||'',characterActions:p.characterActions||''},null,2)}\n规则：只把已经发生/已授权的微拍与剧情事实用于解释校长方向；不得由此创造新的剧情事件或新的风格目标。\n
+【本章动态风格执行依据】\n以下两类信息是老师详细化HYBRID/CHAPTER的唯一事实依据：\n1. 本章微拍情况：${JSON.stringify(middle,null,2)}\n2. 本章剧情情况：${JSON.stringify({title:p.title||'',function:p.function||'',goal:p.goal||'',coreEvent:p.coreEvent||'',characterActions:p.characterActions||''},null,2)}\n规则：只把已经发生/已授权的微拍与剧情事实用于判断是否需要动态层；不得把这些事实理解为“校长逐章风格方向”，也不得由此创造新的剧情事件或新的风格目标。\n
 【章节中段微拍形状｜只读结构形状】\n${JSON.stringify(middle,null,2)}\n
 【本章时间战略补充】\n${JSON.stringify(time,null,2)}\n
 ${previousEnding}\n
@@ -8172,7 +8161,7 @@ ${previousEnding}\n
 
   lines.push(`【本组授权词典｜完整相关资源】\n${teacherScopedGlossary(g,gi,9000)}`);
   lines.push(`【前序正文状态｜完整动态连续性输入】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态；不得自行假定缺失事实）'):'（首组，无前序正文）'}`);
-  lines.push(`【最终输出执行口令】\n现在必须一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。输出不得是摘要，不得是“章节概述”，不得压缩章末，不得遗漏全书恒定风格规则、全校守则、chapterMiddleShape、时间、连续性和章末完整设计。每一章必须先正式输出【三层写作风格执行书】，并独立出现【GLOBAL｜全书恒定风格执行书】、【HYBRID｜本章动态融合执行】、【CHAPTER｜本章局部风格执行】三个层级。GLOBAL必须完整承接校长原规则；HYBRID和CHAPTER即使未被校长授权，也必须在结构上明确写出“本章不使用（校长未授权）”，但不得把未授权层写成新的风格要求。已授权动态层必须严格依据本章微拍与剧情有限详细化，不得新增风格目标或升级语义。随后依次完成章节定位、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。中段必须完整可执行，同时保留章头与章末之间的文学展开空间。输出只作为原始教案保存，不需要也不允许生成任何第二套机器结构。`);
+  lines.push(`【最终输出执行口令】\n校长只提供三层词汇池及唯一完整定义；你负责本章动态选择。不要把上游风格定义重新复制成第二套完整系统，只把本章真正需要执行的内容写入rawText。\n现在必须一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。输出不得是摘要，不得是“章节概述”，不得压缩章末，不得遗漏全书恒定风格规则、全校守则、chapterMiddleShape、时间、连续性和章末完整设计。每一章必须先正式输出【三层写作风格执行书】，并独立出现【GLOBAL｜全书恒定风格执行书】、【HYBRID｜本章动态融合执行】、【CHAPTER｜本章局部风格执行】三个层级。GLOBAL必须完整承接校长原规则；HYBRID和CHAPTER由老师依据本章微拍、剧情、阶段、老师组和环境事实自主判断是否使用；不使用时明确写“本章不使用”，使用时只能从校长提供的对应词汇池与定义中选择，并严格有限详细化，不得新增风格目标或升级语义。随后依次完成章节定位、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。中段必须完整可执行，同时保留章头与章末之间的文学展开空间。输出只作为原始教案保存，不需要也不允许生成任何第二套机器结构。`);
   return lines.join('\n\n');
 }
 
@@ -8311,7 +8300,7 @@ async function genPrincipal(btn, opts){
           _tp.principalStrategyWarnings = principalStrategy.errors.length;
         }
         let principalMachine;
-        try{ principalMachine = parsePrincipalMachine(txt, targetChapterCount, teacherAssignment, principalStrategy.styleStrategy||{}); }
+        try{ principalMachine = parsePrincipalMachine(txt, targetChapterCount); }
         catch(parseErr){ principalMachine=null; addGenerationDiagnostic('principal',{type:'STRUCTURE',code:'PRINCIPAL_MACHINE_PARSE_ERROR',details:String(parseErr?.message||parseErr)}); }
         _tp.actualChapterCount = Number(principalMachine?.rawCount || 0);
         _tp.uniqueChapterCount = Number(principalMachine?.uniqueCount || 0);
@@ -8607,7 +8596,7 @@ function saveCurrentPrincipalResult(raw, reason){
     const a=buildTeacherAssignment();
     const parsed=parsePrincipalStrategyMachine(nextRaw, Number(p.targetChapterCount||principalTargetChapterCount()||0), a);
     if(parsed?.valid) p.styleStrategy=parsed.styleStrategy;
-    const pm=parsePrincipalMachine(nextRaw, Number(p.targetChapterCount||principalTargetChapterCount()||0), a, p.styleStrategy||{});
+    const pm=parsePrincipalMachine(nextRaw, Number(p.targetChapterCount||principalTargetChapterCount()||0));
     if(pm){ p.plans=normalizePrincipalPlans(pm); p.chapterStrategies=buildChapterStrategiesFromPrincipal(p.plans, Number(p.targetChapterCount||principalTargetChapterCount()||0)); }
   }catch(e){ console.debug('[Principal save] 三层结构同步失败，保留原结构缓存',e); }
   p.ts=Date.now();
@@ -8693,52 +8682,6 @@ function openSchoolPrincipalReader(){
   renderSchoolPrincipalBody(ov,p.raw);
 }
 
-function principalThreeLayerDisplayHtml(p){
-  const pr=p||{};
-  let st=pr.styleStrategy&&typeof pr.styleStrategy==='object'?pr.styleStrategy:{};
-  let plans=pr.plans&&typeof pr.plans==='object'?pr.plans:{};
-  // 显示层永远优先读取当前结构化状态；若人工编辑/旧存档只保留 raw，则从同一份当前校长成果确定性回读，不另造第三套数据。
-  if((!Object.keys(st).length || !Object.keys(plans).length) && String(pr.raw||'').trim()){
-    try{
-      const a=buildTeacherAssignment();
-      const parsed=parsePrincipalStrategyMachine(pr.raw, Number(pr.targetChapterCount||principalTargetChapterCount()||0), a);
-      if(parsed?.valid){ st=parsed.styleStrategy||st; }
-      const pm=parsePrincipalMachine(pr.raw, Number(pr.targetChapterCount||principalTargetChapterCount()||0), a, st);
-      if(pm) plans=normalizePrincipalPlans(pm);
-    }catch(e){ console.debug('[Principal UI] 三层结构回读失败',e); }
-  }
-  const defMap={};
-  [['globalStyleDefinitions','globalStyleEntries'],['hybridStyleDefinitions','hybridStyleEntries'],['chapterStyleDefinitions','chapterStyleEntries']].forEach(([df,ef])=>{
-    (Array.isArray(st[df])?st[df]:[]).forEach(d=>{ if(d&&d.id) defMap[String(d.id)]={name:String(d.name||d.id),meaning:String(d.meaning||'').trim()}; });
-    principalStyleEntryIds(st[ef]).forEach(id=>{ if(!defMap[id]){ const x=writeStyleById(id); defMap[id]={name:String(x?.name||id),meaning:String(x?.note||x?.name||'').trim()}; } });
-  });
-  const pool=(ids)=>principalStyleEntryIds(ids).map(id=>{const d=defMap[id]||{};return `<span class="sc-style-chip" title="${esc(d.meaning||id)}">${esc(d.name||id)}</span>`;}).join('')||'<span class="muted">无</span>';
-  const rows=Object.keys(plans).map(Number).filter(Number.isFinite).sort((a,b)=>a-b).map(n=>{
-    const cp=plans[n]||{}, sa=cp.styleAssignment&&typeof cp.styleAssignment==='object'?cp.styleAssignment:{};
-    const hy=String(cp.hybridStyle||'').trim(), hb=String(cp.hybridBasis||'').trim(), ch=String(cp.chapterStyle||'').trim(), cb=String(cp.chapterBasis||'').trim();
-    return `<div class="sc-style-chapter">
-      <div class="sc-style-chapter-head"><b>第${n}章</b><span class="muted">负责：${esc(sa.teacherCode||'未标记')} / ${esc(sa.teacherGroupId||'未标记')}</span></div>
-      <div class="sc-style-grid">
-        <div><b>GLOBAL</b><div>${pool(sa.global)}</div></div>
-        <div><b>HYBRID</b><div>${pool(sa.hybrid)}</div>${hy?`<p>${esc(hy)}</p><small>依据：${esc(hb||'未提供')}</small>`:'<small class="muted">本章不使用 HYBRID（校长未授权）</small>'}</div>
-        <div><b>CHAPTER</b><div>${pool(sa.chapter)}</div>${ch?`<p>${esc(ch)}</p><small>依据：${esc(cb||'未提供')}</small>`:'<small class="muted">本章不使用 CHAPTER（校长未授权）</small>'}</div>
-      </div>
-    </div>`;
-  }).join('');
-  return `<div class="sc-pr-card sc-three-layer-card">
-    <div class="sc-pr-card-h"><span class="sc-pr-card-ic">🎨</span> <b>三层写作风格｜校长分层与章节对接</b></div>
-    <div class="sc-pr-card-b">
-      <div class="sc-style-pools">
-        <div><b>GLOBAL｜全书恒定</b><p>${esc(String(st.globalStyle||'').trim()||'沿用已确定风格。')}</p><div>${pool(st.globalStyleEntries)}</div></div>
-        <div><b>HYBRID｜动态可选词条池</b><div>${pool(st.hybridStyleEntries)}</div></div>
-        <div><b>CHAPTER｜本章可选词条池</b><div>${pool(st.chapterStyleEntries)}</div></div>
-      </div>
-      <div class="sc-style-rule-note">GLOBAL = 全书锁定基线；HYBRID = 当前阶段/老师组/环境需要时的动态融合；CHAPTER = 本章微拍/剧情产生的局部特殊写法。<br>本章最终采用哪些词条，以 <b>styleAssignment</b> 为唯一章节归属依据。</div>
-      <div class="sc-style-chapters">${rows||'<div class="muted">暂无可显示的 PRINCIPAL_CHAPTER / styleAssignment 章节数据。</div>'}</div>
-    </div>
-  </div>`;
-}
-
 function renderSchoolPrincipalBody(ov, raw){
   const body = ov.querySelector('#scPrincipalBody');
   if(!body) return;
@@ -8761,9 +8704,6 @@ function renderSchoolPrincipalBody(ov, raw){
   let html = '';
   const groups=teacherAssignmentGroups();
   html += `<div class="sc-pr-card" style="border-color:var(--accent,#4d8dff)"><div class="sc-pr-card-h"><span class="sc-pr-card-ic">🎓</span> <b>老师对接分配</b></div><div class="sc-pr-card-b"><div class="sc-pr-rules-wrap">${groups.length===1?`当前只有1位老师：启动老师AI时读取本页当前保存的全部校长成果。`:`当前${groups.length}位老师；校长成果按字母代号隔离，老师启动时只读取自己的部分。`}<br>${groups.map(g=>`<b>${esc(g.teacherCode||teacherCodeForIndex(g.gi||0))}老师</b>：第${g.first}-${g.last}章${g.stage?`｜${esc(g.stage)}`:''}`).join('<br>')}</div></div></div>`;
-  
-  const structuredPrincipal = scState()?.principal || {};
-  html += principalThreeLayerDisplayHtml(structuredPrincipal);
   
   if(rulesSec){
     html += `
