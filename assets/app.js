@@ -7770,6 +7770,35 @@ function principalPlansForGroup(plans, group, chapterTitleFn){
   return out;
 }
 function principalPlanContractAudit(plans,total){const missing=[],invalid=[];for(let n=1;n<=Number(total||0);n++){const p=plans?.[n];if(!p){missing.push(n);continue;}if(!p.goal||!p.middleShapeRef||!p.ending?.lastEffectiveEvent)invalid.push(n);}return {missing,invalid};}
+function buildEndingDiversityAudit(plans){
+  const entries=Object.keys(plans||{})
+    .map(Number)
+    .filter(Number.isFinite)
+    .sort((a,b)=>a-b)
+    .map(chapter=>({chapter, ...(plans[chapter]||{})}));
+  let maxConsecutive=0, currentRun=0, previousFunction='';
+  const repeatedFunctions=[];
+  const seen=new Map();
+  for(const p of entries){
+    const fn=String(p.endingFunction||'').trim();
+    if(fn && fn===previousFunction) currentRun+=1;
+    else currentRun=fn?1:0;
+    if(currentRun>maxConsecutive) maxConsecutive=currentRun;
+    previousFunction=fn;
+    if(fn){
+      const arr=seen.get(fn)||[];
+      arr.push(p.chapter);
+      seen.set(fn,arr);
+    }
+  }
+  seen.forEach((chapters,fn)=>{
+    if(chapters.length>1) repeatedFunctions.push({function:fn,chapters});
+  });
+  repeatedFunctions.sort((a,b)=>b.chapters.length-a.chapters.length);
+  const risk=maxConsecutive>=3?'high':(maxConsecutive===2?'medium':'low');
+  return {risk,maxConsecutive,repeatedFunctions};
+}
+
 function auditPrincipalPlanLogic(plans,total){const warnings=[],titleSeen=new Map(),eventSeen=new Map();for(let n=1;n<=Number(total||0);n++){const p=plans?.[n];if(!p)continue;const add=(map,key,chapter,label)=>{if(!key)return;const prev=map.get(key);if(prev)warnings.push({chapter,label,detail:`第${chapter}章与第${prev}章出现完全相同的${label}，需要人工确认是否为有意重复。`});else map.set(key,chapter)};add(titleSeen,p.title,n,'章节标题');add(eventSeen,p.coreEvent,n,'核心事件');if(n<Number(total||0)&&!p.ending.nextTransitionBasis)warnings.push({chapter:n,label:'承接依据',detail:'非终章缺少下一章承接依据。'});if(n===Number(total||0)&&!/终局|全书结束|无下一章|无$/.test(p.ending.nextTransitionType||''))warnings.push({chapter:n,label:'终章承接',detail:'终章未明确声明全书结束/终局/无下一章。'});}return {warnings,count:Number(total||0)};}
 function compilePrincipalMachineCards(parsed){
   if(!parsed || !parsed.rows) return '';
