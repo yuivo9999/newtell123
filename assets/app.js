@@ -1,4 +1,5 @@
-/* v1.0.521 PRINCIPAL-GENERATION-RESTORE: restored principal generation runtime; principal→正文 remains severed.
+/* v1.0.526 CHAPTER-DICT-REFERENCE-GUARD: chapter-scoped glossary/world-material injection; teacher rawText remains sole chapter-plan source; principal→正文 remains severed.
+ * v1.0.524 TEACHER-STYLE-LAYER-RESTORE: restored principal generation runtime; principal→正文 remains severed.
  * v1.0.519 CHAPTER-CUT-FIX: chapter heading matcher accepts markdown heading prefixes (# through ######), so the next chapter boundary is recognized before its first section and cannot leak into the previous chapter. */
 /* v1.0.519 COMPLETE-TEACHER-CONTEXT: teacher AI receives the complete authoritative upstream context and returns a complete raw teaching plan. */
 /* v1.0.519 RAW-TEACHER-ONLY: the teacher AI return is saved verbatim; chapter reads are deterministic raw-text slices only. */
@@ -12,9 +13,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.519';
+const APP_VERSION = '1.0.526';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.520.js';
+const APP_FILE_VERSION = 'app1.0.526.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -79,7 +80,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.500.js — 正文单次生成版；强化章节内部一致性、信息去重、句式多样与人物动态反应逻辑。 */
+/* APP VERSION: app1.0.526.js — 正文单次生成版；强化章节内部一致性、信息去重、句式多样与人物动态反应逻辑。 */
 const state = {
   mode: 'shortfilm',    // 'shortfilm' 短片 / 'longnovel' 经典长篇小说
   wordRange: null,      // (兼容遗留) 不再作为长篇必填；保留字段避免旧快照破坏
@@ -650,119 +651,6 @@ function chapterQualityLedger(i){
  * 把“性格标签”升级为可执行的“刺激→判断→冲突→选择→外显→潜台词→后果”链。
  * 稳定内核不等于固定动作；人物在不同压力、关系和信息条件下应产生不同层次的选择。
  */
-function buildChapterCharacterDynamicReactionBlock(i){
-  const o=state.outline||{}, g=o.glossary||{}, chars=Array.isArray(g.characters)?g.characters:[], names=[];
-  const add=n=>{n=String(n||'').trim(); if(n&&!names.includes(n)) names.push(n);};
-  chars.forEach(c=>{const n=String(c&&c.name||'').trim(); if(n&&castRaw&&castRaw.includes(n)) add(n);});
-  if(!names.length){const p=String(o?.navBeacon?.protagonist||'').split(/[，,：:（(]/)[0].trim(); if(p)add(p);}
-  if(!names.length) return '';
-  const rows=names.slice(0,12).map(n=>{const c=chars.find(x=>String(x&&x.name||'').trim()===n)||{}; return `- ${n}｜身份:${String(c.identity||'未知').trim()}｜稳定内核:${String(c.trait||'未知').trim()}｜关系底色:${String(c.relation||'未知').trim()}｜习惯:${String(c.hobby||'未知').trim()}｜口头特征(低频):${String(c.catchphrase||'无').trim()}`;}).join('\n');
-  return `【人物动态反应引擎｜app22】
-人物鲜明不是“每句话都像这个人”，也不是重复口癖；要求“同一个人，在不同压力下仍有同一个内核，但会作出不同层次的选择”。
-${rows}
-
-【每个关键人物反应的内部因果链】
-刺激/事件 → 当下看见或知道什么 → 最即时的判断 → 想得到/避免什么 → 与对方关系带来的顾虑 → 情绪/利益冲突 → 选择（说/不说/做/不做/先做再说）→ 外显动作或对白 → 潜台词 → 对剧情或关系造成的后果。
-
-【人物层次规则】
-1. 不直接写“他很嘴硬/她很善良”作为性格证明，让读者从选择和后果看出来。
-2. 同一性格允许出现拒绝、沉默、转移、先行动后承认、玩笑遮掩、突然让步、事后补救等不同表现，必须由情境触发。
-3. 核心倾向可以稳定，但表层行为必须受“当前目标、压力、关系、已知信息、过去经验”影响。
-4. 人物只能使用自己已经知道或当下获得的信息。
-5. 同一事件让不同人物作不同选择：差异来自目标、价值排序、关系和经验，而不是为了凑不同句式。
-6. 人物面对亲人、朋友、陌生人、对手、上下级时的表达可受关系影响，但禁止机械套模板。
-7. 人物反常时必须有压力、认知变化或关系变化作为依据；否则视为人设漂移。
-8. 重要场面尽量留下至少一个“不靠形容词就能证明性格”的行为选择。
-9. 口头禅、固定动作低频使用；连续重复时换成另一种符合内核的行为表达。
-10. 真实交流允许打断、误解、回避、答非所问、只回应一半和用行动代替回答。
-
-【禁止的假鲜明】
-“嘴硬”≠每次都先拒绝再答应；“善良”≠每次都主动帮助；“聪明”≠每次都替作者解释设定；“冷静”≠每次都冷淡短句。`;
-}
-
-function buildChapterDialogueSubtextBlock(i){
-  return `【对话潜台词与人物声音锁｜app22】
-重要对白应有真实交流目的：索取、拒绝、试探、遮掩、安慰、威胁、争取、拖延、确认、转移、讽刺、让步、保护关系或改变对方选择。
-人物声音差异不要靠口癖，而靠信息取舍、句长、直接程度、主动/被动回应、是否回答重点、暴露程度以及面对压力时的变化。
-如果一句对白主要只是向读者重复世界观、人物履历或已经讲清的事实，应优先改成有交流目的的表达，或让行动、物件、沉默承担信息。
-潜台词不是故作高深：读者应能从上下文推断人物真正想做什么。`;
-}
-
-function buildChapterLocalInfoLedgerBlock(i){
-  const cur=chapterQualityLedger(i), prev=chapterQualityLedger(i-1);
-  const pick=(x,k)=>Array.isArray(x?.[k])?x[k].slice(0,20):[];
-  const lines=[`【本章局部信息账本｜app22】`,`写作时区分：事实、第一次揭示、人物知情、关系变化、道具/地点状态、未确认猜测。`,`同一章内信息第一次真正落地后，后续默认读者已经知道；再次出现必须带来新证据、新视角、新后果或认知变化。`,`“谁知道什么”与“读者知道什么”不是同一回事；禁止让角色为了替作者讲解而越过自己的知情边界。`];
-  if(prev){if(pick(prev,'introducedInfo').length)lines.push(`【上一章已介绍】${pick(prev,'introducedInfo').join('；')}`);if(pick(prev,'characterKnowledge').length)lines.push(`【上一章人物知情】${pick(prev,'characterKnowledge').join('；')}`);}
-  if(cur){if(pick(cur,'facts').length)lines.push(`【本章已确认事实】${pick(cur,'facts').join('；')}`);if(pick(cur,'introducedInfo').length)lines.push(`【本章已介绍】${pick(cur,'introducedInfo').join('；')}`);}
-  lines.push(`本章每出现重要新信息，内部标记其首次落地方式（行动/对白/观察/物件/结果）；后续不要再用同一种方式完整解释。`);
-  return lines.join('\n');
-}
-
-function buildChapterCharacterBehaviorBlock(i){
-  const o = state.outline || {}, g = o.glossary || {};
-  const castRaw = String(o?.navBeacon?.protagonist||'').trim();
-  const names = [];
-  const all = Array.isArray(g.characters) ? g.characters : [];
-  const addName = n => {
-    n = String(n||'').trim();
-    if(n && !names.includes(n)) names.push(n);
-  };
-  all.forEach(c=>{
-    const n=String(c&&c.name||'').trim();
-    if(n && castRaw && castRaw.includes(n)) addName(n);
-  });
-  if(!names.length){
-    const protagonist = String(o?.navBeacon?.protagonist||'').split(/[，,：:（(]/)[0].trim();
-    if(protagonist) addName(protagonist);
-  }
-  if(!names.length) return '';
-  const rows = names.slice(0,12).map(n=>{
-    const c=all.find(x=>String(x&&x.name||'').trim()===n) || {};
-    const trait=String(c.trait||'').trim(), rel=String(c.relation||'').trim(), hobby=String(c.hobby||'').trim();
-    const identity=String(c.identity||'').trim();
-    const pieces=[];
-    if(identity) pieces.push(`身份:${identity}`);
-    if(trait) pieces.push(`性格内核:${trait}`);
-    if(rel) pieces.push(`关系底色:${rel}`);
-    if(hobby && hobby!=='未知') pieces.push(`习惯/兴趣:${hobby}`);
-    return `- ${n}：${pieces.join('；')||'暂无可用性格资料'}`;
-  }).join('\n');
-  return `【人物反应逻辑｜稳定内核，不是固定口癖】
-以下只提供人物“为什么会这样反应”的底层依据，不要求每次都重复同一口癖、动作或句式。
-${rows}
-【执行方式】
-1. 同一件事先问：此人最在意什么、最怕什么、想得到什么、与对方是什么关系？再决定他说什么或不说什么。
-2. 性格优先通过选择、让步、拒绝、误解、行动、沉默、打断、试探、具体要求和事后补救表现。
-3. 同一人物在不同压力下可以有不同层次：嘴硬后让步、嘴上拒绝却先行动、表面平静但改变做法等；不要把“性格标签”直接写成旁白说明。
-4. 主要人物之间必须保留反应差异：不要让所有人面对同一事实都用相似的惊讶、感动、愤怒、解释和总结句式。
-5. 口头禅只是偶尔出现的声音特征，不是人物塑造主工具。`;
-}
-
-function buildChapterInformationGuard(i){
-  const prev = chapterQualityLedger(i-1);
-  const ss = storyState();
-  const prevObs = ss?.chapters?.[i-1]?.observed;
-  const lines = [`【章节内部信息账本｜写作前只读】`,
-    `本章写作必须区分：已经成立的事实、人物已知信息、第一次揭示的新信息、尚未证实的猜测。`,
-    `关键原则：一个信息第一次讲清后，后续默认读者已知道；除非出现新证据、新后果、新视角或人物认知改变，否则不要再次完整解释。`,
-    `人物知情边界：角色只能使用自己已经知道或当下通过感官/行动获得的信息；不得为了让读者明白而让角色说出他没有理由知道的设定。`];
-  if(prevObs){
-    lines.push(`【上一章已落地状态｜不可偷偷改写】${JSON.stringify(prevObs).slice(0,5000)}`);
-  }
-  if(prev){
-    const facts = Array.isArray(prev.facts)?prev.facts:[];
-    const info = Array.isArray(prev.introducedInfo)?prev.introducedInfo:[];
-    const know = Array.isArray(prev.characterKnowledge)?prev.characterKnowledge:[];
-    const rel = Array.isArray(prev.relationshipChanges)?prev.relationshipChanges:[];
-    if(facts.length) lines.push(`【前章事实账】${facts.slice(0,20).join('；')}`);
-    if(info.length) lines.push(`【前章已介绍信息】${info.slice(0,20).join('；')}`);
-    if(know.length) lines.push(`【前章人物知情】${know.slice(0,20).join('；')}`);
-    if(rel.length) lines.push(`【前章关系变化】${rel.slice(0,12).join('；')}`);
-  }
-  lines.push(`【本章内部记忆方式】正文AI在内部维护三列：①本章已明确成立；②本章刚刚新增；③仍未确认/只是猜测。新增信息一旦落地，后续只写其影响，不再把原信息重新讲一遍。`);
-  return lines.join('\n');
-}
-
 function chapterQualityPromptBlock(){
   return `【本章质量执行锁】
 写完每一段后在内部快速复核，不输出检查过程：
@@ -7946,10 +7834,29 @@ function teacherStyleSemanticCatalog(source){
     return `- ${id} → ${x.name||id}\n  定义：${x.note||''}\n  执行动作：${Array.isArray(x.tips)?x.tips.join('；'):''}\n  禁止：${Array.isArray(x.avoid)?x.avoid.join('；'):''}\n  验收：${Array.isArray(x.check)?x.check.join('；'):''}`;
   }).join('\n');
 }
+function teacherPrincipalRuleSource(pr){
+  const p=pr||{};
+  let schoolRules=(p.schoolRules&&typeof p.schoolRules==='object')?p.schoolRules:{};
+  let styleStrategy=(p.styleStrategy&&typeof p.styleStrategy==='object')?p.styleStrategy:{};
+  const raw=String(p.raw||'').trim();
+  // Principal 机器协议即使章节计划可解析，SCHOOL_RULES/STYLE_STRATEGY 也可能因格式问题单独解析失败。
+  // 老师端不得因此丢失 GLOBAL/HYBRID 的权威来源；从同一份当前校长原始成果做确定性回读。
+  if(raw){
+    try{
+      const rr=parseMachineBlocks(raw,'SCHOOL_RULES')[0];
+      const ss=parseMachineBlocks(raw,'STYLE_STRATEGY')[0];
+      if(rr && Object.keys(rr).length) schoolRules=normalizePrincipalSchoolRules(rr);
+      if(ss && Object.keys(ss).length) styleStrategy=normalizePrincipalStyleStrategy(ss);
+    }catch(e){ console.debug('[Teacher] 校长风格规则回读失败',e); }
+  }
+  return {schoolRules,styleStrategy};
+}
 function teacherStyleLayers(pr, stageRows, groupStrategy, chapterPlans){
   const p=pr||{};
-  const globalStyle=p.styleStrategy||{};
-  const hybrid={schoolRules:p.schoolRules||{},stageRules:stageRows||[],teacherGroupStrategy:groupStrategy||{}};
+  const recovered=teacherPrincipalRuleSource(p);
+  const globalStyle=recovered.styleStrategy||{};
+  const schoolRules=recovered.schoolRules||{};
+  const hybrid={schoolRules,stageRules:stageRows||[],teacherGroupStrategy:groupStrategy||{}};
   const rows=Array.isArray(chapterPlans)?chapterPlans:[];
   const chapterBlocks=rows.map(({chapter,plan,middle})=>{
     const c={chapterIdentity:{chapter,title:plan?.title||''},narrativeRole:plan?.narrativeRole||'',stageTask:plan?.stageTask||'',teacherTask:plan?.teacherTask||'',timeStrategy:plan?.timeStrategy||'',handoff:plan?.handoff||'',middleShape:middle||null,ending:plan?.ending||{}};
@@ -7994,6 +7901,7 @@ const TEACHER_SYS = `你是一位长篇小说「老师」（任课教师），�
 
 【风格三层铁律｜必须完整落入原始教案】
 GLOBAL=全书恒定风格规则；HYBRID=全书恒定规则与当前阶段/老师组动态执行的结合；CHAPTER=当前章节动态执行规则。三层必须分别出现于原始教案中，并用自然语言解释如何执行。不得只输出 global/hybrid/chapter 字段名，不得只输出 suspense2、fast、sus3 等内部代号。
+特别要求：每一章都必须单独、明确写出本章的【GLOBAL｜全书恒定风格规则】【HYBRID｜全书规则×本阶段/本老师组动态执行】【CHAPTER｜本章动态执行规则】三个小节；不能只在整组开头写一次后由后续章节省略。GLOBAL必须说明本章如何继承全书恒定写法，HYBRID必须说明这些恒定规则如何结合本章所属阶段/老师组落地，CHAPTER必须说明本章具体动态执行授权。三层都必须有可直接交给正文AI执行的自然语言，而不是字段名、JSON摘要或内部代号。
 
 【全书恒定规则｜必须真正执行】
 你必须把收到的【全书写作风格规则】与【全校写作守则】当作本书的恒定底座。它们不是参考意见，也不是只给正文AI看的说明；老师的施工方案本身就必须服从它们。
@@ -8130,7 +8038,7 @@ ${previousEnding}\n
 
   lines.push(`【本组授权词典｜完整相关资源】\n${teacherScopedGlossary(g,gi,9000)}`);
   lines.push(`【前序正文状态｜完整动态连续性输入】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态；不得自行假定缺失事实）'):'（首组，无前序正文）'}`);
-  lines.push(`【最终输出执行口令】\n现在必须一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。输出不得是摘要，不得是“章节概述”，不得压缩章末，不得遗漏全书恒定风格规则、全校守则、章节动态执行规则、chapterMiddleShape、时间、连续性和章末完整设计。中段必须完整可执行，同时保留章头与章末之间的文学展开空间。输出只作为原始教案保存，不需要也不允许生成任何第二套机器结构。`);
+  lines.push(`【最终输出执行口令】\n现在必须一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。输出不得是摘要，不得是“章节概述”，不得压缩章末，不得遗漏全书恒定风格规则、全校守则、章节动态执行规则、chapterMiddleShape、时间、连续性和章末完整设计。特别是每一章都必须分别写出GLOBAL、HYBRID、CHAPTER三个明确小节，并在每个小节中给出自然语言执行规则；不能用一组GLOBAL/HYBRID说明覆盖多章，也不能让CHAPTER只剩字段或代号。中段必须完整可执行，同时保留章头与章末之间的文学展开空间。输出只作为原始教案保存，不需要也不允许生成任何第二套机器结构。`);
   return lines.join('\n\n');
 }
 
@@ -9616,7 +9524,7 @@ const AIBus = {
       case 'ideaOptimization': return { ...base, rawIdea: state.idea || '', multi: !!extra?.multi, originalAnchors: state.originalIdeaAnchors || null, strategicDimensions: state.strategicDimensions || [], diversityProfile: state.strategicDiversityProfile || null };
       case 'idea': return { ...base, rawIdea: state.idea || '' };
       case 'titles': return { ...base, outline: o, glossary: o.glossary, expectedN: extra?.n || (o.chapters||[]).length };
-      case 'chapter': return this._chapterCtx(extra?.idx);
+      case 'chapter': return getChapterTeacherRawTextDirect(extra?.idx);
       case 'subplot': return { ...base, chapterIdx: extra?.idx, content: state.chapters[extra?.idx]?.content, prevLog: (o.glossary?.subplots)||[] };
       case 'glossary': return { ...base, chapterIdx: extra?.idx, content: state.chapters[extra?.idx]?.content, existingGlossary: o.glossary };
       case 'strip': return { ...base, chapterIdx: extra?.idx, content: state.chapters[extra?.idx]?.content, targetZhs: extra?.targetZhs };
@@ -9625,21 +9533,6 @@ const AIBus = {
     }
   },
 
-  _chapterCtx(idx){
-    const o = state.outline || {};
-    const c = state.chapters[idx];
-    const prev = state.chapters[idx-1];
-    const next = state.chapters[idx+1];
-    const teacherPlan=String(getCurrentChapterTeacherRawText(idx)||'').trim();
-    return {
-      mode: state.mode, longMode: isLong(),
-      navBeacon: o.navBeacon || '',
-      L1_outline: { title: o.title, logline: o.logline, tone: o.tone, total: (o.chapters||[]).length, idx: idx+1 },
-      L2_chapter: { title: c?.title, teacherPlan, requiredEntities: [] },
-      L3_neighbor: { prevTitle: prev?.title, prevTail: prev?.content?.slice(-300), nextTitle: next?.title, lastScene: o._factCard?.lastScene },
-      L4_context: { rollingSummaries: buildRollingSummary(idx), relevantGlossary: relevantGlossaryForChapter(idx) }
-    };
-  }
 };
 
 function getSystemPrompt(kind, extra){
@@ -9671,7 +9564,7 @@ function buildAIPrompt(kind, extra){
     case 'ideaOptimization': return buildIdeaOptimizationUser(ctx);
     case 'idea': return buildIdeaPolishUserFixed(ctx);
     case 'titles': return titlesGenUser(extra);
-    case 'chapter': return buildChapterUser(extra?.idx, extra);
+    case 'chapter': return getChapterTeacherRawTextDirect(extra?.idx);
     case 'subplot': return buildSubplotUser(ctx);
     case 'glossary': return buildGlossaryExtractUser(ctx);
     case 'dictmaster': return buildDictMasterUser(ctx);
@@ -14667,7 +14560,7 @@ async function regenSelectedChapters(list){
       const pg = panel.querySelector('.gs-progress');
       if(pg) pg.textContent = `正在重写第 ${i+1} 章…`;
       try{
-        const user = buildChapterUser(i, {regenerating:true});
+        const user = getChapterTeacherRawTextDirect(i);
         const txt = await writeOneChapterContent(i, user);      // 关闭流式，单章连贯
         snapshotChapterVersion(i);
         state.chapters[i].content = txt;
@@ -18388,16 +18281,87 @@ function assertChapterLocalHardGate(i,text){
   throw e;
 }
 
+function getChapterTeacherRawTextDirect(i){
+  const raw=String(getCurrentChapterTeacherRawText(i)||'').trim();
+  if(!raw) throw new Error(`第${Number(i)+1}章没有可用的本章纯文本教案，无法启动正文。`);
+  return raw;
+}
+
+/* v1.0.525：本章词典资料只读注入层。
+ * 原则：teacher rawText 是唯一章节教案来源；词典上下文是确定性事实/设定辅助资料，不重写教案、不做第二次AI理解。
+ * 发现：只从当前章节 rawText 中命中词典正式名称/_alias；提取：只返回被命中的条目及其直接关联；过滤：不命中不进入正文。
+ * 世界观规则属于全局只读规则，始终可见；世界素材仍按本章教案命中后授权进入，避免整本词典无差别注入。
+ */
+function _dictNameAliases(item, canonical){
+  const out=[]; const n=String(canonical||item?.name||'').trim();
+  if(n) out.push(n);
+  (Array.isArray(item?._alias)?item._alias:[]).forEach(a=>{const x=String(a||'').trim();if(x&&x!==n)out.push(x);});
+  return out;
+}
+function _dictMentioned(item, raw){
+  const text=String(raw||'');
+  return _dictNameAliases(item).some(n=>n&&text.includes(n));
+}
+function _dictMatched(arr, raw){
+  return (Array.isArray(arr)?arr:[]).filter(x=>x&&String(x.name||'').trim()&&_dictMentioned(x,raw));
+}
+function _dictFormatEntry(x){
+  if(!x) return '';
+  const keys=['name','type','category','identity','age','gender','appearance','hobby','relation','trait','catchphrase','function','meaning','content','note','impact','usage','value','scope','rule','limit','stance','audience','location','era','participants','course'];
+  return keys.map(k=>{const v=String(x[k]??'').trim();return v?`${k}=${v}`:'';}).filter(Boolean).join('｜');
+}
+function buildChapterDictionaryContext(i){
+  const raw=getChapterTeacherRawTextDirect(i);
+  const g=ensureGlossaryKnowledgeShape((state.outline&&state.outline.glossary)||{});
+  const buckets=[
+    ['人物', 'characters', '人物九维', g.characters],
+    ['路人龙套', 'walkons', '路人/龙套', g.walkons],
+    ['地名', 'places', '地点', g.places],
+    ['专名', 'propernouns', '专名', g.propernouns],
+    ['组织/势力', 'organizations', '世界素材', g.organizations],
+    ['职业/机构', 'institutions', '世界素材', g.institutions],
+    ['物品/道具', 'items', '世界素材', g.items],
+    ['扩充规则', 'rules', '世界素材', g.rules],
+    ['术语', 'terms', '世界素材', g.terms],
+    ['历史事件', 'events', '世界素材', g.events],
+    ['生活设定', 'lifeSettings', '世界素材', g.lifeSettings]
+  ];
+  const matched={};
+  buckets.forEach(([label,key,kind,arr])=>{matched[key]=_dictMatched(arr,raw);});
+  const charNames=new Set((matched.characters||[]).map(x=>String(x.name||'').trim()));
+  const placeNames=new Set((matched.places||[]).map(x=>String(x.name||'').trim()));
+  const propNames=new Set((matched.propernouns||[]).map(x=>String(x.name||'').trim()));
+  const rel=(g._relationshipTable||[]).filter(x=>x&&(charNames.has(String(x.a||'').trim())||charNames.has(String(x.b||'').trim())));
+  const pc=(g._placeContacts||[]).filter(x=>x&&(placeNames.has(String(x.from||'').trim())||placeNames.has(String(x.to||'').trim())));
+  const prc=(g._properContacts||[]).filter(x=>x&&(propNames.has(String(x.from||'').trim())||propNames.has(String(x.to||'').trim())));
+  const worldRules=(g._worldRules||[]).filter(x=>x&&String(x.rule||'').trim());
+  const sections=[];
+  const chars=matched.characters||[];
+  if(chars.length){
+    sections.push(`【人物九维｜本章教案命中后从词典提取】\n${chars.map(c=>{
+      const vals={identity:c.identity,age:c.age,gender:c.gender,appearance:c.appearance,hobby:c.hobby,relation:c.relation,trait:c.trait,catchphrase:c.catchphrase};
+      return `- ${c.name}｜${Object.entries(vals).map(([k,v])=>`${k}=${String(v??'').trim()||'未知'}`).join('｜')}`;
+    }).join('\n')}`);
+  }
+  const simple=[['walkons','路人龙套'],['places','地名'],['propernouns','专名'],['organizations','组织/势力'],['institutions','职业/机构'],['items','物品/道具'],['rules','扩充规则'],['terms','术语'],['events','历史事件'],['lifeSettings','生活设定']];
+  simple.forEach(([key,label])=>{const arr=matched[key]||[];if(arr.length)sections.push(`【${label}｜本章教案命中后从词典提取】\n${arr.map(_dictFormatEntry).filter(Boolean).map(x=>'- '+x).join('\n')}`);});
+  if(rel.length)sections.push(`【人物关系关联｜仅关联本章已命中人物】\n${rel.map(x=>`- ${x.a} ←${x.relation||'关系'}→ ${x.b}${x.note?`｜${x.note}`:''}`).join('\n')}`);
+  if(pc.length)sections.push(`【地名关联｜仅关联本章已命中地点】\n${pc.map(x=>`- ${x.from} ↔ ${x.to}${x.relation?`｜${x.relation}`:''}${x.note?`｜${x.note}`:''}`).join('\n')}`);
+  if(prc.length)sections.push(`【专名关联｜仅关联本章已命中专名】\n${prc.map(x=>`- ${x.from} ↔ ${x.to}${x.relation?`｜${x.relation}`:''}${x.note?`｜${x.note}`:''}`).join('\n')}`);
+  if(worldRules.length)sections.push(`【世界观规则｜全局只读，不因本章是否命名而丢失】\n${worldRules.map(x=>'- '+_dictFormatEntry(x)).join('\n')}`);
+  return sections.length ? `【本章词典/世界资料｜只读辅助上下文】\n以下资料不是第二份教案，不改变老师原始教案；只用于核对人物九维、名称、世界事实、关系和世界运转规则。未列出的词典条目本章不得因词典存在而自行调用。\n\n${sections.join('\n\n')}` : '【本章词典/世界资料｜只读辅助上下文】\n本章教案没有命中可注入的词典条目；不得因为词典存在其它条目而自行扩大。';
+}
+function getChapterWriterUser(i){
+  const raw=getChapterTeacherRawTextDirect(i);
+  const dict=buildChapterDictionaryContext(i);
+  return `【本章老师教案｜唯一章节教案来源｜原始纯文本】\n${raw}\n\n${dict}\n\n【词典资料使用声明｜必须遵守】\n以下“本章词典/世界资料”全部是只读参考资料，不是第二份教案，不是新的剧情指令，也不是要求正文必须逐条写入的清单。它们只用于核对已经由老师教案涉及的人物、地名、专名、关系、世界事实、人物九维和世界运转规则。\n- 本章发生什么、写什么、写到哪里：只由上方老师原始教案决定。\n- 词典资料不得自行产生新事件、新人物、新地点、新关系、新秘密、新剧情任务，也不得把未命中的词典条目带入本章。\n- 词典资料不得覆盖、改写、扩展或重新规划老师教案。\n- 人物九维、地名、专名及世界事实以已命中的正式词典资料作为事实参考；如果教案没有要求该实体进入本章，不得仅因词典中存在它而主动加入。\n- “世界观规则”是全局只读约束，用于保证正文不违反既定世界运行逻辑；它不是本章剧情任务。\n- “世界素材”只有在本章教案实际命中对应词典条目时才作为参考；不得把世界素材库当百科全文阅读。\n- 词典资料与老师教案发生冲突时，不得自行改写教案；应遵守现有项目的事实/风格/路线优先级，词典只用于既定事实与设定校核。\n\n【正文资料优先级】\n1. 本章老师原始教案决定本章写什么；2. 已命中的词典资料只作为事实/设定执行参考；3. 全局世界观规则是持续有效的只读硬约束，但不是剧情指令；4. 未命中的词典条目不得自行引入；5. 人物九维必须以本章命中的词典人物卡为事实参考，不得自行补造另一套人物档案。`;
+}
+
 async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride, signal){
   const mt = chapterMaxTokens();
-  const chapterNo=Number(i)+1,groups=teacherAssignmentGroups();
-  const g=groups.find(x=>chapterNo>=Number(x.first||1)&&chapterNo<=Number(x.last||Infinity));
-  const t=g?teacherResultForAssignmentGroup(g).t:null;
-  const rawText=String(t?.chapterCards?.chapters?.[chapterNo]?.rawText||'').trim();
-  if(!rawText) throw new Error(`第${chapterNo}章没有可用的本章纯文本教案，无法启动正文。`);
+  const rawText=getChapterTeacherRawTextDirect(i);
   // 正文铁律：只读取 chapterCards[n].rawText。
   if(typeof persist==='function') persist();
-  onPhase = onPhase || (()=>{});
   onPhase = onPhase || (()=>{});
   onPhase('撰写本章正文…');
   const resumePartial = (state._chapterPartial && state._chapterPartial[i]) || '';
@@ -18410,11 +18374,9 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
     let partial = (state._chapterPartial && state._chapterPartial[i]) || '';
     const _onStream = (delta)=>{ partial += delta; state._chapterPartial[i] = partial; if(onStream) onStream(delta); };
     try{
-      // 正文稳定性修正：正文主请求不再额外调用一次“上下文理解AI”。
-      // 原先该步骤会把教案/上一章再次复制进一个中间包，再与完整 writerUser 合并，
-      // 导致单章实际上下文显著膨胀，并额外增加一次 API 失败/限流机会。
-      // 现在直接使用经过 budgetChapterContext 收敛后的唯一正文输入。
-      const writerUser = `${user}\n\n【本章教案｜唯一来源｜纯文本原文】\n${rawText}\n\n【正文AI铁律】上方“本章教案”就是当前章节唯一教案输入。它是从原始老师总教案按本章头尾直接切出的完整纯文本，不经过结构化转换，不读取 结构化教案链、PlotUnit、ScenePlan、旧骨架或任何第二套教案链。完整阅读这份纯文本后直接写正文，不输出理解过程、计划或后台结构标签。`;
+      // 正文 AI 仍直接以本章老师原始教案作为唯一章节任务来源；同时附加确定性词典只读参考资料，不做AI二次理解或中间教案包。
+      // getChapterWriterUser() 负责在发送前执行“教案命中 → 词典匹配 → 资料提取 → 参考资料声明”的统一链路。
+      const writerUser = getChapterWriterUser(i);
       txt = unwrapAIResult(await callDeepSeek(longChapterSys(), writerUser, {maxTokens: mt, onStream: _onStream, temperature: dynamicChapterParams(i).temperature, topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'}));
       delete state._chapterPartial[i];
       persist();
@@ -18471,198 +18433,6 @@ const USER_PRIO_BILL = `
 6. 优化构想只是创意建议：不得在正文阶段自行把优化构想升级成新的剧情、设定或风格权威。
 设定词典中有台词/有戏份/反复出现的重要人地专名一致性为不可逾越红线；仅作氛围的临时路人/小地名/小专名（见正文【临时闲人】段）不属红线，可现场点缀、不入词典；上一章已落地状态与小说状态链是承接类事实依据，任何要求不得使其违背已成立事实。`;
 let _dictRedlineOver = false;
-function budgetChapterContext(parts, maxChars=18000){
-  // 正文上下文必须有“硬预算”。旧版只压缩少数不存在的标签，导致
-  // 教案 + 校长规则 + 上章尾部 + 滚动摘要全部原样进入模型，极易触发上下文上限。
-  const cap = Math.max(9000, Number(maxChars)||18000);
-  const src = Array.isArray(parts) ? parts.slice() : [];
-  const take = (label, n) => {
-    const i = src.findIndex(x => String(x||'').startsWith(label));
-    if(i < 0) return;
-    const s = String(src[i]||'');
-    if(s.length > n) src[i] = s.slice(0,n) + '\n…【为稳定性省略非核心上下文】';
-  };
-  // 先保留硬事实，再压缩解释性材料。
-  take('【本书写作风格｜正文执行底座', 3000);
-  take('【第二层 · 中观层', 7000);
-  take('◆ 上一章末尾', 3200);
-  take('【第三层 · 微观层', 5200);
-  take('【第一层 · 宏观层', 1800);
-  take('【第一层附录 · 已裁决风格施工层', 1600);
-  take('【第一层附录 · 因果闭环锁', 1800);
-  take('【本章时间合同', 1800);
-  take('【章节时间覆盖执行令', 1500);
-  take('【结尾多样性审计', 1200);
-  take('【章节结尾反模板硬门', 1000);
-  take('【小说状态链', 2200);
-  take('【章级事实授权硬门', 1200);
-  take('【事件可达性硬门', 900);
-  take('【优先级契约', 1100);
-  take('【篇幅参考', 1800);
-
-  let total = () => src.reduce((a,x)=>a+String(x||'').length,0) + Math.max(0,src.length-1)*2;
-  if(total() <= cap) return src;
-
-  // 第二轮：压缩低风险重复信息；优先保留老师教案主体与当前状态数据。
-  take('【第三层 · 微观层', 3600);
-  take('【第一层 · 宏观层', 1000);
-  take('【本书写作风格｜正文执行底座', 1800);
-  take('【第一层附录 · 已裁决风格施工层', 900);
-  take('【第一层附录 · 因果闭环锁', 1000);
-  take('【结尾多样性审计', 700);
-  take('【小说状态链', 1400);
-  take('【篇幅参考', 900);
-  if(total() <= cap) return src;
-
-  // 最后才压缩教案，但仍保留标题/章末状态等首尾信息。
-  const i = src.findIndex(x => String(x||'').startsWith('【第二层 · 中观层'));
-  if(i >= 0){
-    const s = String(src[i]||'');
-    const keepHead = 1800, keepTail = 2200;
-    if(s.length > keepHead + keepTail + 80){
-      src[i] = s.slice(0,keepHead) + '\n…【教案中段为上下文预算省略；请以保留的事件骨架与章末状态为准】…\n' + s.slice(-keepTail);
-    }
-  }
-  if(total() <= cap) return src;
-
-  // 绝不再返回超预算输入：按优先级从后往前裁掉最低权重块。
-  const dropLabels = [
-    '【篇幅参考','【优先级契约','【章节结尾反模板硬门','【结尾多样性审计',
-    '【章级事实授权硬门','【事件可达性硬门','【第一层附录 · 已裁决风格施工层'
-  ];
-  for(const label of dropLabels){
-    const i2=src.findIndex(x=>String(x||'').startsWith(label));
-    if(i2>=0) src.splice(i2,1);
-    if(total()<=cap) return src;
-  }
-  return src;
-}
-
-function buildDynamicProtagonistLedger(i){
-  if(i <= 0) return '';
-  const o = state.outline || {};
-  const digests = Array.isArray(o._chapterDigests) ? o._chapterDigests : [];
-  const prevDigest = digests[i-1] && digests[i-1].text ? digests[i-1].text : '';
-  const prevChapter = state.chapters && state.chapters[i-1] ? state.chapters[i-1] : null;
-  const prevTitle = prevChapter && prevChapter.title ? `第 ${i} 章《${prevChapter.title}》` : `第 ${i} 章`;
-  const protagonist = (o.navBeacon && o.navBeacon.protagonist) ? String(o.navBeacon.protagonist).split(/[，,：:（(]/)[0].trim() : '主角';
-
-  const lines = [];
-  lines.push(`【动态主角状态与悬念账本（承自 ${prevTitle} 已结算的动态状态）】`);
-  lines.push(`- 核心角色锚点：${protagonist}`);
-  if(prevDigest){
-    lines.push(`- 上一章剧情与状态结算：${prevDigest}`);
-  }
-  lines.push(`- 物理与心理定格硬性纪律：上一章已结算的地点、人物状态、重要道具/线索与未决事项属于不可擅改的既成事实。本章必须在这些已落地状态上推进，严禁发生伤势突愈、道具凭空消失或死人复活等逻辑断层！`);
-  return lines.join('\n');
-}
-
-function authorizedWorldResourceBlock(i){
-  const o=state.outline||{}, g=o.glossary||{};
-  const planText=String(getCurrentChapterTeacherRawText(i)||'').trim();
-  if(!planText) return '';
-  const names=new Set();
-  const allWorld=[...(g.organizations||[]),...(g.institutions||[]),...(g.items||[]),...(g.terms||[]),...(g.events||[]),...(g.lifeSettings||[])];
-  allWorld.forEach(x=>{const nm=String(x&&x.name||'').trim();if(nm&&planText.includes(nm))names.add(nm);});
-  if(!names.size)return '';
-  const match=(arr)=> (Array.isArray(arr)?arr:[]).filter(x=>{const nm=String(x&&x.name||'').trim();return nm&&[...names].some(q=>nm===q||nm.includes(q)||q.includes(nm));});
-  const sections=[];
-  const sets=[['组织/势力',g.organizations,'组织/势力用于阵营、权力、冲突与人物归属。'],['职业/机构',g.institutions,'职业/机构用于人物工作身份、社会运行与专业场景。'],['物品/道具',g.items,'物品/道具用于行动资源、线索、限制与可见细节。'],['术语',g.terms,'术语用于世界内部语言、专业表达与共同认知。'],['历史事件',g.events,'历史事件用于解释过去对现在人物、组织、地点或冲突的影响。'],['生活设定',g.lifeSettings,'生活设定用于日常行为、地域/时代质感与场景真实感。']];
-  sets.forEach(([label,arr,use])=>{const hits=match(arr);if(hits.length)sections.push(`【${label}】\n${use}\n`+hits.map(x=>{const src=String(x&&x.sourceType||'')==='dictionary_foundation'?'基底':'扩充';const vals=[x.name,x.type,x.category,x.function,x.meaning,x.content,x.note,x.impact,x.usage,x.value].map(v=>String(v||'').trim()).filter(Boolean);return `- [${src}] ${vals.join('｜')}`;}).join('\n'));});
-  if(!sections.length)return '';
-  return `【本章授权世界资源包｜正式世界事实，只供本章使用】\n以下素材是词典中已存在、且被老师原始教案文本直接提及的世界事实。只有在当前事件、人物行动、场景描写或因果链真正需要时自然调用；禁止为了丰富而强行塞入，也不得修改、重定义或创造同名替代品。\n\n${sections.join('\n\n')}`;
-}
-
-function fullGlossaryChapterBlock(i){ return authorizedWorldResourceBlock(i); }
-
-
-function buildChapterUser(i, opt={}){
-  const o = state.outline || {};
-  const chap = (state.chapters && state.chapters[i]) || {};
-  const curN = i + 1;
-  const parts = [];
-  const chapterNo=Number(i)+1,groups=teacherAssignmentGroups();
-  const g=groups.find(x=>chapterNo>=Number(x.first||1)&&chapterNo<=Number(x.last||Infinity));
-  const t=g?teacherResultForAssignmentGroup(g).t:null;
-  const rawTeacherPlan=String(t?.chapterCards?.chapters?.[chapterNo]?.rawText||'').trim();
-  const _closed=!!rawTeacherPlan;
-
-  if(_closed){
-    const hasT = String(chap.title||'').trim();
-    parts.push(`【长篇小说与章节定位】\n书名：${o.title || '（未定书名）'}\n定位：第 ${curN} 章${hasT ? `《${chap.title}》` : ''}`);
-
-    parts.push(`【本章教案｜唯一来源｜纯文本原文】\n${rawTeacherPlan}\n\n【铁律】本章教案只允许使用当前老师总教案按本章头尾确定性切出的完整纯文本；不得读取、重建或替换为任何结构化教案、结构化教案链、PlotUnit、ScenePlan、旧骨架或其他第二套教案。`);
-
-    const _timeContract = _timeContractForChapter(i);
-    if(_timeContract) parts.push(_timeContract);
-
-    const microParts = [];
-
-    if(i > 0){
-      const ledger = buildDynamicProtagonistLedger(i);
-      if(ledger) microParts.push(ledger);
-
-      const rolling = buildRollingSummary(i);
-      if(rolling) microParts.push(`◆ 前文滚动剧情记忆（防长篇记忆损耗）\n${rolling}`);
-
-      parts.push(`【第三层 · 微观层（动态滚入 · 物理事实与动态状态战报包）】\n${microParts.join('\n\n')}`);
-    } else {
-      parts.push(`【第三层 · 微观层（首章开篇物理基准）】
-本章为全书第 1 章（首章开篇）：无上一章正文。首段应从实际事件/人物现场或本章执行指引规定的起点自然起笔，尽早建立核心人物、当前处境与读者可继续追问的问题。`);
-    }
-
-    const _worldPack = authorizedWorldResourceBlock(i);
-    if(_worldPack) parts.push(_worldPack);
-
-
-
-
-  } else {
-    parts.push(`【小说简介】书名：${o.title||''}\n${o.logline||''}`);
-    const _teacherPlanText = rawTeacherPlan;
-    if(i > 0){
-      const ledger = buildDynamicProtagonistLedger(i);
-      if(ledger) parts.push(ledger);
-      const rolling = buildRollingSummary(i);
-      if(rolling) parts.push(`【前文滚动摘要】\n${rolling}`);
-    }
-    const hasT = String(chap.title||'').trim();
-    const _timeContract = _timeContractForChapter(i);
-    if(_timeContract) parts.push(_timeContract);
-    parts.push(`【本章任务】第 ${curN} 章${hasT ? `《${chap.title}》` : ''}`);
-  }
-
-  if(isLong()){
-    const _ssb=storyStateChapterBlock(i); if(_ssb) parts.push(`【小说状态链｜上一章实际结算 + 本章老师原始教案】\n${_ssb}`);
-    const _qg=buildChapterInformationGuard(i); if(_qg) parts.push(_qg);
-    const _cb=buildChapterCharacterBehaviorBlock(i); if(_cb) parts.push(_cb);
-    const _cdr=buildChapterCharacterDynamicReactionBlock(i); if(_cdr) parts.push(_cdr);
-    const _cdb=buildChapterDialogueSubtextBlock(i); if(_cdb) parts.push(_cdb);
-    const _cil=buildChapterLocalInfoLedgerBlock(i); if(_cil) parts.push(_cil);
-    parts.push(chapterQualityPromptBlock());
-  }
-  parts.push(`【事件可达性硬门】写每个重大事件前，内部快速核对：前置状态是否已成立？触发线索是否存在？人物为什么会采取这一步？信息/道具/能力从哪里来？地点与时间是否可达？本事件是否会让前后因果断裂？若任一关键项缺失，不得用“突然/恰好/偶然”直接补过去。`);
-  if(isLong() && !rawTeacherPlan){ throw new Error('当前章节暂时无法取得负责老师按章切出的纯文本教案。'); }
-  parts.push(USER_PRIO_BILL);
-  if(opt.advice) parts.push(`【人工干预要求（用户指定 · 第二优先）】\n${opt.advice}`);
-
-  parts.push(`【本章教案传导铁律】本章教案唯一使用上方“本章教案｜唯一来源｜纯文本原文”。正文AI、正文“教案”、阅读“概”均不得调用或重建结构化教案链。`);
-  const _lb = chapterLenBounds() || {floor:2700, lo:3000, hi:3600};
-  const _lo = (_lb.lo>0?Math.round(+_lb.lo):3000), _hi = (_lb.hi>0?Math.round(+_lb.hi):3600);
-  const _cap = Math.max(_hi, Math.round(_hi*1.15));
-  parts.push(`【篇幅参考 · 只服务于体量，不驱动剧情】本章建议正文约 ${_lo.toLocaleString()}—${_hi.toLocaleString()} 字；没有“必须补足”的硬字数门槛，剧情完整与章末状态优先。
-【成篇写法】
-1. 只把上方“本章教案｜唯一来源｜纯文本原文”作为本章剧情任务来源，完整理解其中从章头到章末的全部内容；不得寻找、重建或依赖第二套教案。
-2. 以故事完整性为全章落点，让情节从本章开笔承接点持续推进到教案规定的章末；${_lo.toLocaleString()}—${_hi.toLocaleString()} 字仅作体量参考。正文直接以小说段落呈现，不写任何节拍小标、不做逐拍分段的拼装痕迹。
-3. 【停止优先于长度】只要最后一个必要事件已完成且【章末状态】成立，立即结束本章，即使未达到建议字数也不得继续。只有当已有事件本身明显写得过快、影响理解时，才允许在这些已发生事件内部自然补足必要表现。
-4. 自然收束：达到建议体量后，如果章末状态成立就交付；如果核心事件尚未完成，继续完成必要剧情，不因数字机械截断。无论长短，都禁止为了“再多写点”追加无关内容。`);
-
-  _dictRedlineOver = false;
-  const _b = budgetChapterContext(parts, 24000);
-  if(_dictRedlineOver){ setTimeout(()=>toast('当前上下文超出建议预算，若频繁出现请提高输出上限。'), 0); }
-  return _b.join('\n\n');
-}
-
 function rollCallGlossary(i){
   const o=state.outline||{},g=o.glossary||{},chars=Array.isArray(g.characters)?g.characters:[],places=Array.isArray(g.places)?g.places:[],props=Array.isArray(g.propernouns)?g.propernouns:[];
   if(!chars.length&&!places.length&&!props.length)return '';
@@ -19192,7 +18962,7 @@ async function genChapterCompare(i, styleA, styleB){
   const st = $('#chStatus');
   const setPhase = m => { if(st){ st.className='status'; st.textContent = `第 ${i+1}/${state.chapters.length} 章：${m||''}`; } };
   try{
-    const user = buildChapterUser(i, {regenerating:true});
+    const user = getChapterTeacherRawTextDirect(i);
     setPhase('生成 A 稿（当前风格）…');
     const txtA = await writeOneChapterContent(i, user, setPhase, null, styleA);
     setPhase('生成 B 稿（对比风格）…');
@@ -19295,7 +19065,7 @@ async function genOneChapter(i, btn, opt={}){
   }
   let _fullContent = '';
   try{
-    const user = buildChapterUser(i, {regenerating:true, advice:opt.advice, styleOverride: opt.styleOverride});
+    const user = getChapterWriterUser(i);
     const stStream = $('#chStatus');
     let _s = 0;
     const onStream = currentIsDeepSeek() ? (delta => {
@@ -19339,7 +19109,7 @@ async function genTwoChapters(pairStart){
       if(ta){ ta.value = _full2; ta.scrollTop = ta.scrollHeight; }
       patchChapter(idx);
     }) : null;
-    const txt = await writeOneChapterContent(idx, buildChapterUser(idx), null, onStream);
+    const txt = await writeOneChapterContent(idx, getChapterTeacherRawTextDirect(idx), null, onStream);
     assertChapterLocalHardGate(idx, txt);
     snapshotChapterVersion(idx);
     state.chapters[idx].content = txt;
@@ -19393,10 +19163,10 @@ async function genNChapters(start, n){
           }) : null;
           const _dyn = dynamicChapterParams(idx);
           if(isLong()){
-            const res = await callDeepSeek(longChapterSys(), buildChapterUser(idx), {maxTokens: chapterMaxTokens(), onStream, temperature: _dyn.temperature, topP: _dyn.topP, signal: _abortCtl?.signal, taskKey:'chapter'});
+            const res = await callDeepSeek(longChapterSys(), getChapterWriterUser(idx), {maxTokens: chapterMaxTokens(), onStream, temperature: _dyn.temperature, topP: _dyn.topP, signal: _abortCtl?.signal, taskKey:'chapter'});
             txt = res.text; finishReason = res.finishReason;
           } else {
-            const res = await callDeepSeek(PROMPTS.chapterSys, buildChapterUser(idx), {maxTokens: chapterMaxTokens(), temperature: _dyn.temperature, topP: _dyn.topP, signal: (_abortCtl && _abortCtl.signal), taskKey:'chapter'});
+            const res = await callDeepSeek(PROMPTS.chapterSys, getChapterWriterUser(idx), {maxTokens: chapterMaxTokens(), temperature: _dyn.temperature, topP: _dyn.topP, signal: (_abortCtl && _abortCtl.signal), taskKey:'chapter'});
             txt = res.text; finishReason = res.finishReason;
           }
           if(finishReason === 'length'){
@@ -19452,7 +19222,7 @@ async function continueTruncatedChapter(i, firstPart, resumeFrom){
   const full=resumeFrom?String(resumeFrom||''):String(firstPart||''),tail=full.slice(-800);
   const chapterNo=Number(i)+1,groups=teacherAssignmentGroups();const g=groups.find(x=>chapterNo>=Number(x.first||1)&&chapterNo<=Number(x.last||Infinity));const t=g?teacherResultForAssignmentGroup(g).t:null;
   const rawText=String(t?.chapterCards?.chapters?.[chapterNo]?.rawText||'').trim();if(!rawText)throw new Error(`第${chapterNo}章缺少按章头尾切出的纯文本教案，无法续写正文。`);
-  const user=`【本章教案｜唯一来源｜纯文本原文】\n${rawText}\n\n【前文末尾】\n${tail}\n\n【续写铁律】只依据上方本章教案纯文本与已经写出的正文尾部继续写本章；不得读取、生成或依赖 结构化教案链、PlotUnit、ScenePlan、旧骨架或任何结构化教案。直接续写自然小说正文，不解释。\n\n【续写要求】从上文中断处无缝继续，不要重复已有内容；完成本章后立即停止，不推进下一章。保持原文叙事节奏、人物称谓和风格。`;
+  const user=`【本章教案｜唯一来源｜纯文本原文】\n${rawText}\n\n${buildChapterDictionaryContext(i)}\n\n【前文末尾】\n${tail}\n\n【续写铁律】只依据上方本章教案纯文本与已经写出的正文尾部继续写本章；不得读取、生成或依赖 结构化教案链、PlotUnit、ScenePlan、旧骨架或任何结构化教案。直接续写自然小说正文，不解释。\n\n【续写要求】从上文中断处无缝继续，不要重复已有内容；完成本章后立即停止，不推进下一章。保持原文叙事节奏、人物称谓和风格。`;
   let secondPartial = '';
   const res = await callDeepSeek(longChapterSys(), user, {maxTokens: clampMaxTokens('continue'), taskKey:'chapter', onStream: (delta)=>{
     secondPartial += delta;
@@ -19610,7 +19380,7 @@ async function genManyChapters(count, fromStart){
 }
 
 async function genOneChapterNoUI(i){
-  const user = buildChapterUser(i);
+  const user = getChapterTeacherRawTextDirect(i);
   try{
     const txt = isLong()
       ? await writeOneChapterContent(i, user)
