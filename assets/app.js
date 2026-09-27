@@ -17,9 +17,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.542';
+const APP_VERSION = '1.0.543';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.542.js';
+const APP_FILE_VERSION = 'app1.0.543.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -18597,9 +18597,35 @@ function _dictMatched(arr, raw){
   return (Array.isArray(arr)?arr:[]).filter(x=>x&&String(x.name||'').trim()&&_dictMentioned(x,raw));
 }
 function _dictFormatEntry(x){
-  if(!x) return '';
-  const keys=['name','type','category','identity','age','gender','appearance','hobby','relation','trait','catchphrase','function','meaning','content','note','impact','usage','value','scope','rule','limit','stance','audience','location','era','participants','course'];
-  return keys.map(k=>{const v=String(x[k]??'').trim();return v?`${k}=${v}`:'';}).filter(Boolean).join('｜');
+  if(!x || typeof x!=='object') return '';
+  // 正文只需要“事实”，不要把数据库字段名（name= / type= / definitions=JSON 等）当成提示词内容。
+  const labels={
+    name:'名称', type:'类型', category:'类别', identity:'身份', age:'年龄', gender:'性别',
+    appearance:'外貌', hobby:'习惯', relation:'关系', trait:'性格', catchphrase:'口头禅',
+    function:'作用', meaning:'含义', content:'内容', note:'备注', impact:'影响', usage:'用法',
+    value:'价值', scope:'范围', rule:'规则', limit:'限制', stance:'立场', audience:'对象',
+    location:'地点', era:'时代', participants:'参与者', course:'经过'
+  };
+  const keys=Object.keys(labels);
+  const parts=[];
+  keys.forEach(k=>{
+    const v=String(x[k]??'').trim();
+    if(!v || /^(?:json|null|undefined|empty|none)$/i.test(v)) return;
+    parts.push(`${labels[k]}：${v}`);
+  });
+  return parts.join('；');
+}
+
+function sanitizeChapterWriterContext(raw){
+  let out=String(raw||'');
+  // 只在“正文最终输入边界”过滤机器噪声，不修改任何底层 state 对象。
+  out=out.replace(/\[\s*STYLE_STRATEGY\s*\][\s\S]*?\[\s*\/\s*STYLE_STRATEGY\s*\]/gi,'');
+  out=out.replace(/\[\s*PRINCIPAL_CHAPTER\s*\][\s\S]*?\[\s*\/\s*PRINCIPAL_CHAPTER\s*\]/gi,'');
+  // 空机器字段：schema= / protocol= / xxxDefinitions=JSON / xxxEntries=JSON 等不得进入正文。
+  out=out.replace(/^[ \t]*(?:[A-Za-z_$][\w$]*)(?:Entries|Definitions|Schema|Protocol)\s*=\s*(?:JSON|\{\s*\}|\[\s*\]|null|undefined)?\s*$/gim,'');
+  out=out.replace(/^[ \t]*(?:schema|protocol|protocolVersion|parseStatus|sourceBucket|debug|internal|internalId|machine|folded|timestamp|createdAt|updatedAt)\s*=\s*(?:[^\n]*)$/gim,'');
+  out=out.replace(/\n{3,}/g,'\n\n').trim();
+  return out;
 }
 function buildChapterDictionaryContext(i){
   const raw=getChapterTeacherRawTextDirect(i);
@@ -18643,12 +18669,8 @@ function buildChapterDictionaryContext(i){
   return sections.length ? `【本章词典/世界资料｜只读辅助上下文】\n以下资料不是第二份教案，不改变老师原始教案；只用于核对人物九维、名称、世界事实、关系和世界运转规则。未列出的词典条目本章不得因词典存在而自行调用。\n\n${sections.join('\n\n')}` : '【本章词典/世界资料｜只读辅助上下文】\n本章教案没有命中可注入的词典条目；不得因为词典存在其它条目而自行扩大。';
 }
 function sanitizeChapterWriterRawText(raw){
-  let out=String(raw||'');
-  // 正文输入最后一道确定性隔离：旧存档/异常老师输出若残留校长机器协议，只移除机器协议块，不重写正常老师教案。
-  out=out.replace(/\[\s*STYLE_STRATEGY\s*\][\s\S]*?\[\s*\/\s*STYLE_STRATEGY\s*\]/gi,'');
-  out=out.replace(/\[\s*PRINCIPAL_CHAPTER\s*\][\s\S]*?\[\s*\/\s*PRINCIPAL_CHAPTER\s*\]/gi,'');
-  out=out.replace(/\n{3,}/g,'\n\n').trim();
-  return out;
+  // 老师原始教案仍是唯一剧情权威；这里只做确定性的机器协议/空字段隔离，绝不重新总结或改写教案。
+  return sanitizeChapterWriterContext(raw);
 }
 function getChapterWriterUser(i){
   // 正文动态内容的唯一主入口：老师本章原始教案。
@@ -18661,11 +18683,12 @@ function getChapterWriterUser(i){
 
   const parts=[
     `【本章老师原始教案｜唯一内容权威】\n${teacher}`,
-    continuity,
-    dict
+    sanitizeChapterWriterContext(continuity),
+    sanitizeChapterWriterContext(dict)
   ].filter(Boolean);
 
-  return parts.join('\n\n');
+  // 最后一层只清理空机器字段/历史协议；不删除正常中文事实，不改变老师教案语义。
+  return sanitizeChapterWriterContext(parts.join('\n\n'));
 }
 
 // 正文最终注入唯一组装入口：正文真实 AI 请求与“注入导出”共用同一份 system/user。
