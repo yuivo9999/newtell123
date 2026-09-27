@@ -17,9 +17,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.539';
+const APP_VERSION = '1.0.540';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.539.js';
+const APP_FILE_VERSION = 'app1.0.540.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -84,7 +84,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.539.js — 三层职责固化：校长唯一GLOBAL，老师按章施工HYBRID/CHAPTER。 */
+/* APP VERSION: app1.0.540.js — 校长注入链安全去重：唯一GLOBAL来源、合并重复风格资料、移除重复上下文包装。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -6343,10 +6343,19 @@ function buildChapterStrategiesFromPrincipal(plans, targetCount){
  * 老师：读取校长唯一GLOBAL；根据每章剧情自行决定并施工HYBRID/CHAPTER；GLOBAL原义继承。
  * 正文：不重新组合该资料，最终只读取老师rawText。
  */
-function principalOptimizedStyleCatalog(){
+function principalOptimizedStyleCatalog(option){
   const tags=Array.isArray(state.chapterStyle?.tags)?state.chapterStyle.tags:[], lib=writeStyleLib(), entries=[];
-  for(const id of tags){ const x=lib.find(v=>String(v?.id||'')===String(id)); if(x) entries.push({id:String(x.id),name:String(x.name||x.id),category:String(x.cat||x.category||''),note:String(x.note||''),tips:Array.isArray(x.tips)?x.tips.slice():[],avoid:Array.isArray(x.avoid)?x.avoid.slice():[],check:Array.isArray(x.check)?x.check.slice():[]}); }
-  return {source:'用户在“写作风格”卡片中选定的词条（即优化后写作风格的表达层基础）',selectedCount:entries.length,entries};
+  const seen=new Set();
+  for(const id of tags){
+    const x=lib.find(v=>String(v?.id||'')===String(id));
+    if(x){ const k=String(x.id); if(seen.has(k)) continue; seen.add(k); entries.push({id:k,name:String(x.name||x.id),category:String(x.cat||x.category||''),note:String(x.note||''),tips:Array.isArray(x.tips)?x.tips.slice():[],avoid:Array.isArray(x.avoid)?x.avoid.slice():[],check:Array.isArray(x.check)?x.check.slice():[]}); }
+  }
+  /* 1.0.540：继承＋补充不再作为第二份风格来源。只把真正独有的补充词条合并进同一个权威风格资料包；同ID继承项若已存在于用户选定词条中则去重。 */
+  const extra=extractOptimizationStyleInheritanceSupplement(option||{});
+  const addExtra=(x)=>{ const k=String(x?.id||'').trim(); if(!k||seen.has(k)||!String(x?.name||'').trim()) return; seen.add(k); entries.push({id:k,name:String(x.name),category:'supplement',note:String(x.definition||x.features||x.attributes||'').trim(),tips:[],avoid:[],check:[],supplement:true,reason:String(x.reason||'').trim()}); };
+  (extra.inheritance||[]).forEach(addExtra);
+  (extra.supplements||[]).forEach(addExtra);
+  return {source:'唯一写作风格权威资料包（用户已选词条 + 优化构想中真正独有的继承/补充词条）',selectedCount:entries.length,entries};
 }
 /* 1.0.536：优化构想“继承＋补充”唯一权威资料包。
  * 只读取已经确定的优化构想结果；绝不生成、改写、解释或补充风格。
@@ -6364,12 +6373,6 @@ function extractOptimizationStyleInheritanceSupplement(option){
   const supplements=Array.isArray(raw.supplements)?raw.supplements.map(x=>cleanEntry(x,true)).filter(x=>x.id&&x.name):[];
   return {source:'optimization_concept',supplementStatus:supplements.length?'present':'none',inheritance,supplements};
 }
-function optimizationStyleInheritanceSupplementBlock(option){
-  const p=extractOptimizationStyleInheritanceSupplement(option);
-  const fmt=(x,reason)=>`- ${x.id}｜${x.name}｜${x.definition}｜属性：${x.attributes}｜特征：${x.features}｜表现：${x.manifestations}｜例子：${x.examples}${reason?`｜补充原因：${x.reason}`:''}`;
-  return `【优化构想｜继承＋补充｜唯一权威资料】\n这是优化构想阶段已经确定的写作风格资料，不是让下游重新创造风格。\n\n【继承】\n${p.inheritance.length?p.inheritance.map(x=>fmt(x,false)).join('\n'):'无'}\n\n【补充】\n${p.supplements.length?p.supplements.map(x=>fmt(x,true)).join('\n'):'无'}\n\n【使用说明】\n继承=用户已选原有写作风格词条及其完整资料；不得改义、弱化、删除或扩大。\n补充=仅在实际选项与故事存在明确风格缺口时由优化构想新增；无明确缺口时必须为“无”。补充词条已经具备完整定义、属性、特征、表现、例子和补充原因；校长与老师不得再次创造、重定义或扩大补充。内部id仅用于程序匹配，AI必须依据中文词条和完整资料执行。`;
-}
-
 function principalStyleEntryIds(v){ const a=parsePrincipalJsonField(v,[]); return Array.isArray(a)?a.map(x=>typeof x==='string'?x:String(x?.id||'')).map(x=>x.trim()).filter(Boolean):[]; }
 function readableStyleEntries(ids){
   return principalStyleEntryIds(ids).map(id=>{ const x=writeStyleById(id); return x?`【${x.name||id}】${x.note?`：${x.note}`:''}`:`【${id}】（未找到本地词条定义，不得让下游猜测其含义）`; }).join('、');
@@ -6386,9 +6389,9 @@ function principalSourceBlocks(groups, targetCount){
 
   if(canonical) _ppAddSource(out,'canonical_story_strategy','当前有效故事战略·唯一权威',canonical,'highest','canonical_story_strategy');
 
-  _ppAddSource(out,'optimized_writing_style','优化后写作风格·已选词条完整定义',principalOptimizedStyleCatalog(),'highest','optimized_writing_style');
   const adopted=currentCanonicalStoryStrategy();
-  _ppAddSource(out,'optimized_style_inheritance_supplement','优化构想·继承＋补充·唯一权威写作风格资料',extractOptimizationStyleInheritanceSupplement(adopted||{}),'highest','optimization_style_inheritance_supplement');
+  /* 1.0.540：风格资料只进入一个权威来源，避免“已选词条”与“继承＋补充”各注入一次。 */
+  _ppAddSource(out,'optimized_writing_style','唯一写作风格权威资料·已选词条与独有继承/补充已合并去重',principalOptimizedStyleCatalog(adopted||{}),'highest','optimized_writing_style');
 
   /* navBeacon/diversityProfile 已属于 canonical 内部组成，不再重复作为独立来源。 */
   _ppAddSource(out,'book_structure','全书章节结构·唯一数量与目录依据',_principalChapterStructure(targetCount),'highest','outline_structure');
@@ -6424,30 +6427,20 @@ function principalSourceBlocks(groups, targetCount){
 function principalSourceLedger(blocks){
   return (blocks||[]).map((b,i)=>`【来源${i+1}｜${b.id}｜${b.label}｜权限=${b.authority}｜优先级=${b.priority}】\n${b.content}`).join('\n\n');
 }
-function _principalStructuredContext(blocks){
-  const ctx={schema:'principal-decision-context-v1',sources:{}};
-  (blocks||[]).forEach(b=>{
-    try{ctx.sources[b.id]=JSON.parse(b.content);}catch(e){ctx.sources[b.id]=b.content;}
-  });
-  return ctx;
-}
 function principalCompactSourceBlocks(groups, targetCount){
-  /* 兼容旧调用名，但不再做任何字符截断。 */
+  /* 1.0.540：兼容旧调用名；不再构造未被使用的结构化JSON副本，也不做字符截断。 */
   const blocks=principalSourceBlocks(groups,targetCount);
-  const ctx=_principalStructuredContext(blocks);
-  const serialized=JSON.stringify(ctx);
-  console.info('[Principal] 决策上下文：',serialized.length.toLocaleString(),'字符；来源数：',blocks.length,'（结构化整合，无字符截断）');
+  console.info('[Principal] 决策上下文：',blocks.length,'个唯一来源（不重复构造结构化副本）');
   return blocks;
 }
 
-/* v1.0.418 · Principal Decision Context：结构化整合后直接交给校长，不再使用字符 slice 截断。 */
+/* 1.0.540：USER只发送一次真实来源正文；不再同时发送完整ledger + 完整manifest。 */
 function principalFinalContext(baseUser, understanding, blocks, contextMode){
-  const manifest=(blocks||[]).map((b,i)=>`来源${i+1}：${b.id}｜${b.label}｜权限=${b.authority}｜优先级=${b.priority}｜原文字符数=${String(b.content||'').length}`).join('\n');
   const ledger=principalSourceLedger(blocks||[]);
   const hasUnderstanding=!!String(understanding||'').trim();
   const sourceSection=hasUnderstanding
-    ? `【来源清单（已完成结构化决策上下文整合）】\n${manifest}\n\n【上下文理解层】\n${understanding}`
-    : `【来源总账（校长专用结构化决策上下文）】\n${ledger}\n\n【来源清单】\n${manifest}\n\n【上下文处理模式】已按上游AI产物的独特决策价值完成吸收、去重与职责路由；不注入正文全文、老师微拍施工细节、旧章节规划或程序运行状态。`;
+    ? `【来源总账（已完成唯一来源整合）】\n${ledger}\n\n【上下文理解层】\n${understanding}`
+    : `【来源总账（校长专用唯一决策上下文）】\n${ledger}\n\n【上下文处理模式】已按上游AI产物的独特决策价值完成吸收、去重与职责路由；每个权威来源只注入一次，不再重复发送同一来源的结构化副本、manifest或ledger索引。`;
   return `${baseUser}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${sourceSection}\n\n【最终决策要求】\n- 先综合全部来源，再开始规划；不要只依据某一个来源。\n- 用户明确选择/要求、词典已成立事实、正文已观测事实不得被下游规划擅自改写。\n- 当来源冲突时，按既有权限链处理并在规划中保持边界，不要偷偷“修正”原始事实。\n- 每一项重要规划结论都应能追溯到一个或多个来源。\n- 最终必须严格输出四层协议：[BOOK_STRATEGY]一次、[STAGE_STRATEGY]按系统阶段数量、[TEACHER_GROUP_STRATEGY]按系统老师组数量、[PRINCIPAL_CHAPTER]按目标章节数量；不得输出Markdown章节卡或第二套战略。`;
 }
 
@@ -7381,8 +7374,7 @@ CHAPTER：老师根据具体章节自身剧情与微拍，在实际备课时决�
 
 【STYLE_STRATEGY 输出规则】
 必须先读取【优化后写作风格·已选词条完整定义】，把全部已选词条作为唯一 GLOBAL 来源一次性输出；每个已选词条只能出现一次，不能复制到章节。
-STYLE_STRATEGY 只保留 globalStyle / globalStyleEntries / globalStyleDefinitions 以及正常全书写作规则字段。GLOBAL 的 Entries 与 Definitions 必须一一对应，解释必须忠实于已选词条原定义。解释只在 STYLE_STRATEGY 出现一次。
-adaptiveStyle / chapterStyle 如需保留，只能是宏观判断规则，不得列出具体词条，不得形成第二套三层来源。
+STYLE_STRATEGY 只保留唯一 GLOBAL 与正常全书写作规则字段。globalStyleEntries / globalStyleDefinitions 是程序解析所需的唯一机器映射；不得再输出adaptiveStyle / chapterStyle等第二套动态风格来源。GLOBAL的词条资料只在这一处出现一次。
 
 【PRINCIPAL_CHAPTER 职责】
 校长负责全书战略、阶段战略、老师分工、章节战略边界、chapterMiddleShape、章节功能/目标/核心事件/人物行动/时间/章末等正常战略信息。
@@ -7408,9 +7400,7 @@ information=信息释放纪律
 
 [STYLE_STRATEGY]
 globalStyle=【全书恒定风格】校长单独确定、向下不可改义的作品风格原规则。
-adaptiveStyle=老师选择HYBRID时可参考的宏观环境判断；不得列具体词条。
-chapterStyle=老师选择CHAPTER时可参考的宏观章节判断；不得列具体词条。
-globalStyleEntries=JSON数组；只能填写优化后写作风格已选词条的id；这是校长唯一GLOBAL来源；全部已选词条必须且只能出现一次。
+globalStyleEntries=JSON数组；只能填写唯一写作风格权威资料包中的词条id（用户已选词条 + 真正独有的优化继承/补充词条）；这是校长唯一GLOBAL来源；每个词条必须且只能出现一次。
 globalStyleDefinitions=JSON数组；必须与globalStyleEntries逐项对应，每项为{"id":"已选词条id","name":"中文词条名","meaning":"准确简明解释"}。
 narrativeRule=叙事执行规则
 dialogueRule=对白执行规则
@@ -7564,7 +7554,7 @@ function normalizePrincipalSchoolRules(r){
   const keys=['causality','continuity','beat','time','character','style','chapterBoundary','creationPermission','information']; const out={}; keys.forEach(k=>out[k]=String(r?.[k]||'').trim()); return out;
 }
 function normalizePrincipalStyleStrategy(r){
-  const keys=['globalStyle','adaptiveStyle','chapterStyle','narrativeRule','dialogueRule','characterRule','rhythmRule','sceneRule','emotionRule','specialMechanism','absoluteProhibitions','driftRisks','conflictPriority'];
+  const keys=['globalStyle','narrativeRule','dialogueRule','characterRule','rhythmRule','sceneRule','emotionRule','specialMechanism','absoluteProhibitions','driftRisks','conflictPriority'];
   const out={}; keys.forEach(k=>out[k]=String(r?.[k]||'').trim());
   if(!out.globalStyle) out.globalStyle=[out.narrativeRule,out.dialogueRule,out.characterRule].filter(Boolean).join('；');
   // 三层职责固化：校长只输出唯一 GLOBAL；HYBRID / CHAPTER 由老师按章决定并写入教案。
@@ -7599,13 +7589,13 @@ function parsePrincipalStrategyMachine(text, total, assignment){
       if(['globalStyleEntries','globalStyleDefinitions'].includes(k)){ const a=parsePrincipalJsonField(style[k],null); if(!Array.isArray(a)) errors.push(`STYLE_STRATEGY的${k}必须是合法JSON数组`); }
       else if(!String(style[k]||'').trim()) errors.push(`STYLE_STRATEGY缺少${k}`);
     });
-    const selected=principalOptimizedStyleCatalog().entries||[], selectedIds=selected.map(x=>x.id);
+    const selected=principalOptimizedStyleCatalog(currentCanonicalStoryStrategy()||{}).entries||[], selectedIds=selected.map(x=>x.id);
     const ge=principalStyleEntryIds(style.globalStyleEntries), all=ge;
     const dup=all.filter((x,i)=>all.indexOf(x)!==i), unknown=all.filter(x=>!selectedIds.includes(x)), missing=selectedIds.filter(x=>!all.includes(x));
     if(!ge.length) errors.push('STYLE_STRATEGY.globalStyleEntries至少需要一个已选写作风格词条');
     if(dup.length) errors.push(`STYLE_STRATEGY写作风格词条重复分配：${[...new Set(dup)].join('、')}`);
-    if(unknown.length) errors.push(`STYLE_STRATEGY包含未在当前“写作风格”卡片选定的词条：${[...new Set(unknown)].join('、')}`);
-    if(missing.length) errors.push(`STYLE_STRATEGY未把全部已选写作风格词条纳入唯一 GLOBAL 来源：${missing.join('、')}`);
+    if(unknown.length) errors.push(`STYLE_STRATEGY包含未在当前唯一写作风格权威资料包中的词条：${[...new Set(unknown)].join('、')}`);
+    if(missing.length) errors.push(`STYLE_STRATEGY未把全部唯一权威写作风格词条纳入 GLOBAL 来源：${missing.join('、')}`);
     const defs=parsePrincipalJsonField(style.globalStyleDefinitions,[]);
     if(Array.isArray(defs)){
       const got=defs.map(x=>String(x?.id||'').trim()).filter(Boolean);
