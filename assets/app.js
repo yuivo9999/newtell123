@@ -501,23 +501,6 @@ function getCurrentChapterTeacherRawText(i){
   return raw;
 }
 
-function teacherChapterCutStatus(gi){
-  const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
-  const t=teacherCurrentResult(Number(gi));
-  const total=g ? Math.max(0,Number(g.last)-Number(g.first)+1) : 0;
-  if(!g) return {status:'none',ready:0,total:0,cards:{}};
-  if(!t) return {status:'no-teacher',ready:0,total,cards:{}};
-  const cc=t.chapterCards&&typeof t.chapterCards==='object'?t.chapterCards:null;
-  const cards=cc&&cc.chapters&&typeof cc.chapters==='object'?cc.chapters:{};
-  let ready=0;
-  for(let n=g.first;n<=g.last;n++){
-    const c=cards[n];
-    if(c && c.status==='ready' && String(c.rawText||'').trim()) ready++;
-  }
-  if(ready===total && total>0) return {status:'ready',ready,total,cards,cutAt:Number(cc.cutAt)||0};
-  if(ready>0) return {status:'partial',ready,total,cards,cutAt:Number(cc?.cutAt)||0};
-  return {status:'uncut',ready:0,total,cards,cutAt:Number(cc?.cutAt)||0};
-}
 function teacherChapterCutLabel(gi){
   const st=teacherChapterCutStatus(gi);
   if(st.status==='no-teacher') return '✂️ 尚无总教案';
@@ -5771,6 +5754,11 @@ function scState(){
   state.school.noAutoRetry = state.school.noAutoRetry || {};
   state.school.stale    = state.school.stale || {};
   state.school.teachers = Array.isArray(state.school.teachers) ? state.school.teachers : [];
+  // 老数据兼容：旧老师只有 raw 时，把当前 raw 作为最初 AI 教案基准；不另建第二套正式教案来源。
+  state.school.teachers.forEach(t=>{
+    if(!t || typeof t!=='object') return;
+    if(typeof t.originalRaw!=='string') t.originalRaw=String(t.raw||'');
+  });
   scHealState();
   return state.school;
 }
@@ -5928,7 +5916,8 @@ function schoolTeacherBtn(g, i){
     <div class="sc-tc-b">
       <button type="button" class="sc-step sc-teacher ${done?'done':''}" data-scp-step="teacherSingle" data-scp-teacher="${i}" title="${label}：负责第 ${g.first}-${g.last} 章（${esc(g.stage||'')}），一次备完全组逐章教案">${done?'重新备课':`🎓 ${label}备课`}${scBadge(key)}</button>
       <button type="button" class="sc-teacher-cut-btn ${cut.status==='ready'?'ready':''} ${cut.status==='stale'?'stale':''}" data-scp-cut-teacher="${i}" ${cutDisabled?'disabled':''} title="${cutDisabled?'请先完成本老师总教案':'仅切割本老师负责章节，不调用AI'}">${cut.status==='ready'?'↻ 重新切割':'✂️ 切割教案'}</button>
-      <button type="button" class="sc-plan-btn" data-scp-plan="${i}" title="${done?('查看'+ label +'本组教案（预览 / 原始稿切换）'):'该组教案尚未生成，先生成后才能阅读'}">📖 读教案</button>
+      <button type="button" class="sc-plan-btn" data-scp-plan="${i}" title="${done?('查看'+ label +'本组教案并可编辑保存'):'该组教案尚未生成，先生成后才能阅读'}">📖 读教案</button>
+      <button type="button" class="sc-plan-btn sc-injection-export-btn" data-scp-injection-export="${i}" title="查看该老师真实 AI 请求的 SYSTEM + USER">📦 注入导出</button>
     </div>
     <div class="sc-tc-cut-row"><span class="sc-tc-final-note" style="font-weight:700">${_boundary.finalResponsible?'🎯 本项目结局负责者｜无后续老师':'🔗 有后续老师时按系统边界交接'}</span><span class="sc-tc-cut-status ${cut.status}" data-scp-cut-status>${esc(cutText)}</span><span class="sc-tc-cut-detail" data-scp-cut-detail>${esc(cut.status==='ready'?`本章纯文本教案已就绪：${cut.ready}/${cut.total}`:cut.status==='stale'?'总教案已更新，旧单章卡已失效，请重新切割':cut.status==='no-teacher'?'请先完成本老师总教案':`尚未切割本章纯文本教案：${cut.ready}/${cut.total}，点击“切割教案”后按章头尾直接切割`)}</span><button type="button" class="sc-tc-cut-more" data-scp-cut-more>查看详情 ▾</button></div>
     <div class="sc-tc-cut-list" data-scp-cut-list style="display:none">${renderTeacherCutChapterList(i)}</div>
@@ -8062,7 +8051,7 @@ async function genTeacher(btn, gi){
     if(!raw) throw new Error('老师返回空');
     _tp.outputChars=raw.length;
     const sc=scState(); delete sc.stale[key];
-    sc.teachers[gi]={gi,teacherCode:g.teacherCode||teacherCodeForIndex(gi),ts:Date.now(),updatedAt:Date.now(),raw,parseStatus:'raw-only'};
+    sc.teachers[gi]={gi,teacherCode:g.teacherCode||teacherCodeForIndex(gi),ts:Date.now(),updatedAt:Date.now(),raw,originalRaw:raw,lastInjection:{system:String(TEACHER_SYS||''),user:String(_teacherUser||'')},parseStatus:'raw-only'};
     scSetFailed(key,false); scSetError(key,null,false,false);
     scState().noAutoRetry=scState().noAutoRetry||{}; delete scState().noAutoRetry[key];
     const _persistStart=performance.now(); await persistCritical('老师教案原始内容保存');
@@ -8436,6 +8425,15 @@ function bindSchoolSteps(){
   $$('[data-scp-cut-teacher]').forEach(b=>{ if(b._cutB) return; b._cutB=1; b.onclick=e=>{ e.preventDefault(); e.stopPropagation(); }; });
   $$('[data-scp-cut-more]').forEach(b=>{ if(b._moreB) return; b._moreB=1; b.onclick=()=>{ const card=b.closest('[data-scp-teacher-card]'); const list=card?.querySelector('[data-scp-cut-list]'); if(!list) return; const on=list.style.display!=='none'; list.style.display=on?'none':''; b.textContent=on?'查看详情 ▾':'收起详情 ▴'; }; });
   $$('[data-scp-plan]').forEach(b=>{ b.onclick = ()=> openSchoolPlanReader(+b.dataset.scpPlan); });
+  if(!document._teacherInjectionDelegate){
+    document._teacherInjectionDelegate=1;
+    document.addEventListener('click',e=>{
+      const b=e.target.closest?.('[data-scp-injection-export]');
+      if(!b) return;
+      e.preventDefault(); e.stopPropagation();
+      openTeacherInjectionExport(Number(b.dataset.scpInjectionExport));
+    },true);
+  }
   const pv = $('[data-scp-plan-pr]');
   if(pv) pv.onclick = ()=> openSchoolPrincipalReader();
 }
@@ -8490,38 +8488,131 @@ function teacherCurrentResultForGroup(g){
   return teacherResultForAssignmentGroup(g).t || null;
 }
 
+function teacherInjectionTextForGroup(gi){
+  const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
+  if(!g) return null;
+  const resolved=teacherResultForAssignmentGroup(g), t=resolved.t;
+  if(!t || !String(t.raw||'').trim()) return null;
+  // 纯读取：直接复用老师真实 AI 请求的 SYSTEM + USER 组装逻辑，不调用 AI。
+  const cached=t.lastInjection&&typeof t.lastInjection==='object'&&String(t.lastInjection.system||'').trim()&&String(t.lastInjection.user||'').trim() ? t.lastInjection : null;
+  return { gi:Number(gi), label:groups.length>1?`老师${Number(gi)+1}`:'老师', system:cached?String(cached.system):String(TEACHER_SYS||''), user:cached?String(cached.user):String(buildTeacherUser(g,Number(gi))||'') };
+}
+function teacherInjectionFileName(gi){
+  const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
+  const code=String(g?.teacherCode||teacherCodeForIndex(Number(gi))).replace(/[^A-Za-z0-9_-]/g,'_');
+  return `老师${Number(gi)+1}_${code}_注入.txt`;
+}
+function openTeacherInjectionExport(gi){
+  const inj=teacherInjectionTextForGroup(gi);
+  if(!inj){ toast('该老师教案尚未生成，暂时没有可导出的真实 AI 注入'); return; }
+  const text=`【SYSTEM】\n${inj.system}\n\n【USER】\n${inj.user}`;
+  const ov=document.createElement('div'); ov.className='gs-overlay teacher-injection-overlay';
+  ov.innerHTML=`<div class="gs-modal teacher-injection-modal" role="dialog" aria-modal="true" aria-label="老师注入导出">
+    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div><b>🎓 ${esc(inj.label)} · 注入导出</b><span class="muted" style="margin-left:8px;font-size:11px">真实老师 AI 请求 · SYSTEM + USER</span></div>
+      <button type="button" class="gs-x" data-ti-close>✕</button>
+    </div>
+    <div style="padding:12px 16px;flex:1;min-height:0;display:flex">
+      <textarea class="teacher-injection-text" readonly spellcheck="false" style="display:block;width:100%;height:100%;min-height:420px;box-sizing:border-box;resize:none;overflow:auto;white-space:pre-wrap;word-break:break-word;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;padding:0 16px 16px;flex:0 0 auto">
+      <button type="button" class="btn" data-ti-copy>复制</button>
+      <button type="button" class="btn primary" data-ti-txt>导出TXT</button>
+    </div>
+  </div>`;
+  const st=document.createElement('style'); st.textContent='.teacher-injection-modal{width:min(920px,90vw)!important;height:min(760px,84vh)!important;max-width:none!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}@media(max-width:600px){.teacher-injection-modal{width:94vw!important;height:84vh!important}}';
+  st.id='teacherInjectionExportStyle';
+  if(!document.getElementById(st.id)) document.head.appendChild(st);
+  document.body.appendChild(ov);
+  const ta=ov.querySelector('.teacher-injection-text'); ta.value=text;
+  const close=()=>ov.remove();
+  ov.querySelector('[data-ti-close]').onclick=close;
+  ov.addEventListener('click',e=>{
+    if(e.target===ov) close();
+    const cp=e.target.closest('[data-ti-copy]');
+    if(cp){ e.preventDefault(); e.stopPropagation(); copyText(text); }
+    const ex=e.target.closest('[data-ti-txt]');
+    if(ex){ e.preventDefault(); e.stopPropagation(); downloadPlainText(teacherInjectionFileName(gi),text); toast('老师注入 TXT 已导出'); }
+  });
+  ta.focus(); ta.setSelectionRange(0,0); ta.scrollTop=0;
+}
+
+function markTeacherChapterCardsStale(t){
+  if(!t || !t.chapterCards || typeof t.chapterCards!=='object') return false;
+  const cc=t.chapterCards;
+  cc.stale=true;
+  if(cc.chapters && typeof cc.chapters==='object') Object.values(cc.chapters).forEach(c=>{ if(c && c.status==='ready') c.status='stale'; });
+  return true;
+}
+function teacherChapterCutStatus(gi){
+  const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
+  const t=teacherCurrentResult(Number(gi));
+  const total=g ? Math.max(0,Number(g.last)-Number(g.first)+1) : 0;
+  if(!g) return {status:'none',ready:0,total:0,cards:{}};
+  if(!t) return {status:'no-teacher',ready:0,total,cards:{}};
+  const cc=t.chapterCards&&typeof t.chapterCards==='object'?t.chapterCards:null;
+  const cards=cc&&cc.chapters&&typeof cc.chapters==='object'?cc.chapters:{};
+  if(cc?.stale) return {status:'stale',ready:0,total,cards,cutAt:Number(cc.cutAt)||0};
+  let ready=0;
+  for(let n=g.first;n<=g.last;n++){
+    const c=cards[n];
+    if(c && c.status==='ready' && String(c.rawText||'').trim()) ready++;
+  }
+  if(ready===total && total>0) return {status:'ready',ready,total,cards,cutAt:Number(cc.cutAt)||0};
+  if(ready>0) return {status:'partial',ready,total,cards,cutAt:Number(cc?.cutAt)||0};
+  return {status:'uncut',ready:0,total,cards,cutAt:Number(cc?.cutAt)||0};
+}
+
 function openSchoolPlanReader(gi, jumpCh){
   const sc=scState();
-  const t=sc&&sc.teachers&&sc.teachers[gi];
-  const g=teacherAssignmentGroups()[gi];
+  const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
   if(!g){ toast('未找到该章节分组'); return; }
+  const resolved=teacherResultForAssignmentGroup(g), t=resolved.t;
   if(!t || !String(t.raw||'').trim()){
     toast(`第${g.first}-${g.last}章的老师教案尚未生成，请先完成对应老师备课`);
     return;
   }
-  const label=teacherAssignmentGroups().length>1?`老师${gi+1}`:'老师';
-  const currentTeacher=teacherCurrentResult(gi);
-  const ov=document.createElement('div'); ov.className='gs-overlay';
-  ov.innerHTML=`<div class="gs-modal school-plan-modal">
-    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+  const label=groups.length>1?`老师${Number(gi)+1}`:'老师';
+  const original=String(t.originalRaw||t.raw||'');
+  if(typeof t.originalRaw!=='string') t.originalRaw=original;
+  const ov=document.createElement('div'); ov.className='gs-overlay teacher-plan-edit-overlay';
+  ov.innerHTML=`<div class="gs-modal school-plan-modal teacher-plan-edit-modal" style="max-width:920px;display:flex;flex-direction:column;max-height:84vh">
+    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto">
       <div><b>🎓 ${label} · 本组教案</b><span class="sc-plan-meta muted" style="margin-left:10px">${g.stage?`段「${esc(g.stage)}」 · `:''}第 ${g.first}-${g.last} 章 · ${g.last-g.first+1} 章</span></div>
       <button class="gs-x" data-sp-close>✕</button>
     </div>
-    <div class="sc-plan-body" style="max-height:72vh;overflow:auto;padding:12px 16px 20px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;padding:6px 12px;border-radius:8px;background:var(--panel2);border:1px solid var(--line)">
-        <span style="font-size:12px;font-weight:700;color:var(--txt)">📄 老师逐章教案 · 原稿纯文本</span>
-        <button type="button" class="btn small" id="scCopyPlanBtn" style="font-size:11.5px;padding:3px 12px;border-radius:6px;cursor:pointer">📋 复制纯文本全文</button>
-      </div>
-      <pre class="sc-plan-raw" style="user-select:text;white-space:pre-wrap;margin:0"></pre>
+    <div style="padding:12px 16px 10px;flex:0 0 auto;display:flex;gap:8px;align-items:center">
+      <button type="button" class="btn small" data-plan-restore>恢复原先教案</button>
+      <button type="button" class="btn primary small" data-plan-save>保存目前修改</button>
+      <span class="muted" style="font-size:11px">编辑期间不会改变正式教案；只有保存后才生效。</span>
+    </div>
+    <div style="padding:0 16px 16px;flex:1;min-height:0;display:flex">
+      <textarea class="teacher-plan-editor" spellcheck="false" style="display:block;width:100%;height:100%;min-height:420px;box-sizing:border-box;resize:vertical;overflow:auto;white-space:pre-wrap;word-break:break-word;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea>
     </div>
   </div>`;
   document.body.appendChild(ov);
-  ov.querySelector('[data-sp-close]').onclick=()=>ov.remove();
-  ov.addEventListener('click',e=>{if(e.target===ov) ov.remove();});
-  ov.querySelector('.sc-plan-raw').textContent=t.raw;
-  const cp=ov.querySelector('#scCopyPlanBtn');
-  if(cp) cp.onclick=()=>navigator.clipboard.writeText(t.raw).then(()=>{cp.textContent='✓ 已复制全文';setTimeout(()=>cp.textContent='📋 复制纯文本全文',1800);});
+  const ta=ov.querySelector('.teacher-plan-editor'); ta.value=String(t.raw||'');
+  const close=()=>ov.remove();
+  ov.querySelector('[data-sp-close]').onclick=close;
+  ov.addEventListener('click',e=>{if(e.target===ov) close();});
+  ov.querySelector('[data-plan-restore]').onclick=async()=>{
+    if(!window.confirm('确定恢复最初 AI 生成的原始教案吗？当前正式教案会被恢复，不会调用 AI。')) return;
+    t.raw=String(t.originalRaw||'');
+    markTeacherChapterCardsStale(t);
+    ta.value=t.raw;
+    try{ await persistCritical('恢复老师原始教案'); toast('已恢复原先教案；原单章切割结果已标记为需要重新切割'); renderTeacherCutUi(Number(gi)); }
+    catch(e){ toast('保存失败：'+String(e?.message||e)); }
+  };
+  ov.querySelector('[data-plan-save]').onclick=async()=>{
+    const val=String(ta.value||'');
+    if(!val.trim()){ toast('教案不能为空'); return; }
+    t.raw=val;
+    markTeacherChapterCardsStale(t);
+    try{ await persistCritical('保存老师教案修改'); toast('目前修改已保存为正式教案；请按需要重新点击“切割教案”'); renderTeacherCutUi(Number(gi)); }
+    catch(e){ toast('保存失败：'+String(e?.message||e)); }
+  };
 }
+
 function openSchoolPrincipalReader(){
   const p=principalCurrentResult();
   if(!p){ toast('校长统筹成果尚未生成，请先点击「生成校长」'); return; }
