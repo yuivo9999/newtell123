@@ -7961,6 +7961,14 @@ function teacherScopedGlossary(g, gi, maxChar){
   return text||'（本组未从校长计划实际提及中授权额外词典资源；不得因为词典存在某条素材就自行扩大剧情。）';
 }
 
+const TEACHER_SYS = `你是长篇小说创作链中的“老师AI”。你的唯一职责是：接收校长提供的唯一全书GLOBAL与本组章节战略，结合本章剧情、微拍、人物状态、环境与施工条件，为负责章节形成可直接供正文AI执行的完整原始教案。
+
+【唯一主链】校长 → 老师 → 正文。
+【三层职责】GLOBAL只由校长确定；老师必须完整继承GLOBAL，不得重新选择、改义、弱化或创造第二套GLOBAL。HYBRID与CHAPTER只由老师按章判断、融合、详细化；校长不提供逐章HYBRID/CHAPTER答案。
+【正文出口】老师输出的是正文AI唯一的章节教案来源。正文不得再寻找校长原始STYLE_STRATEGY、globalStyleEntries、globalStyleDefinitions或其他旧三层对象。
+【输出原则】可以只有GLOBAL；只有在本章确有必要时才加入HYBRID或CHAPTER。不得为了凑三层制造动态层，不得建立第二套风格词条体系。
+【安全原则】优先忠实执行校长战略与已成立事实；不要越权改变章节任务、人物事实、因果关系、时间连续性或章末边界。输出完整、可执行、自然语言化的老师原始教案，不生成另一套并行机器教案。`;
+
 function buildTeacherUser(g,gi){
   const pr=principalCurrentResult()||{},lines=[],code=g.teacherCode||teacherCodeForIndex(gi),groups=teacherAssignmentGroups(),role=teacherRoleForIndex(gi,groups.length),assignment=buildTeacherAssignment(),finalFacts=teacherGroupBoundaryFacts(gi,assignment);
   const plans=state.school?.principal?.plans||{};
@@ -7980,7 +7988,7 @@ function buildTeacherUser(g,gi){
   lines.push(`【本次老师备课上下文｜权威总入口】\n老师代号=${code}\n系统角色=${role.role}（${role.roleLabel}）\n负责章节=${g.first}-${g.last}。\n本次任务必须覆盖负责范围内每一章，任何章节不得只写标题或一句话概述。`);
   lines.push(`【最终老师身份｜系统只读】\n最终老师=${finalFacts.finalTeacher}｜本老师是否最终负责者=${finalFacts.finalResponsible?'是':'否'}｜后续老师=${finalFacts.hasNextTeacher?finalFacts.nextTeacherCode:'无'}｜全书结局章节=${finalFacts.finalEndChapter}。`);
   lines.push(storyStateCanonBlock());
-  lines.push(optimizationStyleInheritanceSupplementBlock(currentCanonicalStoryStrategy()||{}));
+  // 三层唯一权威入口：GLOBAL只从当前校长成果的STYLE_STRATEGY读取；优化构想中的继承/补充资料不再作为第二套风格权威注入老师。
 
   lines.push(`【全书战略｜完整权威输入】\n${JSON.stringify(pr.bookStrategy||{},null,2)}`);
   const stageRows=(pr.stageStrategies||[]).filter(x=>Number(x.endChapter)>=Number(g.first)&&Number(x.startChapter)<=Number(g.last));
