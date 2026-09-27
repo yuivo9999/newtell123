@@ -4577,13 +4577,13 @@ function refreshAdvHistBadge(kind){
     if(rp){ const b = rp.querySelector('[data-advadv-hist] .ai-hist-badge'); if(b) b.textContent = histState('content').length||''; }
   }
 }
-const AI_RECIPE_SYS_PRO = `你是“AI配方助手”的写作方法设计器。你的职责只有一件事：根据已经确定的小说定位、用户明确的写作要求、上一轮需求理解结果和现有写作风格词库，设计真正可执行、彼此有明显差异的写作配方。
+const AI_RECIPE_SYS_PRO = `你是“AI配方助手”的写作方法设计器。你的职责只有一件事：根据已有小说定位、用户明确的写作要求和现有写作风格词库，在一次请求内部完成需求理解、词库覆盖判断、真实缺口判断和候选方向判断，然后直接设计真正可执行、彼此有明显差异的写作配方。
 
 【职责边界】
 配方决定“怎么写”，不决定“写什么”。不得新增、修改或偷渡人物、关系、势力、世界规则、能力、地点、秘密、谜团、事件、冲突、反转、时代背景或剧情走向。用户明确事实与已经锁定的小说方案优先于你的判断。合理推断只能用于解释写法，不得伪装成小说事实。
 
-【两阶段分工】
-上一轮只负责理解：用户要什么、已经明确什么、现有词库覆盖什么、可能缺什么。你负责第二轮：基于这些结果选择/组合写作能力并形成候选配方。不要重新做一遍完整需求分析，也不要把小说资料重新扩写。
+【单阶段内部工作】
+本次请求内部必须先完成需求理解：用户要什么、已经明确什么、现有词库覆盖什么、可能缺什么；然后直接选择/组合写作能力并形成候选配方。上述分析属于内部工作，不得输出 analysis JSON，也不得把分析结果作为第二份中间数据结构。
 
 【现有词库】
 tags 只能引用输入提供的现有词库 id。优先复用真正匹配的词条。只有现有词库确实无法覆盖一个重要的“写作方法层”缺口时，才创建 gap；如果已有词库足够覆盖，gap 必须为 null。不要因为名称相似就强行复用，也不要为了制造新意重复造词。
@@ -4643,45 +4643,27 @@ function aiRecipeCompactLib(){
     return out;
   });
 }
-function aiRecipeSecondContext(userDesc, analysis){
+function aiRecipePrompt(userDesc){
   const o = state.outline || {};
   const canonical = currentCanonicalStoryStrategy();
   const human = canonical ? (canonical.humanView || canonical.creationBlueprint || {}) : null;
   const optimized = String((human && human.optimizedIdea)||'').trim();
   let position = '';
   if(optimized){
-    // 第二轮只携带小说定位/事实边界，不再次注入完整 optimizedIdea。
+    // 单次请求：只注入必要的小说定位/事实边界，不重复注入完整 optimizedIdea；完整蓝本仍由 aiRecipeUser() 提供一次。
     const title = String(o.title||'').trim();
     const logline = String(o.logline||'').trim();
-    position = title || logline ? `【小说定位】\n书名：${title}\n简介：${logline}` : '【小说定位】已采用优化构想；具体故事事实已由第一轮分析锁定。';
+    position = title || logline ? `【小说定位】\n书名：${title}\n简介：${logline}` : '【小说定位】已采用优化构想；不得自行补造未提供的故事事实。';
   }else{
     position = `【小说定位】\n书名：${String(o.title||'').trim()}\n简介：${String(o.logline||'').trim()}`;
   }
   const req = String(userDesc||'').trim();
-  return `${position}\n\n【用户明确写作要求】\n${req || '（无额外文字要求；依据已明确的小说定位与第一轮分析设计。）'}\n\n【第一轮需求理解】\n${JSON.stringify(analysis||{})}\n\n【现有词库（AI选择专用精简表示）】\n${JSON.stringify(aiRecipeCompactLib())}`;
-}
-function aiRecipePrompt(userDesc, analysis){
+  const base = aiRecipeUser(req);
+  const lib = aiRecipeCompactLib();
   return {
     system: AI_RECIPE_SYS_PRO,
-    user: aiRecipeSecondContext(userDesc, analysis)
+    user: `${base}\n\n${position}\n\n【一次请求内部工作顺序｜不得输出】\n1. 先理解用户明确事实与明确写作要求。\n2. 区分明确事实、合理推断与未知信息；推断不得变成小说事实。\n3. 不得新增人物、剧情、世界观、能力、地点、秘密、事件、冲突、反转或其他小说设定。\n4. 检查现有词库能够覆盖哪些写作能力；能覆盖的能力优先复用现有词条。\n5. 只有现有词库确实无法覆盖重要的写作方法层能力时，才形成真实 gap；不能靠改名、同义词、形容词或顺序制造 gap。\n6. 如生成多个候选，候选之间必须具有真实执行差异，不能凑数量。\n7. 直接完成最终配方设计。\n8. 最终只输出合法 JSON 数组。\n\n【现有词库｜仅此一份精简表示】\n${JSON.stringify(lib)}\n\n【最终输出禁止出现的内部分析字段】\ninputSummary、styleRequests、coveredCapabilities、candidateDirections、possibleGaps、unknowns。以上仅为内部工作过程，不得作为最终输出结构。`
   };
-}
-
-/* 两阶段链路：第一轮读取必要小说上下文并做需求理解；第二轮只接收精简定位、用户要求、analysis 和选择所需词库，避免重复注入完整小说资料。 */
-const AI_RECIPE_ANALYSIS_SYS = `你是“AI配方助手”的输入理解器。你的工作不是生成最终配方，而是准确理解用户要求与已有小说资料，形成供下一轮配方设计使用的最小工作记忆。\n\n【只做四件事】\n1. 提取用户明确事实和明确写作要求。\n2. 区分合理推断与未知信息，不把推断当成小说事实。\n3. 判断现有词库覆盖了哪些写作能力，以及哪些能力可能存在真实缺口；只描述能力，不创建词条。\n4. 提出真正不同的候选写法方向，但不要凑数量。\n\n【绝对禁止】\n不得新增人物、剧情、世界观、能力、地点、秘密、事件、冲突、反转或其他小说设定；不得生成完整配方；不得修改用户方向。\n\n【严格输出 JSON 对象】\n{\n  "inputSummary":"准确概括用户需求",\n  "styleRequests":[],\n  "coveredCapabilities":[],\n  "candidateDirections":[{"name":"方向名","core":"核心写法差异","bestFor":"适用表达场景"}],\n  "possibleGaps":[{"capability":"可能缺失的写作能力","reason":"为什么可能缺","priority":"high|medium|low"}],\n  "unknowns":[]\n}`;
-async function aiRecipeAnalyze(userDesc){
-  const base = aiRecipeUser(userDesc);
-  const compactLib = writeStyleLib().map(s=>{
-    const out = {id:s.id,name:s.name,note:String(s.note||'').trim()};
-    if(s.cat) out.cat = s.cat;
-    if(Array.isArray(s.tips) && s.tips.length) out.tips = s.tips;
-    return out;
-  });
-  const user = `${base}\n\n【现有词库用于覆盖核对】\n${JSON.stringify(compactLib)}\n\n请只完成需求理解，不要生成最终配方。`;
-  const raw = unwrapAIResult(await callDeepSeek(AI_RECIPE_ANALYSIS_SYS,user,{maxTokens:1800,temperature:resolveTaskTemperature('recipeAnalysis'),topP:0.2,signal:_abortCtl?.signal,taskKey:'recipeAnalysis'}));
-  const j = parseJson(raw);
-  if(!j || typeof j!=='object' || Array.isArray(j)) throw new Error('AI配方助手的输入理解阶段返回无效结果');
-  return j;
 }
 
 function aiRecipeCard(){
@@ -4793,21 +4775,16 @@ function dedupeRecipeList(list){
 }
 async function aiRecipeProduce(system, user){
   const opt = { maxTokens: clampMaxTokens('recipe'), temperature:resolveTaskTemperature('recipe'), topP:0.45 };
-  const FIX = `\n\n【质量修正】删除仅靠改名、形容词或顺序制造的重复候选；只保留实际执行不同的方案。gap 必须是真实写作方法缺口，现有词库能覆盖则为 null。`;
   const FIX_JSON = `\n\n【格式修正】只输出合法 JSON 数组，不要 Markdown、解释或额外文字。`;
-  let list = null, lastJsonOk = false;
-  for(let attempt=1; attempt<=2; attempt++){
-    const sys = attempt>1 ? String(system) + (lastJsonOk ? FIX : FIX_JSON) : system;
-    const raw = unwrapAIResult(await callDeepSeek(sys, user, Object.assign({}, opt, {taskKey:'recipe'})));
-    let cands = parseAiJsonList(raw);
-    cands = dedupeRecipeList(cands);
-    cands = prepRecipeList(cands);
-    lastJsonOk = Array.isArray(cands) && cands.length > 0;
-    if(lastJsonOk){ list = cands; break; }
-  }
-  if(!list || !list.length) throw new Error('AI 未返回有效配方，请重试');
-  return list;
+  // 合并后一次生成操作只允许一次 AI API 请求；解析、去重、整理仍由本地 JS 完成。
+  const raw = unwrapAIResult(await callDeepSeek(String(system) + FIX_JSON, user, Object.assign({}, opt, {taskKey:'recipe', retry:0})));
+  let cands = parseAiJsonList(raw);
+  cands = dedupeRecipeList(cands);
+  cands = prepRecipeList(cands);
+  if(!Array.isArray(cands) || !cands.length) throw new Error('AI 未返回有效配方，请重试');
+  return cands;
 }
+
 async function aiRecipeGen(){
   const ta = $('#aiReDesc'); if(!ta) return;
   const desc = (ta.value||'').trim();
@@ -4817,9 +4794,8 @@ async function aiRecipeGen(){
   const out = $('[data-ai-recipe-out]'); if(out) out.innerHTML = `<p class="muted" style="margin:8px 0 0">⏳ AI 正在${hasLine?'依据所选方案':'根据你的描述'}设计候选配方与词条缺口……</p>`;
   const gen = $('[data-ai-recipe-gen]'); if(gen){ gen.disabled = true; gen.textContent = '生成中…'; }
   try{
-    // 两阶段链路：理解输入 → 依据理解结果设计配方，避免模型只抓关键词后机械套词库。
-    const analysis = await aiRecipeAnalyze(desc);
-    const {system, user} = aiRecipePrompt(desc, analysis);
+    // 单阶段链路：唯一一次 AI 请求在内部完成需求理解、词库判断、gap 判断与最终配方设计。
+    const {system, user} = aiRecipePrompt(desc);
     const list = await aiRecipeProduce(system, user);
     aiRp = { list, hi: 0 };
     addAiHist({ id: aiHistEntryId(), ts: Date.now(), src:'desc', desc: desc || '依据所选方案', list: JSON.parse(JSON.stringify(list)), applied:[] });
