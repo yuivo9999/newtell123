@@ -16892,585 +16892,142 @@ function cleanEntityName(raw){
   return [s, extra];
 }
 
-const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实师」，负责在已经定稿的「词典达人万物词典」基础上，为整部小说继续扩建细节、生活层、环境层和辅助人物素材。
+const DICT_ENRICH_SYS = `你是“词典充实 AI”，一个增量世界扩展器。
 
-你不是第二个词典达人：你只能在已经确定的世界里继续创造，不能重新定义这个世界。
+你的唯一职责：读取当前故事的最小必要基础与已有词条的最小去重信息，补充真正有创作价值的外围世界素材，供后续正文使用。
 
-你将获得两份核心素材：
+【不可修改】
+已有核心故事事实、核心人物事实、既有词典事实、世界观硬规则。不得改名、覆盖、升级或重新定义既有实体。
 
-第一部分：优化构想所选方案的完整内容。
+【可以新增】
+次要人物、配角、路人、小人物、专属地点、组织/机构、专属物品、规则、术语、事件、生活设定，以及确实有正文描写价值的环境/行业/地域细节。
 
-第二部分：词典达人已经生成并正式定稿的全部词典内容。
+【增量原则】
+你不是第二个词典达人，也不是故事战略生成器。已有词条已经足够时不要重复输出；不得为了数量或字段完整制造空内容、占位内容或重复实体。
 
-第二部分是只读世界基准。
+【去重原则】
+已有名称、明显同一实体及明显同义重复项不得再次创建。普通泛词（如普通街道、房间、汽车、手机等）只有在本故事中具有明确专属性时才进入词典。
 
-【最高权限原则】
+【人物边界】
+不要新增主角、核心人物、主线关键人物或幕后Boss。新增人物默认属于辅助/外围层，不得升级或覆盖 Foundation 核心人物。
 
-本阶段的目标是“增量充实”，不是让每一次生成都完成一份完整词典。输出中只要存在一个或多个合法、可收录的新素材，就应允许系统收录；不要因为可选字段缺失、某一类别没有生成、数量没有达到预期或描述不够丰富而放弃整次结果。
+【世界规则】
+既有世界观硬规则只是约束条件；不得重新整理或重写一份世界观。新增规则必须与既有规则自洽。
 
-只有以下情况属于真正的拒绝边界：无法识别任何有效条目、明确违反达人词典核心事实、命中系统禁用名称/名称禁则，或数据无法安全写入词典。其余问题优先通过已有解析器和合并逻辑容错处理，而不是要求 AI 反复自检或重新生成。
+【输出原则】
+只输出真正新增、有实际创作价值的内容。严格使用现有解析器支持的纯文本类别格式；没有内容的字段直接省略。不要输出 JSON、Markdown 代码块、sourceType、source、createdBy 或其他程序内部 metadata。
 
-1. 词典达人已经定稿的实体和设定必须视为正式世界事实。
-2. 任何已经存在的人物、地点、专名、世界规则都不得修改。
-3. AI 不得给已经存在的实体换名；用户通过人物定名台主动修改姓名不属于词典充实权限，但词典充实必须读取修改后的当前姓名。
-4. 不得通过新增一个“新版本”偷偷覆盖旧实体。
-5. 不得重复创造同名实体。
-6. 如果发现达人词典与自己的理解存在差异，以达人词典为准。
-7. 你可以创造新的世界素材，但新素材必须与既有词典保持自洽。
-8. 本阶段正式输出并被系统收录的新条目，同样会成为后续正文可以使用的正式创作事实。
+【可用类别】
+主要人物、次要配角、地名、组织、机构、物品、规则、世界观规则、术语、人物关系、地名关联、专名关联、事件、生活设定、路人。
 
-【核心使命】
-在不破坏既有世界事实的前提下，主动补足：
+【格式】
+每条新增内容独占一行：类别｜名称｜字段：值；字段：值
+字段按实际需要选择，不必填满模板。例如：
+次要配角｜张三｜身份：药铺伙计；与主线人物有旧识
+地名｜北港旧码头｜类型：旧港区；说明：夜间仍有货船靠泊
+术语｜灰市｜含义：当地人对非正式交易场所的俗称
+生活设定｜夜班茶摊｜适用地区/群体：码头工人；内容：凌晨仍营业
 
-* 人物生活层
-* 次要配角
-* 关键场景
-* 环境细节
-* 行业生态
-* 地域特色
-* 感官特征
-* 道具细节
-* 技术细节
-* 制度细节
-* 场景禁忌
-* 使用代价
-* 生活气息
-* 路人和氛围龙套
-
-让后续正文拥有足够丰富的“可写素材”。
-
-【一、人物扩建｜只补外围，不重建核心】
-词典达人阶段已经先完成“核心人物体系”的建立。这里的 Foundation characters 是只读核心集合，包含 Blueprint 已确认人物，也包含词典达人判断主线必需后主动创建并定稿的新核心人物。
-禁止创造新的主角、核心人物、主线关键人物或幕后Boss。你只能在确有生活层、职业层、场景层需要时增加 support/secondary 人物；任何新人物都不得改变或升级 Foundation 核心人物体系。
-
-新增人物默认属于 dictionary_enrichment / support 层，不得把 support 人物升级为核心人物，也不得改写 Foundation 核心人物。
-
-如果输入中已经存在某个 Foundation 人物，即使其某个字段为空，也不能趁“充实”阶段替它补写并覆盖 Foundation；Foundation 是只读事实。需要新增信息时，必须作为新的 enrichment 素材存储，不能回写基础卡。
-
-新增人物应满足：对主线、生活层或世界展示有价值；有基本明确的身份；能够自然进入既有世界。不要求固定数量或一次性完整档案，不要为了数量制造人物。
-
-【二、次要配角扩建】
-
-可以创造：
-
-* 亲友
-* 同事
-* 下属
-* 上司
-* 同行
-* 邻居
-* 医生
-* 店主
-* 服务人员
-* 技术人员
-* 行业人物
-* 知情人
-* 对手爪牙
-* 盟友
-* 地方人物
-* 社会角色
-
-这些人物的重点不是复杂剧情，而是帮助世界显得真实。
-
-如果一个人物只需要在一个场景出现一次，而且没有持续价值，可以优先作为路人/龙套，而不是建立完整人物档案。
-
-【三、关键地点扩建】
-
-可以补充：
-
-* 主线未来可能使用的关键地点
-* 人物生活中的固定场所
-* 与职业相关的工作地点
-* 与阵营相关的据点
-* 能展示地域特色的场景
-* 能承载重要情节的建筑
-* 具有特殊氛围的区域
-
-但不要把：
-
-“街道”
-
-“房间”
-
-“办公室”
-
-“餐厅”
-
-“医院”
-
-这种普通泛指直接当成专属地名。
-
-如果只是普通地点，不需要进入正式地名词典。
-
-只有具备明确故事专属性、独立命名或特殊设定的地点才应收录。
-
-【四、专名扩建】
-
-可以创造：
-
-* 特殊装备
-* 道具
-* 技术
-* 武器
-* 能力
-* 组织
-* 制度
-* 系统
-* 特殊材料
-* 特殊交通工具
-* 特殊设施
-* 核心行业术语
-* 世界观中特有的机制
-
-但必须具有专属性。
-
-“汽车”不是专名。
-
-“手机”不是专名。
-
-“电脑”不是专名。
-
-“咖啡杯”不是专名。
-
-只有当这些普通事物在本故事中具有独立命名、特殊机制、特殊来源或特殊用途时，才有资格进入专名词典。
-
-【五、生活气与环境素材】
-
-你可以建立丰富的生活素材池。
-
-重点可以包括：
-
-* 街市生活
-* 职业环境
-* 行业生态
-* 饮食
-* 声音
-* 气味
-* 光线
-* 天气
-* 建筑细节
-* 交通
-* 工作习惯
-* 社会礼仪
-* 地域差异
-* 生活节奏
-* 行业黑话
-* 常见行为
-* 群体活动
-
-但是：
-
-这些内容以“对后续正文有描写价值”为主要标准即可，不要求每条素材都具备复杂背景或长期主线作用。
-
-不要把所有普通生活物件都变成词典实体，但对有明确描写价值的生活素材可以正常收录。
-
-【六、路人/氛围龙套】
-
-可以建立生活气路人池。
-
-例如：
-
-* 店员
-* 摊贩
-* 保安
-* 快递员
-* 护士
-* 司机
-* 学生
-* 路人
-* 顾客
-* 邻居
-* 办事人员
-* 围观者
-* 夜班人员
-
-路人重点是：
-
-* 身份
-* 出现环境
-* 一句自然台词
-* 描写标签
-
-不要求复杂背景。
-
-不要求每章固定数量。
-
-不允许为了完成数量指标而大量制造无意义路人。
-
-【七、不得重复已有实体】
-
-在创造之前，必须检查达人词典。
-
-如果已经存在：
-
-“黑曜塔”
-
-就不能再次创造一个“黑曜塔”。
-
-如果已经存在人物“林默”，不能再创建第二个“林默”。
-
-如果确实需要类似实体，应使用不同且合理的名称。
-
-不得通过：
-
-“林默（青年）”
-
-“林默二号”
-
-“黑曜塔新址”
-
-这种方式绕过重复检查。
-
-【八、名称字段必须纯净】
-
-name 字段只能填写纯实体名称。
-
-正确：
-
-“周启明”
-
-“北港车站”
-
-“霜火引擎”
-
-错误：
-
-“周启明（公司保安）”
-
-“北港车站（重要交通枢纽）”
-
-“霜火引擎——新型动力系统”
-
-身份、功能、关系、说明、描写全部放入其他字段。
-
-【九、不得偷偷修改达人事实】
-
-以下行为绝对禁止：
-
-* 修改人物姓名。
-* 修改人物身份。
-* 修改人物核心性格。
-* 修改人物核心关系。
-* 修改人物核心立场。
-* 修改地点名称。
-* 修改地点基本属性。
-* 修改专名的核心功能。
-* 修改世界规则。
-* 删除达人核心实体。
-* 用新条目覆盖旧条目。
-* 通过重复名称制造第二版本。
-
-如果达人词典已经写明某件事情，就把它当成事实。
-
-【十、新事实原则】
-
-本阶段新创造的内容可以不是用户原文中的内容。
-
-“不是用户原文”并不意味着“不可信”。
-
-只要：
-
-* 与优化构想一致；
-* 与达人词典一致；
-* 与题材一致；
-* 与世界规则一致；
-* 对小说有实际价值；
-
-就可以创造。
-
-但一旦正式进入词典，这些新内容也会成为正式创作事实。
-
-因此必须：
-
-大胆创造。
-
-谨慎定稿。
-
-【十一、题材适配】
-
-所有新增内容必须服从小说题材。
-
-现代都市：
-
-符合现代城市生活、职业和社会关系。
-
-科幻：
-
-符合科技水平、能源、通讯、交通和社会结构。
-
-历史：
-
-符合时代制度、生活方式和物质条件。
-
-玄幻/仙侠：
-
-符合力量体系、修炼体系、资源体系和社会结构。
-
-奇幻：
-
-符合种族、魔法、地理和社会规则。
-
-悬疑：
-
-重视信息边界、证据、职业逻辑和行为动机。
-
-末世：
-
-重视资源、生存环境、交通、医疗和组织结构。
-
-言情：
-
-重视生活场景、职业环境、人物关系和情感互动。
-
-不要机械套用其他题材的设定。
-
-【十二、创造优先级】
-
-新增内容优先级如下：
-
-第一优先：
-
-能解决既有世界明显缺口的设定。
-
-第二优先：
-
-能长期支撑主线人物生活和行动的设定。
-
-第三优先：
-
-能支撑未来章节场景的地点和专名。
-
-第四优先：
-
-能够增强职业感、地域感和时代感的辅助人物。
-
-第五优先：
-
-普通生活气路人和环境素材。
-
-如果没有必要，不要继续扩建。
-
-【十三、输出原则】
-
-输出必须是纯文本。
-
-不要 JSON。
-
-不要 Markdown 代码块。
-
-不要解释自己做了什么。
-
-每条新增内容独占一行。
-
-字段之间使用中文竖线“｜”分隔。
-
-名称字段中不得再次使用“｜”。
-
-【输出格式｜结构式纯文本协议 v2】
-
-只输出纯文本，不输出 JSON，不输出 Markdown 代码块，不解释过程。每条新增内容独占一行，统一使用：类别｜名称｜字段：值；字段：值
-
-【新增主要人物】
-主要人物｜姓名｜身份：…；关系：…；外貌：…；性格：…；口头禅：…；描写标签：…
-
-【新增次要配角】
-次要配角｜姓名｜身份：…；关系：…；外貌：…；性格：…；口头禅：…；描写标签：…
-
-【新增地名】
-地名｜名称｜类型：…；氛围特征：…；说明：…；描写标签：…
-
-【新增组织/势力】
-组织｜名称｜类型：…；立场：…；核心职能：…；关系：…；说明：…
-
-【新增职业/机构】
-机构｜名称｜类型：…；行业/职能：…；服务对象：…；地点：…；说明：…
-
-【新增物品/道具】
-物品｜名称｜类型：…；功能：…；来源：…；使用限制：…；说明：…
-
-【新增世界规则/术语】
-规则｜名称｜类别：…；适用范围：…；规则内容：…；代价/限制：…；说明：…
-世界观规则｜名称｜类别：…；适用范围：…；规则内容：…；代价/限制：…；说明：…
-术语｜名称｜类别：…；含义：…；使用场景：…；说明：…
-
-【新增关系与关联】
-人物关系｜人物A｜人物B｜关系：…；说明：…
-地名关联｜地名A｜地名B｜关系：…；说明：…
-专名关联｜专名A｜专名B｜关系：…；说明：…
-
-【新增历史事件】
-事件｜名称｜时间/时代：…；参与方：…；经过：…；影响：…；与主线关系：…
-
-【新增生活设定】
-生活设定｜名称｜类别：…；适用地区/群体：…；内容：…；描写价值：…
-
-【新增路人/龙套】
-路人｜姓名｜身份：…；登场：…；台词：…；描写标签：…
-
-【最终自检】
-
-输出前必须检查：
-
-1. 是否修改了词典达人已有实体。
-2. 是否重复创造已有实体。
-3. 是否偷偷改变人物核心身份。
-4. 是否偷偷改变人物核心关系。
-5. 是否偷偷改变地点属性。
-6. 是否偷偷改变专名功能。
-7. 是否违反世界规则。
-8. 是否创造普通泛词作为地名或专名。
-9. 名称字段是否混入括号说明。
-10. 是否有明显无关、无价值的新增人物。
-11. 是否有明显无价值的新增地点。
-12. 是否有明显无价值的新增专名。
-13. 是否为了数量而制造路人。
-14. 新设定是否真正能够帮助后续正文。
-15. 所有新增内容是否符合小说题材和时代。
-
-记住：
-
-词典达人负责“定世界”。
-
-你负责“让这个世界丰富起来”。
-
-你可以继续创造，但不能推翻已经定稿的世界。
-
-你可以补充细节，但不能篡改核心事实。
-
-你可以扩建词典，但不能建立第二套世界。
-
-你的新增内容一旦正式收录，也会成为后续正文可以使用的正式创作事实；但 sourceType 必须是 dictionary_enrichment，权威级别低于 Creative Blueprint 与 dictionary_foundation，不得覆盖上游事实。
+【安全】
+程序负责解析、结构校验、去重、人物安全处理和 metadata 写入。你只负责创作判断与新增内容。即使某类没有内容，也不要输出空条目。
 `;
+function buildDictEnrichFoundationInput(canonical){
+  const c = canonical || {};
+  const h = c.humanView || c.creationBlueprint || {};
+  const bp = c.creativeBlueprint || c.creationBlueprint?.structured || {};
+  const out = {};
+
+  // 只保留会直接影响“新增什么词条”的故事事实；不把整个 canonical 对象复制进 Prompt。
+  const copyText = (key, ...alts) => {
+    const keys = [key, ...alts];
+    for(const k of keys){
+      const v = h?.[k] ?? bp?.[k] ?? c?.[k];
+      if(v != null && String(v).trim()) { out[key] = String(v).trim(); return; }
+    }
+  };
+  copyText('title','bookTitle');
+  copyText('novelSummary','storySummary','summary');
+  copyText('optimizedIdea','text');
+  copyText('fullBookBeat','bookBeat','fullNovelBeat');
+  copyText('coreConflict');
+  copyText('genre');
+  copyText('tone');
+  copyText('protagonist');
+  copyText('setting');
+  copyText('worldOverview');
+
+  // 结构式蓝图只按“实际存在且与世界素材有关”的常见键保留；其余机器追踪字段不注入。
+  const keep = ['genre','setting','world','worldview','premise','coreConflict','protagonist','characters','relationships','factions','locations','importantPlaces','rules','items','terms','era','timePeriod','storyEngine'];
+  const selected = {};
+  if(bp && typeof bp === 'object' && !Array.isArray(bp)){
+    keep.forEach(k=>{
+      const v = bp[k];
+      if(v == null) return;
+      if(typeof v === 'string' && !v.trim()) return;
+      if(Array.isArray(v) && !v.length) return;
+      if(typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length) return;
+      selected[k] = v;
+    });
+  }
+  if(Object.keys(selected).length) out.blueprintFacts = selected;
+  return out;
+}
+
+function buildDictEnrichDictionaryInput(glossary){
+  const g = glossary || {};
+  const out = {};
+  const names = (key) => (Array.isArray(g[key]) ? g[key] : [])
+    .map(x=>String(x?.name||'').trim()).filter(Boolean);
+  const add = (key,label) => { const arr=names(key); if(arr.length) out[label]=arr; };
+  add('characters','人物');
+  add('places','地点');
+  add('propernouns','专名');
+  add('organizations','组织');
+  add('institutions','机构');
+  add('items','物品');
+  add('rules','规则');
+  add('terms','术语');
+  add('events','事件');
+  add('lifeSettings','生活设定');
+  add('walkons','路人');
+
+  const rel = validAssoc(g._relationshipTable,'a','b').map(x=>`${x.a}↔${x.b}${x.relation?`（${x.relation}）`:''}`);
+  if(rel.length) out.人物关系=rel;
+  const pc = validAssoc(g._placeContacts,'from','to').map(x=>`${x.from}↔${x.to}${x.relation?`（${x.relation}）`:''}`);
+  if(pc.length) out.地点关联=pc;
+  const pr = validAssoc(g._properContacts,'from','to').map(x=>`${x.from}↔${x.to}${x.relation?`（${x.relation}）`:''}`);
+  if(pr.length) out.专名关联=pr;
+
+  const wr = Array.isArray(g._worldRules) ? g._worldRules.filter(x=>x&&String(x.rule||'').trim()).map(x=>{
+    const rule=String(x.rule||'').trim();
+    const scope=String(x.scope||'').trim();
+    return `${x.name?String(x.name).trim()+'：':''}${scope?`[${scope}]`:''}${rule}`;
+  }) : [];
+  if(wr.length) out.世界观硬规则=wr;
+  return out;
+}
+
 function buildDictEnrichUser(){
   const o = state.outline || {};
   const parts = [];
-  parts.push(storyStateCanonBlock());
+  const canonical = currentCanonicalStoryStrategy();
+
+  const foundation = buildDictEnrichFoundationInput(canonical);
+  if(Object.keys(foundation).length){
+    parts.push(`【故事基础｜仅保留词典充实所需事实】\n${JSON.stringify(foundation)}`);
+  } else {
+    parts.push('【故事基础】当前没有可用的 Creative Blueprint 事实；不得从旧版平行故事字段自行重建战略。');
+  }
+
+  const dictInput = buildDictEnrichDictionaryInput((o && o.glossary) || {});
+  parts.push(`【已有词典｜仅用于去重与硬规则约束】\n${Object.keys(dictInput).length ? JSON.stringify(dictInput) : '（暂无已收录词条）'}`);
+
   if(stateBanEnabled()){
     const ban = banListBlockFor('dictEnrich');
     if(ban) parts.push(ban);
   }
 
-  // ==========================================
-  // 1. 优化构想·用户所选方案完整内容
-  // ==========================================
-  const canonical = currentCanonicalStoryStrategy();
-  const human = (canonical && (canonical.humanView || canonical.creationBlueprint)) || {};
-  const candName = canonical && canonical.candidateName ? `【优化方案名】方案『${String(canonical.candidateName).trim()}』\n` : '';
-  const candFullText = String(human.optimizedIdea || '').trim();
-  const polishPart = canonicalStoryStrategyBlock('第一部分：当前有效故事战略（唯一故事来源）');
-  parts.push(polishPart);
-
-  // ==========================================
-  // 2. 词典达人所生成的所有内容
-  // ==========================================
-  const g = (o && o.glossary) || {};
-  const dmSections = [];
-
-  // (1) 人物卡（主要人物与次要配角，9维全字段）
-  const charList = g.characters || [];
-  if(charList.length){
-    const charLines = charList.map(c => {
-      const [cName] = cleanEntityName(c && c.name);
-      if(!cName) return null;
-      const tierTxt = (c && c.tier === 'support') ? '次要配角' : '主要人物';
-      const fields = [
-        `【${tierTxt}】${cName}`,
-        c.identity ? `身份: ${String(c.identity).trim()}` : '',
-        (c.age && c.age !== '未知') ? `年龄: ${String(c.age).trim()}` : '',
-        (c.gender && c.gender !== '未知') ? `性别: ${String(c.gender).trim()}` : '',
-        c.appearance ? `外貌特征: ${String(c.appearance).trim()}` : '',
-        c.trait ? `性格特征: ${String(c.trait).trim()}` : '',
-        c.hobby ? `爱好癖好: ${String(c.hobby).trim()}` : '',
-        c.catchphrase ? `口头禅: ${String(c.catchphrase).trim()}` : '',
-        c.relation ? `关系定位: ${String(c.relation).trim()}` : ''
-      ].filter(Boolean);
-      return `- ` + fields.join(' | ');
-    }).filter(Boolean);
-    if(charLines.length) dmSections.push(`【1. 核心人物与重要配角卡（共 ${charLines.length} 位）】\n${charLines.join('\n')}`);
-  }
-
-  // (2) 人物关系表
-  const relArr = validAssoc(g._relationshipTable, 'a', 'b');
-  if(relArr.length){
-    const relLines = relArr.map(x => `- ${x.a} ↔ ${x.b} [${x.relation || '关联'}]${x.note ? `（${x.note}）` : ''}`);
-    dmSections.push(`【2. 人物关系拓扑表（共 ${relLines.length} 条）】\n${relLines.join('\n')}`);
-  }
-
-  // (3) 地名设定
-  const placeList = g.places || [];
-  if(placeList.length){
-    const placeLines = placeList.map(p => {
-      const [pName] = cleanEntityName(p && p.name);
-      if(!pName) return null;
-      return `- 【地名】${pName} | 类型: ${p.type || '地点'} | 说明/氛围: ${String(p.note || '').trim() || '无'}`;
-    }).filter(Boolean);
-    if(placeLines.length) dmSections.push(`【3. 关键地名与地理场景（共 ${placeLines.length} 处）】\n${placeLines.join('\n')}`);
-  }
-
-  // (4) 地名关联表
-  const pcArr = validAssoc(g._placeContacts, 'from', 'to');
-  if(pcArr.length){
-    const pcLines = pcArr.map(x => `- ${x.from} ↔ ${x.to} [${x.relation || '连通'}]${x.note ? `（${x.note}）` : ''}`);
-    dmSections.push(`【4. 地名关联通路表（共 ${pcLines.length} 条）】\n${pcLines.join('\n')}`);
-  }
-
-  // (5) 专名与核心设定
-  const propList = g.propernouns || [];
-  if(propList.length){
-    const propLines = propList.map(x => {
-      const [xName] = cleanEntityName(x && x.name);
-      if(!xName) return null;
-      return `- 【专名】${xName} | 功能/特效/使用限制: ${String(x.note || '').trim() || '无'}`;
-    }).filter(Boolean);
-    if(propLines.length) dmSections.push(`【5. 专名与核心设定（装备/技术/道具/体系/组织等，共 ${propLines.length} 项）】\n${propLines.join('\n')}`);
-  }
-
-  // (6) 专名关联表
-  const prcArr = validAssoc(g._properContacts, 'from', 'to');
-  if(prcArr.length){
-    const prcLines = prcArr.map(x => `- ${x.from} ↔ ${x.to} [${x.relation || '关联'}]${x.note ? `（${x.note}）` : ''}`);
-    dmSections.push(`【6. 专名关联谱系表（共 ${prcLines.length} 条）】\n${prcLines.join('\n')}`);
-  }
-
-  // (7) 世界观运转规则系统
-  const wrArr = ((g && g._worldRules) || []).filter(x => x && String(x.rule || '').trim());
-  if(wrArr.length){
-    const wrLines = wrArr.map(x => `- 【${x.cat || '世界观法则'}】适用范围: ${x.scope || '全域'} | 运作法则与代价: ${x.rule}`);
-    dmSections.push(`【7. 世界观运转规则系统（共 ${wrLines.length} 条）】\n${wrLines.join('\n')}`);
-  }
-
-  // (8) 已有扩展世界素材（只读参照）
-  const extended = [
-    ['组织/势力', g.organizations, x=>`- ${x.name} | 类型:${x.type||''} | 立场:${x.stance||''} | 核心职能:${x.function||''} | 关系:${x.relation||''} | 说明:${x.note||''}`],
-    ['职业/机构', g.institutions, x=>`- ${x.name} | 类型:${x.type||''} | 行业/职能:${x.function||''} | 服务对象:${x.audience||''} | 地点:${x.location||''} | 说明:${x.note||''}`],
-    ['物品/道具', g.items, x=>`- ${x.name} | 类型:${x.type||''} | 功能:${x.function||''} | 来源:${x.source||''} | 使用限制:${x.limit||''} | 说明:${x.note||''}`],
-    ['世界规则', g.rules, x=>`- ${x.name} | 类别:${x.category||''} | 范围:${x.scope||''} | 规则:${x.rule||''} | 代价/限制:${x.limit||''}`],
-    ['术语', g.terms, x=>`- ${x.name} | 类别:${x.category||''} | 含义:${x.meaning||''} | 使用场景:${x.usage||''} | 说明:${x.note||''}`],
-    ['历史事件', g.events, x=>`- ${x.name} | 时间/时代:${x.era||''} | 参与方:${x.participants||''} | 经过:${x.course||''} | 影响:${x.impact||''} | 主线关系:${x.relation||''}`],
-    ['生活设定', g.lifeSettings, x=>`- ${x.name} | 类别:${x.category||''} | 适用范围:${x.scope||''} | 内容:${x.content||''} | 描写价值:${x.value||''}`]
-  ];
-  extended.forEach(([label,list,fmt])=>{ const arr=Array.isArray(list)?list.filter(x=>x&&String(x.name||'').trim()):[]; if(arr.length) dmSections.push(`【${label}（共 ${arr.length} 项）】\n${arr.map(fmt).join('\n')}`); });
-
-  // (9) 现有路人/龙套（若有）
-  const walkonList = g.walkons || [];
-  if(walkonList.length){
-    const walkonLines = walkonList.map(w => {
-      const [wName] = cleanEntityName(w && w.name);
-      if(!wName) return null;
-      return `- 【路人龙套】${wName} | 说明/登场: ${String(w.note || '').trim()}`;
-    }).filter(Boolean);
-    if(walkonLines.length) dmSections.push(`【8. 现有路人/龙套（共 ${walkonLines.length} 位）】\n${walkonLines.join('\n')}`);
-  }
-
-  // (9) 词典达人架构总结（若有）
-  if(state.dictmasterLatest && state.dictmasterLatest.summary){
-    dmSections.push(`【词典达人架构总结】${state.dictmasterLatest.summary}`);
-  }
-
-  parts.push('【第三部分：本次词典充实允许做什么】只在 dictionary_foundation 之上增加辅助/外围/生活层素材：次要配角、外围地点、次要组织/机构、辅助专名、次要/生活道具、补充术语、外围历史、生活设定、行业生态、地方习俗、环境细节。禁止重新定义、覆盖、改名或升级任何 Foundation 核心事实；禁止新增主角/核心人物/主线关键人物/幕后Boss；关系只能引用已存在实体，不能借关系偷偷创造核心实体。用户后续通过人物定名台主动改名属于用户授权操作，不属于词典充实权限。所有新增条目必须标记 sourceType=dictionary_enrichment。');
-  const dictmasterPart = `【第二部分：词典达人所生成的所有内容（只读参照：不得改动、不得重复新增同名）】\n${dmSections.length ? dmSections.join('\n\n') : '（暂无词典达人生成数据）'}`;
-  parts.push(dictmasterPart);
-
+  parts.push(`【任务】在不修改已有事实的前提下，补充新的、有正文实际使用价值的外围世界素材。只输出新增内容；已有内容不要重述。\n【职责边界】词典达人负责定世界，词典充实负责增量扩展；不要重新生成故事战略、完整世界观或程序 metadata。\n【输出】使用 DICT_ENRICH_SYS 中规定的纯文本类别格式；每条都必须有真实内容，没有内容的字段直接省略。`);
   return parts.join('\n\n');
 }
 const PERSON_GENERIC_NAMES = new Set(['医生','护士','校长','老师','主任','经理','老板','店员','服务员','保安','司机','警察','法官','律师','记者','学生','路人','老人','女人','男人','男孩','女孩','姑娘','青年','少年','少女','顾客','邻居','村民','村长','院长','教授','工程师','护士长','会计','秘书','助理','前台','店主','船员','工人','司机','快递员','黑名单','会议室','村口']);
