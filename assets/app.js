@@ -17,9 +17,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.538';
+const APP_VERSION = '1.0.539';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.538.js';
+const APP_FILE_VERSION = 'app1.0.539.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -84,7 +84,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.538.js — 三层职责固化：校长唯一GLOBAL，老师按章施工HYBRID/CHAPTER。 */
+/* APP VERSION: app1.0.539.js — 三层职责固化：校长唯一GLOBAL，老师按章施工HYBRID/CHAPTER。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -5759,6 +5759,11 @@ function scState(){
     if(!t || typeof t!=='object') return;
     if(typeof t.originalRaw!=='string') t.originalRaw=String(t.raw||'');
   });
+  // 1.0.539：为历史校长成果建立一次性的“原先成果”基准；以后手动保存不得覆盖它。
+  if(state.school.principal && typeof state.school.principal==='object'){
+    const p=state.school.principal;
+    if(typeof p.originalRaw!=='string' || !p.originalRaw.trim()) p.originalRaw=String(p.raw||'');
+  }
   scHealState();
   return state.school;
 }
@@ -8242,7 +8247,7 @@ async function genPrincipal(btn, opts){
         delete sc.stale.principal;
         const _principalEndingPlans = {}; Object.keys(principalPlans).forEach(n=>{ if(principalPlans[n]?.ending) _principalEndingPlans[n]=Object.assign({chapter:Number(n)},principalPlans[n].ending); });
         const principalLogicAudit = auditPrincipalPlanLogic(principalPlans, targetChapterCount);
-        sc.principal = { machine: !!principalMachine, parseStatus: principalMachine ? ((principalStrategy.valid && !_middleMissing.length) ? 'complete' : 'partial') : 'raw-only', protocolVersion:'v426', targetChapterCount, status:'ADOPTED', qcStatus:'NOT_REQUIRED', bookStrategy: principalStrategy.book, schoolRules: principalStrategy.schoolRules, styleStrategy: principalStrategy.styleStrategy, stageStrategies: principalStrategy.stages, teacherGroupStrategies: principalStrategy.teacherGroups, finalResponsibility: teacherFinalResponsibilityFacts(teacherAssignment), strategyAudit: principalStrategyAudit(principalStrategy, targetChapterCount, teacherAssignment), plans: principalPlans, chapterStrategies, managementBridge: _principalBridge, logicAudit: principalLogicAudit, ts:Date.now(), folded:false, teacherAssignment: JSON.parse(JSON.stringify(teacherAssignment)), groups: teacherAssignment.groups.map((g,gi)=>({ gi, teacherGroupId:g.teacherGroupId, teacherCode:g.teacherCode, teacherIndex:g.teacherIndex, role:g.role, stage:g.stage, startChapter:g.startChapter, endChapter:g.endChapter, chapterCount:g.chapterCount, previousTeacherGroupId:g.previousTeacherGroupId, nextTeacherGroupId:g.nextTeacherGroupId, previousEndChapter:g.previousEndChapter, nextStartChapter:g.nextStartChapter })), raw:principalTxt, titles, chapterEndingAudit: _endingCheck.audit };
+        sc.principal = { machine: !!principalMachine, parseStatus: principalMachine ? ((principalStrategy.valid && !_middleMissing.length) ? 'complete' : 'partial') : 'raw-only', protocolVersion:'v426', targetChapterCount, status:'ADOPTED', qcStatus:'NOT_REQUIRED', bookStrategy: principalStrategy.book, schoolRules: principalStrategy.schoolRules, styleStrategy: principalStrategy.styleStrategy, stageStrategies: principalStrategy.stages, teacherGroupStrategies: principalStrategy.teacherGroups, finalResponsibility: teacherFinalResponsibilityFacts(teacherAssignment), strategyAudit: principalStrategyAudit(principalStrategy, targetChapterCount, teacherAssignment), plans: principalPlans, chapterStrategies, managementBridge: _principalBridge, logicAudit: principalLogicAudit, ts:Date.now(), folded:false, teacherAssignment: JSON.parse(JSON.stringify(teacherAssignment)), groups: teacherAssignment.groups.map((g,gi)=>({ gi, teacherGroupId:g.teacherGroupId, teacherCode:g.teacherCode, teacherIndex:g.teacherIndex, role:g.role, stage:g.stage, startChapter:g.startChapter, endChapter:g.endChapter, chapterCount:g.chapterCount, previousTeacherGroupId:g.previousTeacherGroupId, nextTeacherGroupId:g.nextTeacherGroupId, previousEndChapter:g.previousEndChapter, nextStartChapter:g.nextStartChapter })), raw:principalTxt, originalRaw:(typeof sc.principal?.originalRaw==='string' && sc.principal.originalRaw.trim()) ? sc.principal.originalRaw : principalTxt, lastInjection:{system:String(sys||''),user:String(principalUser||'')}, titles, chapterEndingAudit: _endingCheck.audit };
         if(_principalEndingWarning) sc.principal.chapterEndingAuditWarning = _principalEndingWarning; else delete sc.principal.chapterEndingAuditWarning;
         storyState().docs=storyState().docs||{}; storyState().docs.schoolPlan={source:'principal-current-result',status:'ADOPTED',qcStatus:'NOT_REQUIRED',ts:Date.now(),targetChapterCount,groups:sc.principal.groups,bookStrategy:principalStrategy.book,schoolRules:principalStrategy.schoolRules,styleStrategy:principalStrategy.styleStrategy,stageStrategies:principalStrategy.stages,teacherGroupStrategies:principalStrategy.teacherGroups,finalResponsibility:teacherFinalResponsibilityFacts(teacherAssignment),managementBridge:_principalBridge,teacherAssignment:JSON.parse(JSON.stringify(teacherAssignment)),titles,plans:principalPlans,chapterStrategies,logicAudit:principalLogicAudit};
         _tp.stateWriteMs = Math.round(performance.now()-_state0);
@@ -8436,6 +8441,15 @@ function bindSchoolSteps(){
   }
   const pv = $('[data-scp-plan-pr]');
   if(pv) pv.onclick = ()=> openSchoolPrincipalReader();
+  if(!document._principalInjectionDelegate){
+    document._principalInjectionDelegate=1;
+    document.addEventListener('click',e=>{
+      const b=e.target.closest?.('[data-scp-principal-injection]');
+      if(!b) return;
+      e.preventDefault(); e.stopPropagation();
+      openPrincipalInjectionExport();
+    },true);
+  }
 }
 
 function principalCurrentResult(){
@@ -8449,8 +8463,10 @@ function saveCurrentPrincipalResult(raw, reason){
   if(!p) throw new Error('当前“读校长成果”不存在，无法保存');
   const nextRaw=String(raw||'').trim();
   if(!nextRaw) throw new Error('校长成果不能为空');
+  // 1.0.539：原先成果只在第一次建立时锁定；手动保存绝不能覆盖原先成果。
+  if(typeof p.originalRaw!=='string' || !p.originalRaw.trim()) p.originalRaw=String(p.raw||'');
   p.raw=nextRaw;
-  // 人工编辑校长成果后，同步刷新校长GLOBAL与PRINCIPAL_CHAPTER缓存；解析失败则保留旧结构，避免一次手工编辑把可用路由清空。
+  // 人工编辑校长成果后，同步刷新现有结构化路由缓存；不新建第二套三层来源。
   try{
     const a=buildTeacherAssignment();
     const parsed=parsePrincipalStrategyMachine(nextRaw, Number(p.targetChapterCount||principalTargetChapterCount()||0), a);
@@ -8478,6 +8494,74 @@ function saveCurrentPrincipalResult(raw, reason){
   refreshPrincipalUi();
   return p;
 }
+function restoreOriginalPrincipalResult(){
+  const p=principalCurrentResult();
+  if(!p) throw new Error('当前“读校长成果”不存在，无法恢复');
+  const original=String(p.originalRaw||'').trim();
+  if(!original) throw new Error('当前没有可恢复的原先成果');
+  return saveCurrentPrincipalResult(original,'restore_original');
+}
+
+function principalInjectionData(){
+  const p=principalCurrentResult();
+  if(!p) return null;
+  const cached=p.lastInjection&&typeof p.lastInjection==='object' ? p.lastInjection : null;
+  let system=String(cached?.system||'').trim();
+  let user=String(cached?.user||'').trim();
+  // 历史项目没有缓存时，只重建当前真实请求链，不发送任何 AI/API 请求。
+  if(!system || !user){
+    try{
+      const targetChapterCount=Number(p.targetChapterCount||principalTargetChapterCount()||0);
+      const teacherAssignment=buildTeacherAssignment();
+      const sourceBlocks=principalCompactSourceBlocks(teacherAssignment,targetChapterCount);
+      system=String(PRINCIPAL_SYS_STRUCTURED + `\n\n【运行时章节数量硬约束】本次全书目标章节数=${targetChapterCount}。必须且只能输出${targetChapterCount}个[PRINCIPAL_CHAPTER]块，chapter只能是1-${targetChapterCount}，不得输出越界章节。`).trim();
+      user=String(principalFinalContext(buildPrincipalUser(teacherAssignment,targetChapterCount),'',sourceBlocks,'compact-direct')||'').trim();
+    }catch(e){
+      console.debug('[Principal injection] rebuild failed',e);
+    }
+  }
+  if(!system || !user) return null;
+  return {system,user,label:'校长'};
+}
+function principalInjectionFileName(){
+  const id=String(state?.school?.principal?.ts||Date.now());
+  return `校长_注入_${id}.txt`;
+}
+function openPrincipalInjectionExport(){
+  const inj=principalInjectionData();
+  if(!inj){ toast('校长成果尚未生成，暂时没有可导出的真实 AI 注入'); return; }
+  const text=`【SYSTEM】\n${inj.system}\n\n【USER】\n${inj.user}`;
+  const ov=document.createElement('div'); ov.className='gs-overlay principal-injection-overlay';
+  ov.innerHTML=`<div class="gs-modal principal-injection-modal" role="dialog" aria-modal="true" aria-label="校长注入导出">
+    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div><b>👑 校长 · 注入导出</b><span class="muted" style="margin-left:8px;font-size:11px">真实校长 AI 请求 · SYSTEM + USER</span></div>
+      <button type="button" class="gs-x" data-pi-close>✕</button>
+    </div>
+    <div style="padding:12px 16px;flex:1;min-height:0;display:flex">
+      <textarea class="principal-injection-text" readonly spellcheck="false" style="display:block;width:100%;height:100%;min-height:420px;box-sizing:border-box;resize:none;overflow:auto;white-space:pre-wrap;word-break:break-word;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;padding:0 16px 16px;flex:0 0 auto">
+      <button type="button" class="btn" data-pi-copy>复制</button>
+      <button type="button" class="btn primary" data-pi-txt>导出TXT</button>
+    </div>
+  </div>`;
+  if(!document.getElementById('principalInjectionExportStyle')){
+    const st=document.createElement('style'); st.id='principalInjectionExportStyle'; st.textContent='.principal-injection-modal{width:min(920px,90vw)!important;height:min(760px,84vh)!important;max-width:none!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}@media(max-width:600px){.principal-injection-modal{width:94vw!important;height:84vh!important}}'; document.head.appendChild(st);
+  }
+  document.body.appendChild(ov);
+  const ta=ov.querySelector('.principal-injection-text'); ta.value=text;
+  const close=()=>ov.remove();
+  ov.querySelector('[data-pi-close]').onclick=close;
+  ov.addEventListener('click',e=>{
+    if(e.target===ov) close();
+    const cp=e.target.closest('[data-pi-copy]');
+    if(cp){e.preventDefault();e.stopPropagation();copyText(text);toast('校长注入已复制');}
+    const ex=e.target.closest('[data-pi-txt]');
+    if(ex){e.preventDefault();e.stopPropagation();downloadPlainText(principalInjectionFileName(),text);toast('校长注入 TXT 已导出');}
+  });
+  ta.focus(); ta.setSelectionRange(0,0); ta.scrollTop=0;
+}
+
 function teacherCurrentResult(gi){
   const sc=scState(), t=sc.teachers&&sc.teachers[gi];
   if(!t || !String(t.raw||'').trim()) return null;
@@ -8615,12 +8699,16 @@ function openSchoolPlanReader(gi, jumpCh){
 
 function openSchoolPrincipalReader(){
   const p=principalCurrentResult();
-  if(!p){ toast('校长统筹成果尚未生成，请先点击「生成校长」'); return; }
+  if(!p){toast('校长成果尚未生成。');return;}
+  if(typeof p.originalRaw!=='string' || !p.originalRaw.trim()){
+    p.originalRaw=String(p.raw||'');
+    persist();
+  }
   const ov=document.createElement('div'); ov.className='gs-overlay';
   ov.innerHTML=`<div class="gs-modal school-plan-modal" style="max-width:920px">
     <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
       <div><b>👑 读校长成果</b></div>
-      <div style="display:flex;align-items:center;gap:8px"><button class="gs-x" data-pr-close>✕</button></div>
+      <button class="gs-x" data-pr-close>✕</button>
     </div>
     <div class="sc-plan-body" id="scPrincipalBody" style="max-height:72vh;overflow:auto;padding:14px 18px 22px"></div>
   </div>`;
@@ -8631,12 +8719,25 @@ function openSchoolPrincipalReader(){
 }
 
 function renderSchoolPrincipalBody(ov, raw){
-  const body = ov.querySelector('#scPrincipalBody');
+  const body=ov.querySelector('#scPrincipalBody');
   if(!body) return;
-  body.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px"><div class="muted">这里直接显示校长纯文本成果。校长的 GLOBAL 只存在于 STYLE_STRATEGY 的唯一位置；HYBRID / CHAPTER 不在校长成果中预制。</div><textarea id="principalRawEditor" style="width:100%;min-height:520px;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;">${esc(raw||'')}</textarea><div style="display:flex;gap:8px;align-items:center"><button type="button" class="btn primary" id="btnSavePrincipalRaw">保存为当前校长成果</button><span class="muted">保存后老师启动直接读取当前成果。</span></div></div>`;
+  body.innerHTML=`<div style="display:flex;flex-direction:column;gap:10px">
+    <div class="muted">这里显示当前正式使用中的完整校长纯文本成果。修改只存在于当前编辑框，点击“保存目前修改”后才会成为正式成果；不会因此重新调用AI。</div>
+    <textarea id="principalRawEditor" style="width:100%;min-height:520px;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;">${esc(raw||'')}</textarea>
+    <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
+      <button type="button" class="btn" id="btnRestorePrincipalOriginal">恢复原先成果</button>
+      <button type="button" class="btn primary" id="btnSavePrincipalRaw">保存目前修改</button>
+    </div>
+  </div>`;
   const save=body.querySelector('#btnSavePrincipalRaw');
   if(save) save.onclick=()=>{
-    try{ const val=body.querySelector('#principalRawEditor').value; saveCurrentPrincipalResult(val,'manual_edit'); toast('校长成果已保存，老师将直接读取当前成果。'); const np=principalCurrentResult(); renderSchoolPrincipalBody(ov,np.raw); }catch(e){ toast(String(e?.message||e)); }
+    try{ const val=body.querySelector('#principalRawEditor').value; saveCurrentPrincipalResult(val,'manual_edit'); toast('已保存，目前成果已更新'); const np=principalCurrentResult(); renderSchoolPrincipalBody(ov,np.raw); }
+    catch(e){ toast(String(e?.message||e)); }
+  };
+  const restore=body.querySelector('#btnRestorePrincipalOriginal');
+  if(restore) restore.onclick=()=>{
+    try{ const np=restoreOriginalPrincipalResult(); toast('已恢复原先成果'); renderSchoolPrincipalBody(ov,np.raw); }
+    catch(e){ toast(String(e?.message||e)); }
   };
 }
 
@@ -13633,8 +13734,8 @@ function schoolZoneBlock(){
       </div>
       <div class="ch-right" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <button type="button" class="btn small dm-ai-action sc-principal-generate" data-scp-principal-generate style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成 / 重新生成校长统筹成果">👑 生成校长</button>
-        ${pTitles.length ? `<button type="button" class="sc-plan-btn sc-plan-apply-t ${titlesApplied?'applied':''}" data-scp-apply-titles title="${titlesApplied ? '校长已自动选用拟定标题至全书章节；点击可再次全量覆盖同步' : '一键选用校长拟定标题至全书章节'}">${titlesApplied ? `✓ 校长标题已选用 (${pTitles.length}章)` : `✨ 选用拟定标题 (${pTitles.length}章)`}</button>` : ''}
-        <button type="button" class="sc-plan-btn sc-plan-pr" data-scp-plan-pr title="查看写作守则与章节总表">📋 读校长成果</button>
+        <button type="button" class="sc-plan-btn sc-injection-export-btn" data-scp-principal-injection title="查看校长真实 AI 请求的 SYSTEM + USER">📦 注入导出</button>
+        <button type="button" class="sc-plan-btn sc-plan-pr" data-scp-plan-pr title="查看并编辑当前正式校长成果">📋 读校长成果</button>
       </div>
     </div>
     <div class="cp-body">
