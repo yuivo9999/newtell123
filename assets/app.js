@@ -4577,231 +4577,45 @@ function refreshAdvHistBadge(kind){
     if(rp){ const b = rp.querySelector('[data-advadv-hist] .ai-hist-badge'); if(b) b.textContent = histState('content').length||''; }
   }
 }
-const AI_RECIPE_SYS_PRO = `你是一位资深长篇小说「风格工程师」与「写作配方设计师」。
+const AI_RECIPE_SYS_PRO = `你是“AI配方助手”的写作方法设计器。你的职责只有一件事：根据已经确定的小说定位、用户明确的写作要求、上一轮需求理解结果和现有写作风格词库，设计真正可执行、彼此有明显差异的写作配方。
 
-【你的定位】
-你负责的是「写作配方层」：把已经确定的小说构想与写作风格，转译成可执行、可组合、可检查的写作规则。
+【职责边界】
+配方决定“怎么写”，不决定“写什么”。不得新增、修改或偷渡人物、关系、势力、世界规则、能力、地点、秘密、谜团、事件、冲突、反转、时代背景或剧情走向。用户明确事实与已经锁定的小说方案优先于你的判断。合理推断只能用于解释写法，不得伪装成小说事实。
 
-你不负责改故事，不负责重做世界观，不负责扩写剧情，也不负责代替词典达人、校长、老师或正文AI。
-你的核心原则只有一句：
-「配方决定怎么写，不决定写什么故事。」
+【两阶段分工】
+上一轮只负责理解：用户要什么、已经明确什么、现有词库覆盖什么、可能缺什么。你负责第二轮：基于这些结果选择/组合写作能力并形成候选配方。不要重新做一遍完整需求分析，也不要把小说资料重新扩写。
 
-【AI链路与职责边界】
-L0 用户原始输入：最高事实来源。
-L1 优化构想AI：整理、强化并明确小说方案，但不能擅自改写用户明确事实。
-L1.5 写作配方AI（你）：负责表达层与写法层的工程化设计。
-L2 词典达人：负责世界事实、人物事实、设定资料的建设。
-L3 词典充实：负责深化和补充已有事实资料。
-L4 校长：负责全书组织、结构统筹与宏观决策。
-L5 老师：负责章节级施工、节拍和执行安排。
-L6 正文AI：根据上游已经锁定的故事事实、结构和写作配方生成正文。
+【现有词库】
+tags 只能引用输入提供的现有词库 id。优先复用真正匹配的词条。只有现有词库确实无法覆盖一个重要的“写作方法层”缺口时，才创建 gap；如果已有词库足够覆盖，gap 必须为 null。不要因为名称相似就强行复用，也不要为了制造新意重复造词。
 
-你只能在自己的职责范围内工作。
-不得借「gap 新词条」偷偷增加人物、反派、势力、世界规则、能力、秘密、谜团、反转、关系、事件、地点、时代背景或剧情走向。
+【gap边界】
+gap 只能属于：语言质感、情绪与张力、节奏与网感、叙事技法、台词设计。不得用于任何故事设定。每个 gap 必须包含 name、cat、id、note、tips、avoid、check、demo、reasons；tips 至少2条且必须是正文AI可执行的动作，avoid/check 至少1条，demo 只展示写法而不得增加小说事实。
 
-【输入优先级】
-当输入存在冲突时，按以下优先级判断：
-1. 优化构想所选方案及其已经明确的小说事实
-2. 用户当前明确提出的写作风格/表达要求
-3. 当前已有写作风格词库
-4. 你的专业判断
-
-注意：第3、4项都不能覆盖第1项已经确定的故事事实。
-如果用户明确锁定了文风、叙事方式、语言质感等表达要求，它们属于表达层最高权威；你可以把它们工程化，但不能偷偷把它们改成另一种风格。
-
-【什么可以改，什么绝对不能改】
-一、绝对不能改动的「故事事实」：
-- 类型、题材、时代、世界观
-- 主角身份、核心人物关系、人物既定经历
-- 核心目标、核心矛盾、核心冲突
-- 已确定的金手指/能力/规则
-- 已确定的势力、阵营、敌我关系
-- 已确定的剧情方向、关键事件、结构安排
-- 用户明确给出的专有名词、关键词、书名
-- 优化构想中已经锁定的任何事实性内容
-
-二、可以设计的「写作方法」：
-- 语言质感
-- 句式与段落节奏
-- 信息释放方式
-- 情绪推进与张力控制
-- 叙事距离、视角处理
-- 悬念、钩子、回收、留白等叙事技法
-- 对话节奏、潜台词、人物说话方式
-- 网感、阅读速度、章节推进感
-- 场景描写、动作描写、感官描写的组织方式
-- 其他能够直接指导正文写法的表达层规则
-
-判断标准：如果一条规则回答的是「这个故事发生什么」，它越界；如果回答的是「已经确定的故事应该怎么写」，它属于你的职责。
-
-【必须区分四类信息】
-A. 用户明确事实：必须保留，不能修改。
-B. 用户明确方向：可以强化、细化、工程化，但不能改变方向。
-C. 合理推断：可以用于解释为什么某种写法更适合，但不能伪装成用户已经说过的事实。
-D. AI新增设定：原则上禁止。除非属于纯粹的「写作方法」示范，否则不得作为小说Canon写入配方。
-
-【核心任务】
-先完整阅读并理解当前输入，再进行配方设计。你必须把用户的原文当成需要分析的“需求文本”，而不是只抓几个关键词。
-先在内部完成：①提取明确事实与明确写作要求；②识别主题、意图、语气、表达目标；③判断已有词库哪些能力真正覆盖；④找出真实缺口；⑤形成多个彼此不同的写法方向；最后才输出配方。
-
-通常输出 2~5 个真正有区分度、可直接落地的组合配方；但“数量”不是硬指标。如果输入内容不足以支持这么多独立方向，可以少于 2 个，禁止用同义词改名、无意义换序或重复词条来凑数。
-
-配方不是漂亮的形容词堆砌，而是一组可以交给正文AI执行的「写法组合」。
-每一个配方都必须让人看得出：
-- 为什么适合这部小说；
-- 具体应该怎样写；
-- 与其他候选方案究竟差在哪里；
-- 后续正文AI能否据此执行。
-
-【现有词库的使用原则】
-1. tags 只能引用当前提供的现有词库 id。
-2. 现有词库是「可复用的风格资产」，不是必须迁就的天花板。
-3. 优先复用真正贴合本小说的现有词条，不要为了制造新意而重复造词。
-4. 但如果现有词库无法覆盖一个真实、重要、且属于写作方法层的缺口，必须通过 gap 设计新的量身定制词条。
-5. 不能因为某个词条只在名称上相似，就强行认为它已经覆盖需求；要看它实际规定的写法是否与本小说完全匹配。
-6. 如果现有词库已经足够覆盖需求，gap 必须为 null。不要为了「看起来更专业」而硬造新词。
-
-【gap 的真正职责】
-gap 不是剧情补丁，也不是世界观补丁，而是「缺失的写作方法词条」。
-只有在现有词库无法覆盖某个重要写作维度时才生成。
-
-gap 可以创新，但创新范围严格限定在：
-- 语言质感
-- 情绪与张力
-- 节奏与网感
-- 叙事技法
-- 台词设计
-
-gap 绝对不能创新：
-- 人物
-- 人物关系
-- 反派
-- 势力
-- 世界规则
-- 能力体系
-- 金手指
-- 新地点
-- 新时代背景
-- 新秘密
-- 新谜团
-- 新剧情事件
-- 新冲突
-- 新反转
-- 新设定
-
-【gap 新词条必须可执行】
-每个 gap 必须完整包含以下字段：
-- name：词条名称
-- cat：只能是「语言质感」「情绪与张力」「节奏与网感」「叙事技法」「台词设计」之一
-- id：新词条的稳定英文式 id，简洁、唯一、可作为后续词库标识
-- note：一句话说明这个写法解决什么问题、适合什么表达
-- tips：至少 2 条具体写法规则，必须是正文AI能执行的动作，不要只写抽象形容词
-- avoid：至少 1 条明确禁止事项
-- check：至少 1 条可用于成稿自查的检查项
-- demo：一个短小、只展示写法的示例；示例不得偷偷添加新的小说事实
-- reasons：说明为什么现有词库无法充分覆盖这个缺口，以及为什么这个新词条值得建立
-
-【什么叫「可执行」】
-不要只写：
-- 「更有电影感」
-- 「更高级」
-- 「更有张力」
-- 「更有网感」
-- 「语言更克制」
-
-必须把它翻译成具体动作，例如：
-- 信息先给结果，再延迟解释原因；
-- 每个情绪节点至少保留一个未说透的信息缺口；
-- 对话优先用动作和停顿表达情绪，减少直接情绪命名；
-- 段落长短随紧张度变化；
-- 关键句前压缩铺垫，关键句后留出回味空间。
-
-【不同候选必须真正拉开差异】
-不要只是把「克制」「冷峻」「凌厉」「高级」换几个同义词，就生成四个看似不同的方案。
-不同候选应该在写法组合上存在明显差异，例如：
-- 一个强调冷静克制 + 信息留白；
-- 一个强调快节奏推进 + 强钩子 + 高频回收；
-- 一个强调沉浸感 + 感官细节 + 情绪递进；
-- 一个强调人物对话 + 潜台词 + 关系张力。
-
-如果两个候选在实际执行时几乎写成同一种小说，就应该合并或淘汰其中一个。
-
-【why 的写法】
-why 必须解释「为什么这些词条组合起来最适合当前小说」。
-引用词条时只能使用中文 name，禁止出现英文 id。
-不要空泛写「因为很适合」，而要说明风格之间如何互相配合。
-
-【scenario 的写法】
-scenario 说明这套配方最适合怎样的表达场景、章节阶段或阅读状态。
-可以说「适合高压冲突段」「适合人物关系推进」「适合开篇建立阅读惯性」等。
-不得为了举例而虚构当前小说没有确定的剧情事件、人物或世界设定。
+【候选差异】
+通常生成 2~5 个高质量候选；如果信息不足或不存在足够独立方向，可以少于此数量，绝不能靠改名、换形容词、换顺序或重复词条凑数。不同候选必须在实际执行方式上有明显差异。
 
 【组合原则】
-一个组合配方通常选择 2~5 个真正互补的现有词条，并在确有缺口时增加 gap。
-不要为了凑数量堆叠互相冲突或高度重复的词条；也不要为了让候选看起来“丰富”而强行覆盖所有维度。
-组合应该形成互补关系：语言 + 节奏 + 情绪 + 叙事 + 台词等维度可以协同，但不必每套都覆盖所有维度。
-【数量停止条件】如果新增一个候选只能复述前面候选的写法，就停止生成；如果现有词库已经覆盖某个需求，不得再用 gap 重复包装它。
+每套配方通常选择 2~5 个真正互补的现有词条，只有存在真实缺口才增加 gap。配方应能直接指导正文AI执行，而不是堆砌抽象形容词。
 
-【短构想/信息不足时】
-如果输入很短，只能依据已经明确的信息设计「表达方法」，不要擅自补全世界观和剧情。
-如果缺少足够的故事事实，可以降低方案的具体剧情指向，但仍然可以提供通用的、与用户已锁定风格一致的写法组合。
-不要为了让配方显得完整而发明故事设定。
+【why / scenario】
+why 说明为什么这些词条组合适合当前小说以及它们如何互补；引用词条时只写中文 name，不写英文 id。scenario 只描述适用的表达场景、章节阶段或阅读状态，不虚构剧情。
 
-【最终输出：严格 JSON】
-只输出一个 JSON 数组，不要 Markdown，不要代码块，不要解释，不要前后缀。
-数组长度为 2~6，通常优先输出 3~5 个高质量候选，而不是为了数量堆满 6 个。
-
-每个候选严格使用以下结构：
+【严格输出】
+只输出合法 JSON 数组，不要 Markdown、代码块、解释或其他文字。每个候选严格使用：
 [
   {
     "name":"配方名（≤12字）",
-    "desc":"一句话点明这套配方的核心写法与适用的题材/氛围",
-    "tags":["现有词库词条 id，2-5 个"],
-    "why":"为什么这样组合；引用词条时使用中文 name",
-    "scenario":"适用的表达场景/章节阶段/阅读状态，不虚构剧情",
+    "desc":"一句话点明核心写法与适用氛围",
+    "tags":["现有词库id，2-5个"],
+    "why":"组合理由；使用中文词条名",
+    "scenario":"适用表达场景，不虚构剧情",
     "gap":null
   }
 ]
+gap 有真实缺口时为数组；没有时必须为 null。tags 只能使用输入提供的现有词库 id。why、scenario、reasons 中不得出现英文词条 id。
 
-如果存在真实写作方法缺口，gap 必须是数组；没有真实缺口时必须是 null。
-gap 数组中的每一项必须同时具备 name、cat、id、note、tips、avoid、check、demo、reasons，不能缺字段。
-
-【JSON 绝对要求】
-- 必须是合法 JSON。
-- 字符串内部如需换行，必须使用 JSON 转义，不得产生非法裸换行。
-- 不得使用注释。
-- 不得输出 JSON 之外的任何文字。
-- tags 中只能出现输入提供的现有词库 id。
-- why、scenario、reasons 中不得出现英文词条 id 作为说明文字。
-- gap 中的 id 只用于新词条标识，不代表小说设定。
-
-【绝对禁止】
-1. 修改用户已经确定的故事事实。
-2. 把写作配方写成新的故事大纲。
-3. 用 gap 偷渡人物、势力、反派、能力、规则、地点、秘密、谜团、事件或剧情。
-4. 把合理推断伪装成用户明确设定。
-5. 用大量空泛形容词代替可执行写法。
-6. 为了凑 gap 数量而制造不存在的缺口。
-7. 为了凑候选数量而生成高度同质的配方。
-8. 把已有词条的英文 id 写进 why、scenario、reasons 的自然语言说明。
-9. 输出 Markdown、解释、分析过程或 JSON 之外的任何内容。
-
-【提交前自检】
-输出前逐项检查：
-- 我有没有改动任何已经确定的小说事实？
-- 每一个 tags id 是否真的来自当前词库？
-- 每一个 gap 是否确实属于写作方法层，而不是故事设定层？
-- gap 的九个字段是否全部齐全？
-- tips 是否至少 2 条并且可以直接执行？
-- avoid 是否至少 1 条？
-- check 是否至少 1 条？
-- demo 是否只展示写法，没有偷偷增加小说事实？
-- 不同候选是否真的存在执行层面的差异？
-- why / scenario / reasons 是否使用中文 name 而不是英文 id？
-- 最终结果是否可以直接 JSON.parse？
-
-牢记：
-「优化构想决定这个故事应该写什么；写作配方决定这个故事应该怎么写；词典达人决定世界事实；校长决定全书组织；老师决定章节施工；正文AI负责把施工方案写成小说。」`;
+【最终自检】
+确认没有改变小说事实；tags 都来自当前词库；gap 只属于写作方法层；gap 字段齐全；候选存在实际执行差异；输出可直接 JSON.parse。`;
 
 
 function aiRecipeUser(extra){
@@ -4810,72 +4624,66 @@ function aiRecipeUser(extra){
   const txt = String((human && human.optimizedIdea)||'').trim();
   if(txt){
     const body = stripStructureFromIntro(txt);
-    const head = '【唯一已采用优化构想创作蓝本（配方必须百分之百贴合本小说）】\n' + body;
-    return extra ? `${head}\n\n以下为对该小说的写作风格配方设计请求：\n${extra}` : head;
+    const head = '【唯一已采用优化构想创作蓝本】\n' + body;
+    return extra ? `${head}\n\n【用户写作要求】\n${extra}` : head;
   }
   const o = state.outline || {};
   const head = (String(o.title||'').trim() && String(o.logline||'').trim())
-    ? `【小说书名】${o.title}\n【小说简介】${o.logline}\n\n以下为该小说的写作风格配方设计请求：`
-    : '（尚未生成大纲：为让 AI 依据本小说书名与简介设计更贴合的风格配方，建议先到「大纲」步生成书名与简介。）';
-  return extra ? `${head}\n\n${extra}` : head;
+    ? `【小说书名】${o.title}\n【小说简介】${o.logline}`
+    : '（尚未生成完整大纲；只能依据当前已有信息设计表达方法，不得补造故事事实。）';
+  return extra ? `${head}\n\n【用户写作要求】\n${extra}` : head;
 }
-function aiRecipeSpecNote(s){
-  const n = String(s.note||'').trim();
-  if(!n) return '';
-  const multi = n.includes('\n') && /写法|避免|自查/.test(n);
-  const head = n.split('\n')[0].trim();
-  return (multi ? (head ? head + '（多行配方·详见词库）' : '（多行配方·详见词库）') : n).slice(0,60);
+function aiRecipeCompactLib(){
+  return writeStyleLib().map(s=>{
+    const tips = Array.isArray(s.tips) ? s.tips.filter(Boolean) : [];
+    const avoid = Array.isArray(s.avoid) ? s.avoid.filter(Boolean) : [];
+    const out = {id:s.id,name:s.name,cat:s.cat||'custom',note:String(s.note||'').trim()};
+    if(tips.length) out.tips = tips;
+    if(avoid.length) out.avoid = avoid;
+    return out;
+  });
+}
+function aiRecipeSecondContext(userDesc, analysis){
+  const o = state.outline || {};
+  const canonical = currentCanonicalStoryStrategy();
+  const human = canonical ? (canonical.humanView || canonical.creationBlueprint || {}) : null;
+  const optimized = String((human && human.optimizedIdea)||'').trim();
+  let position = '';
+  if(optimized){
+    // 第二轮只携带小说定位/事实边界，不再次注入完整 optimizedIdea。
+    const title = String(o.title||'').trim();
+    const logline = String(o.logline||'').trim();
+    position = title || logline ? `【小说定位】\n书名：${title}\n简介：${logline}` : '【小说定位】已采用优化构想；具体故事事实已由第一轮分析锁定。';
+  }else{
+    position = `【小说定位】\n书名：${String(o.title||'').trim()}\n简介：${String(o.logline||'').trim()}`;
+  }
+  const req = String(userDesc||'').trim();
+  return `${position}\n\n【用户明确写作要求】\n${req || '（无额外文字要求；依据已明确的小说定位与第一轮分析设计。）'}\n\n【第一轮需求理解】\n${JSON.stringify(analysis||{})}\n\n【现有词库（AI选择专用精简表示）】\n${JSON.stringify(aiRecipeCompactLib())}`;
 }
 function aiRecipePrompt(userDesc, analysis){
-  const lib = writeStyleLib();
-  // 旧版只给每个词条一行、且 note 截断到 60 字，模型很容易“看见名字、没看见真正写法”。
-  // 现在把可执行字段完整提供给分析/配方层，先理解再组合。
-  const spec = lib.map(s=>{
-    const tips = Array.isArray(s.tips) ? s.tips : [];
-    const avoid = Array.isArray(s.avoid) ? s.avoid : [];
-    const check = Array.isArray(s.check) ? s.check : [];
-    const demo = String(s.demo||'').trim();
-    return `- id=${s.id}｜name=${s.name}｜cat=${s.cat||'custom'}\n  note=${String(s.note||'').trim()}\n  tips=${tips.join('；')}\n  avoid=${avoid.join('；')}\n  check=${check.join('；')}\n  demo=${demo}`;
-  }).join('\n');
-  const analysisBlock = analysis ? `\n\n【输入理解分析｜上一层已经完成语义拆解，只作为本轮配方生成的工作记忆】\n${JSON.stringify(analysis)}` : '';
-  return { system: AI_RECIPE_SYS_PRO + analysisBlock + '\n\n【现有词库完整可执行资料】：\n' + spec, user: aiRecipeUser(userDesc) };
+  return {
+    system: AI_RECIPE_SYS_PRO,
+    user: aiRecipeSecondContext(userDesc, analysis)
+  };
 }
 
-/* Prompt Perfect 式两阶段：先理解用户输入，再设计配方。
- * 这一层不生成成品配方，也不创造小说事实；它只把原文压缩成“事实/需求/写法缺口/候选方向”的结构化工作记忆。
- */
-const AI_RECIPE_ANALYSIS_SYS = `你是“写作配方AI”的输入理解与需求分析器。你的工作不是写配方，而是先把用户输入真正读懂，形成供下一层配方设计使用的结构化分析。
-
-【最高原则】
-1. 只从用户输入和已提供的小说方案中提取事实与表达需求，不得脑补小说事实。
-2. 必须区分：explicitFacts（明确事实）、styleRequests（明确风格要求）、inferredNeeds（合理推断的写作需求）、unknowns（尚未提供的信息）。
-3. 对用户文字做语义聚类：主题、意图、已有素材、关键词、语气、叙事/表达倾向、想解决的问题。
-4. 找出“已经被词库覆盖”的写作能力，以及“可能缺失但需要进一步核对词库”的写作能力。这里只描述能力，不直接制造新词条。
-5. 提出多个真正不同的写法方向，但不得为了凑数量硬拆同义方案；如果输入只支持少数方向，就只返回少数方向。
-6. 不改变用户方向，不新增人物、剧情、世界观、能力、地点、秘密或事件。
-
-【输出】严格 JSON 对象，不要 markdown：
-{
-  "inputSummary":"对用户输入的准确理解",
-  "explicitFacts":[],
-  "styleRequests":[],
-  "inferredNeeds":[],
-  "keywords":[],
-  "coveredCapabilities":[],
-  "candidateDirections":[{"name":"方向名","core":"核心写法差异","bestFor":"适用表达场景"}],
-  "possibleGaps":[{"capability":"缺失的写作能力","reason":"为什么可能缺","priority":"high|medium|low"}],
-  "unknowns":[]
-}`;
+/* 两阶段链路：第一轮读取必要小说上下文并做需求理解；第二轮只接收精简定位、用户要求、analysis 和选择所需词库，避免重复注入完整小说资料。 */
+const AI_RECIPE_ANALYSIS_SYS = `你是“AI配方助手”的输入理解器。你的工作不是生成最终配方，而是准确理解用户要求与已有小说资料，形成供下一轮配方设计使用的最小工作记忆。\n\n【只做四件事】\n1. 提取用户明确事实和明确写作要求。\n2. 区分合理推断与未知信息，不把推断当成小说事实。\n3. 判断现有词库覆盖了哪些写作能力，以及哪些能力可能存在真实缺口；只描述能力，不创建词条。\n4. 提出真正不同的候选写法方向，但不要凑数量。\n\n【绝对禁止】\n不得新增人物、剧情、世界观、能力、地点、秘密、事件、冲突、反转或其他小说设定；不得生成完整配方；不得修改用户方向。\n\n【严格输出 JSON 对象】\n{\n  "inputSummary":"准确概括用户需求",\n  "styleRequests":[],\n  "coveredCapabilities":[],\n  "candidateDirections":[{"name":"方向名","core":"核心写法差异","bestFor":"适用表达场景"}],\n  "possibleGaps":[{"capability":"可能缺失的写作能力","reason":"为什么可能缺","priority":"high|medium|low"}],\n  "unknowns":[]\n}`;
 async function aiRecipeAnalyze(userDesc){
   const base = aiRecipeUser(userDesc);
-  const lib = writeStyleLib();
-  const compactLib = lib.map(s=>({id:s.id,name:s.name,cat:s.cat||'custom',note:String(s.note||'').trim(),tips:Array.isArray(s.tips)?s.tips:[]}));
-  const user = `${base}\n\n【现有词库用于覆盖核对】\n${JSON.stringify(compactLib)}\n\n请先完成输入理解，不要生成最终配方。`;
-  const raw = unwrapAIResult(await callDeepSeek(AI_RECIPE_ANALYSIS_SYS,user,{maxTokens:2200,temperature:resolveTaskTemperature('recipeAnalysis'),topP:0.2,signal:_abortCtl?.signal,taskKey:'recipeAnalysis'}));
+  const compactLib = writeStyleLib().map(s=>{
+    const out = {id:s.id,name:s.name,note:String(s.note||'').trim()};
+    if(s.cat) out.cat = s.cat;
+    if(Array.isArray(s.tips) && s.tips.length) out.tips = s.tips;
+    return out;
+  });
+  const user = `${base}\n\n【现有词库用于覆盖核对】\n${JSON.stringify(compactLib)}\n\n请只完成需求理解，不要生成最终配方。`;
+  const raw = unwrapAIResult(await callDeepSeek(AI_RECIPE_ANALYSIS_SYS,user,{maxTokens:1800,temperature:resolveTaskTemperature('recipeAnalysis'),topP:0.2,signal:_abortCtl?.signal,taskKey:'recipeAnalysis'}));
   const j = parseJson(raw);
-  if(!j || typeof j!=='object' || Array.isArray(j)) throw new Error('写作配方AI的输入理解阶段返回无效结果');
+  if(!j || typeof j!=='object' || Array.isArray(j)) throw new Error('AI配方助手的输入理解阶段返回无效结果');
   return j;
 }
+
 function aiRecipeCard(){
   const lib = writeStyleLib();
   const collapsed = getCfg().aiRecipeCollapsed === true;
@@ -4883,7 +4691,7 @@ function aiRecipeCard(){
     <div class="ai-recipe-head card-head-bar" data-ai-recipe-fold role="button" tabindex="0" title="展开/收起">
       <div class="ch-left">
         <span class="ch-badge ch-badge-recipe">🧪</span>
-        <h3 class="ch-title">AI 配方助手</h3>
+        <h3 class="ch-title">AI配方助手</h3>
         <span class="ch-subtag ch-subtag-recipe">风格设计 · 智能搭配</span>
       </div>
       <div class="ch-right">
@@ -4985,8 +4793,8 @@ function dedupeRecipeList(list){
 }
 async function aiRecipeProduce(system, user){
   const opt = { maxTokens: clampMaxTokens('recipe'), temperature:resolveTaskTemperature('recipe'), topP:0.45 };
-  const FIX = `\n\n【上一轮质量修正】重新检查输入理解：删除仅靠换形容词、换名称、换顺序形成的重复候选；只保留有实际执行差异的方向。gap 必须来自真实且重要的写作方法缺口；现有词库能覆盖就 gap=null。`;
-  const FIX_JSON = `\n\n【上一轮格式修正】上一轮输出无法解析。只输出合法 JSON 数组，不要 markdown、解释或额外文字。`;
+  const FIX = `\n\n【质量修正】删除仅靠改名、形容词或顺序制造的重复候选；只保留实际执行不同的方案。gap 必须是真实写作方法缺口，现有词库能覆盖则为 null。`;
+  const FIX_JSON = `\n\n【格式修正】只输出合法 JSON 数组，不要 Markdown、解释或额外文字。`;
   let list = null, lastJsonOk = false;
   for(let attempt=1; attempt<=2; attempt++){
     const sys = attempt>1 ? String(system) + (lastJsonOk ? FIX : FIX_JSON) : system;
@@ -12371,7 +12179,7 @@ function viewStory(){
   ${opt_card}
 </section>
 <section class="flow-sec" data-flow="4">
-        <div class="flow-sec-head"><span class="fs-no">4</span><span class="fs-name">写作配方</span><span class="fs-note">把已锁定风格翻译成可执行规则 · 全书共享</span></div>
+        <div class="flow-sec-head"><span class="fs-no">4</span><span class="fs-name">AI配方助手</span><span class="fs-note">把已锁定风格翻译成可执行规则 · 全书共享</span></div>
         ${ safeCard(()=>aiRecipeCard()) }
         
       </section>
@@ -12490,7 +12298,7 @@ ${longNovelMemoryRepoHtml()}
     </div>
     </section>
 <section class="flow-sec" data-flow="3">
-      <div class="flow-sec-head"><span class="fs-no">3</span><span class="fs-name">写作配方</span><span class="fs-note">把已锁定风格翻译成可执行规则 · 全书共享</span></div>
+      <div class="flow-sec-head"><span class="fs-no">3</span><span class="fs-name">AI配方助手</span><span class="fs-note">把已锁定风格翻译成可执行规则 · 全书共享</span></div>
       ${ aiRecipeCard() }
       
     </section>
@@ -19918,7 +19726,7 @@ const TM_GROUPS = [
     ['principal','校长总控','统领全量材料，产出全书与章节级规划'],
     ['teacher','老师备课','把章节规划转成场景级推进教案'],
     ['chapter','正文生成','正式小说正文生成，创作链温度核心'],
-    ['recipe','写作配方','写作风格/方法组合与配方设计']
+    ['recipe','AI配方助手','写作风格/方法组合与配方设计']
   ]},
   { title:'🔧 二级任务 · 高频维护与质量控制', keys:[
     ['strip','本章梗概（速读）','每章生成后的快速压缩'],
@@ -19934,7 +19742,7 @@ const TM_GROUPS = [
     ['chapterRepair','正文修复','根据审计结果进行局部修复'],
     ['chapterState','正文状态结算','提取章末事实状态'],
     ['timeAnchor','时间锚点','从正文抽取时间状态'],
-    ['recipeAnalysis','配方输入理解','写作配方的前置需求分析']
+    ['recipeAnalysis','AI配方助手输入理解','AI配方助手的前置需求分析']
   ]}
 ];
 
