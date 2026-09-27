@@ -17,7 +17,7 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.540';
+const APP_VERSION = '1.0.541';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
 const APP_FILE_VERSION = 'app1.0.540.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
@@ -3706,18 +3706,11 @@ function buildPolishCanonical(cand, revision){
     originalAnchors: JSON.parse(JSON.stringify(c.originalAnchors || c.coreAnchors || c.anchorPoints || state.originalIdeaAnchors || {})),
     strategicDimensions: Array.isArray(c.strategicDimensions) ? JSON.parse(JSON.stringify(c.strategicDimensions)) : (Array.isArray(v.optimizationStrategies)?JSON.parse(JSON.stringify(v.optimizationStrategies)):[]),
     diversityProfile: c.diversityProfile ? JSON.parse(JSON.stringify(c.diversityProfile)) : (v.diversityProfile ? JSON.parse(JSON.stringify(v.diversityProfile)) : null),
-    writingStyleInheritanceSupplement: JSON.parse(JSON.stringify(c.writingStyleInheritanceSupplement || c.structuredBlueprint?.writingStyleInheritanceSupplement || {source:'optimization_concept',supplementStatus:'none',inheritance:[],supplements:[]})),
     humanView:human,
-    // 1.0.353：结构式创作蓝图。AI只负责提供事实，JS负责保存唯一结构。
+    // 1.0.541：结构式创作蓝图是唯一机器事实源；Human View 仅作 UI/下游可读派生视图。
+    // 不再把 writingStyleInheritanceSupplement / creationBlueprint 再复制一份到 canonical 顶层。
+    // 旧存档中的这些字段仍由读取端兼容，但新结果不再继续制造平行数据源。
     creativeBlueprint: JSON.parse(JSON.stringify(c.structuredBlueprint || c.storyBlueprint || {})),
-    creationBlueprint:{
-      structured: JSON.parse(JSON.stringify(c.structuredBlueprint || c.storyBlueprint || {})),
-      optimizedIdea:human.optimizedIdea,
-      fullBookBeat:human.fullBookBeat,
-      novelSummary:human.novelSummary,
-      navBeacon:human.navBeacon,
-      creativeAdditions:human.creativeAdditions
-    },
     machineTrace:{
       diagnosis:c.diagnosis||v.diagnosis||null,
       optimizationStrategies:Array.isArray(c.optimizationStrategies)?JSON.parse(JSON.stringify(c.optimizationStrategies)):[],
@@ -6363,7 +6356,8 @@ function principalOptimizedStyleCatalog(option){
  */
 function extractOptimizationStyleInheritanceSupplement(option){
   const c=option||{};
-  const raw=c.writingStyleInheritanceSupplement || c.structuredBlueprint?.writingStyleInheritanceSupplement || {};
+  // 新版只从唯一结构式蓝图读取；旧存档的顶层字段仅作为一次性兼容回退，绝不再写回。
+  const raw=c.structuredBlueprint?.writingStyleInheritanceSupplement || c.writingStyleInheritanceSupplement || {};
   const cleanEntry=(x,allowReason)=>{
     const o={id:String(x?.id||'').trim(),name:String(x?.name||'').trim(),definition:String(x?.definition||'').trim(),attributes:String(x?.attributes||'').trim(),features:String(x?.features||'').trim(),manifestations:String(x?.manifestations||'').trim(),examples:String(x?.examples||'').trim()};
     if(allowReason) o.reason=String(x?.reason||'').trim();
