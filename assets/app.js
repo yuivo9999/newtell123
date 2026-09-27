@@ -14625,6 +14625,7 @@ function chCardHtml(c, i){
             <button class="btn ghost" data-read="${i}">📖 阅读</button>
             <button class="btn ghost" data-ch-sum="${i}" title="生成本章速读梗概（本章正文压缩至约 1/3，省时阅读）">🏮 本章梗概</button>
             <button class="btn ghost" data-ver="${i}">📚 版本(${chVersions(i).length})</button>
+            <button class="btn ghost" data-injection-export="${i}" style="background:linear-gradient(135deg,#d6a62a,#f3cf63);color:#241b00;font-weight:700" title="查看并导出正文 AI 实际注入">📤 注入导出</button>
           </div>
         </div>
       </div>`;
@@ -14681,6 +14682,7 @@ function renderChapters(){
           <button class="btn ghost" data-read="${i}">📖 阅读</button>
           <button class="btn ghost" data-ch-sum="${i}" title="生成本章速读梗概（本章正文压缩至约 1/3，省时阅读）">🏮 本章梗概</button>
           <button class="btn ghost" data-ver="${i}" title="版本历史">📚 版本(${chVersions(i).length})</button>
+          <button class="btn ghost" data-injection-export="${i}" style="background:linear-gradient(135deg,#d6a62a,#f3cf63);color:#241b00;font-weight:700" title="查看并导出正文 AI 实际注入">📤 注入导出</button>
         </div>
       </div>`).join('');
   }
@@ -15662,13 +15664,14 @@ const lnER = $('#lnExportReader'); if(lnER) lnER.onclick = openExportReader;
 
   renderChapters();
   const chaptersDelegate = (e)=>{
-    const t = e.target.closest('[data-regen],[data-read],[data-fold],[data-page],[data-ver],[data-ch-sum],[data-ne-resume-ch],[data-ne-partial-adopt],[data-plan-ch]');
+    const t = e.target.closest('[data-regen],[data-read],[data-fold],[data-page],[data-ver],[data-ch-sum],[data-injection-export],[data-ne-resume-ch],[data-ne-partial-adopt],[data-plan-ch]');
     if(!t) return;
     if(t.hasAttribute('data-plan-ch')){
       const i = +t.dataset.planCh;
       openChapterTeacherPlanReader(i);
     }
     else if(t.hasAttribute('data-ver')){ openChapterVersionPanel(+t.dataset.ver); }
+    else if(t.hasAttribute('data-injection-export')){ e.preventDefault(); e.stopPropagation(); openChapterInjectionExport(+t.dataset.injectionExport); }
     else if(t.hasAttribute('data-regen')){ openChapterRegenPanel(+t.dataset.regen); }
     else if(t.hasAttribute('data-ch-sum')){ openChapterSummaryPanel(+t.dataset.chSum); }
     else if(t.hasAttribute('data-read')){ openReader(+t.dataset.read); }
@@ -18336,6 +18339,75 @@ function getChapterWriterUser(i){
   return parts.join('\n\n');
 }
 
+/*
+ * 正文最终注入组装器：正文 AI 与“注入导出”必须共用这一份最终 system/user。
+ * 这是纯读取函数，不发起 AI 请求、不写入业务数据。
+ * extraUserSuffix 仅供截断续写等已有业务在最终 user 后追加其原有上下文；
+ * 普通正文生成与注入导出均不传该参数。
+ */
+function buildChapterInjection(i, options){
+  const opts = options || {};
+  const system = isLong() ? longChapterSys() : PROMPTS.chapterSys;
+  let user = getChapterWriterUser(i);
+  if(opts.extraUserSuffix) user += String(opts.extraUserSuffix);
+  return {
+    system: String(system||''),
+    user: String(user||''),
+    fullText: ['【SYSTEM】', String(system||''), '', '【USER】', String(user||'')].join('\n')
+  };
+}
+
+function chapterInjectionExportName(i){
+  const c = state.chapters && state.chapters[i] || {};
+  const title = cleanChapterTitle(c.title) || ('第'+(Number(i)+1)+'章');
+  const safe = String(title).replace(/[\\/:*?"<>|]/g,'_').trim();
+  return `第${String(Number(i)+1).padStart(3,'0')}章_${safe||'正文'}_正文注入.txt`;
+}
+
+function openChapterInjectionExport(i){
+  i = Number(i);
+  if(!Number.isInteger(i) || i < 0 || !state.chapters || !state.chapters[i]){ toast('无法定位当前章节'); return; }
+  let injection;
+  try{ injection = buildChapterInjection(i); }catch(e){ toast('读取正文注入失败：'+String(e?.message||e)); return; }
+  const ov = document.createElement('div');
+  ov.className = 'gs-modal-overlay';
+  ov.setAttribute('data-chapter-injection-export','1');
+  ov.innerHTML = `<div class="gs-modal" style="width:min(850px,92vw);height:min(700px,82vh);max-height:82vh;display:flex;flex-direction:column">
+    <div class="gs-modal-head"><b>📤 正文注入导出 · 第${i+1}章「${esc(cleanChapterTitle(state.chapters[i].title)||('第'+(i+1)+'章'))}」</b><button type="button" class="gs-x" data-cie-close>✕</button></div>
+    <div class="muted" style="padding:8px 14px 0">以下内容为当前正文 AI 实际使用的最终 SYSTEM + USER 注入，只读显示，不调用 AI、不修改数据。</div>
+    <textarea readonly data-cie-text style="flex:1;min-height:0;width:100%;box-sizing:border-box;margin-top:8px;resize:none;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.45">${esc(injection.fullText)}</textarea>
+    <div class="btn-row" style="justify-content:flex-end;padding-top:10px">
+      <button type="button" class="btn primary" data-cie-copy style="background:linear-gradient(135deg,#2878ff,#4aa3ff);color:#fff">复制</button>
+      <button type="button" class="btn" data-cie-txt style="background:linear-gradient(135deg,#f08a24,#ffb14a);color:#fff">全文导出TXT</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  const close=()=>ov.remove();
+  ov.querySelector('[data-cie-close]').onclick=close;
+  ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+  ov.addEventListener('keydown',e=>{ if(e.key==='Escape') close(); });
+  const ta=ov.querySelector('[data-cie-text]');
+  const copyBtn=ov.querySelector('[data-cie-copy]');
+  copyBtn.onclick=async()=>{
+    const text=ta.value;
+    let ok=false;
+    try{ if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(text); ok=true; } }catch(_){}
+    if(!ok){
+      try{ ta.focus(); ta.select(); ok=document.execCommand('copy'); }catch(_){}
+    }
+    copyBtn.textContent = ok ? '✓ 已复制' : '复制失败';
+    setTimeout(()=>{ if(copyBtn.isConnected) copyBtn.textContent='复制'; },1200);
+  };
+  ov.querySelector('[data-cie-txt]').onclick=()=>{
+    const blob=new Blob([ta.value],{type:'text/plain;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=chapterInjectionExportName(i);
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
+  setTimeout(()=>{ta.focus();ta.setSelectionRange(0,0);},0);
+}
+
 async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride, signal){
   const mt = chapterMaxTokens();
   const rawText=getChapterTeacherRawTextDirect(i);
@@ -18355,8 +18427,8 @@ async function writeOneChapterContent(i, user, onPhase, onStream, styleOverride,
     try{
       // 正文 AI 直接读取本章老师原始教案；GLOBAL必须存在，HYBRID/CHAPTER按实际需要传递，不再建立第三方风格传输链。
       // getChapterWriterUser() 负责在发送前执行“教案命中 → 词典匹配 → 资料提取 → 参考资料声明”的统一链路。
-      const writerUser = getChapterWriterUser(i);
-      txt = unwrapAIResult(await callDeepSeek(longChapterSys(), writerUser, {maxTokens: mt, onStream: _onStream, temperature: dynamicChapterParams(i).temperature, topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'}));
+      const injection = buildChapterInjection(i);
+      txt = unwrapAIResult(await callDeepSeek(injection.system, injection.user, {maxTokens: mt, onStream: _onStream, temperature: dynamicChapterParams(i).temperature, topP: dynamicChapterParams(i).topP, signal: signal || _abortCtl?.signal, taskKey:'chapter'}));
       delete state._chapterPartial[i];
       persist();
     }catch(e){
@@ -19132,10 +19204,12 @@ async function genNChapters(start, n){
           }) : null;
           const _dyn = dynamicChapterParams(idx);
           if(isLong()){
-            const res = await callDeepSeek(longChapterSys(), getChapterWriterUser(idx), {maxTokens: chapterMaxTokens(), onStream, temperature: _dyn.temperature, topP: _dyn.topP, signal: _abortCtl?.signal, taskKey:'chapter'});
+            const injection = buildChapterInjection(idx);
+            const res = await callDeepSeek(injection.system, injection.user, {maxTokens: chapterMaxTokens(), onStream, temperature: _dyn.temperature, topP: _dyn.topP, signal: _abortCtl?.signal, taskKey:'chapter'});
             txt = res.text; finishReason = res.finishReason;
           } else {
-            const res = await callDeepSeek(PROMPTS.chapterSys, getChapterWriterUser(idx), {maxTokens: chapterMaxTokens(), temperature: _dyn.temperature, topP: _dyn.topP, signal: (_abortCtl && _abortCtl.signal), taskKey:'chapter'});
+            const injection = buildChapterInjection(idx);
+            const res = await callDeepSeek(injection.system, injection.user, {maxTokens: chapterMaxTokens(), temperature: _dyn.temperature, topP: _dyn.topP, signal: (_abortCtl && _abortCtl.signal), taskKey:'chapter'});
             txt = res.text; finishReason = res.finishReason;
           }
           if(finishReason === 'length'){
@@ -19350,11 +19424,10 @@ async function genManyChapters(count, fromStart){
 }
 
 async function genOneChapterNoUI(i){
-  const user = getChapterTeacherRawTextDirect(i);
   try{
     const txt = isLong()
-      ? await writeOneChapterContent(i, user)
-      : unwrapAIResult(await callDeepSeek(PROMPTS.chapterSys, user, {temperature: resolveActiveSpec().chapterTemp, taskKey:'chapter'})).trim();
+      ? await writeOneChapterContent(i, getChapterTeacherRawTextDirect(i))
+      : unwrapAIResult(await callDeepSeek(buildChapterInjection(i).system, buildChapterInjection(i).user, {temperature: resolveActiveSpec().chapterTemp, taskKey:'chapter'})).trim();
     state.chapters[i].content = txt;
     persist();
   }catch(e){ /* 继续后续 */ }
