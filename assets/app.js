@@ -7953,7 +7953,11 @@ function teacherScopedGlossary(g, gi, maxChar){
   const out=[];
   const sets=[['人物',gl.characters],['地点',gl.places],['专名',gl.propernouns],['组织/势力',gl.organizations],['职业/机构',gl.institutions],['物品/道具',gl.items],['术语',gl.terms],['历史事件',gl.events],['生活设定',gl.lifeSettings]];
   sets.forEach(([label,arr])=>{const hits=match(arr);if(hits.length)out.push(label+'：'+hits.map(x=>{const vals=[x.name,x.type,x.category,x.identity,x.function,x.meaning,x.content,x.note,x.impact,x.usage,x.value].map(v=>String(v||'').trim()).filter(Boolean);return vals.join('｜');}).join('\n· '));});
-  const rules=[...(gl._worldRules||[]).map(x=>({...x,_sourceBucket:'worldRules'})), ...(gl.rules||[]).map(x=>({cat:x.category,scope:x.scope,rule:x.rule,limit:x.limit,name:x.name,_sourceBucket:'enrichmentRule'}))].map(fmtWR).filter(Boolean); if(rules.length)out.push('世界观规则/扩充规则：\n'+rules.slice(0,30).map(x=>'- '+x).join('\n'));
+  // 世界观规则只有一个正式来源：gl._worldRules。gl.rules 是词典充实产生的普通“扩充规则”，不是第二套世界观规则，必须分开标识，避免下游把两者合并成新的规则源。
+  const worldRules=(gl._worldRules||[]).map(x=>({...x,_sourceBucket:'worldRules'})).map(fmtWR).filter(Boolean);
+  if(worldRules.length) out.push('世界观规则｜正式唯一来源：词典 _worldRules\n'+worldRules.slice(0,30).map(x=>'- '+x).join('\n'));
+  const enrichRules=(gl.rules||[]).map(x=>({cat:x.category,scope:x.scope,rule:x.rule,limit:x.limit,name:x.name,_sourceBucket:'enrichmentRule'})).map(fmtWR).filter(Boolean);
+  if(enrichRules.length) out.push('扩充规则｜词典普通扩充资料（非正式世界观规则）\n'+enrichRules.slice(0,30).map(x=>'- '+x).join('\n'));
   const rel=validAssoc(gl._relationshipTable,'a','b'); if(rel.length) out.push('人物关系关联：\n'+rel.slice(0,40).map(x=>`- ${x.a} ←${x.relation||'关系'}→ ${x.b}${x.note?`（${x.note}）`:''}`).join('\n'));
   const pc=validAssoc(gl._placeContacts,'from','to'); if(pc.length) out.push('地名关联：\n'+pc.slice(0,30).map(x=>`- ${x.from} ↔ ${x.to}${x.relation?`（${x.relation}）`:''}${x.note?`：${x.note}`:''}`).join('\n'));
   const prc=validAssoc(gl._properContacts,'from','to'); if(prc.length) out.push('专名关联：\n'+prc.slice(0,30).map(x=>`- ${x.from} ↔ ${x.to}${x.relation?`（${x.relation}）`:''}${x.note?`：${x.note}`:''}`).join('\n'));
@@ -10719,6 +10723,7 @@ function chapterSysBase(){
     .split('setup / rise / climax / hook').join(keys)
     .split('四个事件').join(cnt + ' 段节拍事件');
   const closedGate = `【正文作家·多层执行链（闭卷创作规范）】
+【世界观规则硬约束】世界观规则只来自随后用户上下文中的“词典正式世界观规则”区块；它是全局硬约束，不是本章剧情、老师教案或写作建议。正文必须遵守，不得改写、总结、扩写、另造第二份，也不得把老师教案中的局部剧情应用当成新的规则源。正文上下文中只应以这一份正式规则为准。
 你是长篇小说的「正文作家（学生）」，只专注文学笔力、对白交锋与生动场面铺展。你的输入不是互相竞争的几份提示词，而是一条有权限层级的创作链。
 【正文AI内部工作顺序｜必须先理解，再动笔】
 1. 先完整阅读并整合“上下文理解包”。
@@ -16364,11 +16369,6 @@ function canonicalCoreRelationships(){
     if(!okA || !okB) return false;
     const k=[a,b,r.relation].map(v=>String(v).trim().toLowerCase()).join('|'); if(seen.has(k)) return false; seen.add(k); return true;
   });
-}
-function canonicalWorldRules(){
-  const c=currentCanonicalStoryStrategy() || {};
-  const b=c.creativeBlueprint || c.creationBlueprint?.structured || {};
-  return Array.isArray(b.worldRules) ? b.worldRules.map(x=>String(x||'').trim()).filter(Boolean) : [];
 }
 function parseDictMasterPlainText(raw){
   let text=String(raw||'').replace(/^```(?:text|plaintext)?\s*/i,'').replace(/\s*```$/,'').trim();
