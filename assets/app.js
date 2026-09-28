@@ -17,9 +17,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.545';
+const APP_VERSION = '1.0.546';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.545.js';
+const APP_FILE_VERSION = 'app1.0.546.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -5545,7 +5545,7 @@ function clampMaxTokens(task){
     chapter: 12000,     // 正文单次输出上限：仅用于一次正常正文生成
     principal: 16384,   // 校长统筹总控
     teacher: 16384,     // 老师分批教案
-    dictmaster: 16384,  // 基础词典生成
+    dictmaster: 32768,  // 基础词典生成；按操作手册仅将词典达人输出上限提高为原值的 2 倍
     dictEnrich: 16384,  // 词典充实与收编
     glossary: 9216,
     json: 4096,         // JSON 类契约输出
@@ -16895,7 +16895,7 @@ async function genDictMaster(btn){
   try{
     const spec = resolveActiveSpec('dictmaster');
     const temp = (spec && spec.dictmasterTemp != null) ? spec.dictmasterTemp : 0.4;
-    const txt = await callAIGuarded('dictmaster', {}, {temperature: temp, maxTokens: 16384, signal: _abortCtl?.signal});
+    const txt = await callAIGuarded('dictmaster', {}, {temperature: temp, maxTokens: 32768, signal: _abortCtl?.signal});
     let j = parseDictMasterPlainText(txt);
     if(!j){
       const rawTrim=String(txt||'').trim();
