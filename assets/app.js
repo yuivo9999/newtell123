@@ -18,9 +18,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.547';
+const APP_VERSION = '1.0.548';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.547.js';
+const APP_FILE_VERSION = 'app1.0.548.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -3975,7 +3975,7 @@ function renderOptimizationStructuredView(o){
     <div class="app-idea-structured-head"><span>✦</span><b>结构化创作蓝图</b><em>用户可读 · 下游 AI 同源</em></div>
     <details open class="app-idea-section"><summary>🎯 故事核心</summary><div class="app-idea-section-body">${kv(b.storyCore)}</div></details>
     <details class="app-idea-section"><summary>👤 主角与核心人物</summary><div class="app-idea-section-body">${kv(b.protagonist)}${escList(b.keyCharacters)}</div></details>
-    <details class="app-idea-section"><summary>🌍 世界与规则</summary><div class="app-idea-section-body">${kv(b.world)}${escList(b.worldRules)}</div></details>
+    <details class="app-idea-section"><summary>🌍 故事背景</summary><div class="app-idea-section-body">${kv(b.world)}</div></details>
     <details class="app-idea-section"><summary>⚔️ 冲突与故事发展</summary><div class="app-idea-section-body">${kv(b.conflict)}${kv(b.storyArc)}</div></details>
     <details class="app-idea-section"><summary>📖 全书故事节拍</summary><div class="app-idea-section-body" style="background:#fff!important;color:#000!important">${escList(b.fullBookBeat)}</div></details>
   </div>`;
@@ -9587,7 +9587,6 @@ function parseOptimizationStructuredBlock(body){
   const storyArc=kvBlock(block('STORY_ARC'));
   const keyCharacters=listBlock(block('KEY_CHARACTERS')).map(x=>{const m=splitPipe(x);return {name:m[0]||'',identity:m[1]||'',role:m[2]||'',relation:m[3]||''};});
   const relationships=listBlock(block('RELATIONSHIPS')).map(x=>{const m=splitPipe(x);return {from:m[0]||'',to:m[1]||'',relation:m.slice(2).join('｜')||''};});
-  const worldRules=[]; // 正式世界规则不再由优化构想独立生成；统一由基础词典/词典达人维护
   const fullBookBeat=listBlock(block('FULL_BOOK_BEAT'));
   const styleBlock=block('WRITING_STYLE_INHERITANCE_SUPPLEMENT');
   const styleLines=String(styleBlock||'').split('\n').map(v=>v.trim()).filter(Boolean);
@@ -9606,7 +9605,7 @@ function parseOptimizationStructuredBlock(body){
     }
   });
   stylePackage.supplementStatus = stylePackage.supplements.length ? 'present' : 'none';
-  return {optionMeta,storyCore,protagonist,keyCharacters,relationships,world,worldRules,conflict,storyArc,fullBookBeat,writingStyleInheritanceSupplement:stylePackage};
+  return {optionMeta,storyCore,protagonist,keyCharacters,relationships,world,conflict,storyArc,fullBookBeat,writingStyleInheritanceSupplement:stylePackage};
 }
 
 function explicitPersonNamesFromUserIdea(){
@@ -9649,7 +9648,7 @@ function parseOptimizationPlainText(raw, multi){
   const anchorBlock=section('原始构想锚点',text);
   const dimBlock=section('动态战略维度',text);
   const divBlock=section('战略多样性',text);
-  const analysis={originalAnchors:{characters:linesToList(kv(anchorBlock,'人物')),relationships:linesToList(kv(anchorBlock,'关系')),goals:linesToList(kv(anchorBlock,'目标')),coreConflict:kv(anchorBlock,'核心冲突'),worldRules:linesToList(kv(anchorBlock,'世界规则')),fixedFacts:linesToList(kv(anchorBlock,'固定事实'))},strategicDimensions:[],diversityProfile:{fixedCore:linesToList(kv(divBlock,'固定核心')),variableAxes:linesToList(kv(divBlock,'可变轴')),avoidRepetition:linesToList(kv(divBlock,'避免重复')),recommendedMix:kv(divBlock,'推荐组合')}};
+  const analysis={originalAnchors:{characters:linesToList(kv(anchorBlock,'人物')),relationships:linesToList(kv(anchorBlock,'关系')),goals:linesToList(kv(anchorBlock,'目标')),coreConflict:kv(anchorBlock,'核心冲突'),fixedFacts:linesToList(kv(anchorBlock,'固定事实'))},strategicDimensions:[],diversityProfile:{fixedCore:linesToList(kv(divBlock,'固定核心')),variableAxes:linesToList(kv(divBlock,'可变轴')),avoidRepetition:linesToList(kv(divBlock,'避免重复')),recommendedMix:kv(divBlock,'推荐组合')}};
   dimBlock.split('\n').forEach(l=>{ const m=l.match(/^\s*(?:[-*•·]|\d+[.)])\s*([^｜|：:]+)\s*[｜|：:]\s*([^｜|]+?)(?:\s*[｜|]\s*(?:契合\s*[：:]\s*)?(.*))?\s*$/); if(m) analysis.strategicDimensions.push({name:m[1].trim(),description:m[2].trim(),whyFit:String(m[3]||'').trim()}); });
   const optionMatches=[...text.matchAll(/(?:^|\n)【方案([一二三四五六七八九十\d]+)(?:\s*[｜|：:]\s*([^】\n]+))?】\s*([\s\S]*?)(?=\n【方案[一二三四五六七八九十\d]+(?:\s*[｜|：:])?|$)/g)];
   const optionBlocks=optionMatches.map(m=>({num:m[1],title:String(m[2]||'').trim(),body:m[3].trim()}));
@@ -9837,7 +9836,7 @@ function buildIdeaOptimizationUser(ctx){
   const ban = banListBlockFor('ideaOptimization');
   if(ban) upstreamRules.push(ban);
   upstreamRules.push('【人物命名边界】优化构想只负责人物角色需求、功能、关系、性格与发展方向。除非用户原始构想已经明确给出正式姓名，否则不得创造新的正式人物姓名；未正式命名的人物必须使用稳定人物ID，如 CHAR_001、CHAR_002。正式姓名由后续词典达人统一确定。');
-  upstreamRules.push('【世界与规则边界】可以提出“世界与规则”的战略蓝图，用于说明世界如何服务故事，但不要建立第二套正式世界知识库，不要擅自定稿与词典达人冲突的核心世界事实；最终正式世界事实由词典达人建立并登记。');
+  upstreamRules.push('【世界设定边界】优化构想不得新增、设计、整理、定稿或保存世界规则；仅可保留用户原始构想中已经明确的世界背景/规则作为受保护事实。正式世界观与世界规则由词典达人独立建立并登记。');
   return `【原始用户构想】\n${String(ctx.rawIdea||'').trim()}\n\n【用户锁定写作风格】\n${style}\n\n【已有叙事结构】\n${parts.join('\n')||'（无额外结构）'}\n\n【输出模式】\n${ctx.multi?'多方案：3—5个真正不同的优化构想。':'单方案：只生成1个最终优化构想。'}\n\n【核心任务】\n一次完成“原始构想提炼 → 动态战略分析 → 优化构想生成”。战略分析是内部中间层，不要把它写成独立操作步骤；但必须按纯文本格式输出动态战略维度，供方案形成差异化依据。`;
 }
 function buildIdeaPolishStage2User(ctx){
@@ -10111,14 +10110,15 @@ const IDEA_POLISH_SYS_PRO = `你是本项目的“AI构想优化与小说策划�
 
 【第三原则：用户事实优先】
 用户明确写出的题材、主角、身份、世界观、核心能力、关系、冲突、时代、风格、固定名称必须保留。不得为了所谓“更商业”而偷换。
-AI可以深化：人物动机、冲突机制、故事动力、长期悬念、关系张力、阶段目标、高潮与收束方式、必要的世界规则。
+AI可以深化：人物动机、冲突机制、故事动力、长期悬念、关系张力、阶段目标、高潮与收束方式。
+AI不得新增、设计、整理或定稿世界规则；用户原始构想中已经明确的世界背景/规则只能作为受保护事实传递给下游。
 AI不得无依据地把新人物、新势力、新能力、新世界规则当成既定事实。新创内容应明确写入“方案蓝本/创意补充”，让下游知道哪些是建议而不是用户原话。
 
 【第四原则：动态战略维度，而不是固定五向】
-绝对禁止把故事套进固定的“商业/反差/情感/悬疑/日常”等固定五向模板。你必须先根据当前故事题材、混合题材、主角驱动力、核心冲突、人物关系、世界规则、信息结构、读者体验和创作目标，在内部动态生成约6—10个最契合的【候选战略维度】。
+绝对禁止把故事套进固定的“商业/反差/情感/悬疑/日常”等固定五向模板。你必须先根据当前故事题材、混合题材、主角驱动力、核心冲突、人物关系、信息结构、读者体验和创作目标，在内部动态生成约6—10个最契合的【候选战略维度】。不要把世界规则当作优化构想需要设计或生成的内容。
 每个战略维度必须说明：name、description、whyFit。不同题材必须得到不同的战略地图；武侠、科幻、言情、历史、悬疑等不能共用一套固定盒子。
 然后从战略维度中组合3—5个最终方案。每个方案必须拥有独立的战略指纹：主战略、辅助战略、核心冲突、故事发动机、情绪/阅读期待、节奏。若两个方案的战略指纹高度相似，应内部重做，不得用改标题、换同义词、换表达方式冒充不同方案。
-同时先提取【原始构想核心锚点】（人物、关系、目标、核心冲突、世界规则、用户明确设定等），所有方案都必须围绕锚点优化，不能把优化变成另一个故事。
+同时先提取【原始构想核心锚点】（人物、关系、目标、核心冲突、用户明确设定等），所有方案都必须围绕锚点优化，不能把优化变成另一个故事。用户明确的世界背景/规则只作为受保护事实，不由优化构想新增或定稿。
 所有方案共享用户事实底盘；一个方案私有的新创意不得污染其他方案。
 
 【第五原则：写作风格与故事方向分开】
@@ -10150,7 +10150,7 @@ AI不得无依据地把新人物、新势力、新能力、新世界规则当成
       "novelSummary":"给下游AI使用的小说简介/故事蓝本摘要，不写营销分析",
       "fullBookBeat":"完整的宏观全书节拍与阶段推进说明，可按当前章节数映射阶段；不是逐章教案",
       "optimizedIdea":"完整故事创作蓝本，允许较长，包含主角、世界、冲突、人物关系、故事发动机、长期发展、高潮与阶段推进",
-      "originalAnchors":{"characters":[],"relationships":[],"goals":[],"coreConflict":"","worldRules":[],"fixedFacts":[]},
+      "originalAnchors":{"characters":[],"relationships":[],"goals":[],"coreConflict":"","fixedFacts":[]},
       "strategicDimensions":[{"name":"动态战略维度名称","description":"该维度如何展开故事","whyFit":"为什么适合当前故事"}],
       "diversityProfile":{"fixedCore":[],"variableAxes":[],"avoidRepetition":[],"recommendedMix":""},
       "strategyFingerprint":{"mainStrategy":"","secondaryStrategy":"","coreConflict":"","storyEngine":"","emotionalPromise":"","pacing":""},
@@ -10172,7 +10172,7 @@ AI不得无依据地把新人物、新势力、新能力、新世界规则当成
 optimizedIdea 建议内部覆盖：
 1. 故事定位与核心设定；
 2. 主角与关键人物；
-3. 世界与规则（只写真正影响剧情的）；
+3. 用户已明确的世界背景（不得新增或定稿世界规则）；
 4. 核心矛盾与持续发动机；
 5. 人物关系与变化；
 6. 故事阶段与升级逻辑；
@@ -10200,7 +10200,7 @@ optimizedIdea 建议内部覆盖：
 const IDEA_STRATEGY_SYS = `你是本项目的“故事战略分析引擎”。本阶段只做战略分析，不生成最终优化方案。
 
 【唯一任务】
-根据用户当前故事构想、题材、人物、核心冲突、世界规则、写作风格和已有上下文，提取用户原始构想核心锚点，并动态生成6—10个最契合当前故事的候选战略维度。
+根据用户当前故事构想、题材、人物、核心冲突、写作风格和已有上下文，提取用户原始构想核心锚点，并动态生成6—10个最契合当前故事的候选战略维度。用户明确的世界背景/规则只能作为受保护事实，不在本阶段新增或定稿。
 
 【绝对禁止】
 1. 禁止使用固定的“商业/反差/情感/悬疑智斗/轻松日常”五向模板。
@@ -10213,7 +10213,7 @@ const IDEA_STRATEGY_SYS = `你是本项目的“故事战略分析引擎”。�
 【输出】
 只输出JSON，不要Markdown，不要解释：
 {
-  "originalAnchors":{"characters":[],"relationships":[],"goals":[],"coreConflict":"","worldRules":[],"fixedFacts":[]},
+  "originalAnchors":{"characters":[],"relationships":[],"goals":[],"coreConflict":"","fixedFacts":[]},
   "strategicDimensions":[{"name":"","description":"","whyFit":""}],
   "diversityProfile":{"fixedCore":[],"variableAxes":[],"avoidRepetition":[],"recommendedMix":""}
 }
@@ -10224,7 +10224,7 @@ const IDEA_STRATEGY_SYS = `你是本项目的“故事战略分析引擎”。�
 - 每个维度必须真正不同，并说明如何展开故事以及为什么适合当前故事。
 - 必须额外判断哪些内容属于全书不能轻易改变的核心，哪些属于可在后续方案中变化的战略轴，并输出diversityProfile。
 - diversityProfile不是鼓励随机，而是防止长期创作被单一战略、单一冲突模式、单一节奏或单一人物功能绑死；固定核心必须保护，变化轴必须允许组合和轮换。
-- originalAnchors只记录用户已经明确给出或可以从其构想直接确认的核心事实；不要把AI新增创意伪装成用户事实。`;
+- originalAnchors只记录用户已经明确给出或可以从其构想直接确认的核心事实；不要把AI新增创意伪装成用户事实。用户明确的世界背景/规则不由本阶段新增或定稿。`;
 
 const IDEA_OPTIMIZATION_SYS = `你是本项目的“优化构想引擎”。你必须在一次生成中完成过去两个阶段的全部工作，但对用户只呈现“优化构想”，不要把“战略维度”做成独立步骤。
 
@@ -10256,7 +10256,6 @@ AI只需要生成一种事实源：每个方案的“结构式创作蓝图”。
 关系：...
 目标：...
 核心冲突：...
-世界规则：...
 固定事实：...
 
 【动态战略维度】
