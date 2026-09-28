@@ -18,9 +18,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.548';
+const APP_VERSION = '1.0.549';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.548.js';
+const APP_FILE_VERSION = 'app1.0.549.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -14794,6 +14794,7 @@ async function regenSelectedChapters(list){
         const txt = await writeOneChapterContent(i, user);      // 关闭流式，单章连贯
         snapshotChapterVersion(i);
         state.chapters[i].content = txt;
+        updateChapterEndingRelay(i, txt);
         chState[i]='done'; persist(); patchChapter(i);
       }catch(e){ chState[i]='error'; persist(); patchChapter(i); }
     }
@@ -16040,6 +16041,7 @@ const lnER = $('#lnExportReader'); if(lnER) lnER.onclick = openExportReader;
         if(!Array.isArray(c.editHistory)) c.editHistory = [];
         c.editHistory.push(old);
         if(c.editHistory.length > 10) c.editHistory.splice(0, c.editHistory.length - 10);   // 上限10
+        updateChapterEndingRelay(i, ta.value);
         persist(); renderChapters(); updateWcTotal();
         toast('已记录编辑快照，可用「↩ 撤销编辑」回退');
       }
@@ -18664,6 +18666,39 @@ function sanitizeChapterWriterRawText(raw){
   // 老师原始教案仍是唯一剧情权威；这里只做确定性的机器协议/空字段隔离，绝不重新总结或改写教案。
   return sanitizeChapterWriterContext(raw);
 }
+function extractChapterEndingRelay(content){
+  const text = String(content || '').replace(/\r/g, '').trim();
+  if(!text) return '';
+
+  const paragraphs = text
+    .split(/\n\s*\n+/)
+    .map(x => x.trim())
+    .filter(Boolean);
+  if(!paragraphs.length) return '';
+
+  const last = paragraphs[paragraphs.length - 1];
+  const meaningfulLength = last.replace(/\s/g, '').length;
+  if(meaningfulLength >= 23) return last;
+  if(paragraphs.length >= 2){
+    return paragraphs[paragraphs.length - 2] + '\n\n' + last;
+  }
+  return last;
+}
+
+function getChapterEndingRelay(i){
+  if(Number(i) <= 0) return '';
+  const ss = storyState();
+  const prev = ss.chapters && ss.chapters[Number(i) - 1];
+  return String(prev?.endingRelay?.text || '').trim();
+}
+
+function updateChapterEndingRelay(i, content){
+  const ss = storyState();
+  if(!ss.chapters || !ss.chapters[i]) return;
+  const relay = extractChapterEndingRelay(content);
+  ss.chapters[i].endingRelay = { text: relay };
+}
+
 function getChapterWriterUser(i){
   // 正文动态内容的唯一主入口：老师本章原始教案。
   // 其它资料只能作为必要的事实/连续性护栏，绝不形成第二份剧情或风格规划。
@@ -18672,10 +18707,15 @@ function getChapterWriterUser(i){
   const continuity=(typeof buildChapterContinuityContext==='function')
     ? String(buildChapterContinuityContext(i)||'').trim()
     : '';
+  const relay=getChapterEndingRelay(i);
+  const relayContext=relay
+    ? `【章节末尾接力变量｜上一章正文原文锚点】\n以下内容来自上一章已经最终落库的正文最后段落。它不是第二份教案、不是剧情规划，也不是故事状态数据库；只用于帮助本章开头进行很短、自然的文字衔接。\n\n上一章末尾：\n${relay}\n\n【使用规则】不要重新总结上一章；不要机械复制上一章结尾；不要为了使用接力变量而强行添加长过渡；只做必要的自然文字衔接，然后立即进入本章自己的剧情；必须同时服从上一章真实状态和本章老师教案，如有冲突以真实状态为准。`
+    : '';
 
   const parts=[
     `【本章老师原始教案｜唯一内容权威】\n${teacher}`,
     sanitizeChapterWriterContext(continuity),
+    sanitizeChapterWriterContext(relayContext),
     sanitizeChapterWriterContext(dict)
   ].filter(Boolean);
 
@@ -18923,6 +18963,7 @@ function adoptChapterPartial(i){
   if(!p){ toast('本章暂无已缓存文本'); return; }
   snapshotChapterVersion(i);
   state.chapters[i].content = p;
+  updateChapterEndingRelay(i, p);
   delete state._chapterPartial[i];
   chState[i] = 'done';
   persist(); patchChapter(i);
@@ -19409,6 +19450,7 @@ async function genOneChapter(i, btn, opt={}){
     state.chapters[i].content = txt;
     updateFactCardFromChapter(i, txt);
     if(isLong()){ const fin=await finalizeChapterState(i, txt); if(fin.content!==txt){ txt=fin.content; assertChapterLocalHardGate(i, txt); state.chapters[i].content=txt; snapshotChapterVersion(i); persist(); } if(fin.blocked) throw new Error(`第${i+1}章未通过正文硬审核：${fin.audit?.blockReason||fin.audit?.summary||'存在未修复的审核问题'}`); }
+    updateChapterEndingRelay(i, txt);
     invalidateChapterMemory(i);
     chState[i] = 'done';
     if(!isLong()) state.chapters[i].confirmed = false;
@@ -19437,11 +19479,12 @@ async function genTwoChapters(pairStart){
       if(ta){ ta.value = _full2; ta.scrollTop = ta.scrollHeight; }
       patchChapter(idx);
     }) : null;
-    const txt = await writeOneChapterContent(idx, getChapterTeacherRawTextDirect(idx), null, onStream);
+    let txt = await writeOneChapterContent(idx, getChapterTeacherRawTextDirect(idx), null, onStream);
     assertChapterLocalHardGate(idx, txt);
     snapshotChapterVersion(idx);
     state.chapters[idx].content = txt;
     updateFactCardFromChapter(idx, txt); if(isLong()){ const fin=await finalizeChapterState(idx, txt); if(fin.content!==txt){ txt=fin.content; assertChapterLocalHardGate(idx, txt); state.chapters[idx].content=txt; snapshotChapterVersion(idx); } if(fin.blocked) throw new Error(`第${idx+1}章未通过正文硬审核：${fin.audit?.blockReason||fin.audit?.summary||'存在未修复的审核问题'}`); }
+    updateChapterEndingRelay(idx, txt);
     persist();
     invalidateChapterMemory(idx);
   }
@@ -19513,6 +19556,7 @@ async function genNChapters(start, n){
         updateFactCardFromChapter(idx, content);
         if(isLong()){ const fin=await finalizeChapterState(idx, content); if(fin.content!==content){ content=fin.content; assertChapterLocalHardGate(idx, content); state.chapters[idx].content=content; snapshotChapterVersion(idx); persist(); } if(fin.blocked){ throw new Error(`第${idx+1}章未通过正文硬审核：${fin.audit?.blockReason||fin.audit?.summary||'存在未修复的审核问题'}`); } }
         assertChapterLocalHardGate(idx, content);
+        updateChapterEndingRelay(idx, content);
         persist();
         invalidateChapterMemory(idx);
         chState[idx] = 'done';
@@ -19578,6 +19622,7 @@ async function continueAndFinalizeChapter(i, sourceNote){
     state.chapters[i].content = content;
     updateFactCardFromChapter(i, content);
     if(isLong()) await commitChapterObservedState(i, content);
+    updateChapterEndingRelay(i, content);
     invalidateChapterMemory(i);
     chState[i] = 'done';
     persist(); patchChapter(i); renderNarrativeEngineMenu();
@@ -19715,6 +19760,7 @@ async function genOneChapterNoUI(i){
       ? await writeOneChapterContent(i, user)
       : unwrapAIResult(await callDeepSeek(PROMPTS.chapterSys, user, {temperature: resolveActiveSpec().chapterTemp, taskKey:'chapter'})).trim();
     state.chapters[i].content = txt;
+    updateChapterEndingRelay(i, txt);
     persist();
   }catch(e){ /* 继续后续 */ }
 }
