@@ -18,9 +18,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.549';
+const APP_VERSION = '1.0.550';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.549.js';
+const APP_FILE_VERSION = 'app1.0.550.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -14865,6 +14865,7 @@ function openChapterVersionPanel(i){
     if(!window.confirm('恢复该历史版本将覆盖当前正文。\n\n（当前正文会自动保存为一条新的历史版本，不会被删除。）\n确定恢复吗？')) return;
     snapshotChapterVersion(i);                  // 先把当前正文存历史
     c.content = v.content;                      // 用历史版覆盖当前
+    updateChapterEndingRelay(i, c.content);
     c.history.splice(+rb.dataset.cvRestore, 1);
     persist(); closeChapterVersionPanel(); renderChapters();
     toast('已恢复历史版本');
@@ -18694,7 +18695,8 @@ function getChapterEndingRelay(i){
 
 function updateChapterEndingRelay(i, content){
   const ss = storyState();
-  if(!ss.chapters || !ss.chapters[i]) return;
+  if(!ss.chapters) ss.chapters = {};
+  ss.chapters[i] = ss.chapters[i] || {};
   const relay = extractChapterEndingRelay(content);
   ss.chapters[i].endingRelay = { text: relay };
 }
@@ -19385,6 +19387,7 @@ function openComparePanel(i, a, b){
     ch.content = pick;
     if(other && String(other).trim()) ch.history.push({ content: other, ts: Date.now() });   // 未采用稿也入历史备查
     if(ch.history.length > 50) ch.history.splice(0, ch.history.length - 50);
+    updateChapterEndingRelay(i, pick);
     updateFactCardFromChapter(i, pick);
     persist(); closeComparePanel(); renderChapters(); updateWcTotal();
     toast('已采用 '+(isA?'A':'B')+' 稿');
