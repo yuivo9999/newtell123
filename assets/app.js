@@ -2419,7 +2419,7 @@ ${CHAPTER_ENDING_WRITER_RULES}
 
 L0 · 用户明确确定的作品事实、世界观、作品定位、写作风格和直接要求
 
-L1 · 已定稿万物词典中的世界事实
+L1 · 已定稿基础词典中的世界事实
 
 L2 · 老师已经确定的本章教案、推进骨架、事件链、人物调度、时间安排、风格三层规则和章末状态
 
@@ -4021,6 +4021,7 @@ function renderOptimizationStructuredView(o){
     <div class="app-idea-structured-head"><span>✦</span><b>结构化创作蓝图</b><em>用户可读 · 下游 AI 同源</em></div>
     <details open class="app-idea-section"><summary>🎯 故事核心</summary><div class="app-idea-section-body">${kv(b.storyCore)}</div></details>
     <details class="app-idea-section"><summary>👤 主角与核心人物</summary><div class="app-idea-section-body">${kv(b.protagonist)}${escList(b.keyCharacters)}</div></details>
+    <details class="app-idea-section"><summary>🌍 世界与规则</summary><div class="app-idea-section-body">${kv(b.world)}${escList(b.worldRules)}</div></details>
     <details class="app-idea-section"><summary>⚔️ 冲突与故事发展</summary><div class="app-idea-section-body">${kv(b.conflict)}${kv(b.storyArc)}</div></details>
     <details class="app-idea-section"><summary>📖 全书故事节拍</summary><div class="app-idea-section-body" style="background:#fff!important;color:#000!important">${escList(b.fullBookBeat)}</div></details>
   </div>`;
@@ -4076,7 +4077,7 @@ function renderPolishCards(container){
   container.querySelectorAll('[data-pol-use]').forEach(b=>{
     b.onclick = (e)=>{ e.preventDefault();
       const o = (state.polishOptions||[])[+b.dataset.polUse]; if(!o) return;
-      if(dictmasterLocked()){ toast('词典达人已产出万物词典，优化构想已锁定，不可更换'); return; }
+      if(dictmasterLocked()){ toast('词典达人已产出基础词典，优化构想已锁定，不可更换'); return; }
       state.polishAdopted = o.name || null;
       state.polishSelectedId = o._id || null;
       state.polishStatus = 'adopted';
@@ -5544,7 +5545,7 @@ function clampMaxTokens(task){
     chapter: 12000,     // 正文单次输出上限：仅用于一次正常正文生成
     principal: 16384,   // 校长统筹总控
     teacher: 16384,     // 老师分批教案
-    dictmaster: 16384,  // 万物词典生成
+    dictmaster: 16384,  // 基础词典生成
     dictEnrich: 16384,  // 词典充实与收编
     glossary: 9216,
     json: 4096,         // JSON 类契约输出
@@ -6719,7 +6720,7 @@ const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（全
 严格遵守以下优先级：
 
 L0 · 用户确定的作品事实、世界观、作品定位、写作风格与明确要求
-L1 · 全量万物词典中已经确认的世界事实
+L1 · 全量基础词典中已经确认的世界事实
 L2 · 校长全书规划 + 唯一 PrincipalChapterPlan 章节战略
 L3 · 老师在授权边界内形成的本章教案
 L4 · 正文AI文学表达
@@ -7101,7 +7102,7 @@ L0 是最高优先级。
 【十二、词典与创造权限】
 ━━━━━━━━━━━━━━━━━━
 
-【全量万物词典】是全书共享事实资源。
+【全量基础词典】是全书共享事实资源。
 
 已经确定的：
 
@@ -9624,10 +9625,12 @@ function parseOptimizationStructuredBlock(body){
   const optionMeta=kvBlock(block('OPTION_META'));
   const storyCore=kvBlock(block('STORY_CORE'));
   const protagonist=kvBlock(block('PROTAGONIST'));
+  const world=kvBlock(block('WORLD'));
   const conflict=kvBlock(block('CONFLICT'));
   const storyArc=kvBlock(block('STORY_ARC'));
   const keyCharacters=listBlock(block('KEY_CHARACTERS')).map(x=>{const m=splitPipe(x);return {name:m[0]||'',identity:m[1]||'',role:m[2]||'',relation:m[3]||''};});
   const relationships=listBlock(block('RELATIONSHIPS')).map(x=>{const m=splitPipe(x);return {from:m[0]||'',to:m[1]||'',relation:m.slice(2).join('｜')||''};});
+  const worldRules=[]; // 正式世界规则不再由优化构想独立生成；统一由基础词典/词典达人维护
   const fullBookBeat=listBlock(block('FULL_BOOK_BEAT'));
   const styleBlock=block('WRITING_STYLE_INHERITANCE_SUPPLEMENT');
   const styleLines=String(styleBlock||'').split('\n').map(v=>v.trim()).filter(Boolean);
@@ -9646,7 +9649,7 @@ function parseOptimizationStructuredBlock(body){
     }
   });
   stylePackage.supplementStatus = stylePackage.supplements.length ? 'present' : 'none';
-  return {optionMeta,storyCore,protagonist,keyCharacters,relationships,conflict,storyArc,fullBookBeat,writingStyleInheritanceSupplement:stylePackage};
+  return {optionMeta,storyCore,protagonist,keyCharacters,relationships,world,worldRules,conflict,storyArc,fullBookBeat,writingStyleInheritanceSupplement:stylePackage};
 }
 
 function explicitPersonNamesFromUserIdea(){
@@ -9702,7 +9705,7 @@ function parseOptimizationPlainText(raw, multi){
       bookTitle:String(sb.optionMeta?.bookTitle||'').trim(),
       name:String(sb.optionMeta?.name||'').trim(),
       novelSummary:[sb.storyCore?.genre,sb.storyCore?.tone,sb.storyCore?.core_promise,sb.storyCore?.story_question].filter(Boolean).join('；'),
-      optimizedIdea:[sb.protagonist?.name?`主角：${sb.protagonist.name}`:'',sb.protagonist?.goal?`目标：${sb.protagonist.goal}`:'',sb.protagonist?.growth?`成长：${sb.protagonist.growth}`:'',sb.conflict?.surface?`表层冲突：${sb.conflict.surface}`:'',sb.conflict?.deep?`深层冲突：${sb.conflict.deep}`:''].filter(Boolean).join('\n'),
+      optimizedIdea:[sb.protagonist?.name?`主角：${sb.protagonist.name}`:'',sb.protagonist?.goal?`目标：${sb.protagonist.goal}`:'',sb.protagonist?.growth?`成长：${sb.protagonist.growth}`:'',sb.conflict?.surface?`表层冲突：${sb.conflict.surface}`:'',sb.conflict?.deep?`深层冲突：${sb.conflict.deep}`:'',sb.world?.world_summary?`世界：${sb.world.world_summary}`:''].filter(Boolean).join('\n'),
       fullBookBeat:sb.fullBookBeatText||'',
       navBeacon:{genre:sb.storyCore?.genre||'',protagonist:sb.protagonist?.name||'',coreConflict:sb.conflict?.surface||sb.conflict?.deep||'',tone:sb.storyCore?.tone||''},
       strategyFingerprint:{mainStrategy:sb.conflict?.character||sb.conflict?.surface||'',secondaryStrategy:sb.storyArc?.phase_2||'',coreConflict:sb.conflict?.surface||sb.conflict?.deep||'',storyEngine:sb.conflict?.deep||'',emotionalPromise:sb.storyCore?.core_promise||'',pacing:sb.storyArc?.phase_3||''}
@@ -9717,7 +9720,7 @@ function parseOptimizationPlainText(raw, multi){
   for(const o of options){ if(!o.bookTitle) o.bookTitle=''; if(!o.navBeacon.genre)o.navBeacon.genre='未明确'; if(!o.navBeacon.protagonist)o.navBeacon.protagonist='未明确'; if(!o.navBeacon.tone)o.navBeacon.tone='遵循用户已选风格'; if(!o.strategyFingerprint.mainStrategy)o.strategyFingerprint.mainStrategy=o.strategicDimensions[0]?.name||'当前故事主线'; if(!o.strategyFingerprint.secondaryStrategy)o.strategyFingerprint.secondaryStrategy=o.strategicDimensions[1]?.name||'辅助推进'; if(!o.strategyFingerprint.storyEngine)o.strategyFingerprint.storyEngine='由核心冲突持续驱动'; if(!o.strategyFingerprint.emotionalPromise)o.strategyFingerprint.emotionalPromise='持续兑现核心冲突带来的情绪推进'; if(!o.strategyFingerprint.pacing)o.strategyFingerprint.pacing='遵循用户已选全书拍子'; }
   if(analysis.strategicDimensions.length<6||analysis.strategicDimensions.length>10) return {ok:false,error:`动态战略维度解析得到 ${analysis.strategicDimensions.length} 项（要求6—10项）`,options,analysis};
   // 1.0.358：生成阶段只接受结构式蓝图，不允许结构块之外再出现平行故事版本。
-  const allowed = ['OPTION_META','STORY_CORE','PROTAGONIST','KEY_CHARACTERS','RELATIONSHIPS','WORLD','WORLD_RULES','CONFLICT','STORY_ARC','FULL_BOOK_BEAT','WRITING_STYLE_INHERITANCE_SUPPLEMENT'];
+  const allowed = ['OPTION_META','STORY_CORE','PROTAGONIST','KEY_CHARACTERS','RELATIONSHIPS','WORLD','CONFLICT','STORY_ARC','FULL_BOOK_BEAT','WRITING_STYLE_INHERITANCE_SUPPLEMENT'];
   for(const [i,sec] of optionBlocks.entries()){
     let rest=String(sec.body||'');
     for(const tag of allowed){
@@ -9737,7 +9740,7 @@ function validateIdeaOptimizationTextOutput(raw, ctx){
   if(!parsed.ok) return {ok:false,code:'PLAIN_TEXT_CONTRACT',details:parsed.error||'纯文本结构不符合要求'};
   const nameErr=validateOptimizationPersonNaming(parsed);
   if(nameErr) return {ok:false,code:'OPTIMIZATION_PERSON_NAMING',details:nameErr};
-  const required=['storyCore','protagonist','conflict','storyArc'];
+  const required=['storyCore','protagonist','world','conflict','storyArc'];
   const blueprintErrors=[];
   for(const [i,o] of parsed.options.entries()){
     const b=o.structuredBlueprint||{};
@@ -10370,8 +10373,11 @@ growth=...
 [RELATIONSHIPS]
 - 人物A｜人物B｜关系与变化方向
 [/RELATIONSHIPS]
-【世界背景边界】
-优化构想可以读取用户原始构想中的世界背景与规则，用于剧情构想；但本阶段不得输出 WORLD / WORLD_RULES 正式世界观区块，也不得建立正式世界观数据库。正式 WORLD / WORLD_RULES 由后续词典达人统一定稿。
+[WORLD]
+time=...
+setting=...
+world_summary=...
+[/WORLD]
 [CONFLICT]
 surface=...
 deep=...
@@ -11851,7 +11857,7 @@ const FLOW_NAV = [
   ['典','[data-flow="6"], [data-flow="5"]'],     // 词典达人：建设者
   ['充','[data-flow="7"], [data-flow="6"]'],     // 词典充实：深化者
   ['校','[data-flow="8"], [data-flow="7"]'],     // 校长/学校统筹
-  ['词','[data-flow="7.5"], [data-flow="8.5"], .card-theme-glossary, .gs-card'],     // 万物词典：全书共享事实数据库
+  ['词','[data-flow="7.5"], [data-flow="8.5"], .card-theme-glossary, .gs-card'],     // 基础词典：全书共享事实数据库
   ['正','[data-flow="9"], [data-flow="8"]']      // 正文作家 · 章节创作
 ];
 function flowNavItems(){
@@ -12111,7 +12117,7 @@ function getDeckStepStatus(){
     { key:'style', name:'风格', done:s1_done, target:'[data-flow="1"]', desc: s1_done ? '已选定小说文风倾向' : '待设定小说文风' },
     { key:'idea',  name:'构想', done:s2_done, target:'[data-flow="2"]', desc: s2_done ? '核心故事构想已就绪' : '待输入核心构想' },
     { key:'outline',name:'大纲', done:s3_done, target: (o ? '[data-flow="2"]' : '#btnGenOutline'), desc: s3_done ? `已定稿 ${chs.length} 章分卷大纲` : '待生成全书大纲' },
-    { key:'dict',  name:'词典', done:s4_done, target:'.card-theme-dictmaster', desc: s4_done ? '万物词典人物/地名已架构' : '待词典达人建立万物词典' },
+    { key:'dict',  name:'词典', done:s4_done, target:'.card-theme-dictmaster', desc: s4_done ? '基础词典人物/地名已架构' : '待词典达人建立基础词典' },
     { key:'principal',name:'校长', done:s5_done, target:'.school-card', desc: s5_done ? '校长统筹守则与标题已定稿' : '待校长统筹全局' },
     { key:'teacher',name:'老师', done:s6_done, target:'.school-teachers', desc: s6_done ? (groups.length > 1 ? `${groups.length} 位老师分段教案就绪` : '老师教案就绪') : '待老师备课分段教案' },
     { key:'chapter',name:'正文', done:s7_done, target:'.chapter-card', desc: written ? `正文已落地 ${written}/${total||'?'} 章` : '待生成第 1 章正文' }
@@ -12182,7 +12188,7 @@ function openCreationProgressModal(){
           <div style="font-size:11px;color:var(--dim);margin-top:6px">${written ? `均章 ${Math.round(totalChars/written)} 字` : '首章待生成'}</div>
         </div>
         <div style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 12px">
-          <div style="font-size:11px;color:var(--dim)">万物词典资产</div>
+          <div style="font-size:11px;color:var(--dim)">基础词典资产</div>
           <div style="font-size:18px;font-weight:700;color:var(--txt);margin-top:2px">${charCount} 人物 · ${placeCount} 地名</div>
           <div style="font-size:11px;color:var(--dim);margin-top:6px">${propCount} 专名 · ${ruleCount} 规则</div>
         </div>
@@ -12471,7 +12477,7 @@ function viewStory(){
         ${ safeCard(()=>schoolZoneBlock()) }
       </section>
 <section class="flow-sec flow-info-sec" data-flow="7.5">
-  <div class="flow-sec-head"><span class="fs-no">📇</span><span class="fs-name">万物词典</span><span class="fs-note">全书共享事实数据库 · 正文的设定唯一基准</span></div>
+  <div class="flow-sec-head"><span class="fs-no">📇</span><span class="fs-name">基础词典</span><span class="fs-note">全书共享事实数据库 · 正文的设定唯一基准</span></div>
   ${ glossaryCardHtml() }
 </section>
 ${longNovelMemoryRepoHtml()}
@@ -12591,7 +12597,7 @@ ${longNovelMemoryRepoHtml()}
       ${ schoolZoneBlock() }
     </section>
 <section class="flow-sec flow-info-sec" data-flow="7.5">
-  <div class="flow-sec-head"><span class="fs-no">📇</span><span class="fs-name">万物词典</span><span class="fs-note">全书共享事实数据库 · 正文的设定唯一基准</span></div>
+  <div class="flow-sec-head"><span class="fs-no">📇</span><span class="fs-name">基础词典</span><span class="fs-note">全书共享事实数据库 · 正文的设定唯一基准</span></div>
   ${ safeCard(()=>glossaryCardHtml()) }
 </section>
 ${longNovelMemoryRepoHtml()}
@@ -12922,8 +12928,8 @@ function bindFixQueueCard(){
 
 function syncOrigIdeaCard(){
   const t = $('.orig-text'); if(!t) return;
-  if(state.dictmasterRan){ t.value = String(state.originalIdeaSnapshot || state.idea || '').trim() || '（尚未生成万物词典）'; }
-  else { t.value = String(state.idea || '').trim() || '（尚未生成万物词典）'; }
+  if(state.dictmasterRan){ t.value = String(state.originalIdeaSnapshot || state.idea || '').trim() || '（尚未生成基础词典）'; }
+  else { t.value = String(state.idea || '').trim() || '（尚未生成基础词典）'; }
 }
 
 function origIdeaCard(){
@@ -12938,7 +12944,7 @@ function origIdeaCard(){
       <button type="button" class="btn small ghost gs-tool" data-orig-copy title="复制构想原文">📋 复制</button>
     </div>
     <div class="orig-body" hidden>
-      <textarea readonly class="orig-text" spellcheck="false">${esc(show || '（尚未生成万物词典）')}</textarea>
+      <textarea readonly class="orig-text" spellcheck="false">${esc(show || '（尚未生成基础词典）')}</textarea>
     </div>
   </div>`;
 }
@@ -14085,7 +14091,7 @@ function glossaryCardHtml(){
     <button type="button" class="btn ghost gs-tool" data-gs-subboard ${(g.subplots&&g.subplots.length)?'':'hidden'} title="列出未收束且消失过久的副线，提示是否安排回归">🧵 副线看板</button>
     <input type="file" id="gsImportFile" accept=".json,application/json" hidden />
   </span>`;
-  if(empty) return `<div class="card gs-card card-theme-glossary"><div class="gs-card-head card-head-bar"><div class="ch-left"><span class="ch-badge ch-badge-glossary">📇</span><h3 class="ch-title">设定表 · 万物词典总览</h3><span class="ch-subtag ch-subtag-glossary">待生成</span></div><div class="ch-right"><span class="muted" style="font-size:12px">一致性基准</span></div></div><div class="gs-card-body">${tools}<p class="sub">生成大纲后自动确立全书万物词典基准。</p></div></div>`;
+  if(empty) return `<div class="card gs-card card-theme-glossary"><div class="gs-card-head card-head-bar"><div class="ch-left"><span class="ch-badge ch-badge-glossary">📇</span><h3 class="ch-title">设定表 · 基础词典总览</h3><span class="ch-subtag ch-subtag-glossary">待生成</span></div><div class="ch-right"><span class="muted" style="font-size:12px">一致性基准</span></div></div><div class="gs-card-body">${tools}<p class="sub">生成大纲后自动确立全书基础词典基准。</p></div></div>`;
   const fmt = (o, keys)=>{ const ks = (keys||[]).filter(k=>o[k]); return ks.map(k=>o[k]).join(' · '); };
   const entry = (o, type, i, nameKeys, detailKeys)=>{
     const name = o.name || '';
@@ -14169,7 +14175,7 @@ function glossaryCardHtml(){
     <div class="gs-card-head card-head-bar" role="button" tabindex="0" data-gs-card-toggle style="cursor:pointer">
       <div class="ch-left">
         <span class="ch-badge ch-badge-glossary">📇</span>
-        <h3 class="ch-title">设定表 · 万物词典总览</h3>
+        <h3 class="ch-title">设定表 · 基础词典总览</h3>
         <span class="ch-subtag ch-subtag-glossary">${total} 条已收录${worldTotal?` · 世界素材 ${worldTotal}（正文按章授权调用）`:""}</span>
       </div>
       <div class="ch-right">
@@ -14417,7 +14423,7 @@ function openGlossaryTableView(type){
   ov.innerHTML = `<div class="gs-modal gs-view-modal gvt-modal">
     <div class="gs-modal-head"><b>${c.name}（<span class="gvt-count">${list.length}</span> 条 · 可编辑）</b><button class="gs-x" data-gvt-close>✕</button></div>
     <div class="cv-body" style="max-height:60vh;overflow:auto">
-      <p class="muted" style="margin:0 0 8px">直接编辑即可；保存后自动写回万物词典，重新生成正文章节时即套用新值。</p>
+      <p class="muted" style="margin:0 0 8px">直接编辑即可；保存后自动写回基础词典，重新生成正文章节时即套用新值。</p>
       ${rowsEl}
       <button type="button" class="btn ghost gs-tool gvt-add">＋ 新增一行</button>
     </div>
@@ -16210,7 +16216,7 @@ const genOutline = async function(){
   if(!canRunAI('outline')){ toast('请先完成上游步骤：优化构想'); if(btn) busy(btn,false); return; }
   const adopted = currentCanonicalStoryStrategy();
   if(!adopted){ toast('请先在“优化构想”中明确采用一个方案，建立唯一故事战略后再生成大纲'); if(btn) busy(btn,false); return; }
-  if(dictmasterLocked()){ toast('词典达人已产出万物词典，优化构想已锁定，不可再换选重搬'); if(btn) busy(btn,false); return; }
+  if(dictmasterLocked()){ toast('词典达人已产出基础词典，优化构想已锁定，不可再换选重搬'); if(btn) busy(btn,false); return; }
   if(!confirmOutlineContentGuard()){ if(btn) busy(btn,false); return; }
   markAIRunning('outline');
   if(btn) busy(btn,true,'搬运大纲中…');
@@ -16502,8 +16508,6 @@ name 字段只能写实体名称。
 
 因此任何进入正式词典的内容，都必须经得起长期正文使用。
 
-【正式世界观职责边界】优化构想阶段只提供故事背景与剧情构想，不再正式生产 WORLD / WORLD_RULES。你是 WORLD / WORLD_RULES 的唯一正式生产者；后续模块只读取你定稿的正式世界观，不得重新建立第二套。
-
 【十九A、最低通行标准｜硬约束与可选内容必须严格分离】
 词典达人只负责建立 Foundation Dictionary 的最小可用核心骨架，不负责一次性完成整本小说百科全书。
 注意：这里的“最小”不是“只抄蓝本已有人物”。词典达人必须判断故事是否需要新增核心人物；蓝本只有一个人物时，允许建立更多必要核心人物，也允许在确实不需要时保持单人物结构。不要把“关系表可为空”误解成“不能建立新人物”。
@@ -16626,6 +16630,8 @@ content=具体内容
 value=长期创作价值
 note=关键说明
 [/LIFE_SETTING]
+
+【程序元数据边界】不要输出 sourceType、createdBy、_dictmaster 等程序内部来源字段；这些由 JS 在收录时内部记录。人物的 id/tier/origin/coreRole 属于人物语义与稳定实体锚点，必须保留。
 
 【输出顺序】WORLD 必须最先出现；随后按 CHARACTER → RELATION → LOCATION → PLACE_CONTACT → PROPER_NOUN → PROPER_CONTACT → RULE → ORGANIZATION → INSTITUTION → ITEM → TERM → HISTORY → LIFE_SETTING 的顺序输出。没有真实关系的区块可以完全省略。不要为了凑数量创建虚假关系。
 【结构式纯文本要求】不要输出大段散文；不要把字段内容拆成多行；不要输出 JSON 花括号。名称、ID、关系两端必须可由程序直接读取。
@@ -16882,7 +16888,7 @@ async function genDictMaster(btn){
   if(!currentCanonicalStoryStrategy()){ toast('先在优化构想中采用一个方案，建立唯一故事战略'); return false; }
   state.originalIdeaSnapshot = String(state.idea || '').trim() || state.originalIdeaSnapshot;
   markAIRunning('dictmaster');
-  if(btn) busy(btn,true,'生成万物词典中…');
+  if(btn) busy(btn,true,'生成基础词典中…');
   if(btn && btn.parentNode) showStopBtn(btn.parentNode);
   let _refreshGlossaryAfterDictMaster = false;
   let _refreshDictMasterCard = false;
@@ -16899,12 +16905,12 @@ async function genDictMaster(btn){
       state.dictmasterHistory=Array.isArray(state.dictmasterHistory)?state.dictmasterHistory:[];
       state.dictmasterHistory.unshift(state.dictmasterLatest); if(state.dictmasterHistory.length>6) state.dictmasterHistory=state.dictmasterHistory.slice(0,6);
       state.dictmasterRan=true; markAIDone('dictmaster'); scMark('dictMaster',true); persist(); refreshDictMasterCardOnly();
-      toast('万物词典已生成并保存原文；结构化解析未完整，但不再作为生成失败。'); return true;
+      toast('基础词典已生成并保存原文；结构化解析未完整，但不再作为生成失败。'); return true;
     }
     try{ normalizeDictMasterEntities(j); }catch(normErr){
       addGenerationDiagnostic('dictMaster',{type:'STRUCTURE',code:'DICTMASTER_NORMALIZE_PARTIAL',details:String(normErr?.message||normErr)});
       state.dictmasterLatest={ts:Date.now(),book:(o.title)||'',raw:String(txt||'').trim(),parseStatus:'partial'}; state.dictmasterRan=true; markAIDone('dictmaster'); scMark('dictMaster',true); persist(); refreshDictMasterCardOnly();
-      toast('万物词典已生成并保存原文；结构化规范化未完整，但不再作为生成失败。'); return true;
+      toast('基础词典已生成并保存原文；结构化规范化未完整，但不再作为生成失败。'); return true;
     }
     // 421：移除词典达人的阻塞式质量质检；结构解析、规范化以及后续名称禁则/安全写入保护仍保留。
     o.glossary = ensureGlossaryKnowledgeShape(o.glossary || { characters:[], places:[], propernouns:[], subplots:[] });
@@ -16955,12 +16961,12 @@ async function genDictMaster(btn){
     refreshDictMasterCardOnly();
     _refreshGlossaryAfterDictMaster = true;
     _refreshDictMasterCard = true;
-    toast(`万物词典已生成：人物 ${result.nChar} · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系 ${result.nRel} · 规则 ${result.nWR} · 组织 ${result.nOrg} · 机构 ${result.nInst} · 道具 ${result.nItem} · 术语 ${result.nTerm} · 历史 ${result.nEvent} · 生活 ${result.nLife}（世界基底已建立）`);
+    toast(`基础词典已生成：人物 ${result.nChar} · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系 ${result.nRel} · 规则 ${result.nWR} · 组织 ${result.nOrg} · 机构 ${result.nInst} · 道具 ${result.nItem} · 术语 ${result.nTerm} · 历史 ${result.nEvent} · 生活 ${result.nLife}（世界基底已建立）`);
     playEventSound('dictmaster_done');
     return true;
   }catch(e){
     if(e.name !== 'AbortError') addToFixQueue({kind:'dictmaster', error:e.message});
-    toast(e.name==='AbortError' ? '已停止生成万物词典' : '万物词典生成失败：'+e.message);
+    toast(e.name==='AbortError' ? '已停止生成基础词典' : '基础词典生成失败：'+e.message);
     if(e.name!=='AbortError') reportSoundError('dictmaster', e);
     if(st){ st.className='status err'; st.textContent = e.message; }
     return false;
@@ -17046,7 +17052,7 @@ function dictMasterBlockHtml(){
       </div>
     </div>
     ${locked?`<div class="dm-locked" style="margin:6px 0;color:#2e9e5b;font-size:12px">设定已锁定，可在「编剧学院」中一键迭代。</div>`:''}
-    <div class="btn-row"><p class="muted" style="margin:8px 0 0;font-size:12px">尚未生成万物词典，开学后自动构建设定库。</p></div>
+    <div class="btn-row"><p class="muted" style="margin:8px 0 0;font-size:12px">尚未生成基础词典，开学后自动构建设定库。</p></div>
     ${status}
   </div>`;
 }
@@ -17073,7 +17079,7 @@ function openDictMasterHistoryPanel(){
       </div>`;
   };
   ov.innerHTML = `<div class="gs-modal dm-hist-modal">
-    <div class="gs-modal-head"><b>🕘 词典达人 · 万物词典历史（${hist.length}/6）</b><button class="gs-x" data-dmh-close>✕</button></div>
+    <div class="gs-modal-head"><b>🕘 词典达人 · 基础词典历史（${hist.length}/6）</b><button class="gs-x" data-dmh-close>✕</button></div>
     <div class="dm-tabs">${tabs}</div>
     <div class="cv-body"><div id="dmhBody" style="max-height:62vh;overflow:auto">${renderBody(idx)}</div></div>
   </div>`;
@@ -17139,7 +17145,7 @@ function cleanEntityName(raw){
   return [s, extra];
 }
 
-const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实师」，负责在已经定稿的「词典达人万物词典」基础上，为整部小说继续扩建细节、生活层、环境层和辅助人物素材。
+const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实师」，负责在已经定稿的「词典达人基础词典」基础上，为整部小说继续扩建细节、生活层、环境层和辅助人物素材。
 
 你不是第二个词典达人：你只能在已经确定的世界里继续创造，不能重新定义这个世界。
 
@@ -17185,6 +17191,9 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 * 路人和氛围龙套
 
 让后续正文拥有足够丰富的“可写素材”。
+
+【人物资源倾向｜约50%，但不是硬比例】
+在故事确有足够人物素材的情况下，应把约一半的有效输出资源优先用于人物/角色的补充与深化，尤其是生活层、职业层、关系层、行为细节和可写描写素材；其余资源再用于地点、组织、专名、道具、规则、术语、历史与生活环境。这里的“约50%”只是资源倾向，不是机械配额。素材不足时不得虚构人物、重复已有人物或用空洞字段凑比例。
 
 【一、人物扩建｜只补外围，不重建核心】
 词典达人阶段已经先完成“核心人物体系”的建立。这里的 Foundation characters 是只读核心集合，包含 Blueprint 已确认人物，也包含词典达人判断主线必需后主动创建并定稿的新核心人物。
@@ -17586,7 +17595,7 @@ name 字段只能填写纯实体名称。
 
 你可以扩建词典，但不能建立第二套世界。
 
-你的新增内容一旦正式收录，也会成为后续正文可以使用的正式创作事实；其权威级别低于 Creative Blueprint 与 dictionary_foundation，不得覆盖上游事实；来源标记由 JS 内部维护，不进入 AI 输出协议。
+你的新增内容一旦正式收录，也会成为后续正文可以使用的正式创作事实；其来源级别由 JS 在收录时内部标记为 dictionary_enrichment，权威级别低于 Creative Blueprint 与 dictionary_foundation，不得覆盖上游事实。
 `;
 function buildDictEnrichUser(){
   const o = state.outline || {};
@@ -17714,7 +17723,7 @@ function buildDictEnrichUser(){
     dmSections.push(`【词典达人架构总结】${state.dictmasterLatest.summary}`);
   }
 
-  parts.push('【第三部分：本次词典充实允许做什么】只在 dictionary_foundation 之上增加辅助/外围/生活层素材：次要配角、外围地点、次要组织/机构、辅助专名、次要/生活道具、补充术语、外围历史、生活设定、行业生态、地方习俗、环境细节。禁止重新定义、覆盖、改名或升级任何 Foundation 核心事实；禁止新增主角/核心人物/主线关键人物/幕后Boss；关系只能引用已存在实体，不能借关系偷偷创造核心实体。用户后续通过人物定名台主动改名属于用户授权操作，不属于词典充实权限。所有新增条目的来源标记由 JS 在解析入库时自动附加；AI 不需要输出 sourceType、来源、创建时间等机器元数据。');
+  parts.push('【第三部分：本次词典充实允许做什么】只在 dictionary_foundation 之上增加辅助/外围/生活层素材：次要配角、外围地点、次要组织/机构、辅助专名、次要/生活道具、补充术语、外围历史、生活设定、行业生态、地方习俗、环境细节。禁止重新定义、覆盖、改名或升级任何 Foundation 核心事实；禁止新增主角/核心人物/主线关键人物/幕后Boss；关系只能引用已存在实体，不能借关系偷偷创造核心实体。用户后续通过人物定名台主动改名属于用户授权操作，不属于词典充实权限。所有新增条目的来源标记由 JS 自动写入，不要求 AI 输出 sourceType。');
   const dictmasterPart = `【第二部分：词典达人所生成的所有内容（只读参照：不得改动、不得重复新增同名）】\n${dmSections.length ? dmSections.join('\n\n') : '（暂无词典达人生成数据）'}`;
   parts.push(dictmasterPart);
 
@@ -18018,10 +18027,10 @@ function mergeDictEnrich(res){
     const existing = findExisting(g.walkons, nm);
     if(existing){
       if(!existing.note && it.note) existing.note = it.note;
-      markGlossaryEnrichment(g,'propernouns',existing,{how:'词典充实'});
+      markGlossaryEnrichment(g,'walkons',existing,{how:'词典充实'});
       return;
     }
-    markGlossaryEnrichment(g,'propernouns',it,{how:'词典充实'});
+    markGlossaryEnrichment(g,'walkons',it,{how:'词典充实'});
     g.walkons.push(it);
     n.w++;
   });
@@ -18029,7 +18038,22 @@ function mergeDictEnrich(res){
   const ensureArr = key => { if(!Array.isArray(g[key])) g[key]=[]; return g[key]; };
   const mergeGeneric = (key, list) => {
     const arr=ensureArr(key); const names=new Set(arr.map(x=>String(x&&x.name||'').trim()).filter(Boolean));
-    (list||[]).forEach(it=>{ const nm=String(it&&it.name||'').trim(); if(!nm || names.has(nm)) return; markGlossaryEnrichment(g,key,it,{how:'词典充实'}); arr.push(it); names.add(nm); n[key]=(n[key]||0)+1; });
+    (list||[]).forEach(it=>{
+      const nm=String(it&&it.name||'').trim(); if(!nm) return;
+      const existing=arr.find(x=>String(x&&x.name||'').trim()===nm);
+      if(existing){
+        // Foundation 资料只读；enrichment 资料允许补齐空字段，但不覆盖已有正式值。
+        if(isGlossaryFoundation(g,key,existing)) return;
+        Object.keys(it||{}).forEach(f=>{
+          if(f==='name' || f==='sourceType' || f.startsWith('_')) return;
+          const nv=String(it[f]??'').trim(); const ov=String(existing[f]??'').trim();
+          if(!ov && nv) existing[f]=it[f];
+        });
+        markGlossaryEnrichment(g,key,existing,{how:'词典充实'});
+        return;
+      }
+      markGlossaryEnrichment(g,key,it,{how:'词典充实'}); arr.push(it); names.add(nm); n[key]=(n[key]||0)+1;
+    });
   };
   mergeGeneric('organizations',res.organizations); mergeGeneric('institutions',res.institutions); mergeGeneric('items',res.items);
   mergeGeneric('rules',res.rules); mergeGeneric('terms',res.terms); mergeGeneric('events',res.events); mergeGeneric('lifeSettings',res.lifeSettings);
@@ -18042,7 +18066,7 @@ function mergeDictEnrich(res){
       const id=identity(a); if(!id) return;
       const existing=index.get(id);
       if(existing){
-        if(isGlossaryFoundation(g,'characters',existing)) return;
+        if(isGlossaryFoundation(g,key,existing)) return;
         ['relation','note','scope','cat','rule','limit'].forEach(f=>{ if(!existing[f] && a[f]) existing[f]=a[f]; });
         markGlossaryEnrichment(g,key,existing,{how:'词典充实'});
         return;
@@ -18059,14 +18083,14 @@ function mergeDictEnrich(res){
   return n;
 }
 
-const DICT_HARVEST_SYS = `你是一位长篇小说的「正文收编师」。正文创作结束后，系统会把「反复出现/有戏份、但尚未录入词典」的新实体候选名单及其在正文中的出现片段交给你。你的职责是判定哪些应正式收编进「万物词典」，哪些只是已有角色的别名、哪些只是一次性路人。
+const DICT_HARVEST_SYS = `你是一位长篇小说的「正文收编师」。正文创作结束后，系统会把「反复出现/有戏份、但尚未录入词典」的新实体候选名单及其在正文中的出现片段交给你。你的职责是判定哪些应正式收编进「基础词典」，哪些只是已有角色的别名、哪些只是一次性路人。
 【判定流程】
 1. 对每个候选先做【别名吸附】：它是否只是已有词典人物的 缩略 / 字号 / 绰号 / 异写？
    - 是 → 不新增、不改名，该候选直接跳过，并在结果末尾附一行【已吸附】说明它是哪个已有名的别名。
 2. 确属全新角色，且「反复出现或有戏份、值得被词典收编」：按词典充实的格式输出其设定，收编进对应类别（人物/地名/专名/路人）。
 3. 只是一次性路人/出场单薄没戏份：不输出（不入典）。
 【硬性约束】
-· 万物词典已收录的名一律不得重复新增同名，不得改动既有词条。
+· 基础词典已收录的名一律不得重复新增同名，不得改动既有词条。
 · 判定必须基于给出的正文片段证据，禁止臆造设定；身份/关系等要点要能与片段对得上。
 【输出格式】每行一个实体，用「类别｜名称｜字段：值；字段：值」格式、末尾加分号。类别只用 人物/地名/专名/路人；人物最好给 身份/关系 等可入典要点（正文片段里有的才写，没有则不编）。若本批决定不入任何实体，只输出一行【收编】无新增候选。`;
 function _parsedCastList(text){
@@ -18137,7 +18161,7 @@ function buildDictHarvestUser(){
   (g.places||[]).forEach(x=>vis.push(`地名·${String(x&&x.name||'').trim()}`));
   (g.propernouns||[]).forEach(x=>vis.push(`专名·${String(x&&x.name||'').trim()}`));
   (g.walkons||[]).forEach(x=>vis.push(`路人·${String(x&&x.name||'').trim()}`));
-  parts.push(`【万物词典（现有，只读参照：不得改动、不得重复新增同名；用于分辨候选是否为已有名的缩略/字号/绰号）】\n${vis.join('\n')||'（无）'}`);
+  parts.push(`【基础词典（现有，只读参照：不得改动、不得重复新增同名；用于分辨候选是否为已有名的缩略/字号/绰号）】\n${vis.join('\n')||'（无）'}`);
   return parts.join('\n\n');
 }
 function dictHarvestGate(opts){
@@ -18280,7 +18304,7 @@ async function genDictEnrich(btn, opts){
     _refreshGlossaryAfterDictEnrich = true;
     _refreshDictEnrichCard = true;
     if(stream) stream.style.display='none';
-    toast(`词典已充实：人物 ${n.main||0}/${n.support||0} · 路人 ${n.w||0} · 地名 ${n.p} · 专名 ${n.k} · 世界素材 ${[n.organizations,n.institutions,n.items,n.rules,n.terms,n.events,n.lifeSettings].reduce((a,v)=>a+(Number(v)||0),0)} · 关系/关联 ${[n.relationshipTable,n.placeContacts,n.properContacts].reduce((a,v)=>a+(Number(v)||0),0)} · 世界规则 ${n.worldRules||0}（已并入万物词典，正文可直接选用）`);
+    toast(`词典已充实：人物 ${n.main||0}/${n.support||0} · 路人 ${n.w||0} · 地名 ${n.p} · 专名 ${n.k} · 世界素材 ${[n.organizations,n.institutions,n.items,n.rules,n.terms,n.events,n.lifeSettings].reduce((a,v)=>a+(Number(v)||0),0)} · 关系/关联 ${[n.relationshipTable,n.placeContacts,n.properContacts].reduce((a,v)=>a+(Number(v)||0),0)} · 世界规则 ${n.worldRules||0}（已并入基础词典，正文可直接选用）`);
     playEventSound('dictEnrich_done');
     return true;
   }catch(e){
@@ -18371,7 +18395,7 @@ function dictEnrichBlockHtml(){
       const isNew = !!(it && isGlossaryEnrichment(g,mode||'',it));
       const goto = it.gsType ? `data-de-goto="${it.gsType}:${it.gsIdx}"` : '';
       return `<div class="de-item${isNew?' new':''}">
-        <button type="button" class="de-chip" style="--h:${hue(nm)}" ${goto} title="点击定位万物词典中的「${esc(nm)}」">${isNew?'✦ ':''}${esc(nm)}</button>
+        <button type="button" class="de-chip" style="--h:${hue(nm)}" ${goto} title="点击定位基础词典中的「${esc(nm)}」">${isNew?'✦ ':''}${esc(nm)}</button>
         <span class="de-brief-desc dm-rel-txt" title="${esc(nm+'：'+brief)}">${esc(brief)}</span>
       </div>`;
     }).join('') : '<span class="muted">（暂无）</span>';
@@ -19093,7 +19117,7 @@ function openChapterRegenPanel(i){
         <div class="advice-ai-row">
           <button type="button" class="btn small ghost" data-advice-ai="${i}">✨ 正文优化建议</button>
           <button type="button" class="ai-upload-btn ai-hist-btn" data-advadv-hist="${i}" title="章节内容 AI 建议历史：回看已生成过的建议（随项目保存）">📖<span class="ai-hist-badge">${Array.isArray(state.contentAdviceHist)?state.contentAdviceHist.length:''}</span></button>
-          <span class="muted" style="font-size:11px">AI 审读本章全文、上一章全文、下一章标题与万物词典给 1–3 条点评建议；点击即回填，可再手改</span>
+          <span class="muted" style="font-size:11px">AI 审读本章全文、上一章全文、下一章标题与基础词典给 1–3 条点评建议；点击即回填，可再手改</span>
         </div>
         <div data-advice-ai-out></div>
         ${histHtml}
@@ -19280,7 +19304,7 @@ function buildAiRefineCtx(i){
     上一章标题: prev ? (prev.title||('第'+i+'章')) : '',
     上一章全文: (prev && prev.content) ? String(prev.content) : '',   // 上一章全文全量
     下一章标题: (o.chapters[i+1]&&o.chapters[i+1].title)||'',
-    万物词典: `人物：${dictChars||'（无）'}\n地点：${dictPlaces||'（无）'}\n专名：${dictProps||'（无）'}`,
+    基础词典: `人物：${dictChars||'（无）'}\n地点：${dictPlaces||'（无）'}\n专名：${dictProps||'（无）'}`,
     当前写作风格: chapNames || '无'
   };
 }
@@ -19288,11 +19312,11 @@ function aiRefineAdvicePrompt(ctx, raw){
   const _raw = String(raw||'').trim();
   return { system:[
     '你是资深网文长篇编辑。用户在建议框里可能写了一段补充要求（续写、扩写、改段落、修正称呼错别字等），也可能留空、只是想听你对本章正文的专业点评。',
-    '请审读给出的【本章全文】【万物词典】【上下文】，输出 1–3 条建议（至少 1 条、最多 3 条）；每条 = { title(一句话定位本条侧重), text(完整点评 + 可直接下发给章节生成 AI 的可执行命令) }。',
+    '请审读给出的【本章全文】【基础词典】【上下文】，输出 1–3 条建议（至少 1 条、最多 3 条）；每条 = { title(一句话定位本条侧重), text(完整点评 + 可直接下发给章节生成 AI 的可执行命令) }。',
     '【允许"无建议"】若本章已写得很稳、没有真正值得动的地方，就只返回 1 条：{"title":"无建议","text":"本章整体稳定，暂不建议改动。"}——宁缺毋滥，绝不为了凑满条数硬找问题或胡说八道。',
-    '【点评要点】节奏是否拖沓或太赶、对白是否有辨识度与推进力、悬念与留白是否给足、人物言行是否与万物词典中的身份/性格/关系一致（有无OOC）、是否承接上一章结尾、是否为下一章（'+ (ctx.下一章标题||'') +'）留好引子、与万物词典命名/设定是否冲突。',
+    '【点评要点】节奏是否拖沓或太赶、对白是否有辨识度与推进力、悬念与留白是否给足、人物言行是否与基础词典中的身份/性格/关系一致（有无OOC）、是否承接上一章结尾、是否为下一章（'+ (ctx.下一章标题||'') +'）留好引子、与基础词典命名/设定是否冲突。',
     '【有补充要求时】先满足用户要求（'+ (_raw? _raw.slice(0,120)+'…' : '（用户未给出方向）') +'）的角度，再在该方向之外综合点评；要求为空时直接审读本章正文点评。',
-    '【可执行】text 用对章节 AI 说的祈使句，明确范围与幅度，可行时用换行拆 2–3 个可独立启用的子要点；续写/扩写必须承接本章与上一章结尾、不越界到下一章；不臆造万物词典外的新名。',
+    '【可执行】text 用对章节 AI 说的祈使句，明确范围与幅度，可行时用换行拆 2–3 个可独立启用的子要点；续写/扩写必须承接本章与上一章结尾、不越界到下一章；不臆造基础词典外的新名。',
     '输出仅一个 JSON 数组（1–3 项），无任何讲解、无 markdown 代码块前后缀。每项结构：{ "title":"一句话说明本条侧重什么", "text":"完整点评+可执行命令" }'
     ].join('\n'),
     user: JSON.stringify({ 上下文: ctx, 用户原始要求: (_raw||'(无)') }, null, 1) };
@@ -20602,7 +20626,7 @@ function updateCfgBadge(){
 const TM_GROUPS = [
   { title:'⭐ 一级核心 · 主创链（最重要）', keys:[
     ['idea','优化构想','WHAT / WHY：故事战略、核心冲突与创作方向'],
-    ['dictmaster','词典达人','建立核心人物、关系、世界规则与基础万物词典'],
+    ['dictmaster','词典达人','建立核心人物、关系、世界规则与基础基础词典'],
     ['dictEnrich','词典充实','在核心词典之上补充次级人物与世界生态'],
     ['principal','校长总控','统领全量材料，产出全书与章节级规划'],
     ['teacher','老师备课','把章节规划转成场景级推进教案'],
