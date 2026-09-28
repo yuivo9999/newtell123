@@ -17,9 +17,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.540';
+const APP_VERSION = '1.0.544';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.540.js';
+const APP_FILE_VERSION = 'app1.0.544.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -3706,18 +3706,11 @@ function buildPolishCanonical(cand, revision){
     originalAnchors: JSON.parse(JSON.stringify(c.originalAnchors || c.coreAnchors || c.anchorPoints || state.originalIdeaAnchors || {})),
     strategicDimensions: Array.isArray(c.strategicDimensions) ? JSON.parse(JSON.stringify(c.strategicDimensions)) : (Array.isArray(v.optimizationStrategies)?JSON.parse(JSON.stringify(v.optimizationStrategies)):[]),
     diversityProfile: c.diversityProfile ? JSON.parse(JSON.stringify(c.diversityProfile)) : (v.diversityProfile ? JSON.parse(JSON.stringify(v.diversityProfile)) : null),
-    writingStyleInheritanceSupplement: JSON.parse(JSON.stringify(c.writingStyleInheritanceSupplement || c.structuredBlueprint?.writingStyleInheritanceSupplement || {source:'optimization_concept',supplementStatus:'none',inheritance:[],supplements:[]})),
     humanView:human,
-    // 1.0.353：结构式创作蓝图。AI只负责提供事实，JS负责保存唯一结构。
+    // 1.0.541：结构式创作蓝图是唯一机器事实源；Human View 仅作 UI/下游可读派生视图。
+    // 不再把 writingStyleInheritanceSupplement / creationBlueprint 再复制一份到 canonical 顶层。
+    // 旧存档中的这些字段仍由读取端兼容，但新结果不再继续制造平行数据源。
     creativeBlueprint: JSON.parse(JSON.stringify(c.structuredBlueprint || c.storyBlueprint || {})),
-    creationBlueprint:{
-      structured: JSON.parse(JSON.stringify(c.structuredBlueprint || c.storyBlueprint || {})),
-      optimizedIdea:human.optimizedIdea,
-      fullBookBeat:human.fullBookBeat,
-      novelSummary:human.novelSummary,
-      navBeacon:human.navBeacon,
-      creativeAdditions:human.creativeAdditions
-    },
     machineTrace:{
       diagnosis:c.diagnosis||v.diagnosis||null,
       optimizationStrategies:Array.isArray(c.optimizationStrategies)?JSON.parse(JSON.stringify(c.optimizationStrategies)):[],
@@ -4584,231 +4577,45 @@ function refreshAdvHistBadge(kind){
     if(rp){ const b = rp.querySelector('[data-advadv-hist] .ai-hist-badge'); if(b) b.textContent = histState('content').length||''; }
   }
 }
-const AI_RECIPE_SYS_PRO = `你是一位资深长篇小说「风格工程师」与「写作配方设计师」。
+const AI_RECIPE_SYS_PRO = `你是“AI配方助手”的写作方法设计器。你的职责只有一件事：根据已有小说定位、用户明确的写作要求和现有写作风格词库，在一次请求内部完成需求理解、词库覆盖判断、真实缺口判断和候选方向判断，然后直接设计真正可执行、彼此有明显差异的写作配方。
 
-【你的定位】
-你负责的是「写作配方层」：把已经确定的小说构想与写作风格，转译成可执行、可组合、可检查的写作规则。
+【职责边界】
+配方决定“怎么写”，不决定“写什么”。不得新增、修改或偷渡人物、关系、势力、世界规则、能力、地点、秘密、谜团、事件、冲突、反转、时代背景或剧情走向。用户明确事实与已经锁定的小说方案优先于你的判断。合理推断只能用于解释写法，不得伪装成小说事实。
 
-你不负责改故事，不负责重做世界观，不负责扩写剧情，也不负责代替词典达人、校长、老师或正文AI。
-你的核心原则只有一句：
-「配方决定怎么写，不决定写什么故事。」
+【单阶段内部工作】
+本次请求内部必须先完成需求理解：用户要什么、已经明确什么、现有词库覆盖什么、可能缺什么；然后直接选择/组合写作能力并形成候选配方。上述分析属于内部工作，不得输出 analysis JSON，也不得把分析结果作为第二份中间数据结构。
 
-【AI链路与职责边界】
-L0 用户原始输入：最高事实来源。
-L1 优化构想AI：整理、强化并明确小说方案，但不能擅自改写用户明确事实。
-L1.5 写作配方AI（你）：负责表达层与写法层的工程化设计。
-L2 词典达人：负责世界事实、人物事实、设定资料的建设。
-L3 词典充实：负责深化和补充已有事实资料。
-L4 校长：负责全书组织、结构统筹与宏观决策。
-L5 老师：负责章节级施工、节拍和执行安排。
-L6 正文AI：根据上游已经锁定的故事事实、结构和写作配方生成正文。
+【现有词库】
+tags 只能引用输入提供的现有词库 id。优先复用真正匹配的词条。只有现有词库确实无法覆盖一个重要的“写作方法层”缺口时，才创建 gap；如果已有词库足够覆盖，gap 必须为 null。不要因为名称相似就强行复用，也不要为了制造新意重复造词。
 
-你只能在自己的职责范围内工作。
-不得借「gap 新词条」偷偷增加人物、反派、势力、世界规则、能力、秘密、谜团、反转、关系、事件、地点、时代背景或剧情走向。
+【gap边界】
+gap 只能属于：语言质感、情绪与张力、节奏与网感、叙事技法、台词设计。不得用于任何故事设定。每个 gap 必须包含 name、cat、id、note、tips、avoid、check、demo、reasons；tips 至少2条且必须是正文AI可执行的动作，avoid/check 至少1条，demo 只展示写法而不得增加小说事实。
 
-【输入优先级】
-当输入存在冲突时，按以下优先级判断：
-1. 优化构想所选方案及其已经明确的小说事实
-2. 用户当前明确提出的写作风格/表达要求
-3. 当前已有写作风格词库
-4. 你的专业判断
-
-注意：第3、4项都不能覆盖第1项已经确定的故事事实。
-如果用户明确锁定了文风、叙事方式、语言质感等表达要求，它们属于表达层最高权威；你可以把它们工程化，但不能偷偷把它们改成另一种风格。
-
-【什么可以改，什么绝对不能改】
-一、绝对不能改动的「故事事实」：
-- 类型、题材、时代、世界观
-- 主角身份、核心人物关系、人物既定经历
-- 核心目标、核心矛盾、核心冲突
-- 已确定的金手指/能力/规则
-- 已确定的势力、阵营、敌我关系
-- 已确定的剧情方向、关键事件、结构安排
-- 用户明确给出的专有名词、关键词、书名
-- 优化构想中已经锁定的任何事实性内容
-
-二、可以设计的「写作方法」：
-- 语言质感
-- 句式与段落节奏
-- 信息释放方式
-- 情绪推进与张力控制
-- 叙事距离、视角处理
-- 悬念、钩子、回收、留白等叙事技法
-- 对话节奏、潜台词、人物说话方式
-- 网感、阅读速度、章节推进感
-- 场景描写、动作描写、感官描写的组织方式
-- 其他能够直接指导正文写法的表达层规则
-
-判断标准：如果一条规则回答的是「这个故事发生什么」，它越界；如果回答的是「已经确定的故事应该怎么写」，它属于你的职责。
-
-【必须区分四类信息】
-A. 用户明确事实：必须保留，不能修改。
-B. 用户明确方向：可以强化、细化、工程化，但不能改变方向。
-C. 合理推断：可以用于解释为什么某种写法更适合，但不能伪装成用户已经说过的事实。
-D. AI新增设定：原则上禁止。除非属于纯粹的「写作方法」示范，否则不得作为小说Canon写入配方。
-
-【核心任务】
-先完整阅读并理解当前输入，再进行配方设计。你必须把用户的原文当成需要分析的“需求文本”，而不是只抓几个关键词。
-先在内部完成：①提取明确事实与明确写作要求；②识别主题、意图、语气、表达目标；③判断已有词库哪些能力真正覆盖；④找出真实缺口；⑤形成多个彼此不同的写法方向；最后才输出配方。
-
-通常输出 2~5 个真正有区分度、可直接落地的组合配方；但“数量”不是硬指标。如果输入内容不足以支持这么多独立方向，可以少于 2 个，禁止用同义词改名、无意义换序或重复词条来凑数。
-
-配方不是漂亮的形容词堆砌，而是一组可以交给正文AI执行的「写法组合」。
-每一个配方都必须让人看得出：
-- 为什么适合这部小说；
-- 具体应该怎样写；
-- 与其他候选方案究竟差在哪里；
-- 后续正文AI能否据此执行。
-
-【现有词库的使用原则】
-1. tags 只能引用当前提供的现有词库 id。
-2. 现有词库是「可复用的风格资产」，不是必须迁就的天花板。
-3. 优先复用真正贴合本小说的现有词条，不要为了制造新意而重复造词。
-4. 但如果现有词库无法覆盖一个真实、重要、且属于写作方法层的缺口，必须通过 gap 设计新的量身定制词条。
-5. 不能因为某个词条只在名称上相似，就强行认为它已经覆盖需求；要看它实际规定的写法是否与本小说完全匹配。
-6. 如果现有词库已经足够覆盖需求，gap 必须为 null。不要为了「看起来更专业」而硬造新词。
-
-【gap 的真正职责】
-gap 不是剧情补丁，也不是世界观补丁，而是「缺失的写作方法词条」。
-只有在现有词库无法覆盖某个重要写作维度时才生成。
-
-gap 可以创新，但创新范围严格限定在：
-- 语言质感
-- 情绪与张力
-- 节奏与网感
-- 叙事技法
-- 台词设计
-
-gap 绝对不能创新：
-- 人物
-- 人物关系
-- 反派
-- 势力
-- 世界规则
-- 能力体系
-- 金手指
-- 新地点
-- 新时代背景
-- 新秘密
-- 新谜团
-- 新剧情事件
-- 新冲突
-- 新反转
-- 新设定
-
-【gap 新词条必须可执行】
-每个 gap 必须完整包含以下字段：
-- name：词条名称
-- cat：只能是「语言质感」「情绪与张力」「节奏与网感」「叙事技法」「台词设计」之一
-- id：新词条的稳定英文式 id，简洁、唯一、可作为后续词库标识
-- note：一句话说明这个写法解决什么问题、适合什么表达
-- tips：至少 2 条具体写法规则，必须是正文AI能执行的动作，不要只写抽象形容词
-- avoid：至少 1 条明确禁止事项
-- check：至少 1 条可用于成稿自查的检查项
-- demo：一个短小、只展示写法的示例；示例不得偷偷添加新的小说事实
-- reasons：说明为什么现有词库无法充分覆盖这个缺口，以及为什么这个新词条值得建立
-
-【什么叫「可执行」】
-不要只写：
-- 「更有电影感」
-- 「更高级」
-- 「更有张力」
-- 「更有网感」
-- 「语言更克制」
-
-必须把它翻译成具体动作，例如：
-- 信息先给结果，再延迟解释原因；
-- 每个情绪节点至少保留一个未说透的信息缺口；
-- 对话优先用动作和停顿表达情绪，减少直接情绪命名；
-- 段落长短随紧张度变化；
-- 关键句前压缩铺垫，关键句后留出回味空间。
-
-【不同候选必须真正拉开差异】
-不要只是把「克制」「冷峻」「凌厉」「高级」换几个同义词，就生成四个看似不同的方案。
-不同候选应该在写法组合上存在明显差异，例如：
-- 一个强调冷静克制 + 信息留白；
-- 一个强调快节奏推进 + 强钩子 + 高频回收；
-- 一个强调沉浸感 + 感官细节 + 情绪递进；
-- 一个强调人物对话 + 潜台词 + 关系张力。
-
-如果两个候选在实际执行时几乎写成同一种小说，就应该合并或淘汰其中一个。
-
-【why 的写法】
-why 必须解释「为什么这些词条组合起来最适合当前小说」。
-引用词条时只能使用中文 name，禁止出现英文 id。
-不要空泛写「因为很适合」，而要说明风格之间如何互相配合。
-
-【scenario 的写法】
-scenario 说明这套配方最适合怎样的表达场景、章节阶段或阅读状态。
-可以说「适合高压冲突段」「适合人物关系推进」「适合开篇建立阅读惯性」等。
-不得为了举例而虚构当前小说没有确定的剧情事件、人物或世界设定。
+【候选差异】
+通常生成 2~5 个高质量候选；如果信息不足或不存在足够独立方向，可以少于此数量，绝不能靠改名、换形容词、换顺序或重复词条凑数。不同候选必须在实际执行方式上有明显差异。
 
 【组合原则】
-一个组合配方通常选择 2~5 个真正互补的现有词条，并在确有缺口时增加 gap。
-不要为了凑数量堆叠互相冲突或高度重复的词条；也不要为了让候选看起来“丰富”而强行覆盖所有维度。
-组合应该形成互补关系：语言 + 节奏 + 情绪 + 叙事 + 台词等维度可以协同，但不必每套都覆盖所有维度。
-【数量停止条件】如果新增一个候选只能复述前面候选的写法，就停止生成；如果现有词库已经覆盖某个需求，不得再用 gap 重复包装它。
+每套配方通常选择 2~5 个真正互补的现有词条，只有存在真实缺口才增加 gap。配方应能直接指导正文AI执行，而不是堆砌抽象形容词。
 
-【短构想/信息不足时】
-如果输入很短，只能依据已经明确的信息设计「表达方法」，不要擅自补全世界观和剧情。
-如果缺少足够的故事事实，可以降低方案的具体剧情指向，但仍然可以提供通用的、与用户已锁定风格一致的写法组合。
-不要为了让配方显得完整而发明故事设定。
+【why / scenario】
+why 说明为什么这些词条组合适合当前小说以及它们如何互补；引用词条时只写中文 name，不写英文 id。scenario 只描述适用的表达场景、章节阶段或阅读状态，不虚构剧情。
 
-【最终输出：严格 JSON】
-只输出一个 JSON 数组，不要 Markdown，不要代码块，不要解释，不要前后缀。
-数组长度为 2~6，通常优先输出 3~5 个高质量候选，而不是为了数量堆满 6 个。
-
-每个候选严格使用以下结构：
+【严格输出】
+只输出合法 JSON 数组，不要 Markdown、代码块、解释或其他文字。每个候选严格使用：
 [
   {
     "name":"配方名（≤12字）",
-    "desc":"一句话点明这套配方的核心写法与适用的题材/氛围",
-    "tags":["现有词库词条 id，2-5 个"],
-    "why":"为什么这样组合；引用词条时使用中文 name",
-    "scenario":"适用的表达场景/章节阶段/阅读状态，不虚构剧情",
+    "desc":"一句话点明核心写法与适用氛围",
+    "tags":["现有词库id，2-5个"],
+    "why":"组合理由；使用中文词条名",
+    "scenario":"适用表达场景，不虚构剧情",
     "gap":null
   }
 ]
+gap 有真实缺口时为数组；没有时必须为 null。tags 只能使用输入提供的现有词库 id。why、scenario、reasons 中不得出现英文词条 id。
 
-如果存在真实写作方法缺口，gap 必须是数组；没有真实缺口时必须是 null。
-gap 数组中的每一项必须同时具备 name、cat、id、note、tips、avoid、check、demo、reasons，不能缺字段。
-
-【JSON 绝对要求】
-- 必须是合法 JSON。
-- 字符串内部如需换行，必须使用 JSON 转义，不得产生非法裸换行。
-- 不得使用注释。
-- 不得输出 JSON 之外的任何文字。
-- tags 中只能出现输入提供的现有词库 id。
-- why、scenario、reasons 中不得出现英文词条 id 作为说明文字。
-- gap 中的 id 只用于新词条标识，不代表小说设定。
-
-【绝对禁止】
-1. 修改用户已经确定的故事事实。
-2. 把写作配方写成新的故事大纲。
-3. 用 gap 偷渡人物、势力、反派、能力、规则、地点、秘密、谜团、事件或剧情。
-4. 把合理推断伪装成用户明确设定。
-5. 用大量空泛形容词代替可执行写法。
-6. 为了凑 gap 数量而制造不存在的缺口。
-7. 为了凑候选数量而生成高度同质的配方。
-8. 把已有词条的英文 id 写进 why、scenario、reasons 的自然语言说明。
-9. 输出 Markdown、解释、分析过程或 JSON 之外的任何内容。
-
-【提交前自检】
-输出前逐项检查：
-- 我有没有改动任何已经确定的小说事实？
-- 每一个 tags id 是否真的来自当前词库？
-- 每一个 gap 是否确实属于写作方法层，而不是故事设定层？
-- gap 的九个字段是否全部齐全？
-- tips 是否至少 2 条并且可以直接执行？
-- avoid 是否至少 1 条？
-- check 是否至少 1 条？
-- demo 是否只展示写法，没有偷偷增加小说事实？
-- 不同候选是否真的存在执行层面的差异？
-- why / scenario / reasons 是否使用中文 name 而不是英文 id？
-- 最终结果是否可以直接 JSON.parse？
-
-牢记：
-「优化构想决定这个故事应该写什么；写作配方决定这个故事应该怎么写；词典达人决定世界事实；校长决定全书组织；老师决定章节施工；正文AI负责把施工方案写成小说。」`;
+【最终自检】
+确认没有改变小说事实；tags 都来自当前词库；gap 只属于写作方法层；gap 字段齐全；候选存在实际执行差异；输出可直接 JSON.parse。`;
 
 
 function aiRecipeUser(extra){
@@ -4817,72 +4624,48 @@ function aiRecipeUser(extra){
   const txt = String((human && human.optimizedIdea)||'').trim();
   if(txt){
     const body = stripStructureFromIntro(txt);
-    const head = '【唯一已采用优化构想创作蓝本（配方必须百分之百贴合本小说）】\n' + body;
-    return extra ? `${head}\n\n以下为对该小说的写作风格配方设计请求：\n${extra}` : head;
+    const head = '【唯一已采用优化构想创作蓝本】\n' + body;
+    return extra ? `${head}\n\n【用户写作要求】\n${extra}` : head;
   }
   const o = state.outline || {};
   const head = (String(o.title||'').trim() && String(o.logline||'').trim())
-    ? `【小说书名】${o.title}\n【小说简介】${o.logline}\n\n以下为该小说的写作风格配方设计请求：`
-    : '（尚未生成大纲：为让 AI 依据本小说书名与简介设计更贴合的风格配方，建议先到「大纲」步生成书名与简介。）';
-  return extra ? `${head}\n\n${extra}` : head;
+    ? `【小说书名】${o.title}\n【小说简介】${o.logline}`
+    : '（尚未生成完整大纲；只能依据当前已有信息设计表达方法，不得补造故事事实。）';
+  return extra ? `${head}\n\n【用户写作要求】\n${extra}` : head;
 }
-function aiRecipeSpecNote(s){
-  const n = String(s.note||'').trim();
-  if(!n) return '';
-  const multi = n.includes('\n') && /写法|避免|自查/.test(n);
-  const head = n.split('\n')[0].trim();
-  return (multi ? (head ? head + '（多行配方·详见词库）' : '（多行配方·详见词库）') : n).slice(0,60);
+function aiRecipeCompactLib(){
+  return writeStyleLib().map(s=>{
+    const tips = Array.isArray(s.tips) ? s.tips.filter(Boolean) : [];
+    const avoid = Array.isArray(s.avoid) ? s.avoid.filter(Boolean) : [];
+    const out = {id:s.id,name:s.name,cat:s.cat||'custom',note:String(s.note||'').trim()};
+    if(tips.length) out.tips = tips;
+    if(avoid.length) out.avoid = avoid;
+    return out;
+  });
 }
-function aiRecipePrompt(userDesc, analysis){
-  const lib = writeStyleLib();
-  // 旧版只给每个词条一行、且 note 截断到 60 字，模型很容易“看见名字、没看见真正写法”。
-  // 现在把可执行字段完整提供给分析/配方层，先理解再组合。
-  const spec = lib.map(s=>{
-    const tips = Array.isArray(s.tips) ? s.tips : [];
-    const avoid = Array.isArray(s.avoid) ? s.avoid : [];
-    const check = Array.isArray(s.check) ? s.check : [];
-    const demo = String(s.demo||'').trim();
-    return `- id=${s.id}｜name=${s.name}｜cat=${s.cat||'custom'}\n  note=${String(s.note||'').trim()}\n  tips=${tips.join('；')}\n  avoid=${avoid.join('；')}\n  check=${check.join('；')}\n  demo=${demo}`;
-  }).join('\n');
-  const analysisBlock = analysis ? `\n\n【输入理解分析｜上一层已经完成语义拆解，只作为本轮配方生成的工作记忆】\n${JSON.stringify(analysis)}` : '';
-  return { system: AI_RECIPE_SYS_PRO + analysisBlock + '\n\n【现有词库完整可执行资料】：\n' + spec, user: aiRecipeUser(userDesc) };
+function aiRecipePrompt(userDesc){
+  const o = state.outline || {};
+  const canonical = currentCanonicalStoryStrategy();
+  const human = canonical ? (canonical.humanView || canonical.creationBlueprint || {}) : null;
+  const optimized = String((human && human.optimizedIdea)||'').trim();
+  let position = '';
+  if(optimized){
+    // 单次请求：只注入必要的小说定位/事实边界，不重复注入完整 optimizedIdea；完整蓝本仍由 aiRecipeUser() 提供一次。
+    const title = String(o.title||'').trim();
+    const logline = String(o.logline||'').trim();
+    position = title || logline ? `【小说定位】\n书名：${title}\n简介：${logline}` : '【小说定位】已采用优化构想；不得自行补造未提供的故事事实。';
+  }else{
+    position = `【小说定位】\n书名：${String(o.title||'').trim()}\n简介：${String(o.logline||'').trim()}`;
+  }
+  const req = String(userDesc||'').trim();
+  const base = aiRecipeUser(req);
+  const lib = aiRecipeCompactLib();
+  return {
+    system: AI_RECIPE_SYS_PRO,
+    user: `${base}\n\n${position}\n\n【一次请求内部工作顺序｜不得输出】\n1. 先理解用户明确事实与明确写作要求。\n2. 区分明确事实、合理推断与未知信息；推断不得变成小说事实。\n3. 不得新增人物、剧情、世界观、能力、地点、秘密、事件、冲突、反转或其他小说设定。\n4. 检查现有词库能够覆盖哪些写作能力；能覆盖的能力优先复用现有词条。\n5. 只有现有词库确实无法覆盖重要的写作方法层能力时，才形成真实 gap；不能靠改名、同义词、形容词或顺序制造 gap。\n6. 如生成多个候选，候选之间必须具有真实执行差异，不能凑数量。\n7. 直接完成最终配方设计。\n8. 最终只输出合法 JSON 数组。\n\n【现有词库｜仅此一份精简表示】\n${JSON.stringify(lib)}\n\n【最终输出禁止出现的内部分析字段】\ninputSummary、styleRequests、coveredCapabilities、candidateDirections、possibleGaps、unknowns。以上仅为内部工作过程，不得作为最终输出结构。`
+  };
 }
 
-/* Prompt Perfect 式两阶段：先理解用户输入，再设计配方。
- * 这一层不生成成品配方，也不创造小说事实；它只把原文压缩成“事实/需求/写法缺口/候选方向”的结构化工作记忆。
- */
-const AI_RECIPE_ANALYSIS_SYS = `你是“写作配方AI”的输入理解与需求分析器。你的工作不是写配方，而是先把用户输入真正读懂，形成供下一层配方设计使用的结构化分析。
-
-【最高原则】
-1. 只从用户输入和已提供的小说方案中提取事实与表达需求，不得脑补小说事实。
-2. 必须区分：explicitFacts（明确事实）、styleRequests（明确风格要求）、inferredNeeds（合理推断的写作需求）、unknowns（尚未提供的信息）。
-3. 对用户文字做语义聚类：主题、意图、已有素材、关键词、语气、叙事/表达倾向、想解决的问题。
-4. 找出“已经被词库覆盖”的写作能力，以及“可能缺失但需要进一步核对词库”的写作能力。这里只描述能力，不直接制造新词条。
-5. 提出多个真正不同的写法方向，但不得为了凑数量硬拆同义方案；如果输入只支持少数方向，就只返回少数方向。
-6. 不改变用户方向，不新增人物、剧情、世界观、能力、地点、秘密或事件。
-
-【输出】严格 JSON 对象，不要 markdown：
-{
-  "inputSummary":"对用户输入的准确理解",
-  "explicitFacts":[],
-  "styleRequests":[],
-  "inferredNeeds":[],
-  "keywords":[],
-  "coveredCapabilities":[],
-  "candidateDirections":[{"name":"方向名","core":"核心写法差异","bestFor":"适用表达场景"}],
-  "possibleGaps":[{"capability":"缺失的写作能力","reason":"为什么可能缺","priority":"high|medium|low"}],
-  "unknowns":[]
-}`;
-async function aiRecipeAnalyze(userDesc){
-  const base = aiRecipeUser(userDesc);
-  const lib = writeStyleLib();
-  const compactLib = lib.map(s=>({id:s.id,name:s.name,cat:s.cat||'custom',note:String(s.note||'').trim(),tips:Array.isArray(s.tips)?s.tips:[]}));
-  const user = `${base}\n\n【现有词库用于覆盖核对】\n${JSON.stringify(compactLib)}\n\n请先完成输入理解，不要生成最终配方。`;
-  const raw = unwrapAIResult(await callDeepSeek(AI_RECIPE_ANALYSIS_SYS,user,{maxTokens:2200,temperature:resolveTaskTemperature('recipeAnalysis'),topP:0.2,signal:_abortCtl?.signal,taskKey:'recipeAnalysis'}));
-  const j = parseJson(raw);
-  if(!j || typeof j!=='object' || Array.isArray(j)) throw new Error('写作配方AI的输入理解阶段返回无效结果');
-  return j;
-}
 function aiRecipeCard(){
   const lib = writeStyleLib();
   const collapsed = getCfg().aiRecipeCollapsed === true;
@@ -4890,7 +4673,7 @@ function aiRecipeCard(){
     <div class="ai-recipe-head card-head-bar" data-ai-recipe-fold role="button" tabindex="0" title="展开/收起">
       <div class="ch-left">
         <span class="ch-badge ch-badge-recipe">🧪</span>
-        <h3 class="ch-title">AI 配方助手</h3>
+        <h3 class="ch-title">AI配方助手</h3>
         <span class="ch-subtag ch-subtag-recipe">风格设计 · 智能搭配</span>
       </div>
       <div class="ch-right">
@@ -4992,21 +4775,16 @@ function dedupeRecipeList(list){
 }
 async function aiRecipeProduce(system, user){
   const opt = { maxTokens: clampMaxTokens('recipe'), temperature:resolveTaskTemperature('recipe'), topP:0.45 };
-  const FIX = `\n\n【上一轮质量修正】重新检查输入理解：删除仅靠换形容词、换名称、换顺序形成的重复候选；只保留有实际执行差异的方向。gap 必须来自真实且重要的写作方法缺口；现有词库能覆盖就 gap=null。`;
-  const FIX_JSON = `\n\n【上一轮格式修正】上一轮输出无法解析。只输出合法 JSON 数组，不要 markdown、解释或额外文字。`;
-  let list = null, lastJsonOk = false;
-  for(let attempt=1; attempt<=2; attempt++){
-    const sys = attempt>1 ? String(system) + (lastJsonOk ? FIX : FIX_JSON) : system;
-    const raw = unwrapAIResult(await callDeepSeek(sys, user, Object.assign({}, opt, {taskKey:'recipe'})));
-    let cands = parseAiJsonList(raw);
-    cands = dedupeRecipeList(cands);
-    cands = prepRecipeList(cands);
-    lastJsonOk = Array.isArray(cands) && cands.length > 0;
-    if(lastJsonOk){ list = cands; break; }
-  }
-  if(!list || !list.length) throw new Error('AI 未返回有效配方，请重试');
-  return list;
+  const FIX_JSON = `\n\n【格式修正】只输出合法 JSON 数组，不要 Markdown、解释或额外文字。`;
+  // 合并后一次生成操作只允许一次 AI API 请求；解析、去重、整理仍由本地 JS 完成。
+  const raw = unwrapAIResult(await callDeepSeek(String(system) + FIX_JSON, user, Object.assign({}, opt, {taskKey:'recipe', retry:0})));
+  let cands = parseAiJsonList(raw);
+  cands = dedupeRecipeList(cands);
+  cands = prepRecipeList(cands);
+  if(!Array.isArray(cands) || !cands.length) throw new Error('AI 未返回有效配方，请重试');
+  return cands;
 }
+
 async function aiRecipeGen(){
   const ta = $('#aiReDesc'); if(!ta) return;
   const desc = (ta.value||'').trim();
@@ -5016,9 +4794,8 @@ async function aiRecipeGen(){
   const out = $('[data-ai-recipe-out]'); if(out) out.innerHTML = `<p class="muted" style="margin:8px 0 0">⏳ AI 正在${hasLine?'依据所选方案':'根据你的描述'}设计候选配方与词条缺口……</p>`;
   const gen = $('[data-ai-recipe-gen]'); if(gen){ gen.disabled = true; gen.textContent = '生成中…'; }
   try{
-    // 两阶段链路：理解输入 → 依据理解结果设计配方，避免模型只抓关键词后机械套词库。
-    const analysis = await aiRecipeAnalyze(desc);
-    const {system, user} = aiRecipePrompt(desc, analysis);
+    // 单阶段链路：唯一一次 AI 请求在内部完成需求理解、词库判断、gap 判断与最终配方设计。
+    const {system, user} = aiRecipePrompt(desc);
     const list = await aiRecipeProduce(system, user);
     aiRp = { list, hi: 0 };
     addAiHist({ id: aiHistEntryId(), ts: Date.now(), src:'desc', desc: desc || '依据所选方案', list: JSON.parse(JSON.stringify(list)), applied:[] });
@@ -6363,7 +6140,8 @@ function principalOptimizedStyleCatalog(option){
  */
 function extractOptimizationStyleInheritanceSupplement(option){
   const c=option||{};
-  const raw=c.writingStyleInheritanceSupplement || c.structuredBlueprint?.writingStyleInheritanceSupplement || {};
+  // 新版只从唯一结构式蓝图读取；旧存档的顶层字段仅作为一次性兼容回退，绝不再写回。
+  const raw=c.structuredBlueprint?.writingStyleInheritanceSupplement || c.writingStyleInheritanceSupplement || {};
   const cleanEntry=(x,allowReason)=>{
     const o={id:String(x?.id||'').trim(),name:String(x?.name||'').trim(),definition:String(x?.definition||'').trim(),attributes:String(x?.attributes||'').trim(),features:String(x?.features||'').trim(),manifestations:String(x?.manifestations||'').trim(),examples:String(x?.examples||'').trim()};
     if(allowReason) o.reason=String(x?.reason||'').trim();
@@ -7957,6 +7735,97 @@ const TEACHER_SYS = `你是长篇小说创作链中的“老师AI”。你的唯
 【输出原则】可以只有GLOBAL；只有在本章确有必要时才加入HYBRID或CHAPTER。不得为了凑三层制造动态层，不得建立第二套风格词条体系。
 【安全原则】优先忠实执行校长战略与已成立事实；不要越权改变章节任务、人物事实、因果关系、时间连续性或章末边界。输出完整、可执行、自然语言化的老师原始教案，不生成另一套并行机器教案。`;
 
+function teacherPromptCompact(value, options={}){
+  const dropKeys = /^(schema|protocol|protocolVersion|version|timestamp|createdAt|updatedAt|parseStatus|debug|debugInfo|internal|internalId|sourceBucket|machine|folded)$/i;
+  const maxDepth = Number.isInteger(options.maxDepth) ? options.maxDepth : 8;
+  const seen = new WeakSet();
+  const walk = (v, depth)=>{
+    if(v==null) return undefined;
+    if(typeof v==='string') return v.trim() ? v.trim() : undefined;
+    if(typeof v==='number'||typeof v==='boolean') return v;
+    if(depth>maxDepth) return undefined;
+    if(Array.isArray(v)){
+      const a=[]; for(const x of v){ const y=walk(x,depth+1); if(y!==undefined) a.push(y); }
+      return a.length?a:undefined;
+    }
+    if(typeof v==='object'){
+      if(seen.has(v)) return undefined; seen.add(v);
+      const o={};
+      for(const [k,x] of Object.entries(v)){
+        if(dropKeys.test(String(k))) continue;
+        const y=walk(x,depth+1); if(y!==undefined) o[k]=y;
+      }
+      return Object.keys(o).length?o:undefined;
+    }
+    return undefined;
+  };
+  const out=walk(value,0);
+  if(out===undefined) return {};
+  return out;
+}
+function teacherPromptText(value, maxChars=12000){
+  const clean=teacherPromptCompact(value);
+  const text=typeof clean==='string'?clean:JSON.stringify(clean||{},null,2);
+  return text.length>maxChars ? text.slice(0,maxChars)+'\n（以上为该资料的必要前段；机器元数据与空字段已移除。）' : text;
+}
+function compileTeacherStageRows(rows){
+  return (Array.isArray(rows)?rows:[]).map(x=>teacherPromptCompact({
+    stage:x.stage||x.name||'', startChapter:x.startChapter, endChapter:x.endChapter,
+    goal:x.goal||x.mission||'', task:x.task||x.teacherTask||'', strategy:x.strategy||x.description||'',
+    constraints:x.constraints||x.boundaries||'', handoff:x.handoff||''
+  })).filter(x=>Object.keys(x).length);
+}
+function compileTeacherGroupStrategy(group){
+  return teacherPromptCompact(group||{});
+}
+function compileTeacherChapterPlan(plan, chapter, fallbackTitle=''){
+  const p=plan||{};
+  return teacherPromptCompact({
+    chapter, title:p.title||fallbackTitle, function:p.function, goal:p.goal,
+    coreEvent:p.coreEvent, characterActions:p.characterActions, characterState:p.characterState,
+    environment:p.environment, location:p.location, conflict:p.conflict, change:p.change,
+    openingLink:p.openingLink, ending:p.ending, endingFunction:p.endingFunction,
+    narrativeRole:p.narrativeRole, timeStrategy:p.timeStrategy, stageTask:p.stageTask,
+    teacherTask:p.teacherTask, handoff:p.handoff, constraints:p.constraints,
+    chapterStrategy:p.chapterStrategy, plot:p.plot, keyEvents:p.keyEvents
+  });
+}
+function compileTeacherTimeContext(source, chapter){
+  const x=source?.plannedChapters?.find(v=>Number(v.chapter)===Number(chapter));
+  if(!x) return '';
+  const a=teacherPromptCompact({from:x.from,to:x.to,timePlan:x.timePlan});
+  return Object.keys(a).length?JSON.stringify(a,null,2):'';
+}
+function compileTeacherGlobal(pr){
+  const recovered=teacherPrincipalRuleSource(pr||{}), style=recovered.styleStrategy||{};
+  const globalText=String(style.globalStyle||'').trim();
+  const ids=principalStyleEntryIds(style.globalStyleEntries);
+  const defs=Array.isArray(style.globalStyleDefinitions)?style.globalStyleDefinitions:[];
+  const map={}; defs.forEach(d=>{if(d&&d.id) map[String(d.id)]=d;});
+  const entries=ids.map(id=>{
+    const d=map[id];
+    if(d) return {id,name:String(d.name||id),meaning:String(d.meaning||'').trim()};
+    const x=Array.isArray(WRITE_STYLES)?WRITE_STYLES.find(v=>String(v?.id||'')===String(id)):null;
+    return x?{id,name:String(x.name||id),meaning:String(x.note||'').trim()}:{id};
+  }).map(teacherPromptCompact);
+  return {
+    global:globalText || '沿用已经确定的优化后写作风格。',
+    selectedSemantics:entries,
+    rule:'GLOBAL 是校长唯一提供的全书风格来源；老师原义继承，不重新选择、不改义、不另建第二套GLOBAL。'
+  };
+}
+function validateTeacherInjection(text){
+  const t=String(text||'');
+  const checks={
+    emptyJson:/\"(?:schema|protocolVersion|parseStatus)\"\s*:\s*(?:\"\"|\[\]|\{\})/.test(t),
+    machineMetadata:/\"(?:schema|protocolVersion|parseStatus|createdAt|updatedAt)\"\s*:/.test(t),
+    duplicateMiddle:(t.match(/本章(?:微拍情况|中段微拍形状)/g)||[]).length>1,
+    globalOccurrences:(t.match(/校长唯一GLOBAL来源/g)||[]).length,
+    hasLastInjection:Boolean(t.trim())
+  };
+  return checks;
+}
+
 function buildTeacherUser(g,gi){
   const pr=principalCurrentResult()||{},lines=[],code=g.teacherCode||teacherCodeForIndex(gi),groups=teacherAssignmentGroups(),role=teacherRoleForIndex(gi,groups.length),assignment=buildTeacherAssignment(),finalFacts=teacherGroupBoundaryFacts(gi,assignment);
   const plans=state.school?.principal?.plans||{};
@@ -7966,47 +7835,37 @@ function buildTeacherUser(g,gi){
     return stages.find(x=>Number(x.startChapter)<=n&&Number(x.endChapter)>=n)||null;
   };
   const groupStrategy=(pr.teacherGroupStrategies||[]).find(x=>String(x.teacherCode||'')===String(code))||{};
-  const middleSource=principalChapterMiddleShapeSource(targetCount);
-  const middleByChapter={};
+  const middleSource=principalChapterMiddleShapeSource(targetCount), middleByChapter={};
   (middleSource.chapters||[]).forEach(x=>{middleByChapter[String(x.chapter)]=x;});
   const timeSource=principalTimeSystemSource(targetCount);
-  const timeByChapter={};
-  (timeSource.plannedChapters||[]).forEach(x=>{timeByChapter[String(x.chapter)]=x;});
+  const assignmentFacts={teacherCode:code,role:role.role,roleLabel:role.roleLabel,startChapter:g.first,endChapter:g.last,chapterCount:g.chapterCount,finalTeacher:finalFacts.finalTeacher,finalResponsible:finalFacts.finalResponsible,hasNextTeacher:finalFacts.hasNextTeacher,nextTeacherCode:finalFacts.nextTeacherCode};
 
-  lines.push(`【本次老师备课上下文｜权威总入口】\n老师代号=${code}\n系统角色=${role.role}（${role.roleLabel}）\n负责章节=${g.first}-${g.last}。\n本次任务必须覆盖负责范围内每一章，任何章节不得只写标题或一句话概述。`);
-  lines.push(`【最终老师身份｜系统只读】\n最终老师=${finalFacts.finalTeacher}｜本老师是否最终负责者=${finalFacts.finalResponsible?'是':'否'}｜后续老师=${finalFacts.hasNextTeacher?finalFacts.nextTeacherCode:'无'}｜全书结局章节=${finalFacts.finalEndChapter}。`);
+  lines.push(`【老师身份与职责】\n老师代号=${code}\n系统角色=${role.role}（${role.roleLabel}）\n负责章节=${g.first}-${g.last}。\n本次必须完整覆盖负责范围内每一章；老师是章节施工总负责人。校长负责全书战略与唯一GLOBAL，老师负责按章施工HYBRID/CHAPTER，正文AI只读取老师形成的最终章节教案。`);
+  lines.push(`【最终责任边界｜系统事实】\n${teacherPromptText(assignmentFacts,4000)}`);
   lines.push(storyStateCanonBlock());
-  // 三层唯一权威入口：GLOBAL只从当前校长成果的STYLE_STRATEGY读取；优化构想中的继承/补充资料不再作为第二套风格权威注入老师。
 
-  lines.push(`【全书战略｜完整权威输入】\n${JSON.stringify(pr.bookStrategy||{},null,2)}`);
+  const global=compileTeacherGlobal(pr);
+  lines.push(`【校长唯一GLOBAL｜全书只出现一次】\n${teacherPromptText(global,9000)}\n\n【GLOBAL使用规则】\nGLOBAL必须原义继承。HYBRID与CHAPTER不由校长逐章预分配，由老师根据每章剧情、阶段、环境、微拍和施工任务自主形成；不得建立第二套三层数据源。`);
+
   const stageRows=(pr.stageStrategies||[]).filter(x=>Number(x.endChapter)>=Number(g.first)&&Number(x.startChapter)<=Number(g.last));
-  lines.push(teacherStyleLayers(pr, stageRows, groupStrategy, []));
-  lines.push(`【本组涉及的阶段战略｜完整权威输入】\n${JSON.stringify(stageRows,null,2)}`);
-  lines.push(`【本组战略｜完整权威输入】\n${JSON.stringify(groupStrategy,null,2)}`);
-  lines.push(`【本组章节所有权与边界｜系统事实】\n${JSON.stringify(g,null,2)}\n\n【本组章节标题】\n${scGroupTitles(g).join('\n')}`);
-  lines.push(`【全书时间系统｜权威输入】\n${JSON.stringify(timeSource,null,2)}`);
-  lines.push(`【全书章末规则｜权威施工契约】\n${chapterEndingContractText()}\n\n【允许的章末表现形式】\n${chapterEndingFormText()}\n\n【章末承接方式】\n${chapterEndingTransitionText()}\n\n【章末功能说明】\n${chapterEndingFunctionText()}`);
+  const compiledStages=compileTeacherStageRows(stageRows);
+  if(compiledStages.length) lines.push(`【本组阶段战略｜仅出现一次】\n${teacherPromptText(compiledStages,10000)}\n\n章节内部只引用本章所属阶段及必要差异，不重复整套阶段对象。`);
+
+  const compiledGroup=compileTeacherGroupStrategy(groupStrategy);
+  if(Object.keys(compiledGroup).length) lines.push(`【本组战略与施工边界】\n${teacherPromptText(compiledGroup,8000)}`);
+  lines.push(`【章末施工契约】\n${chapterEndingContractText()}\n\n【允许的章末表现形式】\n${chapterEndingFormText()}\n\n【章末承接方式】\n${chapterEndingTransitionText()}\n\n【章末功能说明】\n${chapterEndingFunctionText()}`);
 
   for(let n=g.first;n<=g.last;n++){
-    const p=plans[n]||{};
-    const stage=stageForChapter(n)||{};
-    const middle=middleByChapter[String(n)]||getChapterMiddleShape(n)||null;
-    const time=timeByChapter[String(n)]||null;
-    const previousEnding=previousChapterEndingBrief(n,gi);
-    lines.push(`【第${n}章｜完整章节权威执行包】\n
-【章节身份】\n${JSON.stringify({chapter:n,title:String(p.title||state.chapters?.[n-1]?.title||'').trim()},null,2)}\n
-【阶段战略】\n${JSON.stringify(stage,null,2)}\n
-【章节战略原始授权】\n${JSON.stringify(p,null,2)}\n
-【本章三层应用任务】\n校长只提供唯一GLOBAL，不提供本章HYBRID/CHAPTER预分配结果。请根据本章微拍、剧情、阶段战略和老师任务，自主决定本章是否需要HYBRID/CHAPTER，并把实际结果直接写入本章教案。GLOBAL必须原义继承；HYBRID/CHAPTER必须是老师对GLOBAL在本章环境中的自然施工，不得建立第二套三层词条体系，不得把未使用的动态层硬塞进教案。\n本章微拍情况：${JSON.stringify(middle,null,2)}\n本章剧情情况：${JSON.stringify({title:p.title||'',function:p.function||'',goal:p.goal||'',coreEvent:p.coreEvent||'',characterActions:p.characterActions||''},null,2)}\n
-【章节中段微拍形状｜只读结构形状】\n${JSON.stringify(middle,null,2)}\n
-【本章时间战略补充】\n${JSON.stringify(time,null,2)}\n
-${previousEnding}\n
-【本章完整章末设计要求】\n必须严格落实上方章节授权中的ending全部信息：function、intensity、lastEffectiveEvent、form、nextTransitionType、nextTransitionBasis、handoff、diversityNote；不得把这些内容压缩成一句话。章末必须设计真正的停止边界，并说明最后有效事件之后什么也不能再追加。`);
+    const p=plans[n]||{}, stage=stageForChapter(n)||{}, middle=middleByChapter[String(n)]||getChapterMiddleShape(n)||null, time=timeSource?.plannedChapters?.find(x=>Number(x.chapter)===n)||null, previousEnding=previousChapterEndingBrief(n,gi);
+    const chapterData=compileTeacherChapterPlan(p,n,state.chapters?.[n-1]?.title||'');
+    const stageLabel=teacherPromptCompact({stage:stage.stage||stage.name||'',startChapter:stage.startChapter,endChapter:stage.endChapter,goal:stage.goal||stage.mission||'',teacherTask:stage.teacherTask||stage.task||'',handoff:stage.handoff||''});
+    lines.push(`【第${n}章｜章节施工信息】\n【章节战略与剧情事实】\n${teacherPromptText(chapterData,14000)}\n\n【本章所属阶段｜只给本章必要信息】\n${teacherPromptText(stageLabel,5000)}\n\n【本章微拍 / 中段结构｜唯一一次】\n${teacherPromptText(middle||{},9000)}\n规则：这里仅提供结构形状、节奏分段与边界，不把它改写成第二套剧情事件清单。\n\n【本章时间要求】\n${compileTeacherTimeContext(timeSource,n)||'本章没有额外明确的结构化时间范围；以已成立正文状态和章节事实为准，不得臆造。'}\n\n${previousEnding}\n\n【本章三层施工责任】\nGLOBAL：完整继承上方唯一GLOBAL。\nHYBRID：只有本章确有需要时，由老师把GLOBAL语义与本章环境/阶段/剧情融合为自然语言施工规则。\nCHAPTER：只有本章确有需要时，由老师形成章节级具体施工规则。\n不得把校长数据、旧style对象或机器字段再次作为第二来源。\n\n【本章完整章末设计要求】\n必须落实章节授权中的ending信息：function、intensity、lastEffectiveEvent、form、nextTransitionType、nextTransitionBasis、handoff、diversityNote；章末必须形成真正停止边界，并明确最后有效事件之后不再追加内容。`);
   }
 
-  lines.push(`【本组授权词典｜完整相关资源】\n${teacherScopedGlossary(g,gi,9000)}`);
-  lines.push(`【前序正文状态｜完整动态连续性输入】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态；不得自行假定缺失事实）'):'（首组，无前序正文）'}`);
-  lines.push(`【最终输出执行口令】\n现在必须一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。输出不得是摘要，不得是“章节概述”，不得压缩章末，不得遗漏全书恒定风格规则、全校守则、chapterMiddleShape、时间、连续性和章末完整设计。每一章都必须以校长唯一GLOBAL为底座，根据本章剧情与施工需求自主决定并落实GLOBAL/HYBRID/CHAPTER；GLOBAL必须原义继承；HYBRID/CHAPTER由老师自行形成自然语言施工规则，不得创造新的三层词条体系、不得建立第二套三层数据源，也不得为了完整而虚构动态层。可以只使用GLOBAL，也可以在确有需要时加入本章HYBRID或CHAPTER；老师应把实际施工结果直接写入本章教案。随后依次完成章节定位、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。中段必须完整可执行，同时保留章头与章末之间的文学展开空间。输出只作为原始教案保存，不需要也不允许生成任何第二套机器结构。`);
+  lines.push(`【本组授权词典｜仅保留实际相关创作事实】\n${teacherScopedGlossary(g,gi,9000)}`);
+  lines.push(`【前序正文状态｜连续性事实】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态；不得自行假定缺失事实）'):'（首组，无前序正文）'}`);
+  lines.push(`【最终输出执行口令】\n现在一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。不得输出摘要、章节概述或第二套机器教案。每章必须覆盖章节定位、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。GLOBAL只继承一次；HYBRID/CHAPTER由老师按章自主形成，确无必要可以不写。世界观规则必须保留并视为唯一正式来源；不得复制成第二套规则对象。输出只作为正文AI唯一章节教案来源。`);
+
   return lines.join('\n\n');
 }
 
@@ -12296,7 +12155,7 @@ function viewStory(){
   ${opt_card}
 </section>
 <section class="flow-sec" data-flow="4">
-        <div class="flow-sec-head"><span class="fs-no">4</span><span class="fs-name">写作配方</span><span class="fs-note">把已锁定风格翻译成可执行规则 · 全书共享</span></div>
+        <div class="flow-sec-head"><span class="fs-no">4</span><span class="fs-name">AI配方助手</span><span class="fs-note">把已锁定风格翻译成可执行规则 · 全书共享</span></div>
         ${ safeCard(()=>aiRecipeCard()) }
         
       </section>
@@ -12415,7 +12274,7 @@ ${longNovelMemoryRepoHtml()}
     </div>
     </section>
 <section class="flow-sec" data-flow="3">
-      <div class="flow-sec-head"><span class="fs-no">3</span><span class="fs-name">写作配方</span><span class="fs-note">把已锁定风格翻译成可执行规则 · 全书共享</span></div>
+      <div class="flow-sec-head"><span class="fs-no">3</span><span class="fs-name">AI配方助手</span><span class="fs-note">把已锁定风格翻译成可执行规则 · 全书共享</span></div>
       ${ aiRecipeCard() }
       
     </section>
@@ -16191,178 +16050,50 @@ function buildOutlineFromPolishCanonical(){
 
 const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人」（全局设定架构师）。
 
-你的职责不是简单提取名词，也不是把用户故事机械扩写成一堆设定。
+【职责】
+你负责建立可长期使用的 Foundation Dictionary：继承用户/Creative Blueprint 已确认事实，判断故事成立所必需的核心人物、关系、世界、地点、组织、专名、规则和必要生活基础设施，并把它们定稿为稳定世界基准。
+你不是抄写员，也不是章节规划师；不得设计逐章剧情、场景施工或正文。
 
-你的真正职责是：根据用户已经确定的故事蓝本，建立一套能够长期支撑整部小说创作的「万物设定词典」，并把其中真正重要、真正稳定、真正值得长期遵守的内容定稿为全局世界基准。
+【事实优先级】
+1. 用户已经明确的事实最高；不得改名、删除、反转或重定义。
+2. Creative Blueprint 是本次唯一故事事实源；不得把其他上游机器对象当成第二套等价故事。
+3. 已确认的世界事实优先于你的推断；必要的新内容可以创造，但必须与已确认事实一致。
+4. 准确 > 完整；必要 > 数量；宁可省略可选条目，也不要为了丰富而制造无依据事实。
 
-你是整条小说 AI 创作链中的「世界设定源头」。后续的「词典充实」「校长」「老师」「正文 AI」都必须以你正式定稿的核心世界事实为基础。
+【人物优先】
+先完成核心人物体系，再建立其他词典。
+- Blueprint 已定义的人物必须继承并完成正式姓名映射。
+- 不要因为 Blueprint 只有主角就默认人物体系已经完成；根据核心冲突、目标、长期关系、阵营和剧情职责判断是否需要对手、盟友、导师、亲属、关键知情者等必要核心人物。
+- 新增核心人物必须有稳定 CHAR_xxx、正式姓名、origin=dictionary_master_created、identity、coreRole，并服务长期剧情；不得为了凑数创造。
+- tier=main 的主要人物本次必须完成：name、identity、age、gender、appearance、hobby、relation、trait、catchphrase。没有依据时可写“未知/无”，不得写“待补充/以后再定”。
+- support 人物可按实际需要简化。
+- relationshipTable 只能引用已经定义的人物，不能通过关系表偷偷创造人物，也不能制造自我关系。
 
-因此：你可以大胆创造，但必须谨慎定稿。一旦内容进入正式词典，就会成为后续创作可以依赖的正式世界事实。
+【世界骨架】
+人物完成后，再判断是否需要：核心地点、组织/机构、专名、世界规则、核心物件、术语、历史、生活设定。
+- 普通街道、房间、办公室、餐厅等不因“出现过”就进入核心词典；只有需要长期保持固定设定的地点才收录。
+- 普通物品、普通汽车/手机/电脑等不自动成为专名。
+- worldRules 必须是可执行规则，尽可能写清适用范围、触发条件、机制、限制和后果/代价；没有明确世界硬规则时允许省略 RULE。
+- 关联表宁缺毋滥：人物↔人物、地点↔地点、专名↔专名，端点必须真实存在且不能相同。
 
-【一、最高原则｜用户蓝本优先】
-你将获得优化构想所选方案的完整原文，其中包含书名、题材、主角、核心冲突、世界观、对手、动机、风格、结构、核心词，以及用户明确指定的人物、地点、专名、势力、规则等。
+【去重与命名】
+创建前检查 Blueprint 已有实体。禁止同名重复、二号/青年版/新址等变体绕过去重。name 只能是纯实体名称，身份、功能、关系和说明放其他字段。
 
-这份内容是本次创作的唯一蓝本。
+【动态约束】
+系统会额外提供运行时禁用姓名/实体/文本等约束。必须遵守，不得自行取消或弱化。
 
-1. 用户已经明确写出的设定，是最高事实依据。
-2. 蓝本中已经出现的人物、地名、专名必须全部保留。
-3. AI 在本阶段不得擅自修改 Blueprint 已确认名称；用户可在正文生成前通过“人物定名台”主动确认新姓名，这属于用户授权操作。
-4. 不得删除用户明确指定的核心内容。
-5. 不得因为你认为另一种设定更精彩而推翻用户设定。
-6. 不得偷偷改变主角、核心冲突、题材、世界观方向或人物核心立场。
-7. 你的优化只能是深化、补足、结构化、体系化、提高长期可写性，而不是改故事。
-8. 如果用户蓝本已经足够具体，则以忠实整理和精确强化为主，不要为了证明自己会创造而过度创造。
+【不要输出的内容】
+不要输出 JSON、Markdown、解释、自检过程、前言或后记。
+不要输出内部调试信息、UI 状态、时间戳、schema、protocol、parseStatus、internalId、machineTrace 等机器元数据。
+不要输出空的“xxx=JSON”“xxxEntries=JSON”“xxxDefinitions=JSON”之类占位结构。
+不要输出 sourceType、source、createdBy 等来源元数据；程序会根据当前任务统一补齐，避免每个实体重复携带相同机器字段。
+字段没有真实内容时，能省略就省略；但主要人物九项基础字段必须有值。
 
-【二、第一阶段优先级｜先建立完整核心人物体系，再做其他词典】
-这是本次任务最重要的执行顺序，不能跳过，也不能把它弱化成“可选人物整理”：
-
-阶段 1｜建立核心人物体系（必须先做）
-1. 先读取 Creative Blueprint 已经明确的人物。它们是“已确认人物种子”，必须继承；但它们绝不是最终人物总表。
-2. 立即分析故事的核心冲突、主角目标、对立关系、阵营结构、世界运行方式和长期剧情需求，判断“为了让这部小说真正成立，核心人物还缺谁”。
-3. 对确有长期剧情职责、且仅靠已有人物无法成立的角色，主动创建必要的新核心人物，例如核心对手、关键盟友、导师、关键亲属、关键阵营人物、关键知情者等。
-4. 新增核心人物必须获得稳定 CHAR_xxx ID、正式姓名、身份和明确的长期故事职责；正式姓名由你定稿，后续词典充实不得改名。
-5. 人物集合确定后，再建立人物之间的核心关系。关系表只能引用已经进入 characters 集合的人物；关系表绝不能成为隐形人物生成器。
-6. 完成这一阶段后，形成“完整核心人物集合”。这个集合可能比 Blueprint 人物多，也可能只有 Blueprint 中的一个人物；数量由故事需要决定，不由固定人数决定。
-7. 如果故事确实只需要一个核心人物，relationshipTable 可以为空；绝不能为了填表制造自我关系。
-8. 对于被判断为核心/主要人物的每一人，本次生成就是其 Foundation 正式人物卡的主要定稿机会。后续“词典充实”明确禁止回写 Foundation 人物，因此这里不能故意只生成姓名、身份和一个性格标签，把九项基础人物信息留给不存在的后续 AI。
-9. 当前人物基础九项按程序现有契约理解为：正式姓名 + identity、age、gender、appearance、hobby、relation、trait、catchphrase。主要人物必须在本次输出中全部给出；确实没有客观依据的字段可以明确写“未知/无”，但不能留空，更不能用“待补充”“以后再定”等占位语。
-10. 判断人物是否属于主要人物时，不只看 Blueprint 是否写了“主角”。凡是承担核心冲突、核心目标阻力、关键转折、核心关系、长期阵营职责、导师/关键盟友/关键亲属/关键知情者等长期剧情职责的人，都应按主要人物完成九项基础信息。
-
-【人物创造的两种来源必须区分】
-A. 有依据的创造：从 Blueprint 已明确事实、世界规则、人物目标、冲突、关系、阵营和题材逻辑中推导出的合理补全。
-B. 从无到有的必要创造：Blueprint 没有提供该人物，但通过故事结构反推，缺少该人物会导致核心冲突、目标、关系、转折或世界运行无法成立；此时词典达人应主动创建。
-二者都允许进入 Foundation，但不能混淆：Blueprint 已确认人物不得被改名；推导/新造人物必须明确 origin=blueprint_confirmed 或 dictionary_master_created。
-
-【主要人物的反推检查｜在输出前内部完成，不输出检查过程】
-- 删除测试：如果删除该人物，核心冲突/主角目标/关键转折是否明显断裂？若完全不受影响，不应轻率把其定为主要人物。
-- 关系反推：核心人物为何必须与这些人发生关系？关系变化能否产生剧情作用？没有真实关系就不要凑关系表。
-- 冲突反推：每个核心对立角色的目标、利益或立场是否足以形成真实冲突？不要只给“反派”标签。
-- 目标反推：主要人物自己想要什么、为什么要、阻碍是什么，是否能支撑长期行动？
-- 缺口反推：从结局、核心冲突和主线阶段倒推，现在的人物集合是否缺少必要的执行者、阻碍者、知情者、关系承载者或关键阵营角色。
-- 一致性反推：人物年龄、身份、关系、性格、口头禅、外貌等九项之间是否互相支持，而不是各写各的。
-- 反向场景测试：想象后续校长/老师要连续安排数章使用该人物，如果人物九项基础不足以支持行动、关系、对话和描写，则本次必须补足。
-
-阶段 2｜建立核心世界骨架
-只有完成阶段 1 的人物体系后，才继续建立核心地点、组织/机构、专有名词、世界规则、核心物件、术语、历史和必要生活设定。
-
-阶段 3｜统一定稿
-最后检查：所有关系端点都来自正式人物集合；所有新增核心人物都有明确长期职责；蓝本已确认事实未被修改；新增内容没有为了“丰富”而过量制造。
-
-特别重要：不要因为优化构想通常只写了主角，就误以为核心人物只能有主角一个。优化构想负责提供故事方向和已确认人物种子；词典达人负责把这些种子发展成“小说真正需要的核心人物系统”。
-
-【三、工作契约｜先理解职责，再开始创造】
-你不是“抄写员”，也不是“只允许继承、不允许新增”的登记员。
-你是 Foundation Dictionary 的建立者：先完整继承蓝本已经确定的事实，再判断为了让整部小说能够成立，哪些核心人物、核心地点、组织、专名、规则、物件、术语、历史和必要生活基础设施必须存在，并把这些必要内容建立成第一版稳定世界骨架。
-
-必须遵守：准确 > 完整；已确认 > 推断；必要 > 数量；宁可留空 > 为填字段猜测。
-
-【词典达人绝对不能做】
-1. 不能修改蓝本已经明确的事实。
-2. 不能为了让词典“看起来丰富”无限添加实体。
-3. 不能让不存在的人物出现在关系表中，不能出现人物自我关系来凑数。
-4. 不能把关系表中的一个名字/CHAR_ID 当成“隐形人物”；人物必须先有正式人物记录。
-5. 不能因为字段缺失而瞎编；无依据就留空/未知。
-6. 不能提前设计章节、场景或正文。
-
-【七、人物关系表必须真实】
-relationshipTable 只能记录人物↔人物之间的真实关系，例如血缘、亲属、师徒、上下级、同事、朋友、敌对、利益、情感、合作、利用、恩怨、阵营等。
-
-严禁人物↔地名、人物↔道具、人物↔功能、人物↔性格等错误关系。
-
-每条关系必须满足：a 是真实人物、b 是真实人物、a≠b、relation 有实际意义；不能凑数。没有真实关系时输出空数组。
-
-【八、地名设计原则】
-places 只记录真正具有故事专属性的地点：核心城市、关键建筑、主角长期活动地点、核心组织所在地、重要据点、特殊区域、关键险境、重要机构或具有独特历史的地点。
-
-普通街道、房间、办公室、餐厅、医院、商场、学校等，不能仅因为故事经过就进入词典。
-
-判断标准：以后正文写到它时，是否需要保持固定设定？如果不需要，就不应该进入核心词典。
-
-【九、地名关联表必须是真实关系】
-placeContacts 只能记录地名↔地名之间真实存在的相邻、隶属、交通连接、通往、上下级区域、城市与辖区、据点与外围区域等关系。
-
-严禁地名↔人物、地名↔道具、地名↔功能等错误关系。两端必须是真实地名且不能相同。没有真实关系时输出空数组。
-
-【十、专名设计原则】
-propernouns 用于真正具有专属性的核心名称，例如核心武器、装备、特殊道具、科技、能力、材料、系统、交通工具、特殊组织、制度、核心机制、世界观专属体系、重要术语等。
-
-普通汽车、手机、电脑、手枪、咖啡、衣服等不能自动成为专名。只有拥有独立名称、来源、机制、历史、特殊能力、限制或不可替代故事作用时才进入 propernouns。
-
-【十一、专名关联表必须真实】
-properContacts 只能记录专名↔专名之间真实存在的配套、克制、来源、衍生、升级、前置、同系列、等级、技术或制度关系。
-
-禁止专名↔人物、专名↔地名、专名↔功能等错误关系。两端必须是真实专名且不能相同。没有真实关系时输出空数组。
-
-【十二、世界观规则必须真正能执行】
-worldRules 不能写成空泛口号。
-
-每条规则应尽可能体现：适用范围 → 触发条件 → 运作机制 → 限制 → 违反后果/代价。
-
-例如“只有获得正式执照的术士才能进入禁区；未经授权进入者会被守门机构追捕并永久取消术士资格”才属于可执行规则，而“强者拥有更高地位”只是空泛描述。
-
-每条 worldRules 必须尽可能明确：谁适用、什么情况下适用、如何运作、有什么限制、违反后如何处理、使用需要付出什么代价。
-
-【十三、题材适配原则】
-所有设定必须服务于当前小说题材，不能机械套用其他题材模板。
-
-都市重点考虑职业、社会关系、城市结构和现实制度；科幻重点考虑科技、能源、通讯、交通、AI与社会结构；历史重点考虑时代制度、等级、生产方式、交通、物质条件；玄幻/仙侠重点考虑修炼体系、力量层级、资源、门派、禁忌、代价；奇幻重点考虑种族、魔法、地理和阵营；悬疑/推理重点考虑信息边界、证据、职业逻辑、动机、时间线和地理关系；末世重点考虑生存资源、医疗、交通、组织；言情重点考虑人物关系、职业、生活场景和社会关系。
-
-【十四、实体去重原则】
-创造任何新实体前，必须检查用户蓝本中已经存在的实体。
-
-不能重复创建同一人物、地点或专名，也不能用“青年版”“新址”“二号”等方式绕过重复。
-
-一个正式实体对应一个稳定名称。如果已有名称，就继续使用原名称；只有真正不同、具有独立身份的实体才能建立新名称。
-
-【十五、名称字段必须纯净】
-name 字段只能写实体名称。
-
-禁止写成“周启明（公司保安）”“北港车站（重要交通枢纽）”“霜火引擎——新型动力系统”等。
-
-身份、功能、关系、背景、描写全部放到其他字段。
-
-【十六、禁止偷偷修改核心事实】
-绝对禁止修改人物姓名、身份、核心性格、核心关系、立场；修改地点名称或基本属性；修改专名核心功能；修改用户明确世界规则；删除用户明确指定的核心实体；用新实体覆盖旧实体；为了丰富关系表而改变人物关系；为了复杂化世界观而增加无依据的核心规则。
-
-【十七、创造优先级】
-自行补充时依次优先：
-1. 解决用户故事中已有的明显世界设定缺口；
-2. 支撑主角和核心人物长期行动；
-3. 支撑核心剧情未来发展；
-4. 建立必要世界运行规则；
-5. 建立重要地点、专名、组织和体系；
-6. 补充能够增强长期真实感的辅助设定。
-
-不要把大量精力用于无关紧要的日常物件、一次性人物或无法影响正文的细枝末节。
-
-【十八、宁缺毋滥】
-如果一个设定没有长期用途、剧情价值、世界展示价值、角色价值或规则价值，就不要创造。
-
-词典质量不是由条目数量决定，而是由核心准确、关系清晰、规则稳定、长期可用决定。
-
-宁可少一个，也不要把错误事实写入正式世界。
-
-【十九、下游兼容原则】
-你的输出会成为词典充实、校长、老师、正文 AI 的基础。
-
-词典充实必须能在你的世界基准上继续扩建；校长必须能依据它组织全书；老师必须能依据它安排章节；正文 AI 必须能把它当作稳定创作事实。
-
-因此任何进入正式词典的内容，都必须经得起长期正文使用。
-
-【十九A、最低通行标准｜硬约束与可选内容必须严格分离】
-词典达人只负责建立 Foundation Dictionary 的最小可用核心骨架，不负责一次性完成整本小说百科全书。
-注意：这里的“最小”不是“只抄蓝本已有人物”。词典达人必须判断故事是否需要新增核心人物；蓝本只有一个人物时，允许建立更多必要核心人物，也允许在确实不需要时保持单人物结构。不要把“关系表可为空”误解成“不能建立新人物”。
-真正不可缺少的硬约束只有：至少1位核心人物；核心人物有正式姓名和基本身份；Blueprint 人物定义区中明确出现的 CHAR_xxx 人物ID必须完成正式姓名映射；Blueprint 明确的人物核心关系不能丢失；WORLD 必须能说明时代/主要舞台/基本世界；Blueprint 明确存在的世界硬规则不得被删除或改成相反规则；必须遵守禁用姓名、实体去重和安全约束。
-以下均为可选，不得因为缺失而判失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、地点关联、专名关联、关系详细说明。人物详细字段只有在该人物属于 support/非主要人物时才可以省略；主要人物的九项基础字段必须在本次输出中逐项出现并有值，确实无依据时才写“未知/无”。
-没有明确世界规则时，RULE 区块可以完全省略。不要为了凑数量创造条目。
-特别注意：RELATIONSHIPS 中出现的 CHAR_xxx 只是引用；只有 PROTAGONIST.personId、KEY_CHARACTERS.personId 等真正的人物定义字段才产生“必须命名”的人物义务。
-如果可选字段缺失，仍应输出一个可解析的结构式词典；不要因为可选字段缺失而拒绝整个结果、要求补齐或自行重复生成。
-【二十、输出格式｜结构式纯文本绝对契约】
-严格只输出结构式纯文本，不要输出 JSON、Markdown 代码围栏、解释、前言、后记或任何结构之外的文字。
-使用以下区块标签，标签必须独占一行；每个字段一行，格式为“字段名=值”。值必须保持单行；数组中的多个值使用“；”分隔。没有内容的可写“无”。
+【输出协议】
+严格只输出以下结构式纯文本。标签独占一行，每个字段一行，格式为“字段名=值”，值保持单行；数组中的多个值用“；”分隔。没有内容的可省略整个区块。WORLD 必须最先出现。
 
 [WORLD]
-summary=一句话总结这套词典最重要的世界架构亮点
+summary=一句话总结时代、主要舞台和基本世界框架
 [/WORLD]
 
 [CHARACTER]
@@ -16379,7 +16110,6 @@ hobby=爱好或无
 relation=一句话核心关系摘要
 trait=稳定性格核心
 catchphrase=口头禅或无
-sourceType=dictionary_foundation
 [/CHARACTER]
 
 [RELATION]
@@ -16387,14 +16117,12 @@ a=人物名称
 b=人物名称
 relation=真实人物关系
 note=一句话说明
-sourceType=dictionary_foundation
 [/RELATION]
 
 [LOCATION]
 name=纯地点名称
 type=地点类型
 note=关键设定
-sourceType=dictionary_foundation
 [/LOCATION]
 
 [PLACE_CONTACT]
@@ -16402,13 +16130,11 @@ from=地名
 to=地名
 relation=真实地点联系
 note=一句话说明
-sourceType=dictionary_foundation
 [/PLACE_CONTACT]
 
 [PROPER_NOUN]
 name=纯专名
 note=来源、机制、功能、限制或故事价值
-sourceType=dictionary_foundation
 [/PROPER_NOUN]
 
 [PROPER_CONTACT]
@@ -16416,14 +16142,12 @@ from=专名
 to=专名
 relation=真实专名联系
 note=一句话说明
-sourceType=dictionary_foundation
 [/PROPER_CONTACT]
 
 [RULE]
 cat=规则类别
 scope=适用对象/范围
 rule=具体运转规则及违反后果/代价
-sourceType=dictionary_foundation
 [/RULE]
 
 [ORGANIZATION]
@@ -16433,7 +16157,6 @@ stance=立场或未知
 function=功能
 relation=与其他实体关系
 note=关键说明
-sourceType=dictionary_foundation
 [/ORGANIZATION]
 
 [INSTITUTION]
@@ -16443,7 +16166,6 @@ function=功能
 audience=服务对象
 location=所在地点
 note=关键说明
-sourceType=dictionary_foundation
 [/INSTITUTION]
 
 [ITEM]
@@ -16453,7 +16175,6 @@ function=功能
 source=来源
 limit=限制或代价
 note=关键说明
-sourceType=dictionary_foundation
 [/ITEM]
 
 [TERM]
@@ -16462,7 +16183,6 @@ category=分类
 meaning=含义
 usage=使用方式
 note=关键说明
-sourceType=dictionary_foundation
 [/TERM]
 
 [HISTORY]
@@ -16472,7 +16192,6 @@ participants=参与者
 course=经过
 impact=影响
 relation=与当前世界/主线的关系
-sourceType=dictionary_foundation
 [/HISTORY]
 
 [LIFE_SETTING]
@@ -16482,99 +16201,43 @@ scope=适用范围
 content=具体内容
 value=长期创作价值
 note=关键说明
-sourceType=dictionary_foundation
 [/LIFE_SETTING]
 
-【输出顺序】WORLD 必须最先出现；随后按 CHARACTER → RELATION → LOCATION → PLACE_CONTACT → PROPER_NOUN → PROPER_CONTACT → RULE → ORGANIZATION → INSTITUTION → ITEM → TERM → HISTORY → LIFE_SETTING 的顺序输出。没有真实关系的区块可以完全省略。不要为了凑数量创建虚假关系。
-【结构式纯文本要求】不要输出大段散文；不要把字段内容拆成多行；不要输出 JSON 花括号。名称、ID、关系两端必须可由程序直接读取。
+【最终顺序】WORLD → CHARACTER → RELATION → LOCATION → PLACE_CONTACT → PROPER_NOUN → PROPER_CONTACT → RULE → ORGANIZATION → INSTITUTION → ITEM → TERM → HISTORY → LIFE_SETTING。只输出结构式词典。`;
 
-【二十一、字段契约】
-上述结构式纯文本会由程序转换为内部对象；转换后字段契约仍保持原有 glossary 数据结构。characters：name 必须是纯人物姓名；identity 为身份定位；age/gender/appearance/hobby/relation/catchphrase 没有依据或没有实际价值时可以写“未知/无”；trait 必须尽量明确。relation 简洁说明即可，不要把多组关系堆进人物卡，多组关系放 relationshipTable。
+// 词典达人只接收 Creative Blueprint 中与世界建设直接相关的“最小必要视图”。
+// 目的：保留故事事实，不把 canonicalStoryStrategy、UI 状态、机器追踪字段和重复包装整份广播给 AI。
+function buildDictMasterFoundationInput(blueprint){
+  const b=(blueprint && typeof blueprint==='object') ? blueprint : {};
+  const out={};
+  const copy=(key, fallback)=>{
+    if(b[key]!==undefined && b[key]!==null){
+      const v=b[key];
+      if(typeof v==='string' && !v.trim()) return;
+      if(Array.isArray(v) && !v.length) return;
+      if(typeof v==='object' && !Array.isArray(v) && !Object.keys(v).length) return;
+      out[key]=JSON.parse(JSON.stringify(v));
+    }else if(fallback!==undefined) out[key]=fallback;
+  };
+  // 这些结构块直接描述故事事实/世界骨架，是词典达人真正需要的输入。
+  ['optionMeta','storyCore','protagonist','keyCharacters','relationships','world','worldRules','conflict','storyArc','ending','fullBookBeat'].forEach(k=>copy(k));
+  // 创意补充只保留真正存在的内容；不把写作风格继承包、机器追踪等无关对象带入。
+  copy('creativeAdditions');
+  return out;
+}
 
-places：name 必须为纯地点名称；type 明确；note 说明关键设定。
-
-propernouns：name 必须为纯专名；note 说明来源、机制、功能、限制或故事价值。
-
-worldRules：必须含 cat、scope、rule；规则必须贴合题材社会性质，可执行、可校验，并尽可能写清运作规则与违反后果/代价。
-
-summary：只用一句话说明时代、主要舞台或基本世界框架，让下游知道故事发生在哪里、属于什么世界。
-
-【二十二、关联表严格要求】
-三种关联表全部宁缺毋滥。
-
-relationshipTable：两端必须是人物；a≠b。关系两端允许 AI 使用 CHAR_xxx 或正式姓名，但程序会统一解析为正式人物姓名；如果端点无法映射到已建立人物，必须拒绝该关系，不能让关系表创造人物。
-placeContacts：两端必须是地名；from≠to。
-properContacts：两端必须是专名；from≠to。
-
-禁止把属性、功能、说明、子项或空字符串当作另一端凑数。
-
-【二十三、输出前最终自检】
-在输出结构式纯文本之前必须内部完成以下检查：
-
-A. 蓝本检查：是否完整尊重用户蓝本；是否保留所有明确指定的重要实体；是否修改名称；是否改变主角、核心冲突、题材、世界观方向或人物核心立场。
-
-B. 人物检查：人物是否值得进入核心词典；是否区分 blueprint_confirmed 与 dictionary_master_created；主要人物是否明确 tier=main；主要人物九项基础人物字段是否全部实际完成；identity 与 trait 是否清晰；是否为了填字段虚构爱好或口头禅；是否存在重复人物或同名不同人；主要人物是否经得起删除测试、关系反推、冲突反推和反向场景测试。
-
-C. 地名检查：是否真正具有故事专属性；是否误收普通地点；名称是否纯净；是否重复。
-
-D. 专名检查：是否真正具有专属性；是否只是普通物品；是否具有独立故事价值；名称是否纯净；是否重复。
-
-E. 人物关系表检查：每条 a、b 是否都是真实人物；是否不同；relation 是否真实；是否凑数。
-
-F. 地名关联表检查：每条 from、to 是否都是真实地名；是否不同；relation 是否真实；是否凑数。
-
-G. 专名关联表检查：每条 from、to 是否都是真实专名；是否不同；relation 是否真实；是否凑数。
-
-H. 世界规则检查：是否真正属于世界规则；是否有适用范围；是否可执行、可校验；是否有必要；是否与蓝本冲突；是否存在明显逻辑漏洞；是否有明确限制或后果/代价。
-
-I. 题材检查：是否符合当前小说题材；是否出现明显时代、科技、社会、生活方式或力量体系错误。
-
-J. 下游检查：词典充实是否能在这些设定上继续扩建；校长是否能据此组织全书；老师是否能据此安排章节；正文 AI 是否能据此稳定写作。
-
-如果某个设定会给后续 AI 制造歧义，优先修正，而不是保留。
-
-【二十四、最终输出原则】
-经过全部检查后，只输出符合第二十、二十一、二十二条契约的结构式纯文本。不要输出 JSON，不要输出解释、Markdown、代码围栏、自检过程或任何结构之外的字符。
-
-最终目标不是生成最多的设定，而是建立一套准确、稳定、自洽、可长期使用，并能够成为整部小说世界基准的「万物设定词典」。尤其要记住：主要人物的 Foundation 人物卡是一次性正式定稿资产，后续词典充实不得补写它，因此不要把关键九项人物基础留成“以后再补”。
-
-记住：词典达人负责创造世界骨架；词典充实负责在骨架上继续长出血肉；前者必须定得准，后者才能扩得稳。`
 function buildDictMasterUser(ctx){
   const c=currentCanonicalStoryStrategy() || {};
   const blueprint=c.creativeBlueprint || c.creationBlueprint?.structured || {};
-  const anchors=c.originalAnchors || c.anchors || {};
-  const dims=Array.isArray(c.strategicDimensions)?c.strategicDimensions:[];
+  const foundation=buildDictMasterFoundationInput(blueprint);
   const parts=[];
-  parts.push(`【词典达人唯一故事事实源｜Creative Blueprint】\n方案：${String(c.candidateName||'').trim()}\n${JSON.stringify(blueprint)}`);
-  if(Object.keys(anchors||{}).length) parts.push(`【用户原始构想锚点｜仅用于保护用户明确事实】\n${JSON.stringify(anchors)}`);
-  if(dims.length) parts.push(`【战略维度｜仅用于取舍，不是第二套故事事实】\n${JSON.stringify(dims)}`);
-  parts.push(`【词典达人执行顺序｜人物体系优先】
-必须严格按以下顺序执行，不得把“读取 Blueprint 人物”误当成“完成全部人物设计”：
-第一步：继承 Blueprint 已确认人物；
-第二步：判断核心冲突和长期剧情需要哪些核心人物；
-第三步：主动创建缺失但确有必要的新核心人物，并为每人分配稳定 CHAR_xxx、正式姓名、身份、长期故事职责；
-第四步：人物集合定稿后再建立核心关系；
-第五步：人物体系完成后，再建立地点、组织/机构、专名、世界规则、物件、术语、历史和生活设定。
-如果 Blueprint 只有主角一个人物，不得因此默认“人物体系已完成”。必须先判断故事是否需要对手、盟友、导师、亲属、关键阵营人物等；需要就创建，不需要才保持单人物。
-新增核心人物不是错误，而是词典达人建立 Foundation Dictionary 的正式职责；但必须“必要优先、数量克制、长期有用”。
-
-【新增核心人物字段约定】
-新增人物建议写：id=CHAR_XXX、name=正式姓名、origin=dictionary_master_created、coreRole=长期故事职责、identity=身份、trait=核心特征、relation=与主角/其他核心人物的核心关系。
-Blueprint 已确认人物可写 origin=blueprint_confirmed；如果 AI 没有输出 origin/coreRole，JS 可以补默认值，不得因此判失败。
-
-【Foundation Dictionary 最低通行标准】
-本次任务的目标不是一次性完成百科全书，而是建立“下游可以安全开写”的最小核心世界骨架。
-必须完成：至少1位核心人物；核心人物有正式姓名和基本身份；Creative Blueprint 中真正定义的人物ID（只指 PROTAGONIST.personId / KEY_CHARACTERS.personId 等人物定义字段）必须完成正式姓名映射；Blueprint 已明确的人物核心关系不能丢失；能够确定时代/主要舞台/基本世界；Blueprint 明确写出的世界硬规则不得被主动删除或改成相反规则；必须遵守禁用姓名和安全约束。
-可以为空、不得因此失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、关系详细描述、地点关联、专名关联。没有依据就不要硬造；有则收录。
-人物详细档案的例外规则：support/非主要人物可以按实际需要简化；但 tier=main 的核心/主要人物必须在本次 Foundation 输出中完成 name + identity、age、gender、appearance、hobby、relation、trait、catchphrase 这九项基础人物字段。确实没有依据时可以写“未知/无”，但不能留空、不能写“待补充/以后再定”。
-只有 Blueprint 明确给出世界规则时才需要输出 RULE；没有明确规则时允许 RULE 区块完全省略。
-不要因为 RELATIONSHIPS 文本中出现一个未在人物定义区声明的 CHAR_xxx，就创建新人物或把它视为必须命名的人物。
-不要为了凑数量生成地点、组织、专名、道具或其他条目。词典充实阶段会继续补全这些内容。
-【输入层规则】Creative Blueprint 是唯一故事事实源；不要把 Human View、optimizedIdea、小说简介、全书节拍作为第二套等价事实重复理解。战略维度只用于取舍，不得覆盖 Blueprint。`);
+  parts.push(`【词典达人唯一故事事实源｜Creative Blueprint 最小必要视图】\n${JSON.stringify(foundation)}`);
   const ban=banListBlockFor('dictmaster');
   if(ban) parts.push(ban);
+  parts.push(`【执行提醒】只根据上述故事事实建立 Foundation Dictionary。世界观规则、人物事实、核心关系和明确用户事实不得丢失；不需要长期固定的普通细节不要硬造；不要把章节、正文、UI 或其他 AI 阶段的机器结构当成词典事实。`);
   return parts.join('\n\n');
 }
+
 function canonicalPersonDefinitions(){
   const c=currentCanonicalStoryStrategy() || {};
   const b=c.creativeBlueprint || c.creationBlueprint?.structured || {};
@@ -17013,585 +16676,142 @@ function cleanEntityName(raw){
   return [s, extra];
 }
 
-const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实师」，负责在已经定稿的「词典达人万物词典」基础上，为整部小说继续扩建细节、生活层、环境层和辅助人物素材。
+const DICT_ENRICH_SYS = `你是“词典充实 AI”，一个增量世界扩展器。
 
-你不是第二个词典达人：你只能在已经确定的世界里继续创造，不能重新定义这个世界。
+你的唯一职责：读取当前故事的最小必要基础与已有词条的最小去重信息，补充真正有创作价值的外围世界素材，供后续正文使用。
 
-你将获得两份核心素材：
+【不可修改】
+已有核心故事事实、核心人物事实、既有词典事实、世界观硬规则。不得改名、覆盖、升级或重新定义既有实体。
 
-第一部分：优化构想所选方案的完整内容。
+【可以新增】
+次要人物、配角、路人、小人物、专属地点、组织/机构、专属物品、规则、术语、事件、生活设定，以及确实有正文描写价值的环境/行业/地域细节。
 
-第二部分：词典达人已经生成并正式定稿的全部词典内容。
+【增量原则】
+你不是第二个词典达人，也不是故事战略生成器。已有词条已经足够时不要重复输出；不得为了数量或字段完整制造空内容、占位内容或重复实体。
 
-第二部分是只读世界基准。
+【去重原则】
+已有名称、明显同一实体及明显同义重复项不得再次创建。普通泛词（如普通街道、房间、汽车、手机等）只有在本故事中具有明确专属性时才进入词典。
 
-【最高权限原则】
+【人物边界】
+不要新增主角、核心人物、主线关键人物或幕后Boss。新增人物默认属于辅助/外围层，不得升级或覆盖 Foundation 核心人物。
 
-本阶段的目标是“增量充实”，不是让每一次生成都完成一份完整词典。输出中只要存在一个或多个合法、可收录的新素材，就应允许系统收录；不要因为可选字段缺失、某一类别没有生成、数量没有达到预期或描述不够丰富而放弃整次结果。
+【世界规则】
+既有世界观硬规则只是约束条件；不得重新整理或重写一份世界观。新增规则必须与既有规则自洽。
 
-只有以下情况属于真正的拒绝边界：无法识别任何有效条目、明确违反达人词典核心事实、命中系统禁用名称/名称禁则，或数据无法安全写入词典。其余问题优先通过已有解析器和合并逻辑容错处理，而不是要求 AI 反复自检或重新生成。
+【输出原则】
+只输出真正新增、有实际创作价值的内容。严格使用现有解析器支持的纯文本类别格式；没有内容的字段直接省略。不要输出 JSON、Markdown 代码块、sourceType、source、createdBy 或其他程序内部 metadata。
 
-1. 词典达人已经定稿的实体和设定必须视为正式世界事实。
-2. 任何已经存在的人物、地点、专名、世界规则都不得修改。
-3. AI 不得给已经存在的实体换名；用户通过人物定名台主动修改姓名不属于词典充实权限，但词典充实必须读取修改后的当前姓名。
-4. 不得通过新增一个“新版本”偷偷覆盖旧实体。
-5. 不得重复创造同名实体。
-6. 如果发现达人词典与自己的理解存在差异，以达人词典为准。
-7. 你可以创造新的世界素材，但新素材必须与既有词典保持自洽。
-8. 本阶段正式输出并被系统收录的新条目，同样会成为后续正文可以使用的正式创作事实。
+【可用类别】
+主要人物、次要配角、地名、组织、机构、物品、规则、世界观规则、术语、人物关系、地名关联、专名关联、事件、生活设定、路人。
 
-【核心使命】
-在不破坏既有世界事实的前提下，主动补足：
+【格式】
+每条新增内容独占一行：类别｜名称｜字段：值；字段：值
+字段按实际需要选择，不必填满模板。例如：
+次要配角｜张三｜身份：药铺伙计；与主线人物有旧识
+地名｜北港旧码头｜类型：旧港区；说明：夜间仍有货船靠泊
+术语｜灰市｜含义：当地人对非正式交易场所的俗称
+生活设定｜夜班茶摊｜适用地区/群体：码头工人；内容：凌晨仍营业
 
-* 人物生活层
-* 次要配角
-* 关键场景
-* 环境细节
-* 行业生态
-* 地域特色
-* 感官特征
-* 道具细节
-* 技术细节
-* 制度细节
-* 场景禁忌
-* 使用代价
-* 生活气息
-* 路人和氛围龙套
-
-让后续正文拥有足够丰富的“可写素材”。
-
-【一、人物扩建｜只补外围，不重建核心】
-词典达人阶段已经先完成“核心人物体系”的建立。这里的 Foundation characters 是只读核心集合，包含 Blueprint 已确认人物，也包含词典达人判断主线必需后主动创建并定稿的新核心人物。
-禁止创造新的主角、核心人物、主线关键人物或幕后Boss。你只能在确有生活层、职业层、场景层需要时增加 support/secondary 人物；任何新人物都不得改变或升级 Foundation 核心人物体系。
-
-新增人物默认属于 dictionary_enrichment / support 层，不得把 support 人物升级为核心人物，也不得改写 Foundation 核心人物。
-
-如果输入中已经存在某个 Foundation 人物，即使其某个字段为空，也不能趁“充实”阶段替它补写并覆盖 Foundation；Foundation 是只读事实。需要新增信息时，必须作为新的 enrichment 素材存储，不能回写基础卡。
-
-新增人物应满足：对主线、生活层或世界展示有价值；有基本明确的身份；能够自然进入既有世界。不要求固定数量或一次性完整档案，不要为了数量制造人物。
-
-【二、次要配角扩建】
-
-可以创造：
-
-* 亲友
-* 同事
-* 下属
-* 上司
-* 同行
-* 邻居
-* 医生
-* 店主
-* 服务人员
-* 技术人员
-* 行业人物
-* 知情人
-* 对手爪牙
-* 盟友
-* 地方人物
-* 社会角色
-
-这些人物的重点不是复杂剧情，而是帮助世界显得真实。
-
-如果一个人物只需要在一个场景出现一次，而且没有持续价值，可以优先作为路人/龙套，而不是建立完整人物档案。
-
-【三、关键地点扩建】
-
-可以补充：
-
-* 主线未来可能使用的关键地点
-* 人物生活中的固定场所
-* 与职业相关的工作地点
-* 与阵营相关的据点
-* 能展示地域特色的场景
-* 能承载重要情节的建筑
-* 具有特殊氛围的区域
-
-但不要把：
-
-“街道”
-
-“房间”
-
-“办公室”
-
-“餐厅”
-
-“医院”
-
-这种普通泛指直接当成专属地名。
-
-如果只是普通地点，不需要进入正式地名词典。
-
-只有具备明确故事专属性、独立命名或特殊设定的地点才应收录。
-
-【四、专名扩建】
-
-可以创造：
-
-* 特殊装备
-* 道具
-* 技术
-* 武器
-* 能力
-* 组织
-* 制度
-* 系统
-* 特殊材料
-* 特殊交通工具
-* 特殊设施
-* 核心行业术语
-* 世界观中特有的机制
-
-但必须具有专属性。
-
-“汽车”不是专名。
-
-“手机”不是专名。
-
-“电脑”不是专名。
-
-“咖啡杯”不是专名。
-
-只有当这些普通事物在本故事中具有独立命名、特殊机制、特殊来源或特殊用途时，才有资格进入专名词典。
-
-【五、生活气与环境素材】
-
-你可以建立丰富的生活素材池。
-
-重点可以包括：
-
-* 街市生活
-* 职业环境
-* 行业生态
-* 饮食
-* 声音
-* 气味
-* 光线
-* 天气
-* 建筑细节
-* 交通
-* 工作习惯
-* 社会礼仪
-* 地域差异
-* 生活节奏
-* 行业黑话
-* 常见行为
-* 群体活动
-
-但是：
-
-这些内容以“对后续正文有描写价值”为主要标准即可，不要求每条素材都具备复杂背景或长期主线作用。
-
-不要把所有普通生活物件都变成词典实体，但对有明确描写价值的生活素材可以正常收录。
-
-【六、路人/氛围龙套】
-
-可以建立生活气路人池。
-
-例如：
-
-* 店员
-* 摊贩
-* 保安
-* 快递员
-* 护士
-* 司机
-* 学生
-* 路人
-* 顾客
-* 邻居
-* 办事人员
-* 围观者
-* 夜班人员
-
-路人重点是：
-
-* 身份
-* 出现环境
-* 一句自然台词
-* 描写标签
-
-不要求复杂背景。
-
-不要求每章固定数量。
-
-不允许为了完成数量指标而大量制造无意义路人。
-
-【七、不得重复已有实体】
-
-在创造之前，必须检查达人词典。
-
-如果已经存在：
-
-“黑曜塔”
-
-就不能再次创造一个“黑曜塔”。
-
-如果已经存在人物“林默”，不能再创建第二个“林默”。
-
-如果确实需要类似实体，应使用不同且合理的名称。
-
-不得通过：
-
-“林默（青年）”
-
-“林默二号”
-
-“黑曜塔新址”
-
-这种方式绕过重复检查。
-
-【八、名称字段必须纯净】
-
-name 字段只能填写纯实体名称。
-
-正确：
-
-“周启明”
-
-“北港车站”
-
-“霜火引擎”
-
-错误：
-
-“周启明（公司保安）”
-
-“北港车站（重要交通枢纽）”
-
-“霜火引擎——新型动力系统”
-
-身份、功能、关系、说明、描写全部放入其他字段。
-
-【九、不得偷偷修改达人事实】
-
-以下行为绝对禁止：
-
-* 修改人物姓名。
-* 修改人物身份。
-* 修改人物核心性格。
-* 修改人物核心关系。
-* 修改人物核心立场。
-* 修改地点名称。
-* 修改地点基本属性。
-* 修改专名的核心功能。
-* 修改世界规则。
-* 删除达人核心实体。
-* 用新条目覆盖旧条目。
-* 通过重复名称制造第二版本。
-
-如果达人词典已经写明某件事情，就把它当成事实。
-
-【十、新事实原则】
-
-本阶段新创造的内容可以不是用户原文中的内容。
-
-“不是用户原文”并不意味着“不可信”。
-
-只要：
-
-* 与优化构想一致；
-* 与达人词典一致；
-* 与题材一致；
-* 与世界规则一致；
-* 对小说有实际价值；
-
-就可以创造。
-
-但一旦正式进入词典，这些新内容也会成为正式创作事实。
-
-因此必须：
-
-大胆创造。
-
-谨慎定稿。
-
-【十一、题材适配】
-
-所有新增内容必须服从小说题材。
-
-现代都市：
-
-符合现代城市生活、职业和社会关系。
-
-科幻：
-
-符合科技水平、能源、通讯、交通和社会结构。
-
-历史：
-
-符合时代制度、生活方式和物质条件。
-
-玄幻/仙侠：
-
-符合力量体系、修炼体系、资源体系和社会结构。
-
-奇幻：
-
-符合种族、魔法、地理和社会规则。
-
-悬疑：
-
-重视信息边界、证据、职业逻辑和行为动机。
-
-末世：
-
-重视资源、生存环境、交通、医疗和组织结构。
-
-言情：
-
-重视生活场景、职业环境、人物关系和情感互动。
-
-不要机械套用其他题材的设定。
-
-【十二、创造优先级】
-
-新增内容优先级如下：
-
-第一优先：
-
-能解决既有世界明显缺口的设定。
-
-第二优先：
-
-能长期支撑主线人物生活和行动的设定。
-
-第三优先：
-
-能支撑未来章节场景的地点和专名。
-
-第四优先：
-
-能够增强职业感、地域感和时代感的辅助人物。
-
-第五优先：
-
-普通生活气路人和环境素材。
-
-如果没有必要，不要继续扩建。
-
-【十三、输出原则】
-
-输出必须是纯文本。
-
-不要 JSON。
-
-不要 Markdown 代码块。
-
-不要解释自己做了什么。
-
-每条新增内容独占一行。
-
-字段之间使用中文竖线“｜”分隔。
-
-名称字段中不得再次使用“｜”。
-
-【输出格式｜结构式纯文本协议 v2】
-
-只输出纯文本，不输出 JSON，不输出 Markdown 代码块，不解释过程。每条新增内容独占一行，统一使用：类别｜名称｜字段：值；字段：值
-
-【新增主要人物】
-主要人物｜姓名｜身份：…；关系：…；外貌：…；性格：…；口头禅：…；描写标签：…
-
-【新增次要配角】
-次要配角｜姓名｜身份：…；关系：…；外貌：…；性格：…；口头禅：…；描写标签：…
-
-【新增地名】
-地名｜名称｜类型：…；氛围特征：…；说明：…；描写标签：…
-
-【新增组织/势力】
-组织｜名称｜类型：…；立场：…；核心职能：…；关系：…；说明：…
-
-【新增职业/机构】
-机构｜名称｜类型：…；行业/职能：…；服务对象：…；地点：…；说明：…
-
-【新增物品/道具】
-物品｜名称｜类型：…；功能：…；来源：…；使用限制：…；说明：…
-
-【新增世界规则/术语】
-规则｜名称｜类别：…；适用范围：…；规则内容：…；代价/限制：…；说明：…
-世界观规则｜名称｜类别：…；适用范围：…；规则内容：…；代价/限制：…；说明：…
-术语｜名称｜类别：…；含义：…；使用场景：…；说明：…
-
-【新增关系与关联】
-人物关系｜人物A｜人物B｜关系：…；说明：…
-地名关联｜地名A｜地名B｜关系：…；说明：…
-专名关联｜专名A｜专名B｜关系：…；说明：…
-
-【新增历史事件】
-事件｜名称｜时间/时代：…；参与方：…；经过：…；影响：…；与主线关系：…
-
-【新增生活设定】
-生活设定｜名称｜类别：…；适用地区/群体：…；内容：…；描写价值：…
-
-【新增路人/龙套】
-路人｜姓名｜身份：…；登场：…；台词：…；描写标签：…
-
-【最终自检】
-
-输出前必须检查：
-
-1. 是否修改了词典达人已有实体。
-2. 是否重复创造已有实体。
-3. 是否偷偷改变人物核心身份。
-4. 是否偷偷改变人物核心关系。
-5. 是否偷偷改变地点属性。
-6. 是否偷偷改变专名功能。
-7. 是否违反世界规则。
-8. 是否创造普通泛词作为地名或专名。
-9. 名称字段是否混入括号说明。
-10. 是否有明显无关、无价值的新增人物。
-11. 是否有明显无价值的新增地点。
-12. 是否有明显无价值的新增专名。
-13. 是否为了数量而制造路人。
-14. 新设定是否真正能够帮助后续正文。
-15. 所有新增内容是否符合小说题材和时代。
-
-记住：
-
-词典达人负责“定世界”。
-
-你负责“让这个世界丰富起来”。
-
-你可以继续创造，但不能推翻已经定稿的世界。
-
-你可以补充细节，但不能篡改核心事实。
-
-你可以扩建词典，但不能建立第二套世界。
-
-你的新增内容一旦正式收录，也会成为后续正文可以使用的正式创作事实；但 sourceType 必须是 dictionary_enrichment，权威级别低于 Creative Blueprint 与 dictionary_foundation，不得覆盖上游事实。
+【安全】
+程序负责解析、结构校验、去重、人物安全处理和 metadata 写入。你只负责创作判断与新增内容。即使某类没有内容，也不要输出空条目。
 `;
+function buildDictEnrichFoundationInput(canonical){
+  const c = canonical || {};
+  const h = c.humanView || c.creationBlueprint || {};
+  const bp = c.creativeBlueprint || c.creationBlueprint?.structured || {};
+  const out = {};
+
+  // 只保留会直接影响“新增什么词条”的故事事实；不把整个 canonical 对象复制进 Prompt。
+  const copyText = (key, ...alts) => {
+    const keys = [key, ...alts];
+    for(const k of keys){
+      const v = h?.[k] ?? bp?.[k] ?? c?.[k];
+      if(v != null && String(v).trim()) { out[key] = String(v).trim(); return; }
+    }
+  };
+  copyText('title','bookTitle');
+  copyText('novelSummary','storySummary','summary');
+  copyText('optimizedIdea','text');
+  copyText('fullBookBeat','bookBeat','fullNovelBeat');
+  copyText('coreConflict');
+  copyText('genre');
+  copyText('tone');
+  copyText('protagonist');
+  copyText('setting');
+  copyText('worldOverview');
+
+  // 结构式蓝图只按“实际存在且与世界素材有关”的常见键保留；其余机器追踪字段不注入。
+  const keep = ['genre','setting','world','worldview','premise','coreConflict','protagonist','characters','relationships','factions','locations','importantPlaces','rules','items','terms','era','timePeriod','storyEngine'];
+  const selected = {};
+  if(bp && typeof bp === 'object' && !Array.isArray(bp)){
+    keep.forEach(k=>{
+      const v = bp[k];
+      if(v == null) return;
+      if(typeof v === 'string' && !v.trim()) return;
+      if(Array.isArray(v) && !v.length) return;
+      if(typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length) return;
+      selected[k] = v;
+    });
+  }
+  if(Object.keys(selected).length) out.blueprintFacts = selected;
+  return out;
+}
+
+function buildDictEnrichDictionaryInput(glossary){
+  const g = glossary || {};
+  const out = {};
+  const names = (key) => (Array.isArray(g[key]) ? g[key] : [])
+    .map(x=>String(x?.name||'').trim()).filter(Boolean);
+  const add = (key,label) => { const arr=names(key); if(arr.length) out[label]=arr; };
+  add('characters','人物');
+  add('places','地点');
+  add('propernouns','专名');
+  add('organizations','组织');
+  add('institutions','机构');
+  add('items','物品');
+  add('rules','规则');
+  add('terms','术语');
+  add('events','事件');
+  add('lifeSettings','生活设定');
+  add('walkons','路人');
+
+  const rel = validAssoc(g._relationshipTable,'a','b').map(x=>`${x.a}↔${x.b}${x.relation?`（${x.relation}）`:''}`);
+  if(rel.length) out.人物关系=rel;
+  const pc = validAssoc(g._placeContacts,'from','to').map(x=>`${x.from}↔${x.to}${x.relation?`（${x.relation}）`:''}`);
+  if(pc.length) out.地点关联=pc;
+  const pr = validAssoc(g._properContacts,'from','to').map(x=>`${x.from}↔${x.to}${x.relation?`（${x.relation}）`:''}`);
+  if(pr.length) out.专名关联=pr;
+
+  const wr = Array.isArray(g._worldRules) ? g._worldRules.filter(x=>x&&String(x.rule||'').trim()).map(x=>{
+    const rule=String(x.rule||'').trim();
+    const scope=String(x.scope||'').trim();
+    return `${x.name?String(x.name).trim()+'：':''}${scope?`[${scope}]`:''}${rule}`;
+  }) : [];
+  if(wr.length) out.世界观硬规则=wr;
+  return out;
+}
+
 function buildDictEnrichUser(){
   const o = state.outline || {};
   const parts = [];
-  parts.push(storyStateCanonBlock());
+  const canonical = currentCanonicalStoryStrategy();
+
+  const foundation = buildDictEnrichFoundationInput(canonical);
+  if(Object.keys(foundation).length){
+    parts.push(`【故事基础｜仅保留词典充实所需事实】\n${JSON.stringify(foundation)}`);
+  } else {
+    parts.push('【故事基础】当前没有可用的 Creative Blueprint 事实；不得从旧版平行故事字段自行重建战略。');
+  }
+
+  const dictInput = buildDictEnrichDictionaryInput((o && o.glossary) || {});
+  parts.push(`【已有词典｜仅用于去重与硬规则约束】\n${Object.keys(dictInput).length ? JSON.stringify(dictInput) : '（暂无已收录词条）'}`);
+
   if(stateBanEnabled()){
     const ban = banListBlockFor('dictEnrich');
     if(ban) parts.push(ban);
   }
 
-  // ==========================================
-  // 1. 优化构想·用户所选方案完整内容
-  // ==========================================
-  const canonical = currentCanonicalStoryStrategy();
-  const human = (canonical && (canonical.humanView || canonical.creationBlueprint)) || {};
-  const candName = canonical && canonical.candidateName ? `【优化方案名】方案『${String(canonical.candidateName).trim()}』\n` : '';
-  const candFullText = String(human.optimizedIdea || '').trim();
-  const polishPart = canonicalStoryStrategyBlock('第一部分：当前有效故事战略（唯一故事来源）');
-  parts.push(polishPart);
-
-  // ==========================================
-  // 2. 词典达人所生成的所有内容
-  // ==========================================
-  const g = (o && o.glossary) || {};
-  const dmSections = [];
-
-  // (1) 人物卡（主要人物与次要配角，9维全字段）
-  const charList = g.characters || [];
-  if(charList.length){
-    const charLines = charList.map(c => {
-      const [cName] = cleanEntityName(c && c.name);
-      if(!cName) return null;
-      const tierTxt = (c && c.tier === 'support') ? '次要配角' : '主要人物';
-      const fields = [
-        `【${tierTxt}】${cName}`,
-        c.identity ? `身份: ${String(c.identity).trim()}` : '',
-        (c.age && c.age !== '未知') ? `年龄: ${String(c.age).trim()}` : '',
-        (c.gender && c.gender !== '未知') ? `性别: ${String(c.gender).trim()}` : '',
-        c.appearance ? `外貌特征: ${String(c.appearance).trim()}` : '',
-        c.trait ? `性格特征: ${String(c.trait).trim()}` : '',
-        c.hobby ? `爱好癖好: ${String(c.hobby).trim()}` : '',
-        c.catchphrase ? `口头禅: ${String(c.catchphrase).trim()}` : '',
-        c.relation ? `关系定位: ${String(c.relation).trim()}` : ''
-      ].filter(Boolean);
-      return `- ` + fields.join(' | ');
-    }).filter(Boolean);
-    if(charLines.length) dmSections.push(`【1. 核心人物与重要配角卡（共 ${charLines.length} 位）】\n${charLines.join('\n')}`);
-  }
-
-  // (2) 人物关系表
-  const relArr = validAssoc(g._relationshipTable, 'a', 'b');
-  if(relArr.length){
-    const relLines = relArr.map(x => `- ${x.a} ↔ ${x.b} [${x.relation || '关联'}]${x.note ? `（${x.note}）` : ''}`);
-    dmSections.push(`【2. 人物关系拓扑表（共 ${relLines.length} 条）】\n${relLines.join('\n')}`);
-  }
-
-  // (3) 地名设定
-  const placeList = g.places || [];
-  if(placeList.length){
-    const placeLines = placeList.map(p => {
-      const [pName] = cleanEntityName(p && p.name);
-      if(!pName) return null;
-      return `- 【地名】${pName} | 类型: ${p.type || '地点'} | 说明/氛围: ${String(p.note || '').trim() || '无'}`;
-    }).filter(Boolean);
-    if(placeLines.length) dmSections.push(`【3. 关键地名与地理场景（共 ${placeLines.length} 处）】\n${placeLines.join('\n')}`);
-  }
-
-  // (4) 地名关联表
-  const pcArr = validAssoc(g._placeContacts, 'from', 'to');
-  if(pcArr.length){
-    const pcLines = pcArr.map(x => `- ${x.from} ↔ ${x.to} [${x.relation || '连通'}]${x.note ? `（${x.note}）` : ''}`);
-    dmSections.push(`【4. 地名关联通路表（共 ${pcLines.length} 条）】\n${pcLines.join('\n')}`);
-  }
-
-  // (5) 专名与核心设定
-  const propList = g.propernouns || [];
-  if(propList.length){
-    const propLines = propList.map(x => {
-      const [xName] = cleanEntityName(x && x.name);
-      if(!xName) return null;
-      return `- 【专名】${xName} | 功能/特效/使用限制: ${String(x.note || '').trim() || '无'}`;
-    }).filter(Boolean);
-    if(propLines.length) dmSections.push(`【5. 专名与核心设定（装备/技术/道具/体系/组织等，共 ${propLines.length} 项）】\n${propLines.join('\n')}`);
-  }
-
-  // (6) 专名关联表
-  const prcArr = validAssoc(g._properContacts, 'from', 'to');
-  if(prcArr.length){
-    const prcLines = prcArr.map(x => `- ${x.from} ↔ ${x.to} [${x.relation || '关联'}]${x.note ? `（${x.note}）` : ''}`);
-    dmSections.push(`【6. 专名关联谱系表（共 ${prcLines.length} 条）】\n${prcLines.join('\n')}`);
-  }
-
-  // (7) 世界观运转规则系统
-  const wrArr = ((g && g._worldRules) || []).filter(x => x && String(x.rule || '').trim());
-  if(wrArr.length){
-    const wrLines = wrArr.map(x => `- 【${x.cat || '世界观法则'}】适用范围: ${x.scope || '全域'} | 运作法则与代价: ${x.rule}`);
-    dmSections.push(`【7. 世界观运转规则系统（共 ${wrLines.length} 条）】\n${wrLines.join('\n')}`);
-  }
-
-  // (8) 已有扩展世界素材（只读参照）
-  const extended = [
-    ['组织/势力', g.organizations, x=>`- ${x.name} | 类型:${x.type||''} | 立场:${x.stance||''} | 核心职能:${x.function||''} | 关系:${x.relation||''} | 说明:${x.note||''}`],
-    ['职业/机构', g.institutions, x=>`- ${x.name} | 类型:${x.type||''} | 行业/职能:${x.function||''} | 服务对象:${x.audience||''} | 地点:${x.location||''} | 说明:${x.note||''}`],
-    ['物品/道具', g.items, x=>`- ${x.name} | 类型:${x.type||''} | 功能:${x.function||''} | 来源:${x.source||''} | 使用限制:${x.limit||''} | 说明:${x.note||''}`],
-    ['世界规则', g.rules, x=>`- ${x.name} | 类别:${x.category||''} | 范围:${x.scope||''} | 规则:${x.rule||''} | 代价/限制:${x.limit||''}`],
-    ['术语', g.terms, x=>`- ${x.name} | 类别:${x.category||''} | 含义:${x.meaning||''} | 使用场景:${x.usage||''} | 说明:${x.note||''}`],
-    ['历史事件', g.events, x=>`- ${x.name} | 时间/时代:${x.era||''} | 参与方:${x.participants||''} | 经过:${x.course||''} | 影响:${x.impact||''} | 主线关系:${x.relation||''}`],
-    ['生活设定', g.lifeSettings, x=>`- ${x.name} | 类别:${x.category||''} | 适用范围:${x.scope||''} | 内容:${x.content||''} | 描写价值:${x.value||''}`]
-  ];
-  extended.forEach(([label,list,fmt])=>{ const arr=Array.isArray(list)?list.filter(x=>x&&String(x.name||'').trim()):[]; if(arr.length) dmSections.push(`【${label}（共 ${arr.length} 项）】\n${arr.map(fmt).join('\n')}`); });
-
-  // (9) 现有路人/龙套（若有）
-  const walkonList = g.walkons || [];
-  if(walkonList.length){
-    const walkonLines = walkonList.map(w => {
-      const [wName] = cleanEntityName(w && w.name);
-      if(!wName) return null;
-      return `- 【路人龙套】${wName} | 说明/登场: ${String(w.note || '').trim()}`;
-    }).filter(Boolean);
-    if(walkonLines.length) dmSections.push(`【8. 现有路人/龙套（共 ${walkonLines.length} 位）】\n${walkonLines.join('\n')}`);
-  }
-
-  // (9) 词典达人架构总结（若有）
-  if(state.dictmasterLatest && state.dictmasterLatest.summary){
-    dmSections.push(`【词典达人架构总结】${state.dictmasterLatest.summary}`);
-  }
-
-  parts.push('【第三部分：本次词典充实允许做什么】只在 dictionary_foundation 之上增加辅助/外围/生活层素材：次要配角、外围地点、次要组织/机构、辅助专名、次要/生活道具、补充术语、外围历史、生活设定、行业生态、地方习俗、环境细节。禁止重新定义、覆盖、改名或升级任何 Foundation 核心事实；禁止新增主角/核心人物/主线关键人物/幕后Boss；关系只能引用已存在实体，不能借关系偷偷创造核心实体。用户后续通过人物定名台主动改名属于用户授权操作，不属于词典充实权限。所有新增条目必须标记 sourceType=dictionary_enrichment。');
-  const dictmasterPart = `【第二部分：词典达人所生成的所有内容（只读参照：不得改动、不得重复新增同名）】\n${dmSections.length ? dmSections.join('\n\n') : '（暂无词典达人生成数据）'}`;
-  parts.push(dictmasterPart);
-
+  parts.push(`【任务】在不修改已有事实的前提下，补充新的、有正文实际使用价值的外围世界素材。只输出新增内容；已有内容不要重述。\n【职责边界】词典达人负责定世界，词典充实负责增量扩展；不要重新生成故事战略、完整世界观或程序 metadata。\n【输出】使用 DICT_ENRICH_SYS 中规定的纯文本类别格式；每条都必须有真实内容，没有内容的字段直接省略。`);
   return parts.join('\n\n');
 }
 const PERSON_GENERIC_NAMES = new Set(['医生','护士','校长','老师','主任','经理','老板','店员','服务员','保安','司机','警察','法官','律师','记者','学生','路人','老人','女人','男人','男孩','女孩','姑娘','青年','少年','少女','顾客','邻居','村民','村长','院长','教授','工程师','护士长','会计','秘书','助理','前台','店主','船员','工人','司机','快递员','黑名单','会议室','村口']);
@@ -18522,9 +17742,35 @@ function _dictMatched(arr, raw){
   return (Array.isArray(arr)?arr:[]).filter(x=>x&&String(x.name||'').trim()&&_dictMentioned(x,raw));
 }
 function _dictFormatEntry(x){
-  if(!x) return '';
-  const keys=['name','type','category','identity','age','gender','appearance','hobby','relation','trait','catchphrase','function','meaning','content','note','impact','usage','value','scope','rule','limit','stance','audience','location','era','participants','course'];
-  return keys.map(k=>{const v=String(x[k]??'').trim();return v?`${k}=${v}`:'';}).filter(Boolean).join('｜');
+  if(!x || typeof x!=='object') return '';
+  // 正文只需要“事实”，不要把数据库字段名（name= / type= / definitions=JSON 等）当成提示词内容。
+  const labels={
+    name:'名称', type:'类型', category:'类别', identity:'身份', age:'年龄', gender:'性别',
+    appearance:'外貌', hobby:'习惯', relation:'关系', trait:'性格', catchphrase:'口头禅',
+    function:'作用', meaning:'含义', content:'内容', note:'备注', impact:'影响', usage:'用法',
+    value:'价值', scope:'范围', rule:'规则', limit:'限制', stance:'立场', audience:'对象',
+    location:'地点', era:'时代', participants:'参与者', course:'经过'
+  };
+  const keys=Object.keys(labels);
+  const parts=[];
+  keys.forEach(k=>{
+    const v=String(x[k]??'').trim();
+    if(!v || /^(?:json|null|undefined|empty|none)$/i.test(v)) return;
+    parts.push(`${labels[k]}：${v}`);
+  });
+  return parts.join('；');
+}
+
+function sanitizeChapterWriterContext(raw){
+  let out=String(raw||'');
+  // 只在“正文最终输入边界”过滤机器噪声，不修改任何底层 state 对象。
+  out=out.replace(/\[\s*STYLE_STRATEGY\s*\][\s\S]*?\[\s*\/\s*STYLE_STRATEGY\s*\]/gi,'');
+  out=out.replace(/\[\s*PRINCIPAL_CHAPTER\s*\][\s\S]*?\[\s*\/\s*PRINCIPAL_CHAPTER\s*\]/gi,'');
+  // 空机器字段：schema= / protocol= / xxxDefinitions=JSON / xxxEntries=JSON 等不得进入正文。
+  out=out.replace(/^[ \t]*(?:[A-Za-z_$][\w$]*)(?:Entries|Definitions|Schema|Protocol)\s*=\s*(?:JSON|\{\s*\}|\[\s*\]|null|undefined)?\s*$/gim,'');
+  out=out.replace(/^[ \t]*(?:schema|protocol|protocolVersion|parseStatus|sourceBucket|debug|internal|internalId|machine|folded|timestamp|createdAt|updatedAt)\s*=\s*(?:[^\n]*)$/gim,'');
+  out=out.replace(/\n{3,}/g,'\n\n').trim();
+  return out;
 }
 function buildChapterDictionaryContext(i){
   const raw=getChapterTeacherRawTextDirect(i);
@@ -18568,12 +17814,8 @@ function buildChapterDictionaryContext(i){
   return sections.length ? `【本章词典/世界资料｜只读辅助上下文】\n以下资料不是第二份教案，不改变老师原始教案；只用于核对人物九维、名称、世界事实、关系和世界运转规则。未列出的词典条目本章不得因词典存在而自行调用。\n\n${sections.join('\n\n')}` : '【本章词典/世界资料｜只读辅助上下文】\n本章教案没有命中可注入的词典条目；不得因为词典存在其它条目而自行扩大。';
 }
 function sanitizeChapterWriterRawText(raw){
-  let out=String(raw||'');
-  // 正文输入最后一道确定性隔离：旧存档/异常老师输出若残留校长机器协议，只移除机器协议块，不重写正常老师教案。
-  out=out.replace(/\[\s*STYLE_STRATEGY\s*\][\s\S]*?\[\s*\/\s*STYLE_STRATEGY\s*\]/gi,'');
-  out=out.replace(/\[\s*PRINCIPAL_CHAPTER\s*\][\s\S]*?\[\s*\/\s*PRINCIPAL_CHAPTER\s*\]/gi,'');
-  out=out.replace(/\n{3,}/g,'\n\n').trim();
-  return out;
+  // 老师原始教案仍是唯一剧情权威；这里只做确定性的机器协议/空字段隔离，绝不重新总结或改写教案。
+  return sanitizeChapterWriterContext(raw);
 }
 function getChapterWriterUser(i){
   // 正文动态内容的唯一主入口：老师本章原始教案。
@@ -18586,11 +17828,12 @@ function getChapterWriterUser(i){
 
   const parts=[
     `【本章老师原始教案｜唯一内容权威】\n${teacher}`,
-    continuity,
-    dict
+    sanitizeChapterWriterContext(continuity),
+    sanitizeChapterWriterContext(dict)
   ].filter(Boolean);
 
-  return parts.join('\n\n');
+  // 最后一层只清理空机器字段/历史协议；不删除正常中文事实，不改变老师教案语义。
+  return sanitizeChapterWriterContext(parts.join('\n\n'));
 }
 
 // 正文最终注入唯一组装入口：正文真实 AI 请求与“注入导出”共用同一份 system/user。
@@ -20459,7 +19702,7 @@ const TM_GROUPS = [
     ['principal','校长总控','统领全量材料，产出全书与章节级规划'],
     ['teacher','老师备课','把章节规划转成场景级推进教案'],
     ['chapter','正文生成','正式小说正文生成，创作链温度核心'],
-    ['recipe','写作配方','写作风格/方法组合与配方设计']
+    ['recipe','AI配方助手','写作风格/方法组合与配方设计']
   ]},
   { title:'🔧 二级任务 · 高频维护与质量控制', keys:[
     ['strip','本章梗概（速读）','每章生成后的快速压缩'],
@@ -20475,7 +19718,7 @@ const TM_GROUPS = [
     ['chapterRepair','正文修复','根据审计结果进行局部修复'],
     ['chapterState','正文状态结算','提取章末事实状态'],
     ['timeAnchor','时间锚点','从正文抽取时间状态'],
-    ['recipeAnalysis','配方输入理解','写作配方的前置需求分析']
+    ['recipeAnalysis','AI配方助手输入理解','AI配方助手的前置需求分析']
   ]}
 ];
 
