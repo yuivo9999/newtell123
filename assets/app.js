@@ -17,9 +17,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.544';
+const APP_VERSION = '1.0.545';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.544.js';
+const APP_FILE_VERSION = 'app1.0.545.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -4021,7 +4021,6 @@ function renderOptimizationStructuredView(o){
     <div class="app-idea-structured-head"><span>✦</span><b>结构化创作蓝图</b><em>用户可读 · 下游 AI 同源</em></div>
     <details open class="app-idea-section"><summary>🎯 故事核心</summary><div class="app-idea-section-body">${kv(b.storyCore)}</div></details>
     <details class="app-idea-section"><summary>👤 主角与核心人物</summary><div class="app-idea-section-body">${kv(b.protagonist)}${escList(b.keyCharacters)}</div></details>
-    <details class="app-idea-section"><summary>🌍 世界与规则</summary><div class="app-idea-section-body">${kv(b.world)}${escList(b.worldRules)}</div></details>
     <details class="app-idea-section"><summary>⚔️ 冲突与故事发展</summary><div class="app-idea-section-body">${kv(b.conflict)}${kv(b.storyArc)}</div></details>
     <details class="app-idea-section"><summary>📖 全书故事节拍</summary><div class="app-idea-section-body" style="background:#fff!important;color:#000!important">${escList(b.fullBookBeat)}</div></details>
   </div>`;
@@ -9625,12 +9624,10 @@ function parseOptimizationStructuredBlock(body){
   const optionMeta=kvBlock(block('OPTION_META'));
   const storyCore=kvBlock(block('STORY_CORE'));
   const protagonist=kvBlock(block('PROTAGONIST'));
-  const world=kvBlock(block('WORLD'));
   const conflict=kvBlock(block('CONFLICT'));
   const storyArc=kvBlock(block('STORY_ARC'));
   const keyCharacters=listBlock(block('KEY_CHARACTERS')).map(x=>{const m=splitPipe(x);return {name:m[0]||'',identity:m[1]||'',role:m[2]||'',relation:m[3]||''};});
   const relationships=listBlock(block('RELATIONSHIPS')).map(x=>{const m=splitPipe(x);return {from:m[0]||'',to:m[1]||'',relation:m.slice(2).join('｜')||''};});
-  const worldRules=listBlock(block('WORLD_RULES'));
   const fullBookBeat=listBlock(block('FULL_BOOK_BEAT'));
   const styleBlock=block('WRITING_STYLE_INHERITANCE_SUPPLEMENT');
   const styleLines=String(styleBlock||'').split('\n').map(v=>v.trim()).filter(Boolean);
@@ -9649,7 +9646,7 @@ function parseOptimizationStructuredBlock(body){
     }
   });
   stylePackage.supplementStatus = stylePackage.supplements.length ? 'present' : 'none';
-  return {optionMeta,storyCore,protagonist,keyCharacters,relationships,world,worldRules,conflict,storyArc,fullBookBeat,writingStyleInheritanceSupplement:stylePackage};
+  return {optionMeta,storyCore,protagonist,keyCharacters,relationships,conflict,storyArc,fullBookBeat,writingStyleInheritanceSupplement:stylePackage};
 }
 
 function explicitPersonNamesFromUserIdea(){
@@ -9705,7 +9702,7 @@ function parseOptimizationPlainText(raw, multi){
       bookTitle:String(sb.optionMeta?.bookTitle||'').trim(),
       name:String(sb.optionMeta?.name||'').trim(),
       novelSummary:[sb.storyCore?.genre,sb.storyCore?.tone,sb.storyCore?.core_promise,sb.storyCore?.story_question].filter(Boolean).join('；'),
-      optimizedIdea:[sb.protagonist?.name?`主角：${sb.protagonist.name}`:'',sb.protagonist?.goal?`目标：${sb.protagonist.goal}`:'',sb.protagonist?.growth?`成长：${sb.protagonist.growth}`:'',sb.conflict?.surface?`表层冲突：${sb.conflict.surface}`:'',sb.conflict?.deep?`深层冲突：${sb.conflict.deep}`:'',sb.world?.world_summary?`世界：${sb.world.world_summary}`:''].filter(Boolean).join('\n'),
+      optimizedIdea:[sb.protagonist?.name?`主角：${sb.protagonist.name}`:'',sb.protagonist?.goal?`目标：${sb.protagonist.goal}`:'',sb.protagonist?.growth?`成长：${sb.protagonist.growth}`:'',sb.conflict?.surface?`表层冲突：${sb.conflict.surface}`:'',sb.conflict?.deep?`深层冲突：${sb.conflict.deep}`:''].filter(Boolean).join('\n'),
       fullBookBeat:sb.fullBookBeatText||'',
       navBeacon:{genre:sb.storyCore?.genre||'',protagonist:sb.protagonist?.name||'',coreConflict:sb.conflict?.surface||sb.conflict?.deep||'',tone:sb.storyCore?.tone||''},
       strategyFingerprint:{mainStrategy:sb.conflict?.character||sb.conflict?.surface||'',secondaryStrategy:sb.storyArc?.phase_2||'',coreConflict:sb.conflict?.surface||sb.conflict?.deep||'',storyEngine:sb.conflict?.deep||'',emotionalPromise:sb.storyCore?.core_promise||'',pacing:sb.storyArc?.phase_3||''}
@@ -9740,7 +9737,7 @@ function validateIdeaOptimizationTextOutput(raw, ctx){
   if(!parsed.ok) return {ok:false,code:'PLAIN_TEXT_CONTRACT',details:parsed.error||'纯文本结构不符合要求'};
   const nameErr=validateOptimizationPersonNaming(parsed);
   if(nameErr) return {ok:false,code:'OPTIMIZATION_PERSON_NAMING',details:nameErr};
-  const required=['storyCore','protagonist','world','conflict','storyArc'];
+  const required=['storyCore','protagonist','conflict','storyArc'];
   const blueprintErrors=[];
   for(const [i,o] of parsed.options.entries()){
     const b=o.structuredBlueprint||{};
@@ -9763,7 +9760,6 @@ function validateIdeaOptimizationTextOutput(raw, ctx){
       if(miss.length) blueprintErrors.push(`方案${i+1}继承词条${si+1}资料不完整：${miss.join('/')}`);
     }
     if(!Array.isArray(b.fullBookBeat) || b.fullBookBeat.length<3) blueprintErrors.push(`方案${i+1}的FULL_BOOK_BEAT至少需要3项`);
-    if(!Array.isArray(b.worldRules)) blueprintErrors.push(`方案${i+1}的WORLD_RULES结构无效`);
     if(!b.optionMeta || typeof b.optionMeta!=='object' || !String(b.optionMeta.name||'').trim()) blueprintErrors.push(`方案${i+1}缺少OPTION_META.name`);
     if(!Array.isArray(b.keyCharacters)) blueprintErrors.push(`方案${i+1}的KEY_CHARACTERS结构无效`);
     if(!Array.isArray(b.relationships)) blueprintErrors.push(`方案${i+1}的RELATIONSHIPS结构无效`);
@@ -10374,14 +10370,8 @@ growth=...
 [RELATIONSHIPS]
 - 人物A｜人物B｜关系与变化方向
 [/RELATIONSHIPS]
-[WORLD]
-time=...
-setting=...
-world_summary=...
-[/WORLD]
-[WORLD_RULES]
-- 规则或不可轻易改变的事实
-[/WORLD_RULES]
+【世界背景边界】
+优化构想可以读取用户原始构想中的世界背景与规则，用于剧情构想；但本阶段不得输出 WORLD / WORLD_RULES 正式世界观区块，也不得建立正式世界观数据库。正式 WORLD / WORLD_RULES 由后续词典达人统一定稿。
 [CONFLICT]
 surface=...
 deep=...
@@ -16512,6 +16502,8 @@ name 字段只能写实体名称。
 
 因此任何进入正式词典的内容，都必须经得起长期正文使用。
 
+【正式世界观职责边界】优化构想阶段只提供故事背景与剧情构想，不再正式生产 WORLD / WORLD_RULES。你是 WORLD / WORLD_RULES 的唯一正式生产者；后续模块只读取你定稿的正式世界观，不得重新建立第二套。
+
 【十九A、最低通行标准｜硬约束与可选内容必须严格分离】
 词典达人只负责建立 Foundation Dictionary 的最小可用核心骨架，不负责一次性完成整本小说百科全书。
 注意：这里的“最小”不是“只抄蓝本已有人物”。词典达人必须判断故事是否需要新增核心人物；蓝本只有一个人物时，允许建立更多必要核心人物，也允许在确实不需要时保持单人物结构。不要把“关系表可为空”误解成“不能建立新人物”。
@@ -16542,7 +16534,6 @@ hobby=爱好或无
 relation=一句话核心关系摘要
 trait=稳定性格核心
 catchphrase=口头禅或无
-sourceType=dictionary_foundation
 [/CHARACTER]
 
 [RELATION]
@@ -16550,14 +16541,12 @@ a=人物名称
 b=人物名称
 relation=真实人物关系
 note=一句话说明
-sourceType=dictionary_foundation
 [/RELATION]
 
 [LOCATION]
 name=纯地点名称
 type=地点类型
 note=关键设定
-sourceType=dictionary_foundation
 [/LOCATION]
 
 [PLACE_CONTACT]
@@ -16565,13 +16554,11 @@ from=地名
 to=地名
 relation=真实地点联系
 note=一句话说明
-sourceType=dictionary_foundation
 [/PLACE_CONTACT]
 
 [PROPER_NOUN]
 name=纯专名
 note=来源、机制、功能、限制或故事价值
-sourceType=dictionary_foundation
 [/PROPER_NOUN]
 
 [PROPER_CONTACT]
@@ -16579,14 +16566,12 @@ from=专名
 to=专名
 relation=真实专名联系
 note=一句话说明
-sourceType=dictionary_foundation
 [/PROPER_CONTACT]
 
 [RULE]
 cat=规则类别
 scope=适用对象/范围
 rule=具体运转规则及违反后果/代价
-sourceType=dictionary_foundation
 [/RULE]
 
 [ORGANIZATION]
@@ -16596,7 +16581,6 @@ stance=立场或未知
 function=功能
 relation=与其他实体关系
 note=关键说明
-sourceType=dictionary_foundation
 [/ORGANIZATION]
 
 [INSTITUTION]
@@ -16606,7 +16590,6 @@ function=功能
 audience=服务对象
 location=所在地点
 note=关键说明
-sourceType=dictionary_foundation
 [/INSTITUTION]
 
 [ITEM]
@@ -16616,7 +16599,6 @@ function=功能
 source=来源
 limit=限制或代价
 note=关键说明
-sourceType=dictionary_foundation
 [/ITEM]
 
 [TERM]
@@ -16625,7 +16607,6 @@ category=分类
 meaning=含义
 usage=使用方式
 note=关键说明
-sourceType=dictionary_foundation
 [/TERM]
 
 [HISTORY]
@@ -16635,7 +16616,6 @@ participants=参与者
 course=经过
 impact=影响
 relation=与当前世界/主线的关系
-sourceType=dictionary_foundation
 [/HISTORY]
 
 [LIFE_SETTING]
@@ -16645,7 +16625,6 @@ scope=适用范围
 content=具体内容
 value=长期创作价值
 note=关键说明
-sourceType=dictionary_foundation
 [/LIFE_SETTING]
 
 【输出顺序】WORLD 必须最先出现；随后按 CHARACTER → RELATION → LOCATION → PLACE_CONTACT → PROPER_NOUN → PROPER_CONTACT → RULE → ORGANIZATION → INSTITUTION → ITEM → TERM → HISTORY → LIFE_SETTING 的顺序输出。没有真实关系的区块可以完全省略。不要为了凑数量创建虚假关系。
@@ -17607,7 +17586,7 @@ name 字段只能填写纯实体名称。
 
 你可以扩建词典，但不能建立第二套世界。
 
-你的新增内容一旦正式收录，也会成为后续正文可以使用的正式创作事实；但 sourceType 必须是 dictionary_enrichment，权威级别低于 Creative Blueprint 与 dictionary_foundation，不得覆盖上游事实。
+你的新增内容一旦正式收录，也会成为后续正文可以使用的正式创作事实；其权威级别低于 Creative Blueprint 与 dictionary_foundation，不得覆盖上游事实；来源标记由 JS 内部维护，不进入 AI 输出协议。
 `;
 function buildDictEnrichUser(){
   const o = state.outline || {};
@@ -17735,7 +17714,7 @@ function buildDictEnrichUser(){
     dmSections.push(`【词典达人架构总结】${state.dictmasterLatest.summary}`);
   }
 
-  parts.push('【第三部分：本次词典充实允许做什么】只在 dictionary_foundation 之上增加辅助/外围/生活层素材：次要配角、外围地点、次要组织/机构、辅助专名、次要/生活道具、补充术语、外围历史、生活设定、行业生态、地方习俗、环境细节。禁止重新定义、覆盖、改名或升级任何 Foundation 核心事实；禁止新增主角/核心人物/主线关键人物/幕后Boss；关系只能引用已存在实体，不能借关系偷偷创造核心实体。用户后续通过人物定名台主动改名属于用户授权操作，不属于词典充实权限。所有新增条目必须标记 sourceType=dictionary_enrichment。');
+  parts.push('【第三部分：本次词典充实允许做什么】只在 dictionary_foundation 之上增加辅助/外围/生活层素材：次要配角、外围地点、次要组织/机构、辅助专名、次要/生活道具、补充术语、外围历史、生活设定、行业生态、地方习俗、环境细节。禁止重新定义、覆盖、改名或升级任何 Foundation 核心事实；禁止新增主角/核心人物/主线关键人物/幕后Boss；关系只能引用已存在实体，不能借关系偷偷创造核心实体。用户后续通过人物定名台主动改名属于用户授权操作，不属于词典充实权限。所有新增条目的来源标记由 JS 在解析入库时自动附加；AI 不需要输出 sourceType、来源、创建时间等机器元数据。');
   const dictmasterPart = `【第二部分：词典达人所生成的所有内容（只读参照：不得改动、不得重复新增同名）】\n${dmSections.length ? dmSections.join('\n\n') : '（暂无词典达人生成数据）'}`;
   parts.push(dictmasterPart);
 
