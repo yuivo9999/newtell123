@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.552';
+const APP_VERSION = '1.0.553';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.552.js';
+const APP_FILE_VERSION = 'app1.0.553.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -151,8 +151,10 @@ const state = {
   dictmasterLatest: null,
   dictmasterRan: false,
   originalIdeaSnapshot: '',
-  // v1.0.552：词典达人真实生成前 SYSTEM + USER 快照；仅用于注入导出，不是第二套正式数据源。
+  // v1.0.553：词典达人真实生成前 SYSTEM + USER 快照；仅用于注入导出，不是第二套正式数据源。
   dictmasterInjectionSnapshot: null,
+  // v1.0.553：词典充实真实生成前 SYSTEM + USER 快照；仅用于注入导出。
+  dictEnrichInjectionSnapshot: null,
   titleWriteBack: false,
   langLayer: true,
   _narrIron: true,
@@ -1400,6 +1402,7 @@ function projectSnapshot(){
     dictmasterLatest: state.dictmasterLatest || null,
     dictmasterRan: !!state.dictmasterRan,
     dictmasterInjectionSnapshot: state.dictmasterInjectionSnapshot || null,
+    dictEnrichInjectionSnapshot: state.dictEnrichInjectionSnapshot || null,
     originalIdeaSnapshot: state.originalIdeaSnapshot || '',
     school: (state.school && typeof state.school === 'object') ? state.school : null,   // 学校模式：校长/老师 产出 + 各步重试/完成标记（随项目持久化）
     longMemory: state.longMemory || { uiOpen:false, foreshadow:[], lastAuditAt:0 },
@@ -1505,6 +1508,7 @@ function applyProject(p){
   state.dictmasterLatest = (p.dictmasterLatest && typeof p.dictmasterLatest === 'object') ? p.dictmasterLatest : null;
   state.dictmasterRan = !!p.dictmasterRan;
   state.dictmasterInjectionSnapshot = (p.dictmasterInjectionSnapshot && typeof p.dictmasterInjectionSnapshot === 'object') ? p.dictmasterInjectionSnapshot : null;
+  state.dictEnrichInjectionSnapshot = (p.dictEnrichInjectionSnapshot && typeof p.dictEnrichInjectionSnapshot === 'object') ? p.dictEnrichInjectionSnapshot : null;
   state.originalIdeaSnapshot = (typeof p.originalIdeaSnapshot === 'string') ? p.originalIdeaSnapshot : '';
   state.school = (p.school && typeof p.school === 'object') ? p.school : null;   // 学校模式恢复（校长/老师 产出 + 重试/完成标记）
   if(!state.school || typeof state.school !== 'object') state.school = {};
@@ -16984,7 +16988,7 @@ function collapseGlossaryAfterDictionaryGeneration(save=true){
 }
 
 
-/* v1.0.552 SAFE-DICTMASTER-READER-INJECTION:
+/* v1.0.553 SAFE-DICTMASTER-READER-INJECTION:
  * 新增“注入导出 + 读词典达人”。注入导出读取真实生成前快照；读词典达人读取/编辑正式 Foundation 数据，保存仍回到原 outline.glossary，保留词典充实等非 Foundation 数据。
  */
 function dictmasterInjectionTextFromSnapshot(){
@@ -18572,6 +18576,8 @@ async function genDictEnrich(btn, opts){
     const spec = resolveActiveSpec('dictEnrich');
     const temp = (spec && spec.dictEnrichTemp != null) ? spec.dictEnrichTemp : 0.4;
     const user = buildDictEnrichUser();
+    // v1.0.553：真实生成前快照，供“注入导出”只读展示；不建立第二套正式数据源。
+    state.dictEnrichInjectionSnapshot = { system:String(DICT_ENRICH_SYS||''), user:String(user||''), createdAt:Date.now() };
     const onStream = delta => { if(stream){ stream.textContent += String(delta||''); stream.scrollTop = stream.scrollHeight; } };
     const res = await callDeepSeek(DICT_ENRICH_SYS, user, { temperature: temp, topP: 0.6, maxTokens: clampMaxTokens('dictEnrich'), onStream, signal:_abortCtl?.signal, taskKey:'dictEnrich' });
     const txt = String(res.text || '').trim();
@@ -18629,6 +18635,170 @@ function buildDictEnrichSummary(parsed){
     organizations:(parsed.organizations||[]).length, institutions:(parsed.institutions||[]).length, items:(parsed.items||[]).length, rules:(parsed.rules||[]).length, terms:(parsed.terms||[]).length, events:(parsed.events||[]).length, lifeSettings:(parsed.lifeSettings||[]).length,
   };
 }
+/* v1.0.553 SAFE-DICTENRICH-READER-INJECTION:
+ * “注入导出”只读真实生成前 SYSTEM + USER；“读词典充实”只读/编辑正式 enrichment。
+ * 两者都不建立第二套正式事实源；正式数据仍为 state.outline.glossary + _sourceMeta。
+ */
+function dictEnrichInjectionText(){
+  try{
+    const snap=state.dictEnrichInjectionSnapshot;
+    if(snap && typeof snap==='object'){
+      const sys=String(snap.system||'').trim(), user=String(snap.user||'').trim();
+      if(sys || user) return `SYSTEM\n${sys}\n\nUSER\n${user}`.trim();
+    }
+    const sys=String(DICT_ENRICH_SYS||'').trim();
+    const user=String(buildDictEnrichUser()||'').trim();
+    if(!sys && !user) return '';
+    return `SYSTEM\n${sys}\n\nUSER\n${user}`.trim();
+  }catch(e){ console.warn('[dictEnrich injection export]',e); return ''; }
+}
+function dictEnrichFinalRows(){
+  const g=ensureGlossaryKnowledgeShape((state.outline&&state.outline.glossary)||{}), out=[];
+  const add=(category,arr)=>{ (Array.isArray(arr)?arr:[]).forEach(x=>{ if(x&&isGlossaryEnrichment(g,category,x)) out.push({...x}); }); };
+  ['characters','places','propernouns','walkons','organizations','institutions','items','rules','terms','events','lifeSettings'].forEach(k=>add(k,g[k]));
+  add('_relationshipTable',g._relationshipTable); add('_placeContacts',g._placeContacts); add('_properContacts',g._properContacts); add('_worldRules',g._worldRules);
+  return out;
+}
+function _deKV(obj, keys){ return keys.map(([label,key])=>{ const v=String((obj&&obj[key])??'').replace(/[\r\n]+/g,' ').trim(); return v?`${label}：${v}`:''; }).filter(Boolean).join('｜'); }
+function serializeDictEnrichFinalText(glossaryOverride){
+  const g=ensureGlossaryKnowledgeShape(glossaryOverride || ((state.outline&&state.outline.glossary)||{})), lines=[];
+  const emit=(tag,category,arr,fields)=>{ (Array.isArray(arr)?arr:[]).forEach(x=>{ if(!x||!isGlossaryEnrichment(g,category,x)) return; const name=String(x.name||'').trim(); if(!name) return; const tail=_deKV(x,fields); lines.push(`【词典充实·${tag}】${name}${tail?'｜'+tail:''}`); }); };
+  emit('人物','characters',g.characters,[['身份','identity'],['年龄','age'],['性别','gender'],['外貌','appearance'],['爱好','hobby'],['关系','relation'],['性格','trait'],['口头禅','catchphrase']]);
+  emit('路人','walkons',g.walkons,[['说明','note'],['身份','identity'],['关系','relation'],['特征','trait']]);
+  emit('地名','places',g.places,[['类型','type'],['说明','note']]);
+  emit('专名','propernouns',g.propernouns,[['说明','note']]);
+  emit('组织','organizations',g.organizations,[['类型','type'],['立场','stance'],['核心职能','function'],['关系','relation'],['说明','note']]);
+  emit('机构','institutions',g.institutions,[['类型','type'],['职能','function'],['服务对象','audience'],['地点','location'],['说明','note']]);
+  emit('道具','items',g.items,[['类型','type'],['功能','function'],['来源','source'],['使用限制','limit'],['说明','note']]);
+  emit('规则','rules',g.rules,[['类别','category'],['范围','scope'],['规则','rule'],['代价/限制','limit']]);
+  emit('术语','terms',g.terms,[['类别','category'],['含义','meaning'],['使用场景','usage'],['说明','note']]);
+  emit('事件','events',g.events,[['时间/时代','era'],['参与方','participants'],['经过','course'],['影响','impact'],['与主线关系','relation'],['说明','note']]);
+  emit('生活设定','lifeSettings',g.lifeSettings,[['类别','category'],['适用范围','scope'],['内容','content'],['描写价值','value'],['说明','note']]);
+  (g._relationshipTable||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_relationshipTable',x)) return; const a=String(x.a||'').trim(),b=String(x.b||'').trim(); if(a&&b) lines.push(`【词典充实·人物关系】${a}｜${b}｜关系：${String(x.relation||'').trim()}${x.note?'｜说明：'+String(x.note).trim():''}`); });
+  (g._placeContacts||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_placeContacts',x)) return; const a=String(x.from||'').trim(),b=String(x.to||'').trim(); if(a&&b) lines.push(`【词典充实·地名关联】${a}｜${b}｜关系：${String(x.relation||'').trim()}${x.note?'｜说明：'+String(x.note).trim():''}`); });
+  (g._properContacts||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_properContacts',x)) return; const a=String(x.from||'').trim(),b=String(x.to||'').trim(); if(a&&b) lines.push(`【词典充实·专名关联】${a}｜${b}｜关系：${String(x.relation||'').trim()}${x.note?'｜说明：'+String(x.note).trim():''}`); });
+  (g._worldRules||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_worldRules',x)) return; const cat=String(x.cat||'').trim(),scope=String(x.scope||'').trim(),rule=String(x.rule||'').trim(),limit=String(x.limit||'').trim(); if(rule) lines.push(`【词典充实·世界观规则】类别：${cat}｜适用范围：${scope}｜规则：${rule}${limit?'｜代价/限制：'+limit:''}`); });
+  return lines.join('\n');
+}
+function parseDictEnrichFinalText(text){
+  const res={characters:[],places:[],propernouns:[],walkons:[],organizations:[],institutions:[],items:[],rules:[],terms:[],events:[],lifeSettings:[],relationshipTable:[],placeContacts:[],properContacts:[],worldRules:[]};
+  const src=String(text||'').replace(/^```[\s\S]*?\n/,'').replace(/```$/,'').trim();
+  if(!src) return res;
+  const lines=src.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  const cats={'人物':'characters','路人':'walkons','地名':'places','专名':'propernouns','组织':'organizations','机构':'institutions','道具':'items','规则':'rules','术语':'terms','事件':'events','生活设定':'lifeSettings'};
+  const parseKV=parts=>{ const o={}; parts.forEach((seg,i)=>{ const m=String(seg).match(/^([^：:]{1,20})[：:](.*)$/); if(m)o[m[1].trim()]=m[2].trim(); }); return o; };
+  const val=(m,...ks)=>{ for(const k of ks){ if(String(m[k]??'').trim()) return String(m[k]).trim(); } return ''; };
+  for(const ln of lines){
+    const h=ln.match(/^【词典充实·([^】]+)】\s*(.*)$/); if(!h) throw new Error(`无法识别的词典充实行：「${ln.slice(0,60)}」`);
+    const tag=h[1].trim(), body=h[2].trim(), seg=body.split(/[｜|]/).map(x=>x.trim()).filter(Boolean);
+    if(tag==='人物关系'||tag==='地名关联'||tag==='专名关联'){
+      if(seg.length<3) throw new Error(`${tag}格式不完整`);
+      const m=parseKV(seg.slice(2));
+      if(tag==='人物关系') res.relationshipTable.push({a:seg[0],b:seg[1],relation:val(m,'关系')||'关联',note:val(m,'说明','备注')});
+      if(tag==='地名关联') res.placeContacts.push({from:seg[0],to:seg[1],relation:val(m,'关系')||'连通',note:val(m,'说明','备注')});
+      if(tag==='专名关联') res.properContacts.push({from:seg[0],to:seg[1],relation:val(m,'关系')||'关联',note:val(m,'说明','备注')});
+      continue;
+    }
+    if(tag==='世界观规则'){
+      const m=parseKV(seg); const rule=val(m,'规则'); if(!rule) throw new Error('世界观规则缺少“规则”');
+      res.worldRules.push({cat:val(m,'类别','分类'),scope:val(m,'适用范围','范围'),rule,limit:val(m,'代价/限制','限制','代价')}); continue;
+    }
+    const key=cats[tag]; if(!key) throw new Error(`不支持的词典充实类别：「${tag}」`);
+    if(!seg[0]) throw new Error(`${tag}缺少名称`);
+    const name=seg.shift(), m=parseKV(seg), x={name};
+    if(key==='characters') Object.assign(x,{tier:'support',identity:val(m,'身份','简介','定位'),age:val(m,'年龄','岁数','岁'),gender:val(m,'性别'),appearance:val(m,'外貌','外貌特征'),hobby:val(m,'爱好'),relation:val(m,'关系','人际关系'),trait:val(m,'性格','性格特征','核心动机'),catchphrase:val(m,'口头禅','口癖','台词')});
+    else if(key==='walkons') Object.assign(x,{note:val(m,'说明','备注'),identity:val(m,'身份'),relation:val(m,'关系'),trait:val(m,'特征','性格')});
+    else if(key==='places') Object.assign(x,{type:val(m,'类型','类别'),note:val(m,'说明','备注')});
+    else if(key==='propernouns') Object.assign(x,{note:val(m,'说明','备注')});
+    else if(key==='organizations') Object.assign(x,{type:val(m,'类型','类别'),stance:val(m,'立场'),function:val(m,'核心职能','职能'),relation:val(m,'关系'),note:val(m,'说明','备注')});
+    else if(key==='institutions') Object.assign(x,{type:val(m,'类型','类别'),function:val(m,'职能'),audience:val(m,'服务对象'),location:val(m,'地点'),note:val(m,'说明','备注')});
+    else if(key==='items') Object.assign(x,{type:val(m,'类型','类别'),function:val(m,'功能'),source:val(m,'来源'),limit:val(m,'使用限制','限制'),note:val(m,'说明','备注')});
+    else if(key==='rules') Object.assign(x,{category:val(m,'类别','类型'),scope:val(m,'范围','适用范围'),rule:val(m,'规则','规则内容'),limit:val(m,'代价/限制','限制','代价')});
+    else if(key==='terms') Object.assign(x,{category:val(m,'类别','类型'),meaning:val(m,'含义','解释','定义'),usage:val(m,'使用场景','场景'),note:val(m,'说明','备注')});
+    else if(key==='events') Object.assign(x,{era:val(m,'时间/时代','时间','时代'),participants:val(m,'参与方'),course:val(m,'经过','过程'),impact:val(m,'影响'),relation:val(m,'与主线关系','主线关系'),note:val(m,'说明','备注')});
+    else if(key==='lifeSettings') Object.assign(x,{category:val(m,'类别','类型'),scope:val(m,'适用范围','适用地区/群体'),content:val(m,'内容','设定'),value:val(m,'描写价值','价值'),note:val(m,'说明','备注')});
+    res[key].push(x);
+  }
+  return res;
+}
+function _deIdentity(category,x){
+  if(category==='_relationshipTable') return `rel|${String(x?.a||'').trim()}|${String(x?.b||'').trim()}|${String(x?.relation||'').trim()}`;
+  if(category==='_placeContacts') return `place|${String(x?.from||'').trim()}|${String(x?.to||'').trim()}|${String(x?.relation||'').trim()}`;
+  if(category==='_properContacts') return `proper|${String(x?.from||'').trim()}|${String(x?.to||'').trim()}|${String(x?.relation||'').trim()}`;
+  if(category==='_worldRules') return `world|${String(x?.cat||'').trim()}|${String(x?.scope||'').trim()}|${String(x?.rule||'').trim()}`;
+  return `${category}|${String(x?.name||'').trim()}`;
+}
+function _deValidateParsed(parsed,g){
+  const categories={characters:'characters',places:'places',propernouns:'propernouns',walkons:'walkons',organizations:'organizations',institutions:'institutions',items:'items',rules:'rules',terms:'terms',events:'events',lifeSettings:'lifeSettings',relationshipTable:'_relationshipTable',placeContacts:'_placeContacts',properContacts:'_properContacts',worldRules:'_worldRules'};
+  let total=0;
+  for(const [pk,cat] of Object.entries(categories)){
+    const arr=Array.isArray(parsed[pk])?parsed[pk]:[], seen=new Set();
+    for(const x of arr){
+      const id=_deIdentity(cat,x); if(!id || /\|\s*\|/.test(id)) throw new Error(`「${pk}」存在无效条目`);
+      if(seen.has(id)) throw new Error(`「${pk}」存在重复条目`); seen.add(id);
+      if(pk!=='worldRules' && !String(x.name||x.a||x.from||'').trim()) throw new Error(`「${pk}」存在空名称`);
+      if(pk==='relationshipTable' && (!String(x.a||'').trim()||!String(x.b||'').trim()||!String(x.relation||'').trim())) throw new Error('人物关系存在不完整条目');
+      if(pk==='placeContacts' && (!String(x.from||'').trim()||!String(x.to||'').trim()||!String(x.relation||'').trim())) throw new Error('地名关联存在不完整条目');
+      if(pk==='properContacts' && (!String(x.from||'').trim()||!String(x.to||'').trim()||!String(x.relation||'').trim())) throw new Error('专名关联存在不完整条目');
+      if(pk==='worldRules' && !String(x.rule||'').trim()) throw new Error('世界观规则存在不完整条目');
+      total++;
+    }
+  }
+  return true;
+}
+function saveDictEnrichReaderChanges(text){
+  const o=state.outline; if(!o) throw new Error('当前没有作品数据。');
+  const original=ensureGlossaryKnowledgeShape(o.glossary||{});
+  const parsed=parseDictEnrichFinalText(text); _deValidateParsed(parsed,original);
+  const working=JSON.parse(JSON.stringify(original)); ensureGlossaryKnowledgeShape(working);
+  const cats=['characters','places','propernouns','walkons','organizations','institutions','items','rules','terms','events','lifeSettings','_relationshipTable','_placeContacts','_properContacts','_worldRules'];
+  // 先只删除旧 enrichment，Foundation 和非 enrichment 数据完全保留。
+  cats.forEach(cat=>{ working[cat]=(working[cat]||[]).filter(x=>!isGlossaryEnrichment(original,cat,x)); });
+  const maps={characters:'characters',places:'places',propernouns:'propernouns',walkons:'walkons',organizations:'organizations',institutions:'institutions',items:'items',rules:'rules',terms:'terms',events:'events',lifeSettings:'lifeSettings',relationshipTable:'_relationshipTable',placeContacts:'_placeContacts',properContacts:'_properContacts',worldRules:'_worldRules'};
+  for(const [pk,cat] of Object.entries(maps)){
+    for(const row of (parsed[pk]||[])){
+      // 严格保护 Foundation：任何编辑文本都不得覆盖 Foundation 同名/同身份事实。
+      const name=String(row.name||'').trim();
+      if(pk==='characters'||pk==='places'||pk==='propernouns'||pk==='walkons'||pk==='organizations'||pk==='institutions'||pk==='items'||pk==='rules'||pk==='terms'||pk==='events'||pk==='lifeSettings'){
+
+      } else if(pk==='relationshipTable'||pk==='placeContacts'||pk==='properContacts'||pk==='worldRules'){
+        if((original[cat]||[]).some(x=>isGlossaryFoundation(original,cat,x)&&_deIdentity(cat,x)===_deIdentity(cat,row))) throw new Error('不能修改 Foundation 关联/世界观规则。');
+      }
+      const copy={...row};
+      if(pk==='characters' && !copy.id) copy.id=ssEntityId('CHAR',copy.name);
+      markGlossaryEnrichment(working,cat,copy,{how:'读词典充实编辑'});
+      working[cat].push(copy);
+    }
+  }
+  // 提交前做 parse→serialize→parse 闭环；全部成功后才一次性替换正式 glossary。
+  if(!working._sourceMeta || !working._sourceMeta.enrichment) throw new Error('enrichment source metadata 建立失败');
+  const roundTrip=parseDictEnrichFinalText(serializeDictEnrichFinalText(working));
+  _deValidateParsed(roundTrip,working);
+  state.outline.glossary=working;
+  persist();
+  refreshDictEnrichCardOnly();
+  toast('词典充实已保存');
+  return true;
+}
+function openDictEnrichInjectionModal(){
+  const text=dictEnrichInjectionText();
+  const ov=document.createElement('div'); ov.className='modal-overlay'; ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;padding:14px;';
+  ov.innerHTML=`<div style="width:min(920px,96vw);max-height:88vh;background:var(--card,#fff);border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden"><div style="padding:14px 16px;border-bottom:1px solid rgba(127,127,127,.18)"><b>📦 词典充实 · 注入导出</b><div class="muted" style="margin-top:4px">当前词典充实 AI 输入 · SYSTEM + USER</div></div><div style="padding:12px 16px;overflow:auto;flex:1"><textarea data-de-inj-txt style="width:100%;min-height:52vh;box-sizing:border-box;resize:vertical;padding:12px;border-radius:10px;border:1px solid rgba(127,127,127,.25);font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace">${esc(text)}</textarea></div><div style="padding:12px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid rgba(127,127,127,.18);flex-wrap:wrap"><button type="button" class="btn small" data-de-inj-copy>📋 复制</button><button type="button" class="btn small" data-de-inj-download>TXT</button><button type="button" class="btn small" data-de-inj-close>关闭</button></div></div>`;
+  document.body.appendChild(ov);
+  const ta=ov.querySelector('[data-de-inj-txt]'); const copy=ov.querySelector('[data-de-inj-copy]');
+  copy.onclick=async()=>{ try{await navigator.clipboard.writeText(ta.value);toast('已复制');}catch(e){toast('复制失败，请手动复制文本。');} };
+  ov.querySelector('[data-de-inj-download]').onclick=()=>download(`词典充实_注入导出.txt`,ta.value);
+  const close=()=>ov.remove(); ov.querySelector('[data-de-inj-close]').onclick=close; ov.addEventListener('click',e=>{if(e.target===ov)close();});
+}
+function openDictEnrichReaderModal(){
+  const text=serializeDictEnrichFinalText(); const baseline=text; const ov=document.createElement('div'); ov.className='modal-overlay'; ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;padding:14px;';
+  ov.innerHTML=`<div style="width:min(980px,96vw);max-height:90vh;background:var(--card,#fff);border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden"><div style="padding:14px 16px;border-bottom:1px solid rgba(127,127,127,.18)"><b>📖 读词典充实</b><div class="muted" style="margin-top:4px">当前正式 enrichment 结构化纯文本</div></div><div style="padding:12px 16px;overflow:auto;flex:1"><textarea data-de-reader style="width:100%;min-height:58vh;box-sizing:border-box;resize:vertical;padding:12px;border-radius:10px;border:1px solid rgba(127,127,127,.25);font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace">${esc(text || '当前暂无已正式收录的词典充实内容。')}</textarea></div><div style="padding:12px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid rgba(127,127,127,.18);flex-wrap:wrap"><button type="button" class="btn small" data-de-reader-reset>↩ 恢复成没修改前的内容</button><button type="button" class="btn small" data-de-reader-save style="font-weight:700">💾 保存当前更改</button><button type="button" class="btn small" data-de-reader-close>关闭</button></div></div>`;
+  document.body.appendChild(ov); const ta=ov.querySelector('[data-de-reader]');
+  ov.querySelector('[data-de-reader-reset]').onclick=()=>{ta.value=baseline;};
+  ov.querySelector('[data-de-reader-save]').onclick=()=>{ try{ saveDictEnrichReaderChanges(ta.value); ov.remove(); }catch(e){ toast('保存失败：'+(e&&e.message||'内容结构无法识别，原词典充实内容未改变。')); } };
+  const close=()=>ov.remove(); ov.querySelector('[data-de-reader-close]').onclick=close; ov.addEventListener('click',e=>{if(e.target===ov)close();});
+}
+
 function dictEnrichBlockHtml(){
   const o = (state.outline) || {};
   const t = String(o._dictEnrichText || '').trim();
@@ -18711,8 +18881,11 @@ function dictEnrichBlockHtml(){
         ${foldBtn}
       </div>
     </div>
+    <div class="de-action-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px;align-items:center">
+      <button type="button" class="btn small" id="btnDictEnrichInjectionExport" title="查看词典充实真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(245,158,11,.24);font-weight:700">📦 注入导出</button>
+      <button type="button" class="btn small" id="btnDictEnrichReader" title="读取并编辑当前正式词典充实" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(6,182,212,.24);font-weight:700">📖 读词典充实</button>
+    </div>
     <div class="de-body"${deCollapsed?' style="display:none"':''}>
-      <!-- v1.0.29x：词典充实入口收归「规划师④词典充实」，本卡不再放点击按钮，仅供展示生成内容 -->
       ${stream}
       ${status}
       ${(t || hasWorldKnowledge) ? `<div class="dm-tables" style="margin-top:10px">
@@ -18725,6 +18898,8 @@ function dictEnrichBlockHtml(){
   </div>`;
 }
 function bindDictEnrich(){
+  const inj = $('#btnDictEnrichInjectionExport'); if(inj) inj.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); openDictEnrichInjectionModal(); };
+  const rd = $('#btnDictEnrichReader'); if(rd) rd.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); openDictEnrichReaderModal(); };
   const gb = $('#btnCardGenDictEnrich'); if(gb) gb.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); genDictEnrich(gb); };
   const eb = $('#btnGenDictEnrich'); if(eb) eb.onclick = ()=> genDictEnrich(eb);
   const hb = $('#btnHarvestCast'); if(hb) hb.onclick = ()=> genDictHarvest(hb);
