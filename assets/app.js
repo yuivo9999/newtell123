@@ -8,7 +8,7 @@
 /* v1.0.519 COMPLETE-TEACHER-CONTEXT: teacher AI receives the complete authoritative upstream context and returns a complete raw teaching plan. */
 /* v1.0.519 RAW-TEACHER-ONLY: the teacher AI return is saved verbatim; chapter reads are deterministic raw-text slices only. */
 'use strict';
-/* v1.0.551 SAFE-OPTIMIZATION-READER-INJECTION: 优化构想注入导出 + 读优化构想；纯读取/本地编辑；保留 canonicalStoryStrategy 唯一事实源。 */
+/* v1.0.552 SAFE-OPTIMIZATION-READER-INJECTION: 优化构想注入导出 + 读优化构想；纯读取/本地编辑；保留 canonicalStoryStrategy 唯一事实源。 */
 /* v1.0.547 SAFE-AI-CONTRACT-RETIREMENT: 旧 callAIGuarded/callAIWithContract 安全退役；保留 callDeepSeek、text、finishReason、usage、Parser/Normalize/Validator、Abort 与业务数据链；finishReason=length 不再作为统一业务失败条件。 */
 
 /* v1.0.519 IRON LAW — 本章教案传导链永久锁定：
@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.551';
+const APP_VERSION = '1.0.552';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.551.js';
+const APP_FILE_VERSION = 'app1.0.552.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -120,9 +120,9 @@ const state = {
   // 1.0.358：canonicalStoryStrategy 是唯一权威故事事实，不再维护第二事实源。
   canonicalStoryStrategy: null,
   polishRevision: 0,
-  // v1.0.551：优化构想真实AI注入快照；仅在真正发起生成前保存，不触发AI。
+  // v1.0.552：优化构想真实AI注入快照；仅在真正发起生成前保存，不触发AI。
   polishInjectionSnapshot: null,
-  // v1.0.551：最终选定方案的独立正式副本；不是第二事实源，保存时同步回 canonicalStoryStrategy。
+  // v1.0.552：最终选定方案的独立正式副本；不是第二事实源，保存时同步回 canonicalStoryStrategy。
   polishSelectedFinal: null,
   // 优化构想产生的新增实体/设定只能作为待确认建议，绝不直接进入正式词典。
   polishPendingSuggestions: null,
@@ -3575,7 +3575,7 @@ async function generateOptimizationConcept(btn, force){
     const ctx={multi};
     const callOpts={temperature:resolveActiveSpec().ideaTemp,maxTokens:Math.max(4500,clampMaxTokens('polish'))};
     const strictQc=state.ideaOptimizationStrictQc===true;
-    // v1.0.551：真正发起AI请求前，保存本次真实 SYSTEM + USER 快照。注入导出优先读取该快照，绝不重新生成。
+    // v1.0.552：真正发起AI请求前，保存本次真实 SYSTEM + USER 快照。注入导出优先读取该快照，绝不重新生成。
     try{
       const snapshotSystem = String(getSystemPrompt('ideaOptimization',ctx) + globalCreativeConstraintBlock('ideaOptimization') || '');
       const snapshotUser = String(buildAIPrompt('ideaOptimization',ctx) || '');
