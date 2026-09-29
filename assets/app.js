@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.554';
+const APP_VERSION = '1.0.555';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.554.js';
+const APP_FILE_VERSION = 'app1.0.555.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -5778,14 +5778,32 @@ function openChapterTeacherPlanReader(i){
   const chapterNo=Number(i)+1,groups=teacherAssignmentGroups();
   const g=groups.find(x=>chapterNo>=Number(x.first||1)&&chapterNo<=Number(x.last||Infinity));
   const t=g?teacherResultForAssignmentGroup(g).t:null;
-  const text=String(t?.chapterCards?.chapters?.[chapterNo]?.rawText||'').trim();
+  const card=t?.chapterCards?.chapters?.[chapterNo];
+  const text=String(card?.rawText||'');
   if(!t){toast(`第${chapterNo}章对应老师尚未完成备课。`);return;}
-  if(!text){toast(`第${chapterNo}章的本章纯文本教案尚未切割，请先点击“✂️ 切割教案”。`);return;}
+  if(!text.trim()){toast(`第${chapterNo}章的本章纯文本教案尚未切割，请先点击“✂️ 切割教案”。`);return;}
   const title=String(state.chapters?.[i]?.title||'').trim();
+  let baseline=text;
   const ov=document.createElement('div');ov.className='gs-overlay';
-  ov.innerHTML=`<div class="gs-modal school-plan-modal"><div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>📖 第${toCnNum(chapterNo)}章 · 本章教案</b><span class="sc-plan-meta muted" style="margin-left:10px">${esc(title)}</span></div><button class="gs-x" data-cpt-close>✕</button></div><div class="sc-plan-body" style="max-height:72vh;overflow:auto;padding:12px 16px 20px"><div style="font-size:12px;color:var(--muted);margin-bottom:8px">🔒 本章教案唯一来源：当前老师总教案按本章头尾确定性切出的完整纯文本。</div><pre class="sc-plan-raw" style="user-select:text;white-space:pre-wrap">${esc(text)}</pre></div></div>`;
-  document.body.appendChild(ov);ov.querySelector('[data-cpt-close]').onclick=()=>ov.remove();ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+  ov.innerHTML=`<div class="gs-modal school-plan-modal" style="max-width:920px;display:flex;flex-direction:column;max-height:84vh"><div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto"><div><b>📖 第${toCnNum(chapterNo)}章 · 读单章教案</b><span class="sc-plan-meta muted" style="margin-left:10px">${esc(title)}</span></div><button class="gs-x" data-cpt-close>✕</button></div><div style="padding:12px 16px 10px;flex:0 0 auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn small" data-cpt-restore>恢复这次修改之前的状态</button><button type="button" class="btn primary small" data-cpt-save>保存本次修改</button><span class="muted" style="font-size:11px">只修改第${chapterNo}章；不会重新生成 AI，也不会重新切割其他章节。</span></div><div style="padding:0 16px 10px;flex:1;min-height:0;display:flex"><textarea data-cpt-text spellcheck="false" style="display:block;width:100%;height:100%;min-height:420px;box-sizing:border-box;resize:vertical;overflow:auto;white-space:pre-wrap;word-break:break-word;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea></div><div style="padding:0 16px 16px;display:flex;justify-content:flex-end"> <button type="button" class="btn small" data-cpt-import title="导入 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button></div></div>`;
+  document.body.appendChild(ov);
+  const ta=ov.querySelector('[data-cpt-text]'); ta.value=text;
+  const close=()=>ov.remove(); ov.querySelector('[data-cpt-close]').onclick=close; ov.addEventListener('click',e=>{if(e.target===ov)close();});
+  const save=async(val,reason)=>{
+    const next=String(val||''); if(!next.trim()) throw new Error('单章教案不能为空');
+    if(!t.chapterCards||typeof t.chapterCards!=='object') t.chapterCards={chapters:{}};
+    if(!t.chapterCards.chapters||typeof t.chapterCards.chapters!=='object') t.chapterCards.chapters={};
+    const current=t.chapterCards.chapters[chapterNo]||{};
+    const nextCard=Object.assign({},current,{rawText:next,status:'ready'});
+    t.chapterCards.chapters[chapterNo]=nextCard;
+    try{ await persistCritical(reason||`保存第${chapterNo}章单章教案`); }catch(e){ if(current && current.rawText!==undefined) t.chapterCards.chapters[chapterNo]=current; else delete t.chapterCards.chapters[chapterNo]; throw e; }
+    ta.value=next; baseline=next; toast(`第${chapterNo}章单章教案已保存`);
+  };
+  ov.querySelector('[data-cpt-restore]').onclick=()=>{ta.value=baseline;};
+  ov.querySelector('[data-cpt-save]').onclick=async()=>{try{await save(ta.value,`保存第${chapterNo}章单章教案`);}catch(e){toast('保存失败：'+String(e?.message||e));}};
+  ov.querySelector('[data-cpt-import]').onclick=async()=>{try{const picked=await readTextFileForImport(); await save(picked.text,`导入第${chapterNo}章单章教案`);}catch(e){toast('导入失败：'+String(e?.message||e));}};
 }
+
 
 
 const SCHOOL_RETRY_MAX = 16; // 其他学校步骤保留原有失败重试上限
@@ -8760,6 +8778,24 @@ function parseEditedPolishText(text,multi){
   if(multi || /【原始构想锚点】|【动态战略维度】|【战略多样性】/i.test(src)) return parseOptimizationPlainText(src,!!multi);
   return parseOptimizationPlainText(`${polishAnalysisHeader()}\n${src}`,false);
 }
+async function readTextFileForImport(acceptExts=['.txt','.md','.markdown']){
+  return await new Promise((resolve,reject)=>{
+    const input=document.createElement('input'); input.type='file'; input.accept=acceptExts.join(',');
+    input.onchange=async()=>{
+      const file=input.files&&input.files[0];
+      if(!file){ reject(new Error('未选择文件')); return; }
+      const name=String(file.name||'').toLowerCase();
+      if(!acceptExts.some(ext=>name.endsWith(ext))){ reject(new Error('只支持 TXT / MD / MARKDOWN 文件')); return; }
+      try{
+        let text=String(await file.text()||'').replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+        if(!text.trim()){ reject(new Error('导入文件内容为空')); return; }
+        resolve({name:file.name,text});
+      }catch(e){ reject(new Error('文件读取失败：'+String(e?.message||e))); }
+    };
+    input.onerror=()=>reject(new Error('文件读取失败'));
+    input.click();
+  });
+}
 function openOptimizationReader(){
   const opts=Array.isArray(state.polishOptions)?state.polishOptions:[];
   if(!opts.length && !state.polishSelectedFinal && !state.canonicalStoryStrategy){ toast('优化构想尚未生成'); return; }
@@ -8772,7 +8808,7 @@ function openOptimizationReader(){
     <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><b>📖 读优化构想</b><span class="muted" style="margin-left:8px;font-size:11px">优化构想资料查看与人工校正中心 · 不调用 AI</span></div><button type="button" class="gs-x" data-or-close>✕</button></div>
     <div class="optimization-reader-tabs" style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap"><button class="btn small primary" data-or-tab="multi">多方案</button><button class="btn small ghost" data-or-tab="selected">最终选定方案</button><span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px">方案编号：<input type="number" min="1" max="${Math.max(1,opts.length)}" value="${Math.max(1,state.polishSelectedId?opts.findIndex(o=>o._id===state.polishSelectedId)+1:1)}" data-or-number style="width:64px"><button class="btn small" data-or-convert>保存</button></span></div>
     <div style="padding:12px 16px;flex:1;min-height:0;display:flex"><textarea class="optimization-reader-text" spellcheck="false" style="display:block;width:100%;height:100%;min-height:420px;box-sizing:border-box;resize:none;overflow:auto;white-space:pre-wrap;word-break:break-word;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;padding:0 16px 16px;flex-wrap:wrap"><button class="btn ghost" data-or-restore>恢复成没修改前的内容</button><button class="btn primary" data-or-save>保存当前更改</button></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding:0 16px 16px;flex-wrap:wrap"><button class="btn ghost" data-or-restore>恢复成没修改前的内容</button><button class="btn primary" data-or-save>保存当前更改</button><button type="button" class="btn small" data-or-import="multi" title="导入多方案 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button><button type="button" class="btn small" data-or-import="selected" title="导入已选定方案 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button></div>
   </div>`;
   if(!document.getElementById('optimizationReaderStyle')){ const st=document.createElement('style'); st.id='optimizationReaderStyle'; st.textContent='.optimization-reader-overlay{z-index:10061!important}.optimization-reader-modal{width:min(980px,92vw)!important;height:min(800px,88vh)!important;max-width:none!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}@media(max-width:600px){.optimization-reader-modal{width:95vw!important;height:86vh!important}.optimization-reader-tabs{align-items:flex-start!important}}'; document.head.appendChild(st); }
   document.body.appendChild(ov);
@@ -8780,7 +8816,7 @@ function openOptimizationReader(){
   const renderTab=()=>{ ta.value=tab==='multi'?bases.multiText:bases.selectedText; ov.querySelectorAll('[data-or-tab]').forEach(b=>{b.classList.toggle('primary',b.dataset.orTab===tab);b.classList.toggle('ghost',b.dataset.orTab!==tab);}); };
   renderTab();
   ov.querySelector('[data-or-close]').onclick=()=>ov.remove();
-  ov.addEventListener('click',e=>{
+  ov.addEventListener('click',async e=>{
     if(e.target===ov) ov.remove();
     const tb=e.target.closest('[data-or-tab]'); if(tb){ if(tab==='multi') bases.multiText=ta.value; else bases.selectedText=ta.value; tab=tb.dataset.orTab; renderTab(); }
     const rs=e.target.closest('[data-or-restore]'); if(rs){ta.value=tab==='multi'?baseline.multiText:baseline.selectedText;}
@@ -8805,6 +8841,35 @@ function openOptimizationReader(){
         syncPolishMetaFromCandidate(merged); invalidateAfterStoryStrategyChange(); persist(); render(); toast('最终选定方案修改已保存，并已同步正式故事战略');
         bases.selectedText=polishCandidateToStructuredText(merged,idx>=0?idx:0); baseline.selectedText=bases.selectedText;
       }
+    }
+    const imp=e.target.closest('[data-or-import]'); if(imp){
+      e.preventDefault(); e.stopPropagation();
+      const mode=imp.dataset.orImport;
+      try{
+        const picked=await readTextFileForImport();
+        const parsed=parseEditedPolishText(picked.text,mode==='multi');
+        if(!parsed?.ok) throw new Error(parsed?.error||'结构化纯文本解析失败');
+        if(mode==='multi'){
+          if(!Array.isArray(parsed.options)||!parsed.options.length) throw new Error('导入文件中没有有效的多方案');
+          const old=Array.isArray(state.polishOptions)?state.polishOptions:[];
+          const next=parsed.options.map((o,i)=>Object.assign({},old[i]||{},o,{_id:String(old[i]?._id||('polish-'+Date.now()+'-'+i)),name:String(o.name||old[i]?.name||`方案${i+1}`),_v45:(old[i]&&old[i]._v45)?old[i]._v45:{}}));
+          state.polishOptions=next; persist(); render();
+          bases.multiText=polishOptionsToStructuredText(); baseline.multiText=bases.multiText;
+          renderTab(); toast('多方案已导入');
+        }else{
+          const o=parsed.options?.[0]; if(!o) throw new Error('导入文件中没有有效的最终方案');
+          const idx=state.polishOptions?.findIndex(x=>x._id===state.polishSelectedId) ?? -1;
+          const old=idx>=0?state.polishOptions[idx]:null;
+          const merged=Object.assign({},old||{},o,{_id:String(old?._id||('polish-final-'+Date.now())),name:String(o.name||old?.name||'最终选定方案')});
+          state.polishSelectedFinal=merged; state.polishRevision=Number(state.polishRevision||0)+1;
+          state.canonicalStoryStrategy=buildPolishCanonical(merged,state.polishRevision);
+          state.canonicalStoryStrategy=Object.assign({},state.canonicalStoryStrategy,{sourceType:'canonical_story_strategy',sourceVersion:'phase5',sourceOfTruth:'creativeBlueprint',machineTrace:Object.assign({},state.canonicalStoryStrategy.machineTrace||{},{status:'adopted'})});
+          syncPolishMetaFromCandidate(merged); invalidateAfterStoryStrategyChange(); persist(); render();
+          bases.selectedText=polishCandidateToStructuredText(merged,idx>=0?idx:0); baseline.selectedText=bases.selectedText; tab='selected'; renderTab();
+          toast('已选定方案导入成功，并已同步正式故事战略');
+        }
+      }catch(e){ toast('导入失败：'+String(e?.message||e)); }
+      return;
     }
     const cv=e.target.closest('[data-or-convert]'); if(cv){
       const n=Number(ov.querySelector('[data-or-number]')?.value); const max=Array.isArray(state.polishOptions)?state.polishOptions.length:0;
@@ -8971,14 +9036,15 @@ function openSchoolPlanReader(gi, jumpCh){
       <div><b>🎓 ${label} · 本组教案</b><span class="sc-plan-meta muted" style="margin-left:10px">${g.stage?`段「${esc(g.stage)}」 · `:''}第 ${g.first}-${g.last} 章 · ${g.last-g.first+1} 章</span></div>
       <button class="gs-x" data-sp-close>✕</button>
     </div>
-    <div style="padding:12px 16px 10px;flex:0 0 auto;display:flex;gap:8px;align-items:center">
+    <div style="padding:12px 16px 10px;flex:0 0 auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button type="button" class="btn small" data-plan-restore>恢复原先教案</button>
       <button type="button" class="btn primary small" data-plan-save>保存目前修改</button>
-      <span class="muted" style="font-size:11px">编辑期间不会改变正式教案；只有保存后才生效。</span>
+      <span class="muted" style="font-size:11px">编辑期间不会改变正式教案；只有保存或导入成功后才生效。</span>
     </div>
     <div style="padding:0 16px 16px;flex:1;min-height:0;display:flex">
       <textarea class="teacher-plan-editor" spellcheck="false" style="display:block;width:100%;height:100%;min-height:420px;box-sizing:border-box;resize:vertical;overflow:auto;white-space:pre-wrap;word-break:break-word;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea>
     </div>
+    <div style="padding:0 16px 16px;display:flex;justify-content:flex-end"> <button type="button" class="btn small" data-plan-import title="导入 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button></div>
   </div>`;
   document.body.appendChild(ov);
   const ta=ov.querySelector('.teacher-plan-editor'); ta.value=String(t.raw||'');
@@ -8993,6 +9059,7 @@ function openSchoolPlanReader(gi, jumpCh){
     try{ await persistCritical('恢复老师原始教案'); toast('已恢复原先教案；原单章切割结果已标记为需要重新切割'); renderTeacherCutUi(Number(gi)); }
     catch(e){ toast('保存失败：'+String(e?.message||e)); }
   };
+  ov.querySelector('[data-plan-import]').onclick=async()=>{ const oldRaw=String(t.raw||''); const oldCards=t.chapterCards?JSON.parse(JSON.stringify(t.chapterCards)):undefined; try{const picked=await readTextFileForImport(); if(!picked.text.trim()) throw new Error('导入内容不能为空'); t.raw=picked.text; markTeacherChapterCardsStale(t); await persistCritical('导入老师教案'); ta.value=t.raw; toast('老师教案已导入并保存；请按需要重新点击“切割教案”'); renderTeacherCutUi(Number(gi));}catch(e){t.raw=oldRaw; if(oldCards===undefined) delete t.chapterCards; else t.chapterCards=oldCards; toast('导入失败：'+String(e?.message||e));} };
   ov.querySelector('[data-plan-save]').onclick=async()=>{
     const val=String(ta.value||'');
     if(!val.trim()){ toast('教案不能为空'); return; }
@@ -9033,6 +9100,7 @@ function renderSchoolPrincipalBody(ov, raw){
     <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
       <button type="button" class="btn" id="btnRestorePrincipalOriginal">恢复原先成果</button>
       <button type="button" class="btn primary" id="btnSavePrincipalRaw">保存目前修改</button>
+      <button type="button" class="btn small" id="btnImportPrincipalRaw" title="导入 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button>
     </div>
   </div>`;
   const save=body.querySelector('#btnSavePrincipalRaw');
@@ -9040,6 +9108,7 @@ function renderSchoolPrincipalBody(ov, raw){
     try{ const val=body.querySelector('#principalRawEditor').value; saveCurrentPrincipalResult(val,'manual_edit'); toast('已保存，目前成果已更新'); const np=principalCurrentResult(); renderSchoolPrincipalBody(ov,np.raw); }
     catch(e){ toast(String(e?.message||e)); }
   };
+  const imp=body.querySelector('#btnImportPrincipalRaw'); if(imp) imp.onclick=async()=>{ const p0=principalCurrentResult(); const oldP=p0?JSON.parse(JSON.stringify(p0)):null; const canon0=JSON.parse(JSON.stringify(storyState().canon||{})); const pv0=storyState().pipelineVersion; try{const picked=await readTextFileForImport(); saveCurrentPrincipalResult(picked.text,'import'); const np=principalCurrentResult(); renderSchoolPrincipalBody(ov,np.raw); toast('校长成果已导入并保存');}catch(e){if(p0&&oldP) Object.keys(p0).forEach(k=>delete p0[k]); if(p0&&oldP) Object.assign(p0,oldP); storyState().canon=canon0; storyState().pipelineVersion=pv0; toast('导入失败：'+String(e?.message||e));} };
   const restore=body.querySelector('#btnRestorePrincipalOriginal');
   if(restore) restore.onclick=()=>{
     try{ const np=restoreOriginalPrincipalResult(); toast('已恢复原先成果'); renderSchoolPrincipalBody(ov,np.raw); }
@@ -15143,7 +15212,7 @@ function chCardHtml(c, i){
           <textarea data-ch="${i}" class="${hasC?'':'ch-ta-empty'}" style="margin-top:8px" ${hasC?'':'placeholder="暂无正文：点击「🔄 重生成」生成，或直接在此输入"'}>${esc(c.content)}</textarea>
           <div class="btn-row">
             <button class="btn ghost" data-regen="${i}" ${state.generating?'disabled':''}>🔄 重生成</button>
-            <button class="btn ghost" data-plan-ch="${i}" title="查看本章教案${planGi>=0?`（老师${planGi+1}）`:''}">📖 教案</button>
+            <button class="btn ghost" data-plan-ch="${i}" title="查看本章教案${planGi>=0?`（老师${planGi+1}）`:''}">📖 读单章教案</button>
             <button class="btn ghost" data-read="${i}">📖 阅读</button>
             <button class="btn ghost" data-ch-sum="${i}" title="生成本章速读梗概（本章正文压缩至约 1/3，省时阅读）">🏮 本章梗概</button>
             <button class="btn ghost" data-ver="${i}">📚 版本(${chVersions(i).length})</button>
@@ -15200,7 +15269,7 @@ function renderChapters(){
         <textarea data-ch="${i}" style="margin-top:8px">${esc(c.content)}</textarea>
         <div class="btn-row">
           <button class="btn ghost" data-regen="${i}">🔄 重生成</button>
-          <button class="btn ghost" data-plan-ch="${i}" title="查看本章教案">📖 教案</button>
+          <button class="btn ghost" data-plan-ch="${i}" title="查看本章教案">📖 读单章教案</button>
           <button class="btn ghost" data-read="${i}">📖 阅读</button>
           <button class="btn ghost" data-ch-sum="${i}" title="生成本章速读梗概（本章正文压缩至约 1/3，省时阅读）">🏮 本章梗概</button>
           <button class="btn ghost" data-ver="${i}" title="版本历史">📚 版本(${chVersions(i).length})</button>
@@ -17174,12 +17243,13 @@ function openDictmasterReader(){
   ov.innerHTML=`<div class="gs-modal dictmaster-reader-modal" style="max-width:820px;width:min(94vw,820px)">
     <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>📖 读词典达人</b><span class="muted" style="margin-left:8px;font-size:11px">当前正式词典达人 · 可编辑</span></div><button class="gs-x" data-dm-reader-close>✕</button></div>
     <div style="padding:14px 16px 16px"><textarea data-dm-reader-text style="width:100%;height:min(68vh,560px);box-sizing:border-box;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea>
-      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:10px"><button type="button" class="btn ghost small" data-dm-reader-restore>↩ 恢复成没修改前的内容</button><button type="button" class="btn primary small" data-dm-reader-save>💾 保存当前更改</button></div><p data-dm-reader-status class="status" style="margin:8px 0 0"></p>
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:10px"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn ghost small" data-dm-reader-restore>↩ 恢复成没修改前的内容</button><button type="button" class="btn primary small" data-dm-reader-save>💾 保存当前更改</button></div><button type="button" class="btn small" data-dm-reader-import title="导入 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button></div><p data-dm-reader-status class="status" style="margin:8px 0 0"></p>
     </div></div>`;
   document.body.appendChild(ov); const ta=ov.querySelector('[data-dm-reader-text]'); ta.value=text;
   const close=()=>ov.remove(); ov.querySelector('[data-dm-reader-close]').onclick=close; ov.addEventListener('click',e=>{if(e.target===ov)close();});
   ov.querySelector('[data-dm-reader-restore]').onclick=()=>{ta.value=baseline; toast('已恢复到本次打开时的词典达人内容');};
   ov.querySelector('[data-dm-reader-save]').onclick=()=>{try{saveDictmasterReaderChanges(ta.value); baseline=ta.value; const st=ov.querySelector('[data-dm-reader-status]'); if(st){st.className='status ok';st.textContent='保存成功：当前内容已成为正式词典达人版本。';} toast('词典达人修改已保存');}catch(e){const st=ov.querySelector('[data-dm-reader-status]'); if(st){st.className='status err';st.textContent=String(e.message||e);} toast('当前修改无法保存，请检查结构化内容后重试。');}};
+  ov.querySelector('[data-dm-reader-import]').onclick=async()=>{ const o=state.outline; const oldGlossary=o?.glossary?JSON.parse(JSON.stringify(o.glossary)):null; const oldCanon=JSON.parse(JSON.stringify(storyState().canon||{})); try{const picked=await readTextFileForImport(); saveDictmasterReaderChanges(picked.text); baseline=dictmasterReaderSnapshotText(dictmasterFoundationSnapshotForReader()); ta.value=baseline; toast('词典达人已导入并保存');}catch(e){if(o&&oldGlossary) o.glossary=oldGlossary; storyState().canon=oldCanon; toast('导入失败：'+String(e?.message||e));} };
 }
 
 async function genDictMaster(btn){
@@ -18797,10 +18867,11 @@ function openDictEnrichInjectionModal(){
 }
 function openDictEnrichReaderModal(){
   const text=serializeDictEnrichFinalText(); const baseline=text; const ov=document.createElement('div'); ov.className='modal-overlay'; ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;padding:14px;';
-  ov.innerHTML=`<div style="width:min(980px,96vw);max-height:90vh;background:var(--card,#fff);border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden"><div style="padding:14px 16px;border-bottom:1px solid rgba(127,127,127,.18)"><b>📖 读词典充实</b><div class="muted" style="margin-top:4px">当前正式 enrichment 结构化纯文本</div></div><div style="padding:12px 16px;overflow:auto;flex:1"><textarea data-de-reader style="width:100%;min-height:58vh;box-sizing:border-box;resize:vertical;padding:12px;border-radius:10px;border:1px solid rgba(127,127,127,.25);font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace">${esc(text || '当前暂无已正式收录的词典充实内容。')}</textarea></div><div style="padding:12px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid rgba(127,127,127,.18);flex-wrap:wrap"><button type="button" class="btn small" data-de-reader-reset>↩ 恢复成没修改前的内容</button><button type="button" class="btn small" data-de-reader-save style="font-weight:700">💾 保存当前更改</button><button type="button" class="btn small" data-de-reader-close>关闭</button></div></div>`;
+  ov.innerHTML=`<div style="width:min(980px,96vw);max-height:90vh;background:var(--card,#fff);border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden"><div style="padding:14px 16px;border-bottom:1px solid rgba(127,127,127,.18)"><b>📖 读词典充实</b><div class="muted" style="margin-top:4px">当前正式 enrichment 结构化纯文本</div></div><div style="padding:12px 16px;overflow:auto;flex:1"><textarea data-de-reader style="width:100%;min-height:58vh;box-sizing:border-box;resize:vertical;padding:12px;border-radius:10px;border:1px solid rgba(127,127,127,.25);font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace">${esc(text || '当前暂无已正式收录的词典充实内容。')}</textarea></div><div style="padding:12px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid rgba(127,127,127,.18);flex-wrap:wrap"><button type="button" class="btn small" data-de-reader-reset>↩ 恢复成没修改前的内容</button><button type="button" class="btn small" data-de-reader-save style="font-weight:700">💾 保存当前更改</button><button type="button" class="btn small" data-de-reader-import title="导入 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button><button type="button" class="btn small" data-de-reader-close>关闭</button></div></div>`;
   document.body.appendChild(ov); const ta=ov.querySelector('[data-de-reader]');
   ov.querySelector('[data-de-reader-reset]').onclick=()=>{ta.value=baseline;};
   ov.querySelector('[data-de-reader-save]').onclick=()=>{ try{ saveDictEnrichReaderChanges(ta.value); ov.remove(); }catch(e){ toast('保存失败：'+(e&&e.message||'内容结构无法识别，原词典充实内容未改变。')); } };
+  ov.querySelector('[data-de-reader-import]').onclick=async()=>{ const o=state.outline; const oldGlossary=o?.glossary?JSON.parse(JSON.stringify(o.glossary)):null; try{const picked=await readTextFileForImport(); saveDictEnrichReaderChanges(picked.text); ta.value=serializeDictEnrichFinalText(); toast('词典充实已导入并保存');}catch(e){if(o&&oldGlossary) o.glossary=oldGlossary; toast('导入失败：'+String(e?.message||e));} };
   const close=()=>ov.remove(); ov.querySelector('[data-de-reader-close]').onclick=close; ov.addEventListener('click',e=>{if(e.target===ov)close();});
 }
 
