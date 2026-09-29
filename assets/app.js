@@ -1,4 +1,4 @@
-/* v1.0.557 THREE-LAYER-INTEGRATION-CLEANUP: STYLE_STRATEGY contains the single principal GLOBAL authority; teacher performs chapter-level HYBRID/CHAPTER application.
+/* v1.0.558 THREE-LAYER-INTEGRATION-CLEANUP: STYLE_STRATEGY contains the single principal GLOBAL authority; teacher performs chapter-level HYBRID/CHAPTER application.
  * v1.0.536 STYLE-LAYER-OUTPUT-ORGANIZATION: principal outputs only the single GLOBAL source; teacher owns chapter-level HYBRID/CHAPTER application and receives GLOBAL once as the locked baseline.
  * v1.0.532 STYLE-BASIS-LOCK: principal/teacher dynamic style decisions must be grounded in chapter microbeat + plot situation; preserve raw-teacher-only transmission.
  * v1.0.527 STYLE-LAYER-TRANSMISSION: principal style-layer decision + teacher three-layer execution +正文 three-layer transmission; preserve optimized writing style source and keep layer responsibilities separate.
@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.557';
+const APP_VERSION = '1.0.558';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.557.js';
+const APP_FILE_VERSION = 'app1.0.558.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -86,7 +86,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.557.js — 校长注入链安全去重：唯一GLOBAL来源、合并重复风格资料、移除重复上下文包装。 */
+/* APP VERSION: app1.0.558.js — 校长注入链安全去重：唯一GLOBAL来源、合并重复风格资料、移除重复上下文包装。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -6368,9 +6368,11 @@ function principalManagementBridge(assignment, targetCount, plans, strategy){
   }));
   const planRows=Object.keys(plans||{}).map(Number).sort((a,b)=>a-b).map(n=>{
     const x=plans[n]||{}; const e=x.ending||{};
+    const stage = (strategy?.stages||[]).find(st=>Number(st.startChapter)<=n && Number(st.endChapter)>=n) || {};
     return {chapter:n,title:x.title||'',function:x.function||'',goal:x.goal||'',
       旧结构骨架:x.旧结构骨架||'',
       narrativeRole:x.narrativeRole||'', timeStrategy:x.timeStrategy||'', stageTask:x.stageTask||'', teacherTask:x.teacherTask||'', handoff:x.handoff||'',
+      stageId:String(stage.stageId||''), stageBeatInterpretation:String(stage.stageBeatInterpretation||''),
       teacherJob:'依据章头、推进骨架和章末，在关键节点之间自主设计中段调度，并编译为 midConstruction / sceneConstruction；不得改写章头、推进骨架或章末',
       ending:{function:e.function||'',lastEffectiveEvent:e.lastEffectiveEvent||'',nextTransitionType:e.nextTransitionType||'',nextTransitionBasis:e.nextTransitionBasis||''}
     };
@@ -6466,13 +6468,15 @@ function principalChapterMiddleShapeSource(targetCount){
     chapters:rows
   };
 }
-function buildChapterStrategiesFromPrincipal(plans, targetCount){
+function buildChapterStrategiesFromPrincipal(plans, targetCount, strategy){
   const out={};
   const n=Math.max(0,Number(targetCount)||0);
+  const stages=Array.isArray(strategy?.stages)?strategy.stages:[];
   for(let chapter=1; chapter<=n; chapter++){
     const plan=plans?.[chapter];
     if(!plan) continue;
     const shape=getChapterMiddleShape(chapter);
+    const stage=stages.find(x=>Number(x.startChapter)<=chapter&&Number(x.endChapter)>=chapter)||null;
     out[chapter]={
       schema:'chapter-strategy/v1',
       chapter,
@@ -6485,6 +6489,8 @@ function buildChapterStrategiesFromPrincipal(plans, targetCount){
       stageTask:String(plan.stageTask||''),
       teacherTask:String(plan.teacherTask||''),
       handoff:String(plan.handoff||''),
+      stageId:String(stage?.stageId||''),
+      stageBeatInterpretation:String(stage?.stageBeatInterpretation||''),
       ending:{...(plan.ending||{})},
       middleShape:shape ? JSON.parse(JSON.stringify(shape)) : null,
       middleShapeAuthority:'chapterMiddleShape',
@@ -6495,7 +6501,7 @@ function buildChapterStrategiesFromPrincipal(plans, targetCount){
   return out;
 }
 
-/* 内部说明书｜继承＋补充
+/* v1.0.558：全书节拍呼吸空间 + 校长阶段解释；内部说明书｜继承＋补充
  * 优化构想先形成完整风格资料：继承=用户已选原词条；补充=仅在明确风格缺口存在时新增的完整词条。
  * extractOptimizationStyleInheritanceSupplement 只提取，不生成、不改义、不扩展。
  * 校长：只负责确定唯一GLOBAL来源；HYBRID/CHAPTER由老师按章施工。
@@ -6774,6 +6780,13 @@ const PRINCIPAL_SYS = `你是一位统筹一部长篇小说的「校长」（全
 校长负责“方向与结构”；
 老师负责“施工与因果”；
 正文负责“文学呈现”。
+
+【全书节拍唯一权威规则｜最高优先级】
+优化构想生成并经用户选择确认后的 fullBookBeat，是项目唯一权威的全书节拍事实。
+校长必须继承该 fullBookBeat，不得重新生成、改写、替换或另存第二套“校长版全书节拍”。
+校长可以针对每个系统阶段增加一个轻量的 stageBeatInterpretation，用于解释该阶段节拍的意义、张力、趣味方向、矛盾价值或可能的开放空间；它不是新的全书节拍，也不是老师教案。
+stageBeatInterpretation 不得写成具体事件链、具体行动链、具体场景链、具体对白、逐章剧情或详细教案；具体施工仍由老师负责。
+全书节拍只能有一个；阶段解释只能解释它，不能创造第二个。
 
 ━━━━━━━━━━━━━━━━━━
 【一、最高权限链】
@@ -7467,7 +7480,17 @@ L0 是最高优先级。
 全书战略、第一章开篇、组级框架等信息可以作为内部规划依据，但不得以第二套章节卡形式输出。所有逐章战略必须只进入唯一的[PRINCIPAL_CHAPTER]结构式协议。第一章开篇与组级信息如需传递，必须通过对应结构式字段或上游状态完成，不得创建另一套逐章计划。
 
 ━━━━━━━━━━━━━━━━━━
-【二十一、最终输出契约】
+【二十一、全书节拍与阶段解释输出规则】
+━━━━━━━━━━━━━━━━━━
+
+输入中的 fullBookBeat 如果已经由上游确认，必须原样作为唯一权威全书节拍理解，不得重新编写一套等价全书节拍。
+每个 [STAGE_STRATEGY] 可以增加：
+stageBeatInterpretation=针对该阶段既有 fullBookBeat 的战略解释、趣味方向、张力来源与开放空间。
+该字段是可选字段；缺失时视为空，不得因此报错或拒绝整个战略。
+老师只接收与自己章节所属阶段对应的 stageBeatInterpretation，不复制整本 fullBookBeat 到每章。
+
+━━━━━━━━━━━━━━━━━━
+【二十二、最终输出契约】
 
 最终回答只能输出[PRINCIPAL_CHAPTER]结构式纯文本块。不得输出Markdown章节卡、自然语言章节计划、JSON或第二套章节计划。
 每章必须且只能输出一个完整、成对闭合的结构块，严格覆盖全部章节。
@@ -7498,7 +7521,7 @@ diversityNote=重复风险或多样性说明
 输出要求：先完成全部章节结构块，再结束回答；不得省略、合并、重复或改名字段；不得用“同上”“略”“见上文”代替字段值。
 【全书终章硬边界】\n系统已经提供全书总章节数N。chapter=N即全书终章，不得因为“本组最后一章”或“本阶段最后一章”而自动推导存在下一阶段。只有系统阶段表明确存在下一阶段时，才允许输出阶段交接；如果当前阶段结束章节=N，则该阶段为最终阶段，nextStageLaunch必须为“无”，newProblem不得开启新的主线，最后一章nextTransitionType/nextTransitionBasis必须指向全书终止。任何“向下一阶段移交”“下一阶段启动”“下一阶段悬念/高潮”“下一章具体剧情”都不得出现在全书终章的章节战略中。\n\n
 ━━━━━━━━━━━━━━━━━━
-【二十二、最终自检】
+【二十三、最终自检】
 ━━━━━━━━━━━━━━━━━━
 □ 全部章节均有且只有一个PRINCIPAL_CHAPTER
 □ 每个结构块均有开始与结束标记
@@ -7602,7 +7625,7 @@ function buildPrincipalUser(assignment, targetCount){
   lines.push(`【四层战略输出总要求】
 本次必须一次完成四层校长战略：BOOK_STRATEGY负责全书主线/最终转变/长期驱动力/全书节奏；STAGE_STRATEGY负责系统既定阶段的阶段目标、核心冲突、高潮、解决、新问题与阶段交接；TEACHER_GROUP_STRATEGY负责系统既定老师组的组任务、节奏、情绪曲线、推进边界、上下组交接；PRINCIPAL_CHAPTER负责现有章级战略。四层不得互相重复改写：下层只能具体化上层，不能推翻上层。`);
   lines.push(`【阶段与老师组机器战略】
-必须输出BOOK_STRATEGY、STAGE_STRATEGY、TEACHER_GROUP_STRATEGY机器块。STAGE_STRATEGY数量、章节范围必须严格对应系统bookStagePlan；TEACHER_GROUP_STRATEGY数量、老师代号、章节范围、角色、前后老师必须严格对应只读TEACHER_ASSIGNMENT。不要另造分组或重新分配章节。复杂数组字段必须使用合法JSON数组/对象字符串。`);
+必须输出BOOK_STRATEGY、STAGE_STRATEGY、TEACHER_GROUP_STRATEGY机器块。STAGE_STRATEGY数量、章节范围必须严格对应系统bookStagePlan；TEACHER_GROUP_STRATEGY数量、老师代号、章节范围、角色、前后老师必须严格对应只读TEACHER_ASSIGNMENT。不要另造分组或重新分配章节。复杂数组字段必须使用合法JSON数组/对象字符串。每个STAGE_STRATEGY可选增加stageBeatInterpretation：只解释上游唯一fullBookBeat对应阶段的意义、张力与开放空间，不得重建或替换fullBookBeat，不得写成逐章剧情或老师教案。`);
   lines.push(`【已有阶段/老师分配模块必须纳入统筹】
 系统已经存在 bookStagePlan 与 TEACHER_ASSIGNMENT 两个独立维度。你必须读取 TEACHER_ASSIGNMENT 中的老师数量、章节所有权、角色、前后老师及交接边界，并把这些事实用于组级战略；不得重新分配章节。`);
   lines.push(`【已有中段推进战略卡必须纳入统筹】
@@ -7688,7 +7711,9 @@ function normalizePrincipalStageStrategy(r, idx, canonical){
     direction:String(r.direction||'').trim(), mainEmotion:String(r.mainEmotion||'').trim(), stageClimax:String(r.stageClimax||'').trim(),
     settlement:String(r.settlement||'').trim(), newProblem:String(r.newProblem||'').trim(), irreversibleChange:String(r.irreversibleChange||'').trim(),
     previousStageHandoff:String(r.previousStageHandoff||'').trim(), nextStageLaunch:String(r.nextStageLaunch||'').trim(),
-    stageRhythm:parsePrincipalJsonField(r.stageRhythm,{})
+    stageRhythm:parsePrincipalJsonField(r.stageRhythm,{}),
+    // v1.0.558：校长只解释用户已确认的 fullBookBeat，不生成第二套节拍。
+    stageBeatInterpretation:String(r.stageBeatInterpretation||'').trim()
   };
 }
 function normalizePrincipalTeacherGroupStrategy(r, idx, canonical){
@@ -7779,7 +7804,7 @@ function parsePrincipalStrategyMachine(text, total, assignment){
   jsonChecks.forEach(([label,val,type])=>{if(val!=null){const parsed=parsePrincipalJsonField(val,null);if(parsed==null|| (type==='array'&&!Array.isArray(parsed)) || (type==='object'&&(typeof parsed!=='object'||Array.isArray(parsed)))) errors.push(`${label}不是合法${type==='array'?'JSON数组':'JSON对象'}`);}});
   stageRows.forEach((r,i)=>{[['stageRhythm','object']].forEach(([k,type])=>{const parsed=parsePrincipalJsonField(r[k],null);if(parsed==null||typeof parsed!=='object'||Array.isArray(parsed)) errors.push(`STAGE_STRATEGY ${i+1}的${k}不是合法JSON对象`);});});
   groupRows.forEach((r,i)=>{[['chapterAssignments','array'],['keyResources','array'],['mustAdvance','array'],['mustNotPrematurelyResolve','array'],['coreRisks','array'],['groupRhythm','object']].forEach(([k,type])=>{const parsed=parsePrincipalJsonField(r[k],null);if(parsed==null|| (type==='array'&&!Array.isArray(parsed)) || (type==='object'&&(typeof parsed!=='object'||Array.isArray(parsed)))) errors.push(`TEACHER_GROUP_STRATEGY ${i+1}的${k}不是合法JSON${type==='array'?'数组':'对象'}`);});});
-  canonicalStages.forEach((c,i)=>{const r=stageBy[i+1]; if(!r){errors.push(`缺少STAGE_STRATEGY阶段${i+1}`);return;} ['stageGoal','coreConflict','direction','mainEmotion','stageClimax','settlement','newProblem','irreversibleChange','previousStageHandoff','stageRhythm'].forEach(k=>{if(!String(r[k]||'').trim()) errors.push(`STAGE_STRATEGY ${i+1}缺少${k}`);}); const isFinalStage=i===canonicalStages.length-1; const nextLaunch=String(r.nextStageLaunch||'').trim(); const newProblem=String(r.newProblem||'').trim(); if(isFinalStage){if(nextLaunch && !/^(无|没有|不存在|全书结束|终局|终止)$/i.test(nextLaunch)) errors.push(`STAGE_STRATEGY ${i+1}为全书最终阶段，不得存在nextStageLaunch`); if(!/无|没有|不存在|全书结束|终局|终止|不再/i.test(newProblem)) errors.push(`STAGE_STRATEGY ${i+1}为全书最终阶段，newProblem必须明确为无/终局，不得开启新主线`);}else if(!nextLaunch) errors.push(`STAGE_STRATEGY ${i+1}缺少nextStageLaunch`);});
+  canonicalStages.forEach((c,i)=>{const r=stageBy[i+1]; if(!r){errors.push(`缺少STAGE_STRATEGY阶段${i+1}`);return;} ['stageGoal','coreConflict','direction','mainEmotion','stageClimax','settlement','newProblem','irreversibleChange','previousStageHandoff','stageRhythm'].forEach(k=>{if(!String(r[k]||'').trim()) errors.push(`STAGE_STRATEGY ${i+1}缺少${k}`);}); /* stageBeatInterpretation 是可选字段；旧项目缺失时归一化为空字符串。 */ const isFinalStage=i===canonicalStages.length-1; const nextLaunch=String(r.nextStageLaunch||'').trim(); const newProblem=String(r.newProblem||'').trim(); if(isFinalStage){if(nextLaunch && !/^(无|没有|不存在|全书结束|终局|终止)$/i.test(nextLaunch)) errors.push(`STAGE_STRATEGY ${i+1}为全书最终阶段，不得存在nextStageLaunch`); if(!/无|没有|不存在|全书结束|终局|终止|不再/i.test(newProblem)) errors.push(`STAGE_STRATEGY ${i+1}为全书最终阶段，newProblem必须明确为无/终局，不得开启新主线`);}else if(!nextLaunch) errors.push(`STAGE_STRATEGY ${i+1}缺少nextStageLaunch`);});
   canonicalGroups.forEach((c,i)=>{const r=groupBy[i+1]; if(!r){errors.push(`缺少TEACHER_GROUP_STRATEGY第${i+1}组`);return;} ['stageId','teacherCode','teacherIndex','role','startChapter','endChapter','chapterCount','previousTeacherGroupId','nextTeacherGroupId','previousEndChapter','nextStartChapter','groupTask','chapterAssignments','groupRhythm','emotionalCurve','previousGroupHandoff','keyResources','mustAdvance','mustNotPrematurelyResolve','coreRisks'].forEach(k=>{if(!String(r[k]||'').trim()) errors.push(`TEACHER_GROUP_STRATEGY ${i+1}缺少${k}`);}); const isFinalGroup=i===canonicalGroups.length-1; const nextLaunch=String(r.nextGroupLaunch||'').trim(); if(!isFinalGroup && !nextLaunch) errors.push(`TEACHER_GROUP_STRATEGY ${i+1}缺少nextGroupLaunch`);
     const expected={teacherGroupId:c.teacherGroupId,teacherCode:c.teacherCode,teacherIndex:c.teacherIndex,role:c.role,startChapter:c.startChapter,endChapter:c.endChapter,chapterCount:c.chapterCount,previousTeacherGroupId:c.previousTeacherGroupId||'无',nextTeacherGroupId:c.nextTeacherGroupId||'无',previousEndChapter:c.previousEndChapter==null?'无':c.previousEndChapter,nextStartChapter:c.nextStartChapter==null?'无':c.nextStartChapter};
     [['teacherGroupId',r.teacherGroupId],['teacherCode',r.teacherCode],['teacherIndex',r.teacherIndex],['role',r.role],['startChapter',r.startChapter],['endChapter',r.endChapter],['chapterCount',r.chapterCount],['previousTeacherGroupId',r.previousTeacherGroupId],['nextTeacherGroupId',r.nextTeacherGroupId],['previousEndChapter',r.previousEndChapter],['nextStartChapter',r.nextStartChapter]].forEach(([k,v])=>{if(String(v).trim()!==String(expected[k]).trim()) errors.push(`TEACHER_GROUP_STRATEGY ${i+1}的${k}必须严格等于TEACHER_ASSIGNMENT系统事实`);});
@@ -7808,7 +7833,7 @@ function principalStrategyText(strategy, chapterPlans){
     lines.push(`【STYLE_STRATEGY｜非三层摘要】叙事=${st.narrativeRule}｜对白=${st.dialogueRule}｜节奏=${st.rhythmRule}｜绝对禁止=${st.absoluteProhibitions}`);
   }
   const b=p.book||{}; lines.push(`【BOOK_STRATEGY】主线=${b.mainline||'未填'}｜最终转变=${b.finalTransformation||'未填'}｜核心冲突=${b.coreConflict||'未填'}｜起始状态=${b.startingState||'未填'}｜目标状态=${b.targetState||'未填'}`);
-  (p.stages||[]).forEach(s=>lines.push(`【STAGE_STRATEGY ${s.stageId}】${s.startChapter}-${s.endChapter}｜${s.stageName}｜目标=${s.stageGoal}｜冲突=${s.coreConflict}｜高潮=${s.stageClimax}｜解决=${s.settlement}｜新问题=${s.newProblem}｜交接=${s.nextStageLaunch}`));
+  (p.stages||[]).forEach(s=>lines.push(`【STAGE_STRATEGY ${s.stageId}】${s.startChapter}-${s.endChapter}｜${s.stageName}｜目标=${s.stageGoal}｜冲突=${s.coreConflict}｜高潮=${s.stageClimax}｜解决=${s.settlement}｜新问题=${s.newProblem}｜交接=${s.nextStageLaunch}${s.stageBeatInterpretation?`｜节拍解释=${s.stageBeatInterpretation}`:''}`));
   (p.teacherGroups||[]).forEach(g=>lines.push(`【TEACHER_GROUP_STRATEGY ${g.teacherGroupId}】${g.teacherCode}｜${g.startChapter}-${g.endChapter}｜阶段=${g.stageId}｜组任务=${g.groupTask}｜节奏=${JSON.stringify(g.groupRhythm)}｜情绪=${g.emotionalCurve}｜必须推进=${g.mustAdvance.join('；')}｜禁止提前解决=${g.mustNotPrematurelyResolve.join('；')}`));
   return lines.join('\n');
 }
@@ -8176,7 +8201,8 @@ function teacherPromptText(value, maxChars=12000){
 function compileTeacherStageRows(rows){
   return (Array.isArray(rows)?rows:[]).map(x=>teacherPromptCompact({
     stage:x.stage||x.name||'', startChapter:x.startChapter, endChapter:x.endChapter,
-    goal:x.goal||x.mission||'', task:x.task||x.teacherTask||'', strategy:x.strategy||x.description||'',
+    goal:x.goal||x.mission||x.stageGoal||'', task:x.task||x.teacherTask||'', strategy:x.strategy||x.description||'',
+    stageBeatInterpretation:String(x.stageBeatInterpretation||'').trim(),
     constraints:x.constraints||x.boundaries||'', handoff:x.handoff||''
   })).filter(x=>Object.keys(x).length);
 }
@@ -8333,7 +8359,7 @@ function buildTeacherUser(g,gi){
   for(let n=g.first;n<=g.last;n++){
     const p=plans[n]||{}, stage=stageForChapter(n)||{}, middle=middleByChapter[String(n)]||getChapterMiddleShape(n)||null, time=timeSource?.plannedChapters?.find(x=>Number(x.chapter)===n)||null, previousEnding=previousChapterEndingBrief(n,gi);
     const chapterData=compileTeacherChapterPlan(p,n,state.chapters?.[n-1]?.title||'');
-    const stageLabel=teacherPromptCompact({stage:stage.stage||stage.name||'',startChapter:stage.startChapter,endChapter:stage.endChapter,goal:stage.goal||stage.mission||'',teacherTask:stage.teacherTask||stage.task||'',handoff:stage.handoff||''});
+    const stageLabel=teacherPromptCompact({stage:stage.stage||stage.name||'',startChapter:stage.startChapter,endChapter:stage.endChapter,goal:stage.goal||stage.mission||stage.stageGoal||'',teacherTask:stage.teacherTask||stage.task||'',stageBeatInterpretation:String(stage.stageBeatInterpretation||'').trim(),handoff:stage.handoff||''});
     lines.push(`【第${n}章｜章节施工信息】\n【章节战略与剧情事实】\n${teacherPromptText(chapterData,14000)}\n\n【本章所属阶段｜只给本章必要信息】\n${teacherPromptText(stageLabel,5000)}\n\n【本章微拍 / 中段结构｜唯一一次】\n${teacherPromptText(middle||{},9000)}\n规则：这里仅提供结构形状、节奏分段与边界，不把它改写成第二套剧情事件清单。\n\n【本章时间要求】\n${compileTeacherTimeContext(timeSource,n)||'本章没有额外明确的结构化时间范围；以已成立正文状态和章节事实为准，不得臆造。'}\n\n${previousEnding}\n\n【本章三层施工责任】\nGLOBAL：完整继承上方唯一GLOBAL。\nHYBRID：只有本章确有需要时，由老师把GLOBAL语义与本章环境/阶段/剧情融合为自然语言施工规则。\nCHAPTER：只有本章确有需要时，由老师形成章节级具体施工规则。\n不得把校长数据、旧style对象或机器字段再次作为第二来源。\n\n【本章完整章末设计要求】\n必须落实章节授权中的ending信息：function、intensity、lastEffectiveEvent、form、nextTransitionType、nextTransitionBasis、handoff、diversityNote；章末必须形成真正停止边界，并明确最后有效事件之后不再追加内容。`);
   }
 
@@ -8539,7 +8565,7 @@ async function genPrincipal(btn, opts){
             const _fp=principalPlans[Number(targetChapterCount)];
             if(_fp){ _fp.ending=_fp.ending||{}; _fp.ending.nextTransitionType='全书结束／终局／无下一章'; _fp.ending.nextTransitionBasis='本章已完成全书最终状态，不存在下一章、下一阶段或下一位老师。'; _fp.handoff='无，完成全书终局后停止。'; _fp.teacherTask=String(_fp.teacherTask||'')+'；本章由最终结局负责者完成全书终局，不承担任何后续交接。'; }
           }
-          chapterStrategies = buildChapterStrategiesFromPrincipal(principalPlans, targetChapterCount);
+          chapterStrategies = buildChapterStrategiesFromPrincipal(principalPlans, targetChapterCount, principalStrategy);
           const _middleNormalized = principalPlanContractAudit(principalPlans, targetChapterCount);
           if(_middleNormalized.missing.length || _middleNormalized.invalid.length) addGenerationDiagnostic('principal',{type:'STRUCTURE',code:'PRINCIPAL_PLANS_PARTIAL',details:{missing:_middleNormalized.missing,invalid:_middleNormalized.invalid}});
           if(principalStrategy.valid){
@@ -10549,6 +10575,15 @@ AI不得无依据地把新人物、新势力、新能力、新世界规则当成
 
 【第六原则：全书结构必须真正有用】
 如果用户提供章节数和/或全书拍子，必须结合这些约束设计“全书发展节奏”。
+
+【全书节拍呼吸空间规则｜宏观阶段，不锁死执行路径】
+全书节拍必须表达重要的阶段性变化、目标、状态、冲突、阶段结果或下一阶段问题，而不是连续的微动作链。
+- 禁止把“来到这里→打开门→进入房间”这类连续执行步骤拆成多个相邻宏观节拍。
+- 禁止把“发现威胁→立刻解决威胁”这种已经锁死实现路径的连续结果直接作为相邻节拍。
+- 相邻节拍之间必须保留真实的创作发展空间，让下游可以自主决定具体事件、人物行动、场景、误判、关系变化和因果连接。
+- 呼吸空间不是少写、空泛或注水；应锁定阶段变化与戏剧功能，但不锁死从上一拍到下一拍的完整行动路线。
+- 每个节拍可以明确阶段目标、核心冲突、主角状态变化、重要发展方向、阶段性结果和下一阶段新问题；不得把这些内容写成逐章教案、连续动作清单或具体场景施工图。
+- 如果相邻两个节拍实际上只是同一动作链的前后步骤，应提升到更高层次的状态/目标/冲突变化后再输出。
 如果没有章节数，也必须给出阶段化的宏观节拍，让故事可以自然扩写成完整小说。
 全书节拍至少说明：阶段目的、主要矛盾、主角状态变化、关键事件类型、阶段回报、进入下一阶段的新问题。
 不得把全书节拍写成“第1章发生A、第2章发生B”的逐章流水账；除非用户本身已经提供逐章信息。
