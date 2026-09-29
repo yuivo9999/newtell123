@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.553';
+const APP_VERSION = '1.0.554';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.553.js';
+const APP_FILE_VERSION = 'app1.0.554.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -8831,8 +8831,12 @@ function principalInjectionFileName(){
 }
 function openPrincipalInjectionExport(){
   const inj=principalInjectionData();
-  if(!inj){ toast('校长成果尚未生成，暂时没有可导出的真实 AI 注入'); return; }
-  const text=`【SYSTEM】\n${inj.system}\n\n【USER】\n${inj.user}`;
+  const hasSystem=!!String(inj?.system||'').trim();
+  const hasUser=!!String(inj?.user||'').trim();
+  const hasInjection=hasSystem || hasUser;
+  const text=hasInjection
+    ? `【SYSTEM】\n${String(inj?.system||'')}\n\n【USER】\n${String(inj?.user||'')}`
+    : '当前暂无可查看的校长 AI 注入内容。';
   const ov=document.createElement('div'); ov.className='gs-overlay principal-injection-overlay';
   ov.innerHTML=`<div class="gs-modal principal-injection-modal" role="dialog" aria-modal="true" aria-label="校长注入导出">
     <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
@@ -13966,6 +13970,7 @@ function ensureSchoolActionStyles(){
     .sc-tc-cut-list{padding:6px 8px 2px;font-size:11px;line-height:1.7}
     .sc-tc-cut-item{display:inline-block;margin:2px 5px 2px 0}.sc-tc-cut-item.ready{color:#20a95a}.sc-tc-cut-item.todo{color:var(--muted)}
     .sc-principal-generate{background:linear-gradient(135deg,#7b2cff,#ff2d55,#ffc400)!important;color:#fff!important;border-color:transparent!important;font-weight:700!important;text-shadow:0 1px 1px rgba(0,0,0,.18)}
+    .sc-principal-injection-export{background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%)!important;color:#fff!important;border:0!important;font-weight:700!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;white-space:nowrap!important}
     .sc-principal-generate.running{background:linear-gradient(135deg,#ff2d55,#ff6b57,#ffc400)!important;color:#fff!important;cursor:wait!important}
     .sc-principal-generate.done{background:linear-gradient(135deg,#7b2cff,#ff2d55,#ffc400)!important;color:#fff!important}
     .sc-principal-generate:disabled{opacity:.96}
@@ -13988,7 +13993,7 @@ function schoolZoneBlock(){
       </div>
       <div class="ch-right" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <button type="button" class="btn small dm-ai-action sc-principal-generate" data-scp-principal-generate style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成 / 重新生成校长统筹成果">👑 生成校长</button>
-        <button type="button" class="sc-plan-btn sc-injection-export-btn" data-scp-principal-injection title="查看校长真实 AI 请求的 SYSTEM + USER">📦 注入导出</button>
+        <button type="button" class="sc-plan-btn sc-injection-export-btn sc-principal-injection-export" data-scp-principal-injection title="查看校长真实 AI 请求的 SYSTEM + USER">📦 注入导出</button>
         <button type="button" class="sc-plan-btn sc-plan-pr" data-scp-plan-pr title="查看并编辑当前正式校长成果">📋 读校长成果</button>
       </div>
     </div>
