@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.555';
+const APP_VERSION = '1.0.556';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.555.js';
+const APP_FILE_VERSION = 'app1.0.556.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -543,11 +543,46 @@ function teacherChapterTitleMatchers(){
 function teacherChapterNoFromTitleLine(line){
   const src=String(line||'');
   for(const re of teacherChapterTitleMatchers()){
-    const m=src.match(re); if(m) return Number(m[1]);
+    const m=src.match(re);
+    if(m){
+      const chapterNo=Number(m[1]);
+      const titleMatch=src.match(/^\s*(?:#{1,6}\s*)?(?:[一二三四五六七八九十百千万零〇两]+[、.．]\s*)?第\s*\d{1,4}\s*章(?:\s*(.*))?\s*$/i);
+      const title=String(titleMatch?.[1]||'').trim();
+      return {chapterNo,title};
+    }
   }
-  // 最后保留系统基础容错：即使用户误删默认规则，也不会让老格式失效。
-  const m=src.match(/^\s*(?:#{1,6}\s*)?(?:[一二三四五六七八九十百千万零〇两]+[、.．]\s*)?第\s*(\d{1,4})\s*章(?:\s+.*)?\s*$/i);
-  return m?Number(m[1]):NaN;
+  // 系统基础容错：即使用户误删默认规则，也保持老格式可识别。
+  const m=src.match(/^\s*(?:#{1,6}\s*)?(?:[一二三四五六七八九十百千万零〇两]+[、.．]\s*)?第\s*(\d{1,4})\s*章(?:\s*(.*))?\s*$/i);
+  if(!m) return null;
+  return {chapterNo:Number(m[1]),title:String(m[2]||'').trim()};
+}
+function getTeacherGlobalForChapterSync(t,pr){
+  const raw=String(t?.raw||'').replace(/\r\n?/g,'\n');
+  if(raw){
+    const marker='【校长唯一GLOBAL｜全书只出现一次】';
+    const start=raw.indexOf(marker);
+    if(start>=0){
+      const rest=raw.slice(start);
+      const chapterAt=rest.search(/^\s*(?:#{1,6}\s*)?(?:[一二三四五六七八九十百千万零〇两]+[、.．]\s*)?第\s*\d{1,4}\s*章(?:\s|$)/im);
+      const nextSection=rest.slice(marker.length).search(/^【(?!校长唯一GLOBAL｜全书只出现一次)[^\n]*】\s*$/m);
+      const ends=[rest.length];
+      if(chapterAt>=0) ends.push(chapterAt);
+      if(nextSection>=0) ends.push(marker.length+nextSection);
+      const block=rest.slice(0,Math.min(...ends)).trim();
+      if(block.length>marker.length) return block;
+    }
+  }
+  const compiled=compileTeacherGlobal(pr||{});
+  if(!compiled) return '';
+  const global=typeof compiled==='string'?compiled:JSON.stringify(compiled,null,2);
+  return String(global||'').trim();
+}
+function prependTeacherGlobalOnce(globalText,rawText){
+  const g=String(globalText||'').trim();
+  const r=String(rawText||'');
+  if(!g) return r;
+  if(r.trimStart().startsWith(g)) return r;
+  return g+'\n\n'+r;
 }
 function openTeacherChapterTitleRules(gi){
   const ov=document.createElement('div'); ov.className='gs-overlay';
@@ -584,11 +619,9 @@ function parseTeacherRawChapters(raw, first, last){
   let offset=0;
   for(let i=0;i<lines.length;i++){
     const line=String(lines[i]||'');
-    const ch=teacherChapterNoFromTitleLine(line);
-    if(Number.isFinite(ch)){
-      const titleMatch=line.match(/第\s*\d{1,4}\s*章(?:\s+(.*))?$/i);
-      const title=String(titleMatch?.[1]||'').replace(/^[\s:：\-–—]+/,'').replace(/[《》【】（）()]/g,'').trim();
-      hits.push({ch,title,startLine:i,startOffset:offset});
+    const parsed=teacherChapterNoFromTitleLine(line);
+    if(parsed&&Number.isFinite(parsed.chapterNo)){
+      hits.push({ch:parsed.chapterNo,title:String(parsed.title||'').replace(/^[\s:：\-–—|｜]+/,'').replace(/[《》【】（）()]/g,'').trim(),startLine:i,startOffset:offset});
     }
     offset += line.length + 1;
   }
@@ -700,8 +733,8 @@ async function cutTeacherChapterCardsManually(gi){return (async()=>{
   if(state._teacherCutting?.[gi])return false;const groups=teacherAssignmentGroups(),g=groups[Number(gi)],t=teacherCurrentResult(Number(gi));
   if(!g||!t){toast(`老师${Number(gi)+1}总教案尚未生成，请先完成备课`);return false;}const source=String(t.raw||'').trim();
   if(!source){toast('当前老师没有可读取的总教案原始纯文本');return false;}state._teacherCutting=state._teacherCutting||{};state._teacherCutting[gi]=true;renderTeacherCutUi(gi);
-  try{const rawChapters=parseTeacherRawChapters(source,g.first,g.last),built={};
-    for(let n=g.first;n<=g.last;n++){const row=rawChapters[n];if(!row||!String(row.rawText||'').trim())throw new Error(`第${n}章未能从老师总教案中按章头尾切出完整纯文本`);const rawText=String(row.rawText);
+  try{const rawChapters=parseTeacherRawChapters(source,g.first,g.last),built={},pr=principalCurrentResult()||{},globalText=getTeacherGlobalForChapterSync(t,pr);
+    for(let n=g.first;n<=g.last;n++){const row=rawChapters[n];if(!row||!String(row.rawText||'').trim())throw new Error(`第${n}章未能从老师总教案中按章头尾切出完整纯文本`);const originalRawText=String(row.rawText);const rawText=prependTeacherGlobalOnce(globalText,originalRawText);
       built[n]={chapter:n,title:String(row.title||state.chapters?.[n-1]?.title||'').trim(),status:'ready',cutAt:Date.now(),rawText,rawTeacherPlan:rawText};}
     t.chapterCards={cutAt:Date.now(),total:g.last-g.first+1,ready:Object.keys(built).length,chapters:built,errors:[]};
     await persistCritical('本章纯文本教案切割保存');renderTeacherCutUi(gi);toast(`${groups.length>1?`老师${gi+1}`:'老师'}本章纯文本教案切割完成：${Object.keys(built).length}/${g.last-g.first+1}`);return true;
