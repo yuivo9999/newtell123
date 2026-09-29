@@ -8,7 +8,7 @@
 /* v1.0.519 COMPLETE-TEACHER-CONTEXT: teacher AI receives the complete authoritative upstream context and returns a complete raw teaching plan. */
 /* v1.0.519 RAW-TEACHER-ONLY: the teacher AI return is saved verbatim; chapter reads are deterministic raw-text slices only. */
 'use strict';
-/* v1.0.552 SAFE-OPTIMIZATION-READER-INJECTION: 优化构想注入导出 + 读优化构想；纯读取/本地编辑；保留 canonicalStoryStrategy 唯一事实源。 */
+/* v1.0.551 SAFE-OPTIMIZATION-READER-INJECTION: 优化构想注入导出 + 读优化构想；纯读取/本地编辑；保留 canonicalStoryStrategy 唯一事实源。 */
 /* v1.0.547 SAFE-AI-CONTRACT-RETIREMENT: 旧 callAIGuarded/callAIWithContract 安全退役；保留 callDeepSeek、text、finishReason、usage、Parser/Normalize/Validator、Abort 与业务数据链；finishReason=length 不再作为统一业务失败条件。 */
 
 /* v1.0.519 IRON LAW — 本章教案传导链永久锁定：
@@ -120,9 +120,9 @@ const state = {
   // 1.0.358：canonicalStoryStrategy 是唯一权威故事事实，不再维护第二事实源。
   canonicalStoryStrategy: null,
   polishRevision: 0,
-  // v1.0.552：优化构想真实AI注入快照；仅在真正发起生成前保存，不触发AI。
+  // v1.0.551：优化构想真实AI注入快照；仅在真正发起生成前保存，不触发AI。
   polishInjectionSnapshot: null,
-  // v1.0.552：最终选定方案的独立正式副本；不是第二事实源，保存时同步回 canonicalStoryStrategy。
+  // v1.0.551：最终选定方案的独立正式副本；不是第二事实源，保存时同步回 canonicalStoryStrategy。
   polishSelectedFinal: null,
   // 优化构想产生的新增实体/设定只能作为待确认建议，绝不直接进入正式词典。
   polishPendingSuggestions: null,
@@ -151,6 +151,8 @@ const state = {
   dictmasterLatest: null,
   dictmasterRan: false,
   originalIdeaSnapshot: '',
+  // v1.0.552：词典达人真实生成前 SYSTEM + USER 快照；仅用于注入导出，不是第二套正式数据源。
+  dictmasterInjectionSnapshot: null,
   titleWriteBack: false,
   langLayer: true,
   _narrIron: true,
@@ -1397,6 +1399,7 @@ function projectSnapshot(){
     dictmasterHistory: Array.isArray(state.dictmasterHistory) ? state.dictmasterHistory : [],
     dictmasterLatest: state.dictmasterLatest || null,
     dictmasterRan: !!state.dictmasterRan,
+    dictmasterInjectionSnapshot: state.dictmasterInjectionSnapshot || null,
     originalIdeaSnapshot: state.originalIdeaSnapshot || '',
     school: (state.school && typeof state.school === 'object') ? state.school : null,   // 学校模式：校长/老师 产出 + 各步重试/完成标记（随项目持久化）
     longMemory: state.longMemory || { uiOpen:false, foreshadow:[], lastAuditAt:0 },
@@ -1501,6 +1504,7 @@ function applyProject(p){
   state.dictmasterHistory = Array.isArray(p.dictmasterHistory) ? p.dictmasterHistory : [];
   state.dictmasterLatest = (p.dictmasterLatest && typeof p.dictmasterLatest === 'object') ? p.dictmasterLatest : null;
   state.dictmasterRan = !!p.dictmasterRan;
+  state.dictmasterInjectionSnapshot = (p.dictmasterInjectionSnapshot && typeof p.dictmasterInjectionSnapshot === 'object') ? p.dictmasterInjectionSnapshot : null;
   state.originalIdeaSnapshot = (typeof p.originalIdeaSnapshot === 'string') ? p.originalIdeaSnapshot : '';
   state.school = (p.school && typeof p.school === 'object') ? p.school : null;   // 学校模式恢复（校长/老师 产出 + 重试/完成标记）
   if(!state.school || typeof state.school !== 'object') state.school = {};
@@ -3575,7 +3579,7 @@ async function generateOptimizationConcept(btn, force){
     const ctx={multi};
     const callOpts={temperature:resolveActiveSpec().ideaTemp,maxTokens:Math.max(4500,clampMaxTokens('polish'))};
     const strictQc=state.ideaOptimizationStrictQc===true;
-    // v1.0.552：真正发起AI请求前，保存本次真实 SYSTEM + USER 快照。注入导出优先读取该快照，绝不重新生成。
+    // v1.0.551：真正发起AI请求前，保存本次真实 SYSTEM + USER 快照。注入导出优先读取该快照，绝不重新生成。
     try{
       const snapshotSystem = String(getSystemPrompt('ideaOptimization',ctx) + globalCreativeConstraintBlock('ideaOptimization') || '');
       const snapshotUser = String(buildAIPrompt('ideaOptimization',ctx) || '');
@@ -16979,6 +16983,196 @@ function collapseGlossaryAfterDictionaryGeneration(save=true){
   if(save) persist();
 }
 
+
+/* v1.0.552 SAFE-DICTMASTER-READER-INJECTION:
+ * 新增“注入导出 + 读词典达人”。注入导出读取真实生成前快照；读词典达人读取/编辑正式 Foundation 数据，保存仍回到原 outline.glossary，保留词典充实等非 Foundation 数据。
+ */
+function dictmasterInjectionTextFromSnapshot(){
+  const snap=state.dictmasterInjectionSnapshot;
+  if(!snap || typeof snap!=='object') return '';
+  const sys=String(snap.system||'').trim();
+  const user=String(snap.user||'').trim();
+  if(!sys && !user) return '';
+  return `SYSTEM\n${sys}\n\nUSER\n${user}`.trim();
+}
+function buildDictmasterInjectionSnapshotFallback(){
+  try{
+    const sys=getSystemPrompt('dictmaster', {}) + globalCreativeConstraintBlock('dictmaster');
+    const user=buildAIPrompt('dictmaster', {});
+    if(!String(sys||'').trim() && !String(user||'').trim()) return null;
+    return {system:String(sys||''), user:String(user||''), createdAt:Date.now(), fallback:true};
+  }catch(e){
+    console.warn('[dictmaster injection fallback]', e);
+    return null;
+  }
+}
+function dictmasterFoundationSnapshotForReader(){
+  const g=ensureGlossaryKnowledgeShape((state.outline&&state.outline.glossary)||{});
+  const foundation=(key,cat)=> (g[key]||[]).filter(x=>x && !isGlossaryEnrichment(g,cat,x)).map(x=>({...x}));
+  const generic={};
+  ['organizations','institutions','items','rules','terms','events','lifeSettings'].forEach(k=>{generic[k]=foundation(k,k);});
+  return {
+    summary:String(state.dictmasterLatest?.summary||storyState()?.canon?.masterSnapshot?.summary||'').trim(),
+    characters:foundation('characters','characters'),
+    places:foundation('places','places'),
+    propernouns:foundation('propernouns','propernouns'),
+    generic,
+    relationshipTable:foundation('_relationshipTable','relationshipTable'),
+    placeContacts:foundation('_placeContacts','placeContacts'),
+    properContacts:foundation('_properContacts','properContacts'),
+    worldRules:foundation('_worldRules','worldRules')
+  };
+}
+function dictmasterReaderSnapshotText(snap){
+  if(!snap) return '';
+  const blocks=[];
+  const add=(tag,obj,fields)=>{
+    if(!obj || typeof obj!=='object') return;
+    const lines=[]; fields.forEach(k=>{ if(obj[k]!==undefined && obj[k]!==null){ const v=String(obj[k]).replace(/\r?\n/g,' ').trim(); if(v) lines.push(`${k}=${v}`); }});
+    if(lines.length) blocks.push(`[${tag}]\n${lines.join('\n')}\n[/${tag}]`);
+  };
+  add('WORLD',{summary:snap.summary||''},['summary']);
+  (snap.characters||[]).forEach(x=>add('CHARACTER',x,['id','name','tier','origin','coreRole','identity','age','gender','appearance','hobby','relation','trait','catchphrase']));
+  (snap.relationshipTable||[]).forEach(x=>add('RELATION',x,['a','b','relation','note']));
+  (snap.places||[]).forEach(x=>add('LOCATION',x,['name','type','note']));
+  (snap.placeContacts||[]).forEach(x=>add('PLACE_CONTACT',x,['from','to','relation','note']));
+  (snap.propernouns||[]).forEach(x=>add('PROPER_NOUN',x,['name','note']));
+  (snap.properContacts||[]).forEach(x=>add('PROPER_CONTACT',x,['from','to','relation','note']));
+  (snap.worldRules||[]).forEach(x=>add('RULE',x,['cat','scope','rule']));
+  const generic=snap.generic||{};
+  (generic.organizations||[]).forEach(x=>add('ORGANIZATION',x,['name','type','stance','function','relation','note']));
+  (generic.institutions||[]).forEach(x=>add('INSTITUTION',x,['name','type','function','audience','location','note']));
+  (generic.items||[]).forEach(x=>add('ITEM',x,['name','type','function','source','limit','note']));
+  (generic.terms||[]).forEach(x=>add('TERM',x,['name','category','meaning','usage','note']));
+  (generic.events||[]).forEach(x=>add('HISTORY',x,['name','era','participants','course','impact','relation']));
+  (generic.lifeSettings||[]).forEach(x=>add('LIFE_SETTING',x,['name','category','scope','content','value','note']));
+  return blocks.join('\n\n');
+}
+function validateDictmasterReaderData(j){
+  if(!j || typeof j!=='object') return {ok:false,reason:'无法解析结构化词典内容。'};
+  if(!Array.isArray(j.characters)) return {ok:false,reason:'人物区块结构无效。'};
+  const seenNames=new Set(), seenIds=new Set();
+  for(const c of j.characters){
+    const name=String(c?.name||'').trim(); if(!name) return {ok:false,reason:'存在人物缺少 name。'};
+    if(seenNames.has(name)) return {ok:false,reason:`人物姓名重复：「${name}」`}; seenNames.add(name);
+    const id=String(c?.id||'').trim().toUpperCase();
+    if(id){ if(!/^CHAR_\d{3,}$/.test(id)) return {ok:false,reason:`人物ID格式无效：「${id}」`}; if(seenIds.has(id)) return {ok:false,reason:`人物ID重复：「${id}」`}; seenIds.add(id); }
+  }
+  const nonEmpty=(arr,keys)=>Array.isArray(arr) && arr.every(x=>x && keys.every(k=>String(x[k]??'').trim()));
+  if(!nonEmpty(j.relationshipTable,['a','b','relation'])) return {ok:false,reason:'人物关系表存在结构不完整的条目。'};
+  if(!nonEmpty(j.placeContacts,['from','to','relation'])) return {ok:false,reason:'地名关联表存在结构不完整的条目。'};
+  if(!nonEmpty(j.properContacts,['from','to','relation'])) return {ok:false,reason:'专名关联表存在结构不完整的条目。'};
+  if(!nonEmpty(j.worldRules,['cat','scope','rule'])) return {ok:false,reason:'世界观规则存在结构不完整的条目。'};
+  return {ok:true};
+}
+function dictmasterReaderIdentity(category,x){
+  if(!x) return '';
+  if(category==='relationshipTable') return `rel|${String(x.a||'').trim()}|${String(x.b||'').trim()}|${String(x.relation||'').trim()}`;
+  if(category==='placeContacts') return `pc|${String(x.from||'').trim()}|${String(x.to||'').trim()}|${String(x.relation||'').trim()}`;
+  if(category==='properContacts') return `prc|${String(x.from||'').trim()}|${String(x.to||'').trim()}|${String(x.relation||'').trim()}`;
+  if(category==='worldRules') return `wr|${String(x.cat||'').trim()}|${String(x.scope||'').trim()}|${String(x.rule||'').trim()}`;
+  return `${category}|${String(x.id||'').trim()}|${String(x.name||'').trim()}`;
+}
+function dictmasterReaderFoundationIdentitySets(snap){
+  const out={};
+  const maps={characters:'characters',places:'places',propernouns:'propernouns',organizations:'organizations',institutions:'institutions',items:'items',rules:'rules',terms:'terms',events:'events',lifeSettings:'lifeSettings'};
+  Object.entries(maps).forEach(([k,sk])=>{ out[k]=new Set((sk==='characters'||sk==='places'||sk==='propernouns')?(snap?.[sk]||[]).map(x=>dictmasterReaderIdentity(k,x)):(snap?.generic?.[sk]||[]).map(x=>dictmasterReaderIdentity(k,x))); });
+  out.relationshipTable=new Set((snap?.relationshipTable||[]).map(x=>dictmasterReaderIdentity('relationshipTable',x)));
+  out.placeContacts=new Set((snap?.placeContacts||[]).map(x=>dictmasterReaderIdentity('placeContacts',x)));
+  out.properContacts=new Set((snap?.properContacts||[]).map(x=>dictmasterReaderIdentity('properContacts',x)));
+  out.worldRules=new Set((snap?.worldRules||[]).map(x=>dictmasterReaderIdentity('worldRules',x)));
+  return out;
+}
+function replaceDictmasterFoundationArray(g,key,newRows,identitySet,mapper){
+  const current=Array.isArray(g[key])?g[key]:[];
+  const kept=current.filter(x=>isGlossaryEnrichment(g,key,x) || !identitySet.has(dictmasterReaderIdentity(key,x)));
+  const mapped=(newRows||[]).map(mapper).filter(x=>x && String(x.name||'').trim());
+  g[key]=kept.concat(mapped);
+  mapped.forEach(x=>markGlossaryFoundation(g,key,x,{editedBy:'dictmasterReader'}));
+}
+function saveDictmasterReaderChanges(text){
+  const parsed=parseDictMasterPlainText(text);
+  const check=validateDictmasterReaderData(parsed);
+  if(!check.ok) throw new Error(check.reason);
+  normalizeDictMasterEntities(parsed);
+  const o=state.outline||(state.outline={});
+  const g=ensureGlossaryKnowledgeShape(o.glossary||{characters:[],places:[],propernouns:[],subplots:[]});
+  const snap=dictmasterFoundationSnapshotForReader();
+  const sets=dictmasterReaderFoundationIdentitySets(snap);
+  const charMap=c=>({id:String(c.id||'').trim(),name:String(c.name||'').trim(),tier:String(c.tier||'').trim().toLowerCase()==='support'?'support':'main',origin:String(c.origin||'').trim()||'dictionary_master',coreRole:String(c.coreRole||'').trim(),identity:String(c.identity||'').trim(),age:String(c.age||'').trim(),gender:String(c.gender||'').trim(),appearance:String(c.appearance||'').trim(),hobby:String(c.hobby||'').trim(),relation:String(c.relation||'').trim(),trait:String(c.trait||'').trim(),catchphrase:String(c.catchphrase||'').trim()});
+  replaceDictmasterFoundationArray(g,'characters',parsed.characters,sets.characters,charMap);
+  replaceDictmasterFoundationArray(g,'places',parsed.places,sets.places,p=>({name:String(p.name||'').trim(),type:String(p.type||'').trim(),note:String(p.note||'').trim()}));
+  replaceDictmasterFoundationArray(g,'propernouns',parsed.propernouns,sets.propernouns,p=>({name:String(p.name||'').trim(),note:String(p.note||'').trim()}));
+  const genericMap={
+    organizations:x=>({name:String(x.name||'').trim(),type:String(x.type||'').trim(),stance:String(x.stance||'').trim(),function:String(x.function||'').trim(),relation:String(x.relation||'').trim(),note:String(x.note||'').trim()}),
+    institutions:x=>({name:String(x.name||'').trim(),type:String(x.type||'').trim(),function:String(x.function||'').trim(),audience:String(x.audience||'').trim(),location:String(x.location||'').trim(),note:String(x.note||'').trim()}),
+    items:x=>({name:String(x.name||'').trim(),type:String(x.type||'').trim(),function:String(x.function||'').trim(),source:String(x.source||'').trim(),limit:String(x.limit||'').trim(),note:String(x.note||'').trim()}),
+    rules:x=>({name:String(x.name||'').trim(),note:String(x.note||'').trim()}),
+    terms:x=>({name:String(x.name||'').trim(),category:String(x.category||'').trim(),meaning:String(x.meaning||'').trim(),usage:String(x.usage||'').trim(),note:String(x.note||'').trim()}),
+    events:x=>({name:String(x.name||'').trim(),era:String(x.era||'').trim(),participants:String(x.participants||'').trim(),course:String(x.course||'').trim(),impact:String(x.impact||'').trim(),relation:String(x.relation||'').trim()}),
+    lifeSettings:x=>({name:String(x.name||'').trim(),category:String(x.category||'').trim(),scope:String(x.scope||'').trim(),content:String(x.content||'').trim(),value:String(x.value||'').trim(),note:String(x.note||'').trim()})
+  };
+  Object.keys(genericMap).forEach(k=>replaceDictmasterFoundationArray(g,k,parsed[k],sets[k],genericMap[k]));
+  const replaceAssoc=(key,cat,newRows,mapper)=>{
+    const cur=Array.isArray(g[key])?g[key]:[]; const set=sets[cat]; const kept=cur.filter(x=>isGlossaryEnrichment(g,cat,x)||!set.has(dictmasterReaderIdentity(cat,x))); const mapped=(newRows||[]).map(mapper); g[key]=kept.concat(mapped); mapped.forEach(x=>markGlossaryFoundation(g,cat,x,{editedBy:'dictmasterReader'}));
+  };
+  replaceAssoc('_relationshipTable','relationshipTable',parsed.relationshipTable,x=>({a:String(x.a||'').trim(),b:String(x.b||'').trim(),relation:String(x.relation||'').trim(),note:String(x.note||'').trim()}));
+  replaceAssoc('_placeContacts','placeContacts',parsed.placeContacts,x=>({from:String(x.from||'').trim(),to:String(x.to||'').trim(),relation:String(x.relation||'').trim(),note:String(x.note||'').trim()}));
+  replaceAssoc('_properContacts','properContacts',parsed.properContacts,x=>({from:String(x.from||'').trim(),to:String(x.to||'').trim(),relation:String(x.relation||'').trim(),note:String(x.note||'').trim()}));
+  replaceAssoc('_worldRules','worldRules',parsed.worldRules,x=>({cat:String(x.cat||'').trim(),scope:String(x.scope||'').trim(),rule:String(x.rule||'').trim()}));
+  migrateAndCleanGlossarySources(g);
+  // 更新正式词典达人基线，但不把词典充实等增量数据改造成新的第二事实源。
+  const newSnap={
+    characters:(g.characters||[]).filter(x=>!isGlossaryEnrichment(g,'characters',x)).map(x=>({...x})),
+    places:(g.places||[]).filter(x=>!isGlossaryEnrichment(g,'places',x)).map(x=>({...x})),
+    propernouns:(g.propernouns||[]).filter(x=>!isGlossaryEnrichment(g,'propernouns',x)).map(x=>({...x})),
+    generic:{},
+    relationshipTable:(g._relationshipTable||[]).filter(x=>!isGlossaryEnrichment(g,'relationshipTable',x)).map(x=>({...x})),
+    placeContacts:(g._placeContacts||[]).filter(x=>!isGlossaryEnrichment(g,'placeContacts',x)).map(x=>({...x})),
+    properContacts:(g._properContacts||[]).filter(x=>!isGlossaryEnrichment(g,'properContacts',x)).map(x=>({...x})),
+    worldRules:(g._worldRules||[]).filter(x=>!isGlossaryEnrichment(g,'worldRules',x)).map(x=>({...x}))
+  };
+  ['organizations','institutions','items','rules','terms','events','lifeSettings'].forEach(k=>{newSnap.generic[k]=(g[k]||[]).filter(x=>!isGlossaryEnrichment(g,k,x)).map(x=>({...x}));});
+  storyState().canon=storyState().canon||{}; storyState().canon.masterSnapshot=newSnap;
+  ssEnsureCanonEntities();
+  persist();
+  refreshDictMasterCardOnly();
+  refreshGlossaryCardOnly();
+  return true;
+}
+function openDictmasterInjectionExport(){
+  let text=dictmasterInjectionTextFromSnapshot();
+  if(!text){ const fb=buildDictmasterInjectionSnapshotFallback(); if(fb){ text=`SYSTEM\n${String(fb.system||'').trim()}\n\nUSER\n${String(fb.user||'').trim()}`.trim(); } }
+  if(!text){ toast(state.dictmasterRan?'当前项目暂无可用的词典达人注入内容。':'词典达人尚未生成，暂无可导出的注入内容。'); return; }
+  const ov=document.createElement('div'); ov.className='gs-overlay';
+  ov.innerHTML=`<div class="gs-modal dictmaster-injection-export-modal" style="max-width:760px;width:min(92vw,760px)">
+    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>📦 词典达人 · 注入导出</b><span class="muted" style="margin-left:8px;font-size:11px">真实生成 AI 请求 · SYSTEM + USER</span></div><button class="gs-x" data-dm-inj-close>✕</button></div>
+    <div style="padding:14px 16px 16px"><textarea data-dm-inj-text readonly style="width:100%;height:min(62vh,520px);box-sizing:border-box;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea>
+      <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:10px"><button type="button" class="btn small" data-dm-inj-copy>📋 复制</button><button type="button" class="btn small primary" data-dm-inj-txt>⬇️ 导出 TXT</button></div>
+    </div></div>`;
+  document.body.appendChild(ov); const ta=ov.querySelector('[data-dm-inj-text]'); ta.value=text;
+  const close=()=>ov.remove(); ov.querySelector('[data-dm-inj-close]').onclick=close;
+  ov.addEventListener('click',e=>{if(e.target===ov)close();});
+  ov.querySelector('[data-dm-inj-copy]').onclick=async()=>{try{await copyText(text);toast('词典达人注入内容已复制');}catch(e){ta.select();document.execCommand('copy');toast('词典达人注入内容已复制');}};
+  ov.querySelector('[data-dm-inj-txt]').onclick=()=>download(`词典达人注入-${APP_VERSION}.txt`,text);
+}
+function openDictmasterReader(){
+  const snap=dictmasterFoundationSnapshotForReader();
+  const text=dictmasterReaderSnapshotText(snap);
+  if(!text){ toast('当前尚未生成词典达人。'); return; }
+  let baseline=text;
+  const ov=document.createElement('div'); ov.className='gs-overlay';
+  ov.innerHTML=`<div class="gs-modal dictmaster-reader-modal" style="max-width:820px;width:min(94vw,820px)">
+    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>📖 读词典达人</b><span class="muted" style="margin-left:8px;font-size:11px">当前正式词典达人 · 可编辑</span></div><button class="gs-x" data-dm-reader-close>✕</button></div>
+    <div style="padding:14px 16px 16px"><textarea data-dm-reader-text style="width:100%;height:min(68vh,560px);box-sizing:border-box;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea>
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:10px"><button type="button" class="btn ghost small" data-dm-reader-restore>↩ 恢复成没修改前的内容</button><button type="button" class="btn primary small" data-dm-reader-save>💾 保存当前更改</button></div><p data-dm-reader-status class="status" style="margin:8px 0 0"></p>
+    </div></div>`;
+  document.body.appendChild(ov); const ta=ov.querySelector('[data-dm-reader-text]'); ta.value=text;
+  const close=()=>ov.remove(); ov.querySelector('[data-dm-reader-close]').onclick=close; ov.addEventListener('click',e=>{if(e.target===ov)close();});
+  ov.querySelector('[data-dm-reader-restore]').onclick=()=>{ta.value=baseline; toast('已恢复到本次打开时的词典达人内容');};
+  ov.querySelector('[data-dm-reader-save]').onclick=()=>{try{saveDictmasterReaderChanges(ta.value); baseline=ta.value; const st=ov.querySelector('[data-dm-reader-status]'); if(st){st.className='status ok';st.textContent='保存成功：当前内容已成为正式词典达人版本。';} toast('词典达人修改已保存');}catch(e){const st=ov.querySelector('[data-dm-reader-status]'); if(st){st.className='status err';st.textContent=String(e.message||e);} toast('当前修改无法保存，请检查结构化内容后重试。');}};
+}
+
 async function genDictMaster(btn){
   const o = state.outline;
   const st = $('#dictmasterStatus');
@@ -16995,7 +17189,11 @@ async function genDictMaster(btn){
   try{
     const spec = resolveActiveSpec('dictmaster');
     const temp = (spec && spec.dictmasterTemp != null) ? spec.dictmasterTemp : 0.4;
-    const dictMasterRes = await callDeepSeek(getSystemPrompt('dictmaster', {}) + globalCreativeConstraintBlock('dictmaster'), buildAIPrompt('dictmaster', {}), {temperature: temp, maxTokens: 32768, signal: _abortCtl?.signal, taskKey:'dictmaster'});
+    const _dictmasterSystem = getSystemPrompt('dictmaster', {}) + globalCreativeConstraintBlock('dictmaster');
+    const _dictmasterUser = buildAIPrompt('dictmaster', {});
+    state.dictmasterInjectionSnapshot = { system:String(_dictmasterSystem||''), user:String(_dictmasterUser||''), createdAt:Date.now() };
+    persist();
+    const dictMasterRes = await callDeepSeek(_dictmasterSystem, _dictmasterUser, {temperature: temp, maxTokens: 32768, signal: _abortCtl?.signal, taskKey:'dictmaster'});
     const txt = dictMasterRes.text;
     let j = parseDictMasterPlainText(txt);
     if(!j){
@@ -17119,6 +17317,8 @@ function dictMasterBlockHtml(){
         </div>
         <div class="ch-right">
           <button id="btnCardGenDictMaster" type="button" class="btn small dm-ai-action" style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成 / 重新生成词典达人">✨ 生成</button>
+          <button type="button" class="btn small" data-dm-injection-export title="查看词典达人真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;font-weight:700">📦 注入导出</button>
+          <button type="button" class="btn small" data-dm-reader title="查看并人工编辑正式词典达人资料" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 55%,#14b8a6 100%);color:#fff;border:0;font-weight:700">📖 读词典达人</button>
           ${histN?`<button id="btnDictMasterHist" class="btn small ghost">🕘 历史(${histN}/6)</button>`:''}
         </div>
       </div>
@@ -17150,6 +17350,8 @@ function dictMasterBlockHtml(){
       </div>
       <div class="ch-right">
         <button id="btnCardGenDictMaster" type="button" class="btn small dm-ai-action" style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成词典达人">✨ 生成</button>
+        <button type="button" class="btn small" data-dm-injection-export title="查看词典达人真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;font-weight:700">📦 注入导出</button>
+        <button type="button" class="btn small" data-dm-reader title="查看并人工编辑正式词典达人资料" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 55%,#14b8a6 100%);color:#fff;border:0;font-weight:700">📖 读词典达人</button>
       </div>
     </div>
     ${locked?`<div class="dm-locked" style="margin:6px 0;color:#2e9e5b;font-size:12px">设定已锁定，可在「编剧学院」中一键迭代。</div>`:''}
@@ -17194,6 +17396,8 @@ function openDictMasterHistoryPanel(){
 }
 function bindDictMaster(){
   const gb = $('#btnCardGenDictMaster'); if(gb) gb.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); genDictMaster(gb); };
+  $$('[data-dm-injection-export]').forEach(b=>{ if(b._dmBound) return; b._dmBound=1; b.onclick=(e)=>{e.preventDefault();e.stopPropagation();openDictmasterInjectionExport();}; });
+  $$('[data-dm-reader]').forEach(b=>{ if(b._dmBound) return; b._dmBound=1; b.onclick=(e)=>{e.preventDefault();e.stopPropagation();openDictmasterReader();}; });
   const hb = $('#btnDictMasterHist'); if(hb) hb.onclick = ()=> openDictMasterHistoryPanel();
   $$('.dmt-tab').forEach(t=>{
     if(t._dmt) return; t._dmt = 1;
