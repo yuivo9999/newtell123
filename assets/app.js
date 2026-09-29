@@ -1,4 +1,4 @@
-/* THREE-LAYER-INTEGRATION-CLEANUP: STYLE_STRATEGY contains the single principal GLOBAL authority; teacher performs chapter-level HYBRID/CHAPTER application.
+/* v1.0.557 THREE-LAYER-INTEGRATION-CLEANUP: STYLE_STRATEGY contains the single principal GLOBAL authority; teacher performs chapter-level HYBRID/CHAPTER application.
  * v1.0.536 STYLE-LAYER-OUTPUT-ORGANIZATION: principal outputs only the single GLOBAL source; teacher owns chapter-level HYBRID/CHAPTER application and receives GLOBAL once as the locked baseline.
  * v1.0.532 STYLE-BASIS-LOCK: principal/teacher dynamic style decisions must be grounded in chapter microbeat + plot situation; preserve raw-teacher-only transmission.
  * v1.0.527 STYLE-LAYER-TRANSMISSION: principal style-layer decision + teacher three-layer execution +正文 three-layer transmission; preserve optimized writing style source and keep layer responsibilities separate.
@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.556';
+const APP_VERSION = '1.0.557';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.556.js';
+const APP_FILE_VERSION = 'app1.0.557.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -86,7 +86,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.540.js — 校长注入链安全去重：唯一GLOBAL来源、合并重复风格资料、移除重复上下文包装。 */
+/* APP VERSION: app1.0.557.js — 校长注入链安全去重：唯一GLOBAL来源、合并重复风格资料、移除重复上下文包装。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -1479,7 +1479,18 @@ function applyProject(p){
   state.plannerFinalized = (typeof p.plannerFinalized === 'boolean') ? p.plannerFinalized : false;
   state.expOpenGroups = Array.isArray(p.expOpenGroups) ? p.expOpenGroups : [];
   state.polishOptions = Array.isArray(p.polishOptions) ? p.polishOptions : undefined;
-  state.polishAdopted = (typeof p.polishAdopted === 'string') ? p.polishAdopted : undefined;
+  // v1.0.557：候选方案身份统一由程序生成“方案1/方案2…”。旧存档的name保留到_legacyName，避免直接删除旧语义造成采用状态丢失。
+  if(Array.isArray(state.polishOptions)){
+    const oldAdopted=(typeof p.polishAdopted==='string') ? p.polishAdopted : '';
+    let migratedAdopted='';
+    state.polishOptions=state.polishOptions.map((o,i)=>{
+      const legacy=String(o?.name||o?.optionName||'').trim();
+      const name=`方案${i+1}`;
+      if(oldAdopted && (oldAdopted===legacy || oldAdopted===name)) migratedAdopted=name;
+      return Object.assign({},o,{_legacyName:String(o?._legacyName||legacy).trim(),name,candidateName:name});
+    });
+    state.polishAdopted=migratedAdopted||((oldAdopted && state.polishOptions.some(o=>o.name===oldAdopted))?oldAdopted:undefined);
+  }else state.polishAdopted=(typeof p.polishAdopted === 'string') ? p.polishAdopted : undefined;
   state.polishMode = p.polishMode === 'multi' ? 'multi' : 'single';
   state.polishSelectedId = (typeof p.polishSelectedId === 'string') ? p.polishSelectedId : null;
   state.polishDiagnosis = (p.polishDiagnosis && typeof p.polishDiagnosis === 'object') ? p.polishDiagnosis : null;
@@ -1495,6 +1506,10 @@ function applyProject(p){
   state.canonicalStoryStrategy = (p.canonicalStoryStrategy && typeof p.canonicalStoryStrategy === 'object') ? p.canonicalStoryStrategy : null;
   if(!state.canonicalStoryStrategy && legacyPolishCanonical && legacyPolishCanonical.machineTrace?.status==='adopted'){
     state.canonicalStoryStrategy = Object.assign({}, legacyPolishCanonical, { sourceType:'canonical_story_strategy', sourceVersion:'phase5-migrated', sourceOfTruth:'creativeBlueprint' });
+  }
+  if(state.canonicalStoryStrategy && Array.isArray(state.polishOptions) && state.polishAdopted){
+    const hit=state.polishOptions.find(o=>o.name===state.polishAdopted || o._legacyName===state.polishAdopted);
+    if(hit) state.canonicalStoryStrategy=Object.assign({},state.canonicalStoryStrategy,{candidateName:hit.name});
   }
   state.polishPendingSuggestions = (p.polishPendingSuggestions && typeof p.polishPendingSuggestions === 'object') ? p.polishPendingSuggestions : null;
   state.polishRevision = Number.isFinite(+p.polishRevision) ? +p.polishRevision : 0;
@@ -3872,8 +3887,11 @@ function normalizePolishCandidate(raw, index){
   let blueprint = rawText;
   if(!blueprint && (summary||beat)) blueprint=[summary,beat].filter(Boolean).join('\n\n');
   const title = String(r.bookTitle||r.title||extractCandidateBookName(rawText)||'').trim();
+  const generatedName = `方案${(index||0)+1}`;
   return Object.assign({}, r, {
-    name:String(r.name||r.optionName||('方案'+((index||0)+1))).trim(),
+    _legacyName:String(r.name||r.optionName||'').trim(),
+    name:generatedName,
+    candidateName:generatedName,
     bookTitle:title,
     novelSummary:summary,
     fullBookBeat:beat,
@@ -4209,12 +4227,19 @@ function applyPolishBatch(idx){
   const hist = polishHistory(); const b = hist[idx]; if(!b || !Array.isArray(b.options) || !b.options.length) return;
   if(!confirm(`整批应用「${idx+1}. ${b.label||'优化版本'}」（共 ${b.options.length} 个方案）？将覆盖当前保留的方案。`)) return;
   snapshotPolishBatch('切换前');
-  state.polishOptions = b.options.map((o,i)=>({
-    ...o, _id:String(o._id || ('polish-'+Date.now()+'-'+i)), name:o.name, text:String(o.text||o.optimizedIdea||''),
-    bookTitle:String(o.bookTitle||''), novelSummary:String(o.novelSummary||''),
-    fullBookBeat:String(o.fullBookBeat||o.bookBeat||''), optimizedIdea:String(o.optimizedIdea||o.text||''),
-  }));
-  state.polishAdopted = (b.adopted && b.options.some(o=>o.name===b.adopted)) ? b.adopted : null;
+  const batchAdopted=String(b.adopted||'').trim();
+  let batchAdoptedNew=null;
+  state.polishOptions = b.options.map((o,i)=>{
+    const legacy=String(o?.name||o?.optionName||'').trim();
+    const name=`方案${i+1}`;
+    if(batchAdopted && (batchAdopted===legacy || batchAdopted===name)) batchAdoptedNew=name;
+    return {
+      ...o, _id:String(o._id || ('polish-'+Date.now()+'-'+i)), _legacyName:String(o?._legacyName||legacy).trim(), name, candidateName:name, text:String(o.text||o.optimizedIdea||''),
+      bookTitle:String(o.bookTitle||''), novelSummary:String(o.novelSummary||''),
+      fullBookBeat:String(o.fullBookBeat||o.bookBeat||''), optimizedIdea:String(o.optimizedIdea||o.text||''),
+    };
+  });
+  state.polishAdopted = batchAdoptedNew;
   state.polishSelectedId = state.polishAdopted ? (state.polishOptions.find(o=>o.name===state.polishAdopted)?._id || null) : null;
   state.polishMode = state.polishOptions.length>1 ? 'multi' : 'single';
   state.polishStatus = state.polishAdopted ? 'adopted' : (state.polishOptions.length>1 ? 'waiting_selection' : 'ready_single');
@@ -7508,8 +7533,8 @@ HYBRID：老师根据具体章节环境、剧情状态、阶段和场景，在�
 CHAPTER：老师根据具体章节自身剧情与微拍，在实际备课时决定是否需要；由老师写入对应章节教案，不来自校长逐章预制。
 
 【STYLE_STRATEGY 输出规则】
-必须先读取【优化后写作风格·已选词条完整定义】，把全部已选词条作为唯一 GLOBAL 来源一次性输出；每个已选词条只能出现一次，不能复制到章节。
-STYLE_STRATEGY 只保留唯一 GLOBAL 与正常全书写作规则字段。globalStyleEntries / globalStyleDefinitions 是程序解析所需的唯一机器映射；不得再输出adaptiveStyle / chapterStyle等第二套动态风格来源。GLOBAL的词条资料只在这一处出现一次。
+必须先读取【优化后写作风格·已选词条完整定义】。校长只从全部权威词条中确定 GLOBAL 子集；没有进入 GLOBAL 的词条不是错误，而是必须由老师继续分配到 HYBRID / CHAPTER。每个 GLOBAL 词条只能出现一次，不能复制到章节。
+STYLE_STRATEGY 只保留唯一 GLOBAL 与正常全书写作规则字段。globalStyleEntries / globalStyleDefinitions 是程序解析所需的唯一机器映射；不得再输出adaptiveStyle / chapterStyle等第二套动态风格来源。剩余词条由JS根据 ALL-GLOBAL 稳定计算，不要求AI自行输出第二份剩余池。
 
 【PRINCIPAL_CHAPTER 职责】
 校长负责全书战略、阶段战略、老师分工、章节战略边界、chapterMiddleShape、章节功能/目标/核心事件/人物行动/时间/章末等正常战略信息。
@@ -7694,6 +7719,18 @@ function normalizePrincipalStyleStrategy(r){
   if(!out.globalStyle) out.globalStyle=[out.narrativeRule,out.dialogueRule,out.characterRule].filter(Boolean).join('；');
   // 三层职责固化：校长只输出唯一 GLOBAL；HYBRID / CHAPTER 由老师按章决定并写入教案。
   ['globalStyleEntries','globalStyleDefinitions'].forEach(k=>{const a=parsePrincipalJsonField(r?.[k],[]);out[k]=Array.isArray(a)?a:[];});
+  const catalog=principalOptimizedStyleCatalog(currentCanonicalStoryStrategy()||{});
+  const allEntries=Array.isArray(catalog?.entries)?catalog.entries:[];
+  const globalIds=principalStyleEntryIds(out.globalStyleEntries);
+  const globalSet=new Set(globalIds);
+  out.remainingStyleEntries=allEntries.filter(x=>!globalSet.has(String(x?.id||''))).map(x=>({
+    id:String(x?.id||''), name:String(x?.name||x?.id||''), definition:String(x?.note||x?.name||'').trim(),
+    attributes:Array.isArray(x?.attributes)?x.attributes:[], features:Array.isArray(x?.features)?x.features:[],
+    manifestations:Array.isArray(x?.manifestations)?x.manifestations:[], examples:Array.isArray(x?.examples)?x.examples:[],
+    tips:Array.isArray(x?.tips)?x.tips:[], avoid:Array.isArray(x?.avoid)?x.avoid:[], check:Array.isArray(x?.check)?x.check:[],
+    supplement:!!x?.supplement, reason:String(x?.reason||'').trim()
+  })).filter(x=>x.id);
+  out.allStyleEntries=allEntries.map(x=>({id:String(x?.id||''),name:String(x?.name||x?.id||''),definition:String(x?.note||x?.name||'').trim(),supplement:!!x?.supplement,reason:String(x?.reason||'').trim()})).filter(x=>x.id);
   return out;
 }
 function parsePrincipalStrategyMachine(text, total, assignment){
@@ -7725,12 +7762,12 @@ function parsePrincipalStrategyMachine(text, total, assignment){
       else if(!String(style[k]||'').trim()) errors.push(`STYLE_STRATEGY缺少${k}`);
     });
     const selected=principalOptimizedStyleCatalog(currentCanonicalStoryStrategy()||{}).entries||[], selectedIds=selected.map(x=>x.id);
-    const ge=principalStyleEntryIds(style.globalStyleEntries), all=ge;
-    const dup=all.filter((x,i)=>all.indexOf(x)!==i), unknown=all.filter(x=>!selectedIds.includes(x)), missing=selectedIds.filter(x=>!all.includes(x));
-    if(!ge.length) errors.push('STYLE_STRATEGY.globalStyleEntries至少需要一个已选写作风格词条');
+    const ge=principalStyleEntryIds(style.globalStyleEntries);
+    const dup=ge.filter((x,i)=>ge.indexOf(x)!==i), unknown=ge.filter(x=>!selectedIds.includes(x));
     if(dup.length) errors.push(`STYLE_STRATEGY写作风格词条重复分配：${[...new Set(dup)].join('、')}`);
     if(unknown.length) errors.push(`STYLE_STRATEGY包含未在当前唯一写作风格权威资料包中的词条：${[...new Set(unknown)].join('、')}`);
-    if(missing.length) errors.push(`STYLE_STRATEGY未把全部唯一权威写作风格词条纳入 GLOBAL 来源：${missing.join('、')}`);
+    // 新规则：GLOBAL 只是 ALL 的合法子集；未进入 GLOBAL 的词条自动进入 remaining，不再作为校长错误。
+    if(new Set(ge).size!==ge.length) errors.push('STYLE_STRATEGY.globalStyleEntries存在重复ID');
     const defs=parsePrincipalJsonField(style.globalStyleDefinitions,[]);
     if(Array.isArray(defs)){
       const got=defs.map(x=>String(x?.id||'').trim()).filter(Boolean);
@@ -8017,18 +8054,28 @@ function teacherStyleLayers(pr, stageRows, groupStrategy, chapterPlans){
   const defMap={};
   (Array.isArray(style.globalStyleDefinitions)?style.globalStyleDefinitions:[]).forEach(d=>{if(d&&d.id&&globalEntries.includes(String(d.id)))defMap[String(d.id)]={name:String(d.name||d.id),meaning:String(d.meaning||'').trim()};});
   globalEntries.forEach(id=>{if(defMap[id])return;const x=Array.isArray(WRITE_STYLES)?WRITE_STYLES.find(v=>String(v?.id||'')===String(id)):null;if(x)defMap[id]={name:String(x.name||id),meaning:String(x.note||x.name||'').trim()};});
-  const entriesText=globalEntries.map(id=>{const d=defMap[id]||{};return `【${d.name||id}】${d.meaning?`：${d.meaning}`:''}`;}).join('、')||'无';
+  const entriesText=globalEntries.map(id=>{const d=defMap[id]||{};return `【${d.name||id}｜ID:${id}】${d.meaning?`：${d.meaning}`:''}`;}).join('、')||'无';
+  const catalog=principalOptimizedStyleCatalog(currentCanonicalStoryStrategy()||{});
+  const allEntries=Array.isArray(catalog?.entries)?catalog.entries:[];
+  const remaining=allEntries.filter(x=>!globalEntries.includes(String(x?.id||'')));
+  const remainingText=remaining.map(x=>`- ID:${String(x.id)}｜${String(x.name||x.id)}｜原始定义：${String(x.note||x.name||'').trim()}`).join('\n')||'（无剩余词条：校长已将全部权威词条纳入GLOBAL）';
   return `【校长唯一GLOBAL来源｜全书只出现一次】
 GLOBAL：${entriesText}
 
 【校长全书恒定风格原规则】
 ${globalText}
 
+【ALL → GLOBAL → REMAINING 数据关系】
+ALL：当前唯一权威写作风格资料包全部词条。
+GLOBAL：校长从ALL中确定的合法子集。
+REMAINING：JS自动计算为ALL-GLOBAL；以下词条必须由老师最终分别归入HYBRID或CHAPTER，不能遗漏、重复或创造新ID。
+${remainingText}
+
 【老师三层职责边界｜最终责任在老师】
-以上 GLOBAL 是校长提供的唯一三层信息。你必须原义继承 GLOBAL，不得改名、改义、删除或稀释。
-HYBRID 与 CHAPTER 不再由校长预先提供，也不存在校长逐章分配结果。你必须根据每章自己的剧情、微拍、阶段环境和施工任务，自主判断是否需要 HYBRID / CHAPTER，并直接把实际施工结果写入该章教案。
-HYBRID / CHAPTER 不是第二套授权池：只能从 GLOBAL 所代表的已选风格语义中做章节级融合与局部化表达，不得凭空创造新的风格词条体系，也不得制造第二个三层数据源。
-本次老师输出中，如果某章不需要 HYBRID 或 CHAPTER，可以不写；不得为了凑齐三层强行添加。
+以上 GLOBAL 是校长唯一全书来源，必须原义继承，不得改名、改义、删除或稀释。REMAINING 是待分层的原始权威词条资料，不是第二套风格来源。
+老师必须首先完成 REMAINING → HYBRID / CHAPTER 的层级归属；每个剩余ID最终只能归入其中一层。然后再根据每章剧情决定具体在哪些章节施工。
+老师不得重新定义词条：原始定义保持不变，只能增加本章施工说明、usage、implementation等应用信息。
+如果某个剩余词条在本组不适合施工，不要擅自丢弃；应保留其ID，交由后续老师继续完成归属。
 
 【全校写作守则关联】
 ${JSON.stringify(schoolRules,null,2)}`;
@@ -8087,9 +8134,10 @@ function teacherScopedGlossary(g, gi, maxChar){
 const TEACHER_SYS = `你是长篇小说创作链中的“老师AI”。你的唯一职责是：接收校长提供的唯一全书GLOBAL与本组章节战略，结合本章剧情、微拍、人物状态、环境与施工条件，为负责章节形成可直接供正文AI执行的完整原始教案。
 
 【唯一主链】校长 → 老师 → 正文。
-【三层职责】GLOBAL只由校长确定；老师必须完整继承GLOBAL，不得重新选择、改义、弱化或创造第二套GLOBAL。HYBRID与CHAPTER只由老师按章判断、融合、详细化；校长不提供逐章HYBRID/CHAPTER答案。
+【三层职责】GLOBAL只由校长确定；老师必须完整继承GLOBAL，不得重新选择、改义、弱化或创造第二套GLOBAL。校长没有进入GLOBAL的词条会作为REMAINING原始资料交给老师；老师必须先完成REMAINING→HYBRID/CHAPTER的唯一层级归属，再按章施工。HYBRID与CHAPTER只由老师按章判断、融合、详细化。
+【风格数据硬约束】老师只能使用上游给出的原始style ID；不得自创style ID，不得改写原始definition。允许新增的只有本章施工说明、usage、implementation等应用信息。
 【正文出口】老师输出的是正文AI唯一的章节教案来源。正文不得再寻找校长原始STYLE_STRATEGY、globalStyleEntries、globalStyleDefinitions或其他旧三层对象。
-【输出原则】可以只有GLOBAL；只有在本章确有必要时才加入HYBRID或CHAPTER。不得为了凑三层制造动态层，不得建立第二套风格词条体系。
+【输出原则】最终必须让全部ALL词条都有且只有一个层级归属：GLOBAL、HYBRID或CHAPTER。GLOBAL由校长锁定；REMAINING必须全部归入HYBRID或CHAPTER。某一章可以没有HYBRID或CHAPTER，但全书不能有未分配词条。不得建立第二套风格词条体系。
 【安全原则】优先忠实执行校长战略与已成立事实；不要越权改变章节任务、人物事实、因果关系、时间连续性或章末边界。输出完整、可执行、自然语言化的老师原始教案，不生成另一套并行机器教案。`;
 
 function teacherPromptCompact(value, options={}){
@@ -8165,10 +8213,20 @@ function compileTeacherGlobal(pr){
     const x=Array.isArray(WRITE_STYLES)?WRITE_STYLES.find(v=>String(v?.id||'')===String(id)):null;
     return x?{id,name:String(x.name||id),meaning:String(x.note||'').trim()}:{id};
   }).map(teacherPromptCompact);
+  const catalog=principalOptimizedStyleCatalog(currentCanonicalStoryStrategy()||{});
+  const all=Array.isArray(catalog?.entries)?catalog.entries:[];
+  const remaining=all.filter(x=>!ids.includes(String(x?.id||''))).map(x=>({
+    id:String(x?.id||''), name:String(x?.name||x?.id||''), definition:String(x?.note||x?.name||'').trim(),
+    attributes:Array.isArray(x?.attributes)?x.attributes:[], features:Array.isArray(x?.features)?x.features:[],
+    manifestations:Array.isArray(x?.manifestations)?x.manifestations:[], examples:Array.isArray(x?.examples)?x.examples:[],
+    tips:Array.isArray(x?.tips)?x.tips:[], avoid:Array.isArray(x?.avoid)?x.avoid:[], check:Array.isArray(x?.check)?x.check:[],
+    supplement:!!x?.supplement, reason:String(x?.reason||'').trim()
+  }));
   return {
     global:globalText || '沿用已经确定的优化后写作风格。',
     selectedSemantics:entries,
-    rule:'GLOBAL 是校长唯一提供的全书风格来源；老师原义继承，不重新选择、不改义、不另建第二套GLOBAL。'
+    remainingStyleEntries:remaining,
+    rule:'GLOBAL 是校长唯一提供的全书风格来源；老师原义继承。REMAINING=ALL-GLOBAL，必须最终归入HYBRID或CHAPTER，不得遗漏、重复或改写原始定义。'
   };
 }
 function validateTeacherInjection(text){
@@ -8181,6 +8239,64 @@ function validateTeacherInjection(text){
     hasLastInjection:Boolean(t.trim())
   };
   return checks;
+}
+
+function parseTeacherStyleAllocation(raw){
+  const t=String(raw||'');
+  const layers={GLOBAL:[],HYBRID:[],CHAPTER:[]};
+  const add=(layer,id)=>{id=String(id||'').trim(); if(id && !layers[layer].includes(id)) layers[layer].push(id);};
+  // Prefer explicit layer headings/labels. Accept multiple IDs separated by common punctuation.
+  const scan=(layer)=>{
+    const re=new RegExp(`(?:^|\\n)\\s*(?:【|\\[)?${layer}(?:】|\\])?\\s*[：:=]\\s*([^\\n]+)`,`gi`);
+    let m; while((m=re.exec(t))){
+      const ids=String(m[1]||'').match(/[A-Za-z][A-Za-z0-9_-]{2,}/g)||[];
+      ids.forEach(id=>add(layer,id));
+    }
+  };
+  scan('GLOBAL'); scan('HYBRID'); scan('CHAPTER');
+  return layers;
+}
+function teacherStyleLedgerForPriorGroups(gi){
+  const groups=teacherAssignmentGroups(), idx=Number(gi)||0, assignedIds=[], byId={};
+  const seen=new Set();
+  for(let i=0;i<idx;i++){
+    const g=groups[i], t=teacherResultForAssignmentGroup(g).t;
+    if(!t?.raw) continue;
+    const a=parseTeacherStyleAllocation(t.raw);
+    for(const layer of ['GLOBAL','HYBRID','CHAPTER']){
+      for(const id of a[layer]){
+        if(layer==='GLOBAL') continue;
+        if(!seen.has(id)){seen.add(id);assignedIds.push(id);byId[id]=layer;}
+      }
+    }
+  }
+  return {assignedIds,byId};
+}
+function validateTeacherStyleCoverageAcrossGroups(){
+  const pr=principalCurrentResult()||{}, style=(pr.styleStrategy&&typeof pr.styleStrategy==='object')?pr.styleStrategy:{};
+  const allCatalog=principalOptimizedStyleCatalog(currentCanonicalStoryStrategy()||{}).entries||[];
+  const allIds=allCatalog.map(x=>String(x?.id||'')).filter(Boolean);
+  const globalIds=principalStyleEntryIds(style.globalStyleEntries);
+  const assigned={}; const duplicate=[]; const unknown=[];
+  const groups=teacherAssignmentGroups();
+  for(const g of groups){
+    const t=teacherResultForAssignmentGroup(g).t; if(!t?.raw) continue;
+    const a=parseTeacherStyleAllocation(t.raw);
+    for(const layer of ['HYBRID','CHAPTER']){
+      for(const id of a[layer]){
+        if(!allIds.includes(id)){unknown.push(id);continue;}
+        if(globalIds.includes(id)){duplicate.push(id);continue;}
+        if(assigned[id] && assigned[id]!==layer) duplicate.push(id);
+        else assigned[id]=layer;
+      }
+    }
+  }
+  const missing=allIds.filter(id=>!globalIds.includes(id)&&!assigned[id]);
+  const globalUnknown=globalIds.filter(id=>!allIds.includes(id));
+  const globalDup=globalIds.filter((id,i)=>globalIds.indexOf(id)!==i);
+  const report={all:allIds,global:[...new Set(globalIds)],hybrid:Object.keys(assigned).filter(id=>assigned[id]==='HYBRID'),chapter:Object.keys(assigned).filter(id=>assigned[id]==='CHAPTER'),missing:[...new Set(missing)],duplicate:[...new Set([...duplicate,...globalDup])],unknown:[...new Set([...unknown,...globalUnknown])],ok:false};
+  report.ok=report.missing.length===0&&report.duplicate.length===0&&report.unknown.length===0&&new Set([...report.global,...report.hybrid,...report.chapter]).size===allIds.length;
+  return report;
 }
 
 function buildTeacherUser(g,gi){
@@ -8202,7 +8318,9 @@ function buildTeacherUser(g,gi){
   lines.push(storyStateCanonBlock());
 
   const global=compileTeacherGlobal(pr);
-  lines.push(`【校长唯一GLOBAL｜全书只出现一次】\n${teacherPromptText(global,9000)}\n\n【GLOBAL使用规则】\nGLOBAL必须原义继承。HYBRID与CHAPTER不由校长逐章预分配，由老师根据每章剧情、阶段、环境、微拍和施工任务自主形成；不得建立第二套三层数据源。`);
+  const previousStyleAudit=teacherStyleLedgerForPriorGroups(gi);
+  const remainingForThisGroup=Array.isArray(global.remainingStyleEntries) ? global.remainingStyleEntries.filter(x=>!previousStyleAudit.assignedIds.includes(String(x.id))) : [];
+  lines.push(`【校长唯一GLOBAL｜全书只出现一次】\n${teacherPromptText(global,9000)}\n\n【本组风格分层接力】\n此前老师组已经完成的归属ID：${previousStyleAudit.assignedIds.join('、')||'无'}\n本组当前仍待归属ID：${remainingForThisGroup.map(x=>String(x.id)).join('、')||'无'}\n本组不是重新定义风格；如果本组负责章节确实适合某个待归属词条，请在最终教案中明确将其归入HYBRID或CHAPTER并给出本章施工说明。若不适合本组，请不要吞掉该ID，由后续老师继续接力。最后一位老师必须确保全书剩余归属为0。`);
 
   const stageRows=(pr.stageStrategies||[]).filter(x=>Number(x.endChapter)>=Number(g.first)&&Number(x.startChapter)<=Number(g.last));
   const compiledStages=compileTeacherStageRows(stageRows);
@@ -8221,7 +8339,7 @@ function buildTeacherUser(g,gi){
 
   lines.push(`【本组授权词典｜仅保留实际相关创作事实】\n${teacherScopedGlossary(g,gi,9000)}`);
   lines.push(`【前序正文状态｜连续性事实】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态；不得自行假定缺失事实）'):'（首组，无前序正文）'}`);
-  lines.push(`【最终输出执行口令】\n现在一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。不得输出摘要、章节概述或第二套机器教案。每章必须覆盖章节定位、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。GLOBAL只继承一次；HYBRID/CHAPTER由老师按章自主形成，确无必要可以不写。世界观规则必须保留并视为唯一正式来源；不得复制成第二套规则对象。输出只作为正文AI唯一章节教案来源。`);
+  lines.push(`【最终输出执行口令】\n现在一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。不得输出摘要、章节概述或第二套机器教案。每章必须覆盖章节定位、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。除正文教案外，必须在教案中明确写出本组承担的风格层级归属：HYBRID：ID｜词条名｜本章施工说明；CHAPTER：ID｜词条名｜本章施工说明；GLOBAL只引用上方唯一来源，不重新分配。不得遗漏本组已经认领的待归属ID。世界观规则必须保留并视为唯一正式来源；不得复制成第二套规则对象。输出只作为正文AI唯一章节教案来源。`);
 
   return lines.join('\n\n');
 }
@@ -8264,13 +8382,33 @@ async function genTeacher(btn, gi){
     if(!raw) throw new Error('老师返回空');
     _tp.outputChars=raw.length;
     const sc=scState(); delete sc.stale[key];
-    sc.teachers[gi]={gi,teacherCode:g.teacherCode||teacherCodeForIndex(gi),ts:Date.now(),updatedAt:Date.now(),raw,originalRaw:raw,lastInjection:{system:String(TEACHER_SYS||''),user:String(_teacherUser||'')},parseStatus:'raw-only'};
+    sc.teachers[gi]={gi,teacherCode:g.teacherCode||teacherCodeForIndex(gi),teacherGroupId:g.teacherGroupId,ts:Date.now(),updatedAt:Date.now(),raw,originalRaw:raw,lastInjection:{system:String(TEACHER_SYS||''),user:String(_teacherUser||'')},parseStatus:'raw-only'};
+    const styleAudit=validateTeacherStyleCoverageAcrossGroups();
+    sc.teachers[gi].styleAudit=styleAudit;
+    const teacherGroupsNow=teacherAssignmentGroups();
+    const isFinalTeacher=Number(gi)===teacherGroupsNow.length-1;
+    const hardStyleError=styleAudit.duplicate.length>0 || styleAudit.unknown.length>0 || (isFinalTeacher && styleAudit.missing.length>0);
+    if(hardStyleError){
+      scSetFailed(key,true);
+      scSetError(key,{category:'TEACHER_STYLE_ALLOCATION_ERROR',code:'STYLE_ALLOCATION_INCOMPLETE',details:`写作风格分层未完成：未分配=${styleAudit.missing.length}，重复=${styleAudit.duplicate.length}，未知=${styleAudit.unknown.length}`,expected:'ALL=GLOBAL+HYBRID+CHAPTER，三层互不重复且无未知ID；最后一位老师必须清零remaining',actual:styleAudit});
+      const _persistStart=performance.now(); await persistCritical('老师教案原始内容保存（风格分层未通过）');
+      _tp.persistMs=Math.round(performance.now()-_persistStart); _tp.totalLocalMs=Math.round(performance.now()-_aiStart); _tp.totalMs=Math.round(performance.now()-_tp0); _tp.status='style_gate_failed'; _tp.styleAudit=styleAudit;
+      teacherPerfRecord(gi,_tp); refreshTeacherUi(gi);
+      toast(`老师${gi+1}已保存原始教案，但写作风格分层未通过：未分配${styleAudit.missing.length}项、重复${styleAudit.duplicate.length}项、未知${styleAudit.unknown.length}项`); return false;
+    }
+    if(styleAudit.missing.length){
+      scSetError(key,null,false,false);
+      sc.teachers[gi].styleAuditStatus='PARTIAL_HANDOFF';
+    }else{
+      scSetError(key,null,false,false);
+      sc.teachers[gi].styleAuditStatus='COMPLETE';
+    }
     scSetFailed(key,false); scSetError(key,null,false,false);
     scState().noAutoRetry=scState().noAutoRetry||{}; delete scState().noAutoRetry[key];
     const _persistStart=performance.now(); await persistCritical('老师教案原始内容保存');
-    _tp.persistMs=Math.round(performance.now()-_persistStart); _tp.totalLocalMs=Math.round(performance.now()-_aiStart); _tp.totalMs=Math.round(performance.now()-_tp0); _tp.status='raw_saved';
+    _tp.persistMs=Math.round(performance.now()-_persistStart); _tp.totalLocalMs=Math.round(performance.now()-_aiStart); _tp.totalMs=Math.round(performance.now()-_tp0); _tp.status='raw_saved'; _tp.styleAudit=styleAudit;
     teacherPerfRecord(gi,_tp); markAIDone(key,false); scMark(key,true,false); refreshTeacherUi(gi);
-    toast(`老师${gi+1}备课完成；已原样保存老师AI返回的完整教案`); playDoneSound('single'); return true;
+    toast(isFinalTeacher ? `老师${gi+1}备课完成；已原样保存完整教案，且全书写作风格分层已清零通过` : (styleAudit.missing.length ? `老师${gi+1}备课完成；本组分层合法，剩余${styleAudit.missing.length}项交由后续老师接力` : `老师${gi+1}备课完成；本组已完成全部剩余风格归属`)); playDoneSound('single'); return true;
   }catch(e){
     console.error('[genTeacher] 老师流程失败：',e);
     if(e&&e.name==='AbortError'){toast('已停止备课');return false;}
@@ -9941,7 +10079,8 @@ function parseOptimizationPlainText(raw, multi){
     if(sb.fullBookBeat.length) sb.fullBookBeatText=sb.fullBookBeat.join('\n');
     const humanFromBlueprint={
       bookTitle:String(sb.optionMeta?.bookTitle||'').trim(),
-      name:String(sb.optionMeta?.name||'').trim(),
+      name:`方案${idx+1}`,
+      _legacyName:String(sb.optionMeta?.name||'').trim(),
       novelSummary:[sb.storyCore?.genre,sb.storyCore?.tone,sb.storyCore?.core_promise,sb.storyCore?.story_question].filter(Boolean).join('；'),
       optimizedIdea:[sb.protagonist?.name?`主角：${sb.protagonist.name}`:'',sb.protagonist?.goal?`目标：${sb.protagonist.goal}`:'',sb.protagonist?.growth?`成长：${sb.protagonist.growth}`:'',sb.conflict?.surface?`表层冲突：${sb.conflict.surface}`:'',sb.conflict?.deep?`深层冲突：${sb.conflict.deep}`:'',sb.world?.world_summary?`世界：${sb.world.world_summary}`:''].filter(Boolean).join('\n'),
       fullBookBeat:sb.fullBookBeatText||'',
@@ -10001,7 +10140,8 @@ function validateIdeaOptimizationTextOutput(raw, ctx){
       if(miss.length) blueprintErrors.push(`方案${i+1}继承词条${si+1}资料不完整：${miss.join('/')}`);
     }
     if(!Array.isArray(b.fullBookBeat) || b.fullBookBeat.length<3) blueprintErrors.push(`方案${i+1}的FULL_BOOK_BEAT至少需要3项`);
-    if(!b.optionMeta || typeof b.optionMeta!=='object' || !String(b.optionMeta.name||'').trim()) blueprintErrors.push(`方案${i+1}缺少OPTION_META.name`);
+    if(!b.optionMeta || typeof b.optionMeta!=='object') blueprintErrors.push(`方案${i+1}缺少OPTION_META结构块`);
+    if(!String(b.optionMeta?.bookTitle||'').trim()) blueprintErrors.push(`方案${i+1}缺少OPTION_META.bookTitle`);
     if(!Array.isArray(b.keyCharacters)) blueprintErrors.push(`方案${i+1}的KEY_CHARACTERS结构无效`);
     if(!Array.isArray(b.relationships)) blueprintErrors.push(`方案${i+1}的RELATIONSHIPS结构无效`);
   }
@@ -10427,7 +10567,6 @@ AI不得无依据地把新人物、新势力、新能力、新世界规则当成
 {
   "options":[
     {
-      "name":"方案名称",
       "bookTitle":"可直接使用的书名",
       "novelSummary":"给下游AI使用的小说简介/故事蓝本摘要，不写营销分析",
       "fullBookBeat":"完整的宏观全书节拍与阶段推进说明，可按当前章节数映射阶段；不是逐章教案",
@@ -10556,7 +10695,6 @@ AI只需要生成一种事实源：每个方案的“结构式创作蓝图”。
 【结构式创作蓝图｜唯一且唯一输出的事实源】
 每个方案必须完整输出以下区块。标签必须完全保留；字段使用“字段=内容”，列表使用“- 内容”。
 [OPTION_META]
-name=方案名称
 bookTitle=书名
 [/OPTION_META]
 [STORY_CORE]
