@@ -8,6 +8,7 @@
 /* v1.0.519 COMPLETE-TEACHER-CONTEXT: teacher AI receives the complete authoritative upstream context and returns a complete raw teaching plan. */
 /* v1.0.519 RAW-TEACHER-ONLY: the teacher AI return is saved verbatim; chapter reads are deterministic raw-text slices only. */
 'use strict';
+/* v1.0.551 SAFE-OPTIMIZATION-READER-INJECTION: 优化构想注入导出 + 读优化构想；纯读取/本地编辑；保留 canonicalStoryStrategy 唯一事实源。 */
 /* v1.0.547 SAFE-AI-CONTRACT-RETIREMENT: 旧 callAIGuarded/callAIWithContract 安全退役；保留 callDeepSeek、text、finishReason、usage、Parser/Normalize/Validator、Abort 与业务数据链；finishReason=length 不再作为统一业务失败条件。 */
 
 /* v1.0.519 IRON LAW — 本章教案传导链永久锁定：
@@ -18,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.550';
+const APP_VERSION = '1.0.551';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.550.js';
+const APP_FILE_VERSION = 'app1.0.551.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -119,6 +120,10 @@ const state = {
   // 1.0.358：canonicalStoryStrategy 是唯一权威故事事实，不再维护第二事实源。
   canonicalStoryStrategy: null,
   polishRevision: 0,
+  // v1.0.551：优化构想真实AI注入快照；仅在真正发起生成前保存，不触发AI。
+  polishInjectionSnapshot: null,
+  // v1.0.551：最终选定方案的独立正式副本；不是第二事实源，保存时同步回 canonicalStoryStrategy。
+  polishSelectedFinal: null,
   // 优化构想产生的新增实体/设定只能作为待确认建议，绝不直接进入正式词典。
   polishPendingSuggestions: null,
   // 校长一次性统筹出的逐章章末策略；后续老师/正文只读取，不重新启动校长。
@@ -1361,6 +1366,8 @@ function projectSnapshot(){
     // 1.0.358：只持久化 canonicalStoryStrategy；旧 polishCanonical 仅在加载旧存档时读取一次并迁移。
     canonicalStoryStrategy: state.canonicalStoryStrategy,
     polishRevision: state.polishRevision,
+    polishInjectionSnapshot: state.polishInjectionSnapshot || null,
+    polishSelectedFinal: state.polishSelectedFinal || null,
     polishHistory: state.polishHistory,
     polishRawFallback: state.polishRawFallback || '',
     chapters: state.chapters,
@@ -1452,6 +1459,8 @@ function applyProject(p){
   }
   state.polishPendingSuggestions = (p.polishPendingSuggestions && typeof p.polishPendingSuggestions === 'object') ? p.polishPendingSuggestions : null;
   state.polishRevision = Number.isFinite(+p.polishRevision) ? +p.polishRevision : 0;
+  state.polishInjectionSnapshot = (p.polishInjectionSnapshot && typeof p.polishInjectionSnapshot === 'object') ? p.polishInjectionSnapshot : null;
+  state.polishSelectedFinal = (p.polishSelectedFinal && typeof p.polishSelectedFinal === 'object') ? p.polishSelectedFinal : null;
   state.strategyStage1Status = ['empty','generating','ready','error'].includes(p.strategyStage1Status) ? p.strategyStage1Status : (state.originalIdeaAnchors && state.strategicDimensions?.length ? 'ready' : 'empty');
   state.strategyStage2Status = ['empty','generating','ready','adopted','error'].includes(p.strategyStage2Status) ? p.strategyStage2Status : (state.polishAdopted ? 'adopted' : (state.polishOptions?.length ? 'ready' : 'empty'));
   state.polishStatus = ['empty','generating','ready_single','waiting_selection','adopted'].includes(p.polishStatus) ? p.polishStatus : ((state.polishAdopted && state.polishOptions?.length) ? 'adopted' : (state.polishOptions?.length>1?'waiting_selection':state.polishOptions?.length?'ready_single':'empty'));
@@ -3566,6 +3575,15 @@ async function generateOptimizationConcept(btn, force){
     const ctx={multi};
     const callOpts={temperature:resolveActiveSpec().ideaTemp,maxTokens:Math.max(4500,clampMaxTokens('polish'))};
     const strictQc=state.ideaOptimizationStrictQc===true;
+    // v1.0.551：真正发起AI请求前，保存本次真实 SYSTEM + USER 快照。注入导出优先读取该快照，绝不重新生成。
+    try{
+      const snapshotSystem = String(getSystemPrompt('ideaOptimization',ctx) + globalCreativeConstraintBlock('ideaOptimization') || '');
+      const snapshotUser = String(buildAIPrompt('ideaOptimization',ctx) || '');
+      state.polishInjectionSnapshot = { system:snapshotSystem, user:snapshotUser, mode:multi?'multi':'single', createdAt:Date.now() };
+      persist();
+    }catch(snapshotErr){
+      console.warn('[Optimization injection snapshot] failed', snapshotErr);
+    }
     // 关闭严格质检：只做一次 AI 生成；不触发 validation/repair retry。
     // callDeepSeek 自身的网络层 retry 仍保留，不属于质检重试。
     const v=strictQc
@@ -3903,11 +3921,13 @@ function showPolishResult(out, multi){
   state.polishStatus = state.polishMode==='multi' ? 'waiting_selection' : 'adopted';
   state.polishRevision = Number(state.polishRevision||0) + 1;
   if(state.polishMode!=='multi'){
+    state.polishSelectedFinal=JSON.parse(JSON.stringify(state.polishOptions[0]));
     syncPolishMetaFromCandidate(state.polishOptions[0]);
     state.canonicalStoryStrategy=buildPolishCanonical(state.polishOptions[0],state.polishRevision);
     state.canonicalStoryStrategy=Object.assign({}, state.canonicalStoryStrategy, { sourceType:'canonical_story_strategy', sourceVersion:'phase5', sourceOfTruth:'creativeBlueprint', machineTrace:Object.assign({}, state.canonicalStoryStrategy.machineTrace||{}, {status:'adopted'}) });
     invalidateAfterStoryStrategyChange();
   }else{
+    state.polishSelectedFinal=null;
     state.canonicalStoryStrategy=null;
     state.polishDiagnosis=null;
     state.polishStrategies=[];
@@ -4034,6 +4054,7 @@ function renderPolishCards(container){
       if(dictmasterLocked()){ toast('词典达人已产出基础词典，优化构想已锁定，不可更换'); return; }
       state.polishAdopted = o.name || null;
       state.polishSelectedId = o._id || null;
+      state.polishSelectedFinal = JSON.parse(JSON.stringify(o));
       state.polishStatus = 'adopted';
       state.strategyStage2Status = 'adopted';
       state.polishRevision = Number(state.polishRevision||0) + 1;
@@ -4060,6 +4081,8 @@ function renderPolishCards(container){
 }
 
 function bindPolishIdea(){
+  const inj=$('#btnOptimizationInjectionExport'); if(inj) inj.onclick=(e)=>{e.preventDefault();e.stopPropagation();openOptimizationInjectionExport();};
+  const reader=$('#btnOptimizationReader'); if(reader) reader.onclick=(e)=>{e.preventDefault();e.stopPropagation();openOptimizationReader();};
   const b = $('#btnOptimizationConcept');
   if(b) b.onclick = async ()=>{
     b.classList.remove('app-opt-btn-pressed');
@@ -4080,7 +4103,7 @@ function bindPolishIdea(){
       chk.disabled = false;
     };
     sync();
-    chk.onchange = ()=>{ polishMulti = !!chk.checked; state.polishMode = polishMulti?'multi':'single'; if(Array.isArray(state.polishOptions)&&state.polishOptions.length){ state.polishStatus='empty'; state.strategyStage2Status='empty'; state.polishSelectedId=null; state.polishAdopted=null; state.canonicalStoryStrategy=null; state.polishDiagnosis=null; state.polishStrategies=[]; } persist(); render(); };
+    chk.onchange = ()=>{ polishMulti = !!chk.checked; state.polishMode = polishMulti?'multi':'single'; if(Array.isArray(state.polishOptions)&&state.polishOptions.length){ state.polishStatus='empty'; state.strategyStage2Status='empty'; state.polishSelectedId=null; state.polishAdopted=null; state.polishSelectedFinal=null; state.canonicalStoryStrategy=null; state.polishDiagnosis=null; state.polishStrategies=[]; } persist(); render(); };
     const idea = $('#ideaInput');
     if(idea) idea.oninput = ()=>{ state.idea = idea.value; sync(); syncOrigIdeaCard(); };
   }
@@ -4102,6 +4125,7 @@ function bindPolishIdea(){
     snapshotPolishBatch('清除前');   // 归档当前批，之后仍可在「优化版本」找回
     delete state.polishOptions;
     delete state.polishAdopted;
+    state.polishSelectedFinal = null;
     state.polishSelectedId = null;
     state.polishStatus = 'empty';
     persist(); render();
@@ -8649,6 +8673,150 @@ function principalInjectionData(){
   if(!system || !user) return null;
   return {system,user,label:'校长'};
 }
+function optimizationInjectionData(){
+  const snap=state.polishInjectionSnapshot;
+  if(snap && typeof snap==='object' && String(snap.system||'').trim() && String(snap.user||'').trim()){
+    return {system:String(snap.system),user:String(snap.user),mode:String(snap.mode||state.polishMode||'single'),createdAt:Number(snap.createdAt)||0,fromSnapshot:true};
+  }
+  // 兼容没有快照的旧项目：只在用户点击导出时重新组装当前真实生成路径，不调用AI。
+  const ctx={multi:state.polishMode==='multi'};
+  try{
+    return {system:String(getSystemPrompt('ideaOptimization',ctx)+globalCreativeConstraintBlock('ideaOptimization')||''),user:String(buildAIPrompt('ideaOptimization',ctx)||''),mode:ctx.multi?'multi':'single',createdAt:0,fromSnapshot:false};
+  }catch(e){ return null; }
+}
+function optimizationInjectionFileName(){ return `优化构想_注入_${Date.now()}.txt`; }
+function openOptimizationInjectionExport(){
+  const inj=optimizationInjectionData();
+  if(!inj || !String(inj.system||'').trim() || !String(inj.user||'').trim()){ toast('优化构想尚未生成，暂时没有可导出的真实 AI 注入'); return; }
+  const text=`【SYSTEM】\n${inj.system}\n\n【USER】\n${inj.user}`;
+  const ov=document.createElement('div'); ov.className='gs-overlay optimization-injection-overlay';
+  ov.innerHTML=`<div class="gs-modal optimization-injection-modal" role="dialog" aria-modal="true" aria-label="优化构想注入导出">
+    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div><b>✨ 优化构想 · 注入导出</b><span class="muted" style="margin-left:8px;font-size:11px">优化构想真实 AI 请求 · SYSTEM + USER</span></div>
+      <button type="button" class="gs-x" data-oi-close>✕</button>
+    </div>
+    <div style="padding:12px 16px;flex:1;min-height:0;display:flex">
+      <textarea class="optimization-injection-text" readonly spellcheck="false" style="display:block;width:100%;height:100%;min-height:420px;box-sizing:border-box;resize:none;overflow:auto;white-space:pre-wrap;word-break:break-word;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;padding:0 16px 16px;flex:0 0 auto">
+      <button type="button" class="btn" data-oi-copy>复制</button>
+      <button type="button" class="btn primary" data-oi-txt>导出TXT</button>
+    </div>
+  </div>`;
+  if(!document.getElementById('optimizationInjectionExportStyle')){
+    const st=document.createElement('style'); st.id='optimizationInjectionExportStyle'; st.textContent='.optimization-injection-overlay{z-index:10060!important}.optimization-injection-modal{width:min(920px,90vw)!important;height:min(760px,84vh)!important;max-width:none!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}@media(max-width:600px){.optimization-injection-modal{width:94vw!important;height:84vh!important}}'; document.head.appendChild(st);
+  }
+  document.body.appendChild(ov);
+  const ta=ov.querySelector('.optimization-injection-text'); ta.value=text;
+  const close=()=>ov.remove();
+  ov.querySelector('[data-oi-close]').onclick=close;
+  ov.addEventListener('click',e=>{
+    if(e.target===ov) close();
+    const cp=e.target.closest('[data-oi-copy]'); if(cp){e.preventDefault();e.stopPropagation();copyText(text);toast('优化构想注入已复制');}
+    const ex=e.target.closest('[data-oi-txt]'); if(ex){e.preventDefault();e.stopPropagation();downloadPlainText(optimizationInjectionFileName(),text);toast('优化构想注入 TXT 已导出');}
+  });
+  ta.focus(); ta.setSelectionRange(0,0); ta.scrollTop=0;
+}
+function polishCandidateToStructuredText(o, index){
+  const b=o?.structuredBlueprint||{}; const lines=[];
+  const kv=(obj)=>Object.entries(obj||{}).filter(([,v])=>v!==undefined&&v!==null&&String(v).trim()!=='').map(([k,v])=>`${k}：${typeof v==='string'?v:JSON.stringify(v)}`);
+  const list=(arr,mapper)=>Array.isArray(arr)?arr.map(mapper).filter(Boolean):[];
+  lines.push(`[OPTION_META]`,`name：${String(o?.name||`方案${index+1}`)}`,`bookTitle：${String(o?.bookTitle||b.optionMeta?.bookTitle||'')}`,'[/OPTION_META]');
+  lines.push(`[STORY_CORE]`,...kv(b.storyCore),'[/STORY_CORE]');
+  lines.push(`[PROTAGONIST]`,...kv(b.protagonist),'[/PROTAGONIST]');
+  lines.push(`[KEY_CHARACTERS]`,...list(b.keyCharacters,x=>`- ${[x?.name,x?.identity,x?.role,x?.relation].map(v=>String(v||'')).join('｜')}`),'[/KEY_CHARACTERS]');
+  lines.push(`[RELATIONSHIPS]`,...list(b.relationships,x=>`- ${[x?.from,x?.to,x?.relation].map(v=>String(v||'')).join('｜')}`),'[/RELATIONSHIPS]');
+  lines.push(`[WORLD]`,...kv(b.world),'[/WORLD]');
+  lines.push(`[CONFLICT]`,...kv(b.conflict),'[/CONFLICT]');
+  lines.push(`[STORY_ARC]`,...kv(b.storyArc),'[/STORY_ARC]');
+  lines.push(`[FULL_BOOK_BEAT]`,...list(b.fullBookBeat,x=>`- ${String(x||'')}`),'[/FULL_BOOK_BEAT]');
+  const wsp=b.writingStyleInheritanceSupplement||o?.writingStyleInheritanceSupplement||{};
+  lines.push(`[WRITING_STYLE_INHERITANCE_SUPPLEMENT]`,`source：${String(wsp.source||'optimization_concept')}`,`supplementStatus：${String(wsp.supplementStatus||'none')}`,'INHERITANCE',...list(wsp.inheritance,x=>`- ${[x?.id,x?.name,x?.definition,x?.attributes,x?.features,x?.manifestations,x?.examples].map(v=>String(v||'')).join('｜')}`),'SUPPLEMENTS',...list(wsp.supplements,x=>`- ${[x?.id,x?.name,x?.definition,x?.attributes,x?.features,x?.manifestations,x?.examples,x?.reason].map(v=>String(v||'')).join('｜')}`),'[/WRITING_STYLE_INHERITANCE_SUPPLEMENT]');
+  return lines.join('\n');
+}
+function polishOptionsToStructuredText(){
+  const opts=Array.isArray(state.polishOptions)?state.polishOptions:[];
+  if(!opts.length) return '';
+  const out=[polishAnalysisHeader(),''];
+  opts.forEach((o,i)=>{ out.push(`【方案${i+1}｜${o.name||`方案${i+1}`}】`,polishCandidateToStructuredText(o,i),''); });
+  return out.join('\n').trim();
+}
+function polishAnalysisHeader(){
+  const analysis=Array.isArray(state.polishOptions)&&state.polishOptions[0]?.originalAnchors ? state.polishOptions[0].originalAnchors : (state.originalIdeaAnchors||{});
+  const dims=Array.isArray(state.strategicDimensions)&&state.strategicDimensions.length ? state.strategicDimensions : ((state.polishOptions||[])[0]?.strategicDimensions||[]);
+  const dp=(state.strategicDiversityProfile||((state.polishOptions||[])[0]?.diversityProfile)||{});
+  return ['【原始构想锚点】',`人物：${(analysis.characters||[]).join('、')}`,`关系：${(analysis.relationships||[]).join('、')}`,`目标：${(analysis.goals||[]).join('、')}`,`核心冲突：${analysis.coreConflict||''}`,`固定事实：${(analysis.fixedFacts||[]).join('、')}`,'','【动态战略维度】',...dims.map(d=>`- ${d?.name||''}｜${d?.description||''}｜契合：${d?.whyFit||''}`),'','【战略多样性】',`固定核心：${(dp.fixedCore||[]).join('、')}`,`可变轴：${(dp.variableAxes||[]).join('、')}`,`避免重复：${(dp.avoidRepetition||[]).join('、')}`,`推荐组合：${dp.recommendedMix||''}`,''].join('\n');
+}
+function parseEditedPolishText(text,multi){
+  const src=String(text||'').trim();
+  if(multi || /【原始构想锚点】|【动态战略维度】|【战略多样性】/i.test(src)) return parseOptimizationPlainText(src,!!multi);
+  return parseOptimizationPlainText(`${polishAnalysisHeader()}\n${src}`,false);
+}
+function openOptimizationReader(){
+  const opts=Array.isArray(state.polishOptions)?state.polishOptions:[];
+  if(!opts.length && !state.polishSelectedFinal && !state.canonicalStoryStrategy){ toast('优化构想尚未生成'); return; }
+  const multiText=polishOptionsToStructuredText();
+  const selectedObj=state.polishSelectedFinal || (state.canonicalStoryStrategy ? canonicalToPolishCandidate(state.canonicalStoryStrategy) : (state.polishSelectedId ? opts.find(o=>o._id===state.polishSelectedId) : null));
+  const selectedText=selectedObj ? polishCandidateToStructuredText(selectedObj,Math.max(0,opts.findIndex(o=>o._id===selectedObj._id))) : '';
+  const baseline={multiText,selectedText};
+  const ov=document.createElement('div'); ov.className='gs-overlay optimization-reader-overlay';
+  ov.innerHTML=`<div class="gs-modal optimization-reader-modal" role="dialog" aria-modal="true" aria-label="读优化构想">
+    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><b>📖 读优化构想</b><span class="muted" style="margin-left:8px;font-size:11px">优化构想资料查看与人工校正中心 · 不调用 AI</span></div><button type="button" class="gs-x" data-or-close>✕</button></div>
+    <div class="optimization-reader-tabs" style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap"><button class="btn small primary" data-or-tab="multi">多方案</button><button class="btn small ghost" data-or-tab="selected">最终选定方案</button><span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px">方案编号：<input type="number" min="1" max="${Math.max(1,opts.length)}" value="${Math.max(1,state.polishSelectedId?opts.findIndex(o=>o._id===state.polishSelectedId)+1:1)}" data-or-number style="width:64px"><button class="btn small" data-or-convert>保存</button></span></div>
+    <div style="padding:12px 16px;flex:1;min-height:0;display:flex"><textarea class="optimization-reader-text" spellcheck="false" style="display:block;width:100%;height:100%;min-height:420px;box-sizing:border-box;resize:none;overflow:auto;white-space:pre-wrap;word-break:break-word;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;padding:0 16px 16px;flex-wrap:wrap"><button class="btn ghost" data-or-restore>恢复成没修改前的内容</button><button class="btn primary" data-or-save>保存当前更改</button></div>
+  </div>`;
+  if(!document.getElementById('optimizationReaderStyle')){ const st=document.createElement('style'); st.id='optimizationReaderStyle'; st.textContent='.optimization-reader-overlay{z-index:10061!important}.optimization-reader-modal{width:min(980px,92vw)!important;height:min(800px,88vh)!important;max-width:none!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}@media(max-width:600px){.optimization-reader-modal{width:95vw!important;height:86vh!important}.optimization-reader-tabs{align-items:flex-start!important}}'; document.head.appendChild(st); }
+  document.body.appendChild(ov);
+  const ta=ov.querySelector('.optimization-reader-text'); let tab='multi'; let bases={...baseline};
+  const renderTab=()=>{ ta.value=tab==='multi'?bases.multiText:bases.selectedText; ov.querySelectorAll('[data-or-tab]').forEach(b=>{b.classList.toggle('primary',b.dataset.orTab===tab);b.classList.toggle('ghost',b.dataset.orTab!==tab);}); };
+  renderTab();
+  ov.querySelector('[data-or-close]').onclick=()=>ov.remove();
+  ov.addEventListener('click',e=>{
+    if(e.target===ov) ov.remove();
+    const tb=e.target.closest('[data-or-tab]'); if(tb){ if(tab==='multi') bases.multiText=ta.value; else bases.selectedText=ta.value; tab=tb.dataset.orTab; renderTab(); }
+    const rs=e.target.closest('[data-or-restore]'); if(rs){ta.value=tab==='multi'?baseline.multiText:baseline.selectedText;}
+    const sv=e.target.closest('[data-or-save]'); if(sv){
+      if(tab==='multi') bases.multiText=ta.value; else bases.selectedText=ta.value;
+      const parsed=parseEditedPolishText(tab==='multi'?bases.multiText:bases.selectedText,tab==='multi');
+      if(!parsed.ok){ toast('保存失败：'+(parsed.error||'结构化纯文本解析失败')); return; }
+      if(tab==='multi'){
+        const old=Array.isArray(state.polishOptions)?state.polishOptions:[];
+        state.polishOptions=parsed.options.map((o,i)=>Object.assign({},old[i]||{},o,{_id:String(old[i]?._id||('polish-'+Date.now()+'-'+i)),name:String(o.name||old[i]?.name||`方案${i+1}`),_v45:(old[i] && old[i]._v45 ? old[i]._v45 : {})}));
+        persist(); render(); toast('多方案修改已保存');
+        bases.multiText=polishOptionsToStructuredText(); baseline.multiText=bases.multiText;
+      }else{
+        const o=parsed.options[0]; if(!o){toast('保存失败：没有最终方案');return;}
+        const idx=state.polishOptions?.findIndex(x=>x._id===state.polishSelectedId) ?? -1;
+        const old=idx>=0?state.polishOptions[idx]:null;
+        const merged=Object.assign({},old||{},o,{_id:String(old?._id||('polish-final-'+Date.now())),name:String(o.name||old?.name||'最终选定方案')});
+        state.polishSelectedFinal=merged;
+        state.polishRevision=Number(state.polishRevision||0)+1;
+        state.canonicalStoryStrategy=buildPolishCanonical(merged,state.polishRevision);
+        state.canonicalStoryStrategy=Object.assign({},state.canonicalStoryStrategy,{sourceType:'canonical_story_strategy',sourceVersion:'phase5',sourceOfTruth:'creativeBlueprint',machineTrace:Object.assign({},state.canonicalStoryStrategy.machineTrace||{},{status:'adopted'})});
+        syncPolishMetaFromCandidate(merged); invalidateAfterStoryStrategyChange(); persist(); render(); toast('最终选定方案修改已保存，并已同步正式故事战略');
+        bases.selectedText=polishCandidateToStructuredText(merged,idx>=0?idx:0); baseline.selectedText=bases.selectedText;
+      }
+    }
+    const cv=e.target.closest('[data-or-convert]'); if(cv){
+      const n=Number(ov.querySelector('[data-or-number]')?.value); const max=Array.isArray(state.polishOptions)?state.polishOptions.length:0;
+      if(!Number.isInteger(n)||n<1||n>max){toast('请输入有效的方案编号');return;}
+      const o=state.polishOptions[n-1]; if(!o){toast('请输入有效的方案编号');return;}
+      if(dictmasterLocked()){toast('词典达人已产出基础词典，优化构想已锁定，不可更换');return;}
+      state.polishSelectedId=o._id||null; state.polishAdopted=o.name||`方案${n}`; state.polishStatus='adopted'; state.strategyStage2Status='adopted'; state.polishRevision=Number(state.polishRevision||0)+1;
+      const copy=JSON.parse(JSON.stringify(o)); state.polishSelectedFinal=copy; syncPolishMetaFromCandidate(copy); state.canonicalStoryStrategy=buildPolishCanonical(copy,state.polishRevision); state.canonicalStoryStrategy=Object.assign({},state.canonicalStoryStrategy,{sourceType:'canonical_story_strategy',sourceVersion:'phase5',sourceOfTruth:'creativeBlueprint',machineTrace:Object.assign({},state.canonicalStoryStrategy.machineTrace||{},{status:'adopted'})}); invalidateAfterStoryStrategyChange(); persist();
+      bases.selectedText=polishCandidateToStructuredText(copy,n-1); baseline.selectedText=bases.selectedText; tab='selected'; renderTab(); toast(`已将方案${n}转换为最终选定方案`); render();
+    }
+  });
+  ta.addEventListener('input',()=>{ /* 本地编辑，不触发AI */ });
+  ta.focus();
+}
+function canonicalToPolishCandidate(c){
+  if(!c||typeof c!=='object') return null;
+  const h=c.humanView||{}; const b=c.creativeBlueprint||{};
+  return { _id:String(c.candidateId||''), name:String(c.candidateName||'最终选定方案'), bookTitle:String(h.bookTitle||''), novelSummary:String(h.novelSummary||''), optimizedIdea:String(h.optimizedIdea||''), fullBookBeat:String(h.fullBookBeat||''), structuredBlueprint:b, strategicDimensions:Array.isArray(c.strategicDimensions)?JSON.parse(JSON.stringify(c.strategicDimensions)):[], strategyFingerprint:c.strategyFingerprint||{}, originalAnchors:c.originalAnchors||{}, diversityProfile:c.diversityProfile||{}, writingStyleInheritanceSupplement:b.writingStyleInheritanceSupplement||{source:'optimization_concept',supplementStatus:'none',inheritance:[],supplements:[]}};
+}
+
 function principalInjectionFileName(){
   const id=String(state?.school?.principal?.ts||Date.now());
   return `校长_注入_${id}.txt`;
@@ -12315,6 +12483,10 @@ function viewStory(){
           <div style="margin:7px 0 10px;font-size:12px;line-height:1.7;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span style="flex:1 1 auto">${(state.strategyStage1Status==='ready'&&state.strategyStage2Status==='ready')?'✅ 已完成：战略分析已融入优化构想生成':'AI会先在内部分析动态战略维度，再直接生成最终优化构想；战略分析不会作为独立操作步骤。'}</span>
             <label title="开启后：严格质检失败会触发定向自动修复重试；关闭后：不做质检驱动重试，仅保留网络层重试。" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer;font-size:11px;opacity:.82"><input type="checkbox" id="chkPolishStrictQc" ${state.ideaOptimizationStrictQc===true?'checked':''}> 严格质检</label>
+            <span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <button type="button" class="btn small" id="btnOptimizationInjectionExport" title="查看优化构想真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;font-weight:700">📦 注入导出</button>
+              <button type="button" class="btn small" id="btnOptimizationReader" title="查看并人工编辑优化构想资料" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 55%,#14b8a6 100%);color:#fff;border:0;font-weight:700">📖 读优化构想</button>
+            </span>
           </div>
           <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}">
             <div class="pol-head"><b>✨ 方案比选</b>
