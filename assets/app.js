@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.561';
+const APP_VERSION = '1.0.562';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.561.js';
+const APP_FILE_VERSION = 'app1.0.562.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -86,7 +86,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.561.js — 校长注入链安全去重：唯一GLOBAL来源、合并重复风格资料、移除重复上下文包装。 */
+/* APP VERSION: app1.0.562.js — 校长注入链安全去重：唯一GLOBAL来源、合并重复风格资料、移除重复上下文包装。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -3616,8 +3616,8 @@ async function generateOptimizationConcept(btn, force){
   if(!idea){ toast('请先输入故事构想'); return false; }
   const kept=Array.isArray(state.polishOptions)&&state.polishOptions.length;
   if(kept && !force){ if(!confirm(`已有 ${kept} 个优化方案，重新生成将覆盖当前批次。继续？`)) return false; }
-  const multi=polishMulti===true;
-  state.polishMode=multi?'multi':'single';
+  // v1.0.562：优化构想固定四方案，不再读取单/多方案开关，也不进入质检/修复链。
+  state.polishMode='four';
   state.strategyStage1Status='generating';
   state.strategyStage2Status='generating';
   state.polishStatus='generating';
@@ -3625,54 +3625,36 @@ async function generateOptimizationConcept(btn, force){
   state.polishOptions=[]; state.strategicDimensions=[]; state.strategicDiversityProfile=null; state.originalIdeaAnchors=null;
   state.polishDiagnosis=null; state.polishStrategies=[]; state.polishFailureTrace=null; state.polishRawFallback='';
   persist();
-  const live=$('#btnOptimizationConcept'); if(live) busy(live,true,multi?'✨ 正在生成3—5个优化构想…':'✨ 正在生成优化构想…');
+  const live=$('#btnOptimizationConcept'); if(live) busy(live,true,'✨ 正在生成4个优化构想…');
   markAIRunning('ideaOptimization'); markAIRunning('idea');
   try{
-    const ctx={multi};
+    const ctx={originalAnchors:null,strategicDimensions:[],diversityProfile:null};
     const callOpts={temperature:resolveActiveSpec().ideaTemp,maxTokens:Math.max(4500,clampMaxTokens('polish'))};
-    const strictQc=state.ideaOptimizationStrictQc===true;
-    // v1.0.551：真正发起AI请求前，保存本次真实 SYSTEM + USER 快照。注入导出优先读取该快照，绝不重新生成。
+    // 真正发起AI请求前，保存本次真实 SYSTEM + USER 快照；注入导出只读取快照，绝不重新生成。
     try{
       const snapshotSystem = String(getSystemPrompt('ideaOptimization',ctx) + globalCreativeConstraintBlock('ideaOptimization') || '');
       const snapshotUser = String(buildAIPrompt('ideaOptimization',ctx) || '');
-      state.polishInjectionSnapshot = { system:snapshotSystem, user:snapshotUser, mode:multi?'multi':'single', createdAt:Date.now() };
+      state.polishInjectionSnapshot = { system:snapshotSystem, user:snapshotUser, mode:'four', createdAt:Date.now() };
       persist();
     }catch(snapshotErr){
       console.warn('[Optimization injection snapshot] failed', snapshotErr);
     }
-    // 关闭严格质检：只做一次 AI 生成；不触发 validation/repair retry。
-    // callDeepSeek 自身的网络层 retry 仍保留，不属于质检重试。
-    const v=strictQc
-      ? await callValidatedWithRepair('ideaOptimization',ctx,callOpts,ctx)
-      : await generateOptimizationRaw(callOpts,ctx);
+    // 固定单次 AI 请求：不调用 callValidatedWithRepair，不增加自动修复/质检请求。
+    const v=await generateOptimizationRaw(callOpts,ctx);
     state.polishRawFallback=String(v.raw||'').trim();
-    const parsed=parseOptimizationPlainText(v.raw,multi);
-    if(!parsed.ok){
-      if(strictQc) throw new Error(parsed.error||'优化构想纯文本解析失败');
-      addGenerationDiagnostic('ideaOptimization',{type:'STRUCTURE',code:'OPTIMIZATION_PARSE_PARTIAL',details:parsed.error||'优化构想纯文本解析失败；已保留原始AI输出，质检关闭不阻挡完成。',blocking:false});
-      const rawText=String(v.raw||'').trim();
-      state.polishOptions=rawText ? [{_id:'polish-'+Date.now(),name:'AI原始方案',text:rawText,optimizedIdea:rawText,_rawFallback:true}] : [];
-      state.polishSelectedId=multi?null:(state.polishOptions[0]?state.polishOptions[0]._id:null);
-      state.polishAdopted=multi?null:(state.polishOptions[0]?state.polishOptions[0].name:null);
-      state.polishStatus=multi?'waiting_selection':'ready_single';
-      state.strategyStage1Status='ready';
-      state.strategyStage2Status='ready';
-      markAIDone('ideaOptimization'); markAIDone('idea');
-      persist(); refreshPolishUi(); queueGenerationFocus('#polishBox',120);
-      toast('优化构想已生成：严格质检关闭，已保留AI原始结果');
-      return true;
-    }
+    const parsed=parseOptimizationPlainText(v.raw);
+    if(!parsed.ok) throw new Error(parsed.error||'优化构想四方案解析失败');
     state.originalIdeaAnchors=parsed.analysis.originalAnchors;
     state.strategicDimensions=parsed.analysis.strategicDimensions;
     state.strategicDiversityProfile=parsed.analysis.diversityProfile;
     state.polishStrategyTrace={ts:Date.now(),originalAnchors:state.originalIdeaAnchors,strategicDimensions:state.strategicDimensions};
-    showPolishResult(v.raw,multi);
+    showPolishResult(v.raw);
     state.strategyStage1Status='ready';
     state.strategyStage2Status='ready';
     state.polishFailureTrace=null; state.polishRawFallback='';
     markAIDone('ideaOptimization'); markAIDone('idea');
     persist();
-    toast(multi?`优化构想完成：已生成 ${state.polishOptions.length} 个方案`:'优化构想完成：已生成最终方案');
+    toast(`优化构想完成：已生成 ${state.polishOptions.length} 个方案`);
     playEventSound('polish_done');
     refreshPolishUi();
     queueGenerationFocus('#polishBox',120);
@@ -3683,6 +3665,7 @@ async function generateOptimizationConcept(btn, force){
     toast('优化构想生成失败：'+e.message); reportSoundError('polish',e); persist(); refreshPolishUi(); queueGenerationFocus('#polishBox',120); return false;
   }finally{
     state.aiNetwork.running=(state.aiNetwork.running||[]).filter(k=>!['ideaOptimization','ideaStrategy','ideaPolishStage2','idea'].includes(k));
+    const live2=$('#btnOptimizationConcept'); if(live2) busy(live2,false);
   }
 }
 
@@ -3941,17 +3924,17 @@ function refreshPolishUi(){
   if(cards) renderPolishCards(cards);
 }
 
-function showPolishResult(out, multi){
+function showPolishResult(out){
   const box=$('#polishBox'), cards=$('#polishCards');
   const rawText=String(out||'').trim();
   state.polishRawFallback = rawText;
   if(!rawText){ toast('优化失败：AI没有返回内容'); return; }
-  const parsed=parseOptimizationPlainText(out, !!multi);
+  const parsed=parseOptimizationPlainText(out);
   if(!parsed.ok) throw new Error(`结构式创作蓝图解析失败：${parsed.error||'未知错误'}`);
   const opts=parsed.options;
-  polishDebugTrace('parsed-structured-blueprint', out, opts, {multi:!!multi, firstKeys:opts[0]?Object.keys(opts[0]).slice(0,20):[]});
+  polishDebugTrace('parsed-structured-blueprint', out, opts, {fixedFour:true, firstKeys:opts[0]?Object.keys(opts[0]).slice(0,20):[]});
   if(!opts.length) throw new Error('第二阶段解析失败：未形成结构化优化方案');
-  if(multi && (opts.length<3 || opts.length>5)) throw new Error(`第二阶段解析失败：得到 ${opts.length} 个方案，要求3-5个`);
+  if(opts.length!==4) throw new Error(`优化构想解析失败：得到 ${opts.length} 个方案，固定要求4个`);
   state.polishOptions=opts;
   const pickV45=(o)=>({
     defects:Array.isArray(o?.defects)?o.defects:[],
@@ -3968,6 +3951,7 @@ function showPolishResult(out, multi){
   state.polishOptions=state.polishOptions.map((o,i)=>Object.assign({},o,{
     _id:String(o._id||('polish-'+Date.now()+'-'+i)),
     name:String(o.name||('方案'+(i+1))),
+    adherence:[100,80,50,30][i],
     text:String(o.text||o.optimizedIdea||o.novelSummary||o.fullBookBeat||rawText).trim(),
     _v45:pickV45(o)
   }));
@@ -3975,22 +3959,15 @@ function showPolishResult(out, multi){
   // 方案自身采用的战略维度只保存在 candidate.strategicDimensions，并在采用后进入 canonicalStoryStrategy。
   // 第一阶段 originalIdeaAnchors 是只读权威源；第二阶段解析不得反向覆盖它。
   // 当前生成批次只属于本次优化构想，不自动写入历史；历史仅在用户明确执行清除/切换等操作时建立快照。
-  state.polishSelectedId = state.polishMode==='multi' ? null : state.polishOptions[0]._id;
-  state.polishAdopted = state.polishMode==='multi' ? null : (state.polishOptions[0].name||'方案1');
-  state.polishStatus = state.polishMode==='multi' ? 'waiting_selection' : 'adopted';
+  state.polishMode='four';
+  state.polishSelectedId = null;
+  state.polishAdopted = null;
+  state.polishStatus = 'waiting_selection';
   state.polishRevision = Number(state.polishRevision||0) + 1;
-  if(state.polishMode!=='multi'){
-    state.polishSelectedFinal=JSON.parse(JSON.stringify(state.polishOptions[0]));
-    syncPolishMetaFromCandidate(state.polishOptions[0]);
-    state.canonicalStoryStrategy=buildPolishCanonical(state.polishOptions[0],state.polishRevision);
-    state.canonicalStoryStrategy=Object.assign({}, state.canonicalStoryStrategy, { sourceType:'canonical_story_strategy', sourceVersion:'phase5', sourceOfTruth:'creativeBlueprint', machineTrace:Object.assign({}, state.canonicalStoryStrategy.machineTrace||{}, {status:'adopted'}) });
-    invalidateAfterStoryStrategyChange();
-  }else{
-    state.polishSelectedFinal=null;
-    state.canonicalStoryStrategy=null;
-    state.polishDiagnosis=null;
-    state.polishStrategies=[];
-  }
+  state.polishSelectedFinal=null;
+  state.canonicalStoryStrategy=null;
+  state.polishDiagnosis=null;
+  state.polishStrategies=[];
   persist();
   if(box && cards){ box.style.display='block'; renderPolishCards(cards); }
 }
@@ -4081,6 +4058,7 @@ function renderPolishCards(container){
     const c = POLISH_PALETTE[i % POLISH_PALETTE.length];
     const name = o.name || ('方案'+(i+1));
     const isAdopted = !!adopted && adopted === name;
+    const adherence = [100,80,50,30][i];
     const defects = (o._v45 && Array.isArray(o._v45.defects)) ? o._v45.defects.filter(d=>String(d||'').trim()) : [];
     const hasV45 = !!(o._v45 && (o._v45.navBeacon || (o._v45.seedCharacters&&o._v45.seedCharacters.length) || (o._v45.seedPlaces&&o._v45.seedPlaces.length)));
     const displaySource = String(o.text||o.optimizedIdea||o.novelSummary||o.fullBookBeat||'').trim();
@@ -4090,6 +4068,7 @@ function renderPolishCards(container){
       <div class="pol-cand-head">
         <span class="pol-no" style="background:${c}">${i+1}</span>
         <b class="pol-name" style="color:${c}">${esc(name)}</b>
+        <span class="pol-adopted-tag" style="opacity:.85">${adherence}%贴合</span>
         ${isAdopted?'<span class="pol-adopted-tag">✔ 已采用</span>':''}
         <span class="pol-cand-actions">
           <button type="button" class="btn small ghost" data-pol-copy="${i}" title="复制此方案">📋 复制</button>
@@ -4150,22 +4129,8 @@ function bindPolishIdea(){
     setTimeout(()=>b.classList.remove('app-opt-btn-pressed'),320);
     await generateOptimizationConcept(b, true);
   };
-  const strictChk = $('#chkPolishStrictQc');
-  if(strictChk){
-    strictChk.checked = state.ideaOptimizationStrictQc === true;
-    strictChk.onchange = ()=>{ state.ideaOptimizationStrictQc = !!strictChk.checked; persist(); toast(state.ideaOptimizationStrictQc?'已开启优化构想严格质检与自动修复重试':'已关闭优化构想严格质检与自动修复重试'); };
-  }
-  const chk = $('#chkPolishMulti');
-  if(chk){
-    const sync = ()=>{
-      chk.checked = polishMulti === true;
-      chk.disabled = false;
-    };
-    sync();
-    chk.onchange = ()=>{ polishMulti = !!chk.checked; state.polishMode = polishMulti?'multi':'single'; if(Array.isArray(state.polishOptions)&&state.polishOptions.length){ state.polishStatus='empty'; state.strategyStage2Status='empty'; state.polishSelectedId=null; state.polishAdopted=null; state.polishSelectedFinal=null; state.canonicalStoryStrategy=null; state.polishDiagnosis=null; state.polishStrategies=[]; } persist(); render(); };
-    const idea = $('#ideaInput');
-    if(idea) idea.oninput = ()=>{ state.idea = idea.value; sync(); syncOrigIdeaCard(); };
-  }
+  const idea = $('#ideaInput');
+  if(idea) idea.oninput = ()=>{ state.idea = idea.value; syncOrigIdeaCard(); };
   const disc = $('#btnPolishDiscard');
   if(disc) disc.onclick = ()=>{
     const box = $('#polishBox');
@@ -8715,9 +8680,9 @@ function optimizationInjectionData(){
     return {system:String(snap.system),user:String(snap.user),mode:String(snap.mode||state.polishMode||'single'),createdAt:Number(snap.createdAt)||0,fromSnapshot:true};
   }
   // 兼容没有快照的旧项目：只在用户点击导出时重新组装当前真实生成路径，不调用AI。
-  const ctx={multi:state.polishMode==='multi'};
+  const ctx={originalAnchors:null,strategicDimensions:[],diversityProfile:null};
   try{
-    return {system:String(getSystemPrompt('ideaOptimization',ctx)+globalCreativeConstraintBlock('ideaOptimization')||''),user:String(buildAIPrompt('ideaOptimization',ctx)||''),mode:ctx.multi?'multi':'single',createdAt:0,fromSnapshot:false};
+    return {system:String(getSystemPrompt('ideaOptimization',ctx)+globalCreativeConstraintBlock('ideaOptimization')||''),user:String(buildAIPrompt('ideaOptimization',ctx)||''),mode:'four',createdAt:0,fromSnapshot:false};
   }catch(e){ return null; }
 }
 function optimizationInjectionFileName(){ return `优化构想_注入_${Date.now()}.txt`; }
@@ -9908,8 +9873,8 @@ function parseOptimizationPlainText(raw, multi){
   dimBlock.split('\n').forEach(l=>{ const m=l.match(/^\s*(?:[-*•·]|\d+[.)])\s*([^｜|：:]+)\s*[｜|：:]\s*([^｜|]+?)(?:\s*[｜|]\s*(?:契合\s*[：:]\s*)?(.*))?\s*$/); if(m) analysis.strategicDimensions.push({name:m[1].trim(),description:m[2].trim(),whyFit:String(m[3]||'').trim()}); });
   const optionMatches=[...text.matchAll(/(?:^|\n)【方案([一二三四五六七八九十\d]+)(?:\s*[｜|：:]\s*([^】\n]+))?】\s*([\s\S]*?)(?=\n【方案[一二三四五六七八九十\d]+(?:\s*[｜|：:])?|$)/g)];
   const optionBlocks=optionMatches.map(m=>({num:m[1],title:String(m[2]||'').trim(),body:m[3].trim()}));
-  const expected=multi?3:1;
-  if((multi && (optionBlocks.length<3||optionBlocks.length>5)) || (!multi && optionBlocks.length!==1)) return {ok:false,error:`纯文本解析得到 ${optionBlocks.length} 个方案（${multi?'要求3—5个':'要求1个'}）`,options:[],analysis};
+  const expectedAdherence=[100,80,50,30];
+  if(optionBlocks.length!==4) return {ok:false,error:`纯文本解析得到 ${optionBlocks.length} 个方案（固定要求4个：100%、80%、50%、30%贴合）`,options:[],analysis};
   const options=optionBlocks.map((sec,idx)=>{
     const sb=parseOptimizationStructuredBlock(sec.body);
     if(sb.fullBookBeat.length) sb.fullBookBeatText=sb.fullBookBeat.join('\n');
@@ -9928,7 +9893,7 @@ function parseOptimizationPlainText(raw, multi){
     const defects=[], seedCharacters=sb.keyCharacters.map(x=>({name:x.name,identity:x.identity||'未知',age:'未知',gender:'未知',appearance:'未知',hobby:'未知',catchphrase:'无',relation:x.relation||'未知',trait:x.role||'未知'}));
     const seedPlaces=[];
     const dims=analysis.strategicDimensions.slice(0,10);
-    return {name:humanFromBlueprint.name||`方案${sec.num}`,bookTitle:humanFromBlueprint.bookTitle,novelSummary:summary,optimizedIdea,fullBookBeat:beat,navBeacon:humanFromBlueprint.navBeacon,defects,seedCharacters,seedPlaces,strategicDimensions:dims,strategyFingerprint:humanFromBlueprint.strategyFingerprint,originalAnchors:JSON.parse(JSON.stringify(analysis.originalAnchors)),diversityProfile:JSON.parse(JSON.stringify(analysis.diversityProfile)),structuredBlueprint:sb,writingStyleInheritanceSupplement:JSON.parse(JSON.stringify(sb.writingStyleInheritanceSupplement||{source:'optimization_concept',supplementStatus:'none',inheritance:[],supplements:[]})),optimizationStrategies:[],diagnosis:null,text:optimizedIdea};
+    return {name:humanFromBlueprint.name||`方案${sec.num}`,adherence:expectedAdherence[idx],bookTitle:humanFromBlueprint.bookTitle,novelSummary:summary,optimizedIdea,fullBookBeat:beat,navBeacon:humanFromBlueprint.navBeacon,defects,seedCharacters,seedPlaces,strategicDimensions:dims,strategyFingerprint:humanFromBlueprint.strategyFingerprint,originalAnchors:JSON.parse(JSON.stringify(analysis.originalAnchors)),diversityProfile:JSON.parse(JSON.stringify(analysis.diversityProfile)),structuredBlueprint:sb,writingStyleInheritanceSupplement:JSON.parse(JSON.stringify(sb.writingStyleInheritanceSupplement||{source:'optimization_concept',supplementStatus:'none',inheritance:[],supplements:[]})),optimizationStrategies:[],diagnosis:null,text:optimizedIdea};
   });
   for(const o of options){ if(!o.bookTitle) o.bookTitle=''; if(!o.navBeacon.genre)o.navBeacon.genre='未明确'; if(!o.navBeacon.protagonist)o.navBeacon.protagonist='未明确'; if(!o.navBeacon.tone)o.navBeacon.tone='遵循用户已选风格'; if(!o.strategyFingerprint.mainStrategy)o.strategyFingerprint.mainStrategy=o.strategicDimensions[0]?.name||'当前故事主线'; if(!o.strategyFingerprint.secondaryStrategy)o.strategyFingerprint.secondaryStrategy=o.strategicDimensions[1]?.name||'辅助推进'; if(!o.strategyFingerprint.storyEngine)o.strategyFingerprint.storyEngine='由核心冲突持续驱动'; if(!o.strategyFingerprint.emotionalPromise)o.strategyFingerprint.emotionalPromise='持续兑现核心冲突带来的情绪推进'; if(!o.strategyFingerprint.pacing)o.strategyFingerprint.pacing='遵循用户已选全书拍子'; }
   if(analysis.strategicDimensions.length<6||analysis.strategicDimensions.length>10) return {ok:false,error:`动态战略维度解析得到 ${analysis.strategicDimensions.length} 项（要求6—10项）`,options,analysis};
@@ -9949,7 +9914,7 @@ function validateIdeaOptimizationTextOutput(raw, ctx){
   // 结构式蓝图是唯一AI事实源：若AI又输出旧版“小说简介/完整优化构想/全书节拍”等平行字段，直接拒绝，避免一次生成两套版本。
   const duplicateHeaders=[...rawText.matchAll(/(?:^|\n)\s*[【\[]\s*(小说简介|核心优化方向|完整优化构想|全书故事节拍|战略维度|战略指纹|创意补充|导航灯塔|缺陷|种子人物|种子地点)\s*[】\]]\s*[：:]/g)];
   if(duplicateHeaders.length) return {ok:false,code:'DUPLICATE_VERSION_CONTENT',details:`检测到旧版平行字段：${duplicateHeaders.slice(0,5).map(m=>m[1]).join('、')}。本阶段AI只允许生成一份结构式创作蓝图，由JS派生用户视图和下游字段。`};
-  const parsed=parseOptimizationPlainText(raw,!!ctx?.multi);
+  const parsed=parseOptimizationPlainText(raw);
   if(!parsed.ok) return {ok:false,code:'PLAIN_TEXT_CONTRACT',details:parsed.error||'纯文本结构不符合要求'};
   const nameErr=validateOptimizationPersonNaming(parsed);
   if(nameErr) return {ok:false,code:'OPTIMIZATION_PERSON_NAMING',details:nameErr};
@@ -10010,7 +9975,7 @@ const AIBus = {
     switch(kind){
       case 'ideaStrategy': return { ...base, rawIdea: state.idea || '' };
       case 'ideaPolishStage2': return { ...base, rawIdea: state.idea || '', multi: !!extra?.multi, originalAnchors: extra?.originalAnchors || state.originalIdeaAnchors || null, strategicDimensions: extra?.strategicDimensions || state.strategicDimensions || [], diversityProfile: extra?.diversityProfile || state.strategicDiversityProfile || null };
-      case 'ideaOptimization': return { ...base, rawIdea: state.idea || '', multi: !!extra?.multi, originalAnchors: state.originalIdeaAnchors || null, strategicDimensions: state.strategicDimensions || [], diversityProfile: state.strategicDiversityProfile || null };
+      case 'ideaOptimization': return { ...base, rawIdea: state.idea || '', originalAnchors: state.originalIdeaAnchors || null, strategicDimensions: state.strategicDimensions || [], diversityProfile: state.strategicDiversityProfile || null, fixedFour:true, adherenceLevels:[100,80,50,30] };
       case 'idea': return { ...base, rawIdea: state.idea || '' };
       case 'titles': return { ...base, outline: o, glossary: o.glossary, expectedN: extra?.n || (o.chapters||[]).length };
       case 'chapter': return getChapterTeacherRawTextDirect(extra?.idx);
@@ -10028,7 +9993,7 @@ function getSystemPrompt(kind, extra){
   switch(kind){
     case 'ideaStrategy': return IDEA_STRATEGY_SYS;
     case 'ideaPolishStage2': return IDEA_POLISH_STAGE2_SYS + (extra && extra.multi ? POLISH_MULTI_MODE : POLISH_SINGLE_MODE);
-    case 'ideaOptimization': return IDEA_OPTIMIZATION_SYS + (extra && extra.multi ? POLISH_MULTI_MODE : POLISH_SINGLE_MODE);
+    case 'ideaOptimization': return IDEA_OPTIMIZATION_SYS + POLISH_MULTI_MODE;
     case 'idea': return IDEA_POLISH_SYS + (extra && extra.multi ? POLISH_MULTI_MODE : POLISH_SINGLE_MODE);
     case 'titles': return REGEN_TITLES_SYS;
     case 'chapter': return longChapterSys();
@@ -10636,10 +10601,17 @@ const POLISH_SINGLE_MODE = `
 `;
 
 const POLISH_MULTI_MODE = `
-【多方案执行层】
-本次必须按用户输入的真实需求进行受控分叉。先理解，再扩展；先锁定共同事实底盘，再产生不同故事发展路线。
-默认保留3—5个高质量方案；明显不适配的方向不要硬凑。
+【固定四方案执行层】
+本次“优化构想”固定一次生成4个彼此独立的方案，且四个方案必须共享同一份【原始用户构想】作为事实底盘。
+固定顺序与贴合程度：
+方案一：100%贴合——最大程度保持用户核心意思、已明确人物方向、世界观方向和主要冲突，重点做逻辑补强、因果补全、人物关系整理与剧情结构完善。
+方案二：80%贴合——保留核心人物、冲突、主题、世界设定与故事种子，允许更明显地重组剧情、优化关系、增强冲突和调整推进方式。
+方案三：50%贴合——保留核心创作种子，允许较大幅度重新设计故事结构、人物关系、冲突组织、节奏与叙事方式。
+方案四：30%贴合——保留最核心的创作种子、主题或基本方向，允许最大创造空间，但仍必须能够追溯到用户原始构想，不能完全另起炉灶。
 
+【重要】100%、80%、50%、30%只表示“对用户原始构想的贴合程度”，不是质量分数、AI评分、优劣评分、推荐分数或排名。
+【重要】四个方案必须并行独立创作；禁止将100%方案逐层改写成80%、50%、30%，禁止方案之间前后依赖。
+【重要】一次点击只能产生一次AI请求；禁止战略AI、质检AI、修复AI、第二次生成或隐藏生成。
 【重要】所有方案只允许输出同一份结构式创作蓝图；bookTitle、小说简介、全书节拍、导航灯塔等用户视图/程序字段一律由JS从蓝图派生，不得在AI输出中另写一份。
 【重要】如果用户输入包含多个想法、人物、设定或要求，必须先整合它们之间的关系，再输出真正能写成小说的方案，而不是只改写原句。
 【重要】如果输入很短，允许主动补齐合理的主角动机、阻力、阶段目标、关系张力、长期悬念和收束所需条件，但这些新增内容必须直接融入对应方案结构，不得伪装成用户已经确认的事实。
@@ -12601,9 +12573,7 @@ function viewStory(){
               <h3 class="ch-title">用户构想与动态战略优化</h3>
               <span class="ch-subtag ch-subtag-idea">${(state.polishOptions&&state.polishOptions.length)?'✨ 构想已优化':'待优化'}</span>
             </div>
-            <div class="ch-right">
-              <label class="pol-multi" title="生成多方向构想供比选"><input type="checkbox" id="chkPolishMulti"> 多方案</label>
-            </div>
+            <div class="ch-right"></div>
           </div>
           <div class="idea-row">
             <textarea id="ideaInput" placeholder="描述你的故事点子（世界观、主角、核心冲突等）…">${esc(state.idea)}</textarea>
@@ -12612,8 +12582,7 @@ function viewStory(){
             <button id="btnOptimizationConcept" class="btn ghost ${polishIdle()?'first':''}">${(state.strategyStage1Status==='ready'&&state.strategyStage2Status==='ready')?'🔄 重新生成优化构想':'✨ 生成优化构想'}</button>
           </div>
           <div style="margin:7px 0 10px;font-size:12px;line-height:1.7;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            <span style="flex:1 1 auto">${(state.strategyStage1Status==='ready'&&state.strategyStage2Status==='ready')?'✅ 已完成：战略分析已融入优化构想生成':'AI会先在内部分析动态战略维度，再直接生成最终优化构想；战略分析不会作为独立操作步骤。'}</span>
-            <label title="开启后：严格质检失败会触发定向自动修复重试；关闭后：不做质检驱动重试，仅保留网络层重试。" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer;font-size:11px;opacity:.82"><input type="checkbox" id="chkPolishStrictQc" ${state.ideaOptimizationStrictQc===true?'checked':''}> 严格质检</label>
+            <span style="flex:1 1 auto">${(state.strategyStage1Status==='ready'&&state.strategyStage2Status==='ready')?'✅ 已完成：战略分析已融入优化构想生成':'AI会在一次请求中独立生成4个方案：100%贴合、80%贴合、50%贴合、30%贴合；四者均从同一份原始构想出发。'}</span>
             <span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap">
               <button type="button" class="btn small" id="btnOptimizationInjectionExport" title="查看优化构想真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;font-weight:700">📦 注入导出</button>
               <button type="button" class="btn small" id="btnOptimizationReader" title="查看并人工编辑优化构想资料" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 55%,#14b8a6 100%);color:#fff;border:0;font-weight:700">📖 读优化构想</button>
