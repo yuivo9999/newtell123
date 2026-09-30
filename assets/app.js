@@ -19,15 +19,17 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.569';
+const APP_VERSION = '1.0.570';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.569.js';
+const APP_FILE_VERSION = 'app1.0.570.js';
 function installV569Styles(){
-  if(document.getElementById('v568ScopedStyles')) return;
-  const st=document.createElement('style'); st.id='v568ScopedStyles'; st.textContent=`
+  if(document.getElementById('v570ScopedStyles')) return;
+  const st=document.createElement('style'); st.id='v570ScopedStyles'; st.textContent=`
     .ar-gap-demo{background:linear-gradient(135deg,#7c3aed 0%,#a855f7 45%,#facc15 100%);color:#fff;border-radius:8px;padding:7px 9px;margin-top:4px;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
     .ai-recipe-gapitem,.ai-recipe-gapitem *{min-width:0;max-width:100%;box-sizing:border-box}
-    .ws-opt{min-width:0;max-width:100%;position:relative}
+    .ws-opt{min-width:0;max-width:100%;position:relative;background:linear-gradient(135deg,#dbeafe 0%,#ede9fe 52%,#fce7f3 100%);color:#312e81;border-color:rgba(99,102,241,.22)}
+    .ws-opt.on{background:linear-gradient(135deg,#a855f7 0%,#ec4899 52%,#f59e0b 100%);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(168,85,247,.22)}
+    .ws-opt.on .ws-opt-note,.ws-opt.on .ws-opt-name{color:#fff}
     .ws-opt-detail{flex:0 0 auto;width:28px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--txt);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1;font-size:15px}
     .ws-opt-detail:hover{filter:brightness(1.06)}
     .ws-opt-main{min-width:0;flex:1 1 auto}
@@ -124,7 +126,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.569.js — 优化构想与读优化构想完整重构。 */
+/* APP VERSION: app1.0.570.js — 优化构想与读优化构想完整重构。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -1419,6 +1421,8 @@ function projectSnapshot(){
     soCollapsed: !!state.soCollapsed,
     deCollapsed: !!state.deCollapsed,
     polishCollapsed: !!state.polishCollapsed,
+    dmCollapsed: !!state.dmCollapsed,
+    microBeatCollapsed: !!state.microBeatCollapsed,
     gsCatFold: (state.gsCatFold && typeof state.gsCatFold === 'object') ? state.gsCatFold : { main:false, support:false, walkon:false, place:false, proper:false, sub:false },   // 词典小类别折叠态（仅存结构，运行时各键默认见 state）
     useChapterPlans: true,
     plannerFinalized: !!state.plannerFinalized,
@@ -1515,6 +1519,8 @@ function applyProject(p){
   state.soCollapsed = !!p.soCollapsed;
   state.deCollapsed = !!p.deCollapsed;
   state.polishCollapsed = !!p.polishCollapsed;
+  state.dmCollapsed = (typeof p.dmCollapsed === 'boolean') ? p.dmCollapsed : false;
+  state.microBeatCollapsed = (typeof p.microBeatCollapsed === 'boolean') ? p.microBeatCollapsed : true;
   state.gsCatFold = (p.gsCatFold && typeof p.gsCatFold === 'object') ? p.gsCatFold : { main:false, support:false, walkon:false, place:false, proper:false, sub:false };   // 词典小类别折叠态恢复
   const _gcf = state.gsCatFold; if(_gcf && typeof _gcf === 'object'){ ['main','support','walkon'].forEach(k=>{ if(typeof _gcf[k] !== 'boolean') _gcf[k] = false; }); }
   state.useChapterPlans = true;
@@ -1639,6 +1645,8 @@ function clearState(){
   state.teamShape = 'solo';
   state.openingStrategy = 'none';
   state.polishCollapsed = false;
+  state.dmCollapsed = false;
+  state.microBeatCollapsed = true;
   state._chapterPartial = {};
   state.aiNetwork = { stage:'idle', running:[], completed:[], blockedBy:{} };
   state._lastCpRaw = '';
@@ -4207,10 +4215,15 @@ function bindPolishIdea(){
   const idea = $('#ideaInput');
   if(idea) idea.oninput = ()=>{ state.idea = idea.value; syncOrigIdeaCard(); };
   const disc = $('#btnPolishDiscard');
-  if(disc) disc.onclick = ()=>{
-    const box = $('#polishBox');
-    if(box) box.style.display = 'none';
+  const phead = $('[data-polish-fold]');
+  const setPolishFold = (collapsed)=>{
+    state.polishCollapsed = !!collapsed;
+    persist();
+    const box = $('#polishBox'); if(box) box.style.display = state.polishCollapsed ? 'none' : 'block';
+    const ico = phead && phead.querySelector('.sc-fold-ico'); if(ico) ico.textContent = state.polishCollapsed ? '▸' : '▾';
   };
+  if(disc) disc.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); setPolishFold(true); };
+  if(phead){ phead.onclick = ()=>setPolishFold(!state.polishCollapsed); phead.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); setPolishFold(!state.polishCollapsed); } }; }
   const hist = $('[data-pol-keep-hist]');
   if(hist) hist.onclick = (e)=>{ e.stopPropagation(); openPolishBatchPanel(); };
   const view = $('[data-pol-keep-view]');
@@ -8675,6 +8688,13 @@ function bindSchoolSteps(){
       openPrincipalInjectionExport();
     },true);
   }
+  const mbh = $('[data-microbeat-fold]');
+  if(mbh && !mbh._mbFold){
+    mbh._mbFold=1;
+    const toggleMicroBeat=()=>{ state.microBeatCollapsed=!state.microBeatCollapsed; persist(); const body=mbh.closest('.cp-card')?.querySelector('.cp-body'); if(body) body.hidden=state.microBeatCollapsed; const ico=mbh.querySelector('.sc-fold-ico'); if(ico) ico.textContent=state.microBeatCollapsed?'▸':'▾'; };
+    mbh.onclick=toggleMicroBeat;
+    mbh.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleMicroBeat(); } };
+  }
 }
 
 function principalCurrentResult(){
@@ -11672,8 +11692,6 @@ function writeStyleChipsHtml(sel, dataPrefix, opts){
 
 function buildStyleDetailHtml(style){
   const styleDetailFields = [
-    ['cat','分类'],
-    ['name','名称'],
     ['note','核心说明'],
     ['tips','写法'],
     ['avoid','避免'],
@@ -11694,7 +11712,7 @@ function buildStyleDetailHtml(style){
   const styleDetailExampleHtml = styleDetailExample
     ? `<section class="ws-detail-example"><div class="ws-detail-example-title">示例</div><div class="ws-detail-example-text">${esc(styleDetailExample)}</div></section>`
     : '';
-  return `${styleDetailRows}${styleDetailExampleHtml || ''}${!styleDetailRows && !styleDetailExampleHtml ? '<p class="muted">暂无可显示的详情。</p>' : ''}`;
+  return `${styleDetailExampleHtml || ''}${styleDetailRows}${!styleDetailRows && !styleDetailExampleHtml ? '<p class="muted">暂无可显示的详情。</p>' : ''}`;
 }
 
 function openStyleEntryDetails(id){
@@ -12721,7 +12739,7 @@ function viewStory(){
             </span>
           </div>
           <div id="polishBox" class="pol-box" style="display:${state.polishCollapsed?'none':'block'}">
-            <div class="pol-head"><b>✨ 方案比选</b>
+            <div class="pol-head" data-polish-fold role="button" tabindex="0" title="点击折叠/展开候选方案比选"><b>✨ 方案比选 <span class="sc-fold-ico">${state.polishCollapsed?'▸':'▾'}</span></b>
               <span class="pol-tools">
                 <button id="btnPolishDiscard" class="btn small ghost">✕ 收起</button>
               </span>
@@ -12738,10 +12756,7 @@ function viewStory(){
     return CYBER_HOME_GRID + `${isLong()?longNovelControlDeckHtml():''}
     <div class="flow-wrap">
             <section class="flow-sec" data-flow="1">
-        <div class="flow-sec-head"><span class="fs-no">1</span><span class="fs-name">写作风格</span><span class="fs-note">用户先定表达方式 · 全书共享 · 表达层最高权威</span></div>
-        <div class="flow-style-lock-note" style="margin:0 0 10px;padding:9px 12px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff);font-size:12px;line-height:1.7">
-          🔒 <b>表达层最高权威</b>：这里确定「怎么写」。后续优化构想只能提供创意建议，不得偷偷改写你已经选定的写作风格。
-        </div>
+        <div class="flow-sec-head"><span class="fs-no">1</span><span class="fs-name">写作风格</span><span class="fs-note">用户先定表达方式 · 全书共享</span></div>
         ${ safeCard(()=>writeStyleCard()) }
       </section>
 <section class="flow-sec flow-action-sec" data-flow="2">
@@ -12858,10 +12873,7 @@ ${longNovelMemoryRepoHtml()}
   ${longNovelControlDeckHtml()}
   <div class="flow-wrap">
         <section class="flow-sec" data-flow="1">
-      <div class="flow-sec-head"><span class="fs-no">1</span><span class="fs-name">写作风格</span><span class="fs-note">用户先定表达方式 · 全书共享 · 表达层最高权威</span></div>
-      <div class="flow-style-lock-note" style="margin:0 0 10px;padding:9px 12px;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fff);font-size:12px;line-height:1.7">
-        🔒 <b>表达层最高权威</b>：这里确定「怎么写」。后续优化构想只能提供创意建议，不得偷偷改写你已经选定的写作风格。
-      </div>
+      <div class="flow-sec-head"><span class="fs-no">1</span><span class="fs-name">写作风格</span><span class="fs-note">用户先定表达方式 · 全书共享</span></div>
       ${ safeCard(()=>writeStyleCard()) }
     </section>
 <section class="flow-sec" data-flow="2">
@@ -14144,9 +14156,10 @@ function renderBeatsTextHtml(txt){
   return `<div class="bs-beats-text">${body.join('')}</div>`;
 }
 function microBeatBlock(){
+  const collapsed = !!state.microBeatCollapsed;
   const curBeat = BEAT_OPTIONS.find(b=>b.id===currentBeatId()) || {};
   return `<div class="card cp-card beat-card card-theme-microbeat">
-    <div class="cp-head card-head-bar" style="cursor:default">
+    <div class="cp-head card-head-bar" style="cursor:pointer" data-microbeat-fold role="button" tabindex="0" title="点击折叠/展开章节微拍节奏">
       <div class="ch-left">
         <span class="ch-badge ch-badge-microbeat">🥁</span>
         <h3 class="ch-title">章节微拍节奏</h3>
@@ -14156,7 +14169,7 @@ function microBeatBlock(){
         <span class="muted" style="font-size:12px">段落推进节拍</span>
       </div>
     </div>
-    <div class="cp-body">
+    <div class="cp-body"${collapsed?' hidden':''}>
       <div class="cp-micropick">
         <div class="cp-micropick-title">选择章节推进节奏</div>
         <div class="cp-micropick-opts">
@@ -14195,7 +14208,7 @@ function ensureSchoolActionStyles(){
     .sc-tc-cut-list{padding:6px 8px 2px;font-size:11px;line-height:1.7}
     .sc-tc-cut-item{display:inline-block;margin:2px 5px 2px 0}.sc-tc-cut-item.ready{color:#20a95a}.sc-tc-cut-item.todo{color:var(--muted)}
     .sc-principal-generate{background:linear-gradient(135deg,#7b2cff,#ff2d55,#ffc400)!important;color:#fff!important;border-color:transparent!important;font-weight:700!important;text-shadow:0 1px 1px rgba(0,0,0,.18)}
-    .sc-principal-injection-export{background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%)!important;color:#fff!important;border:0!important;font-weight:700!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;white-space:nowrap!important}
+    .sc-principal-injection-export{background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%)!important;color:#fff!important;border:0!important;font-weight:700!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;white-space:nowrap!important;padding:6px 10px!important;min-height:30px!important;height:30px!important;line-height:1.2!important;border-radius:7px!important;font-size:12px!important}
     .sc-principal-generate.running{background:linear-gradient(135deg,#ff2d55,#ff6b57,#ffc400)!important;color:#fff!important;cursor:wait!important}
     .sc-principal-generate.done{background:linear-gradient(135deg,#7b2cff,#ff2d55,#ffc400)!important;color:#fff!important}
     .sc-principal-generate:disabled{opacity:.96}
@@ -17407,6 +17420,7 @@ function dictMasterBlockHtml(){
   const hasOut = !!state.dictmasterLatest && g && ((g.characters&&g.characters.length)||(g.places&&g.places.length)||(g.propernouns&&g.propernouns.length));
   const locked = dictmasterLocked();
   const histN = Array.isArray(state.dictmasterHistory) ? state.dictmasterHistory.length : 0;
+  const dmCollapsed = !!state.dmCollapsed;
   const status = `<p id="dictmasterStatus" class="status" style="margin:8px 0 0"></p>`;
   if(hasOut){
     const r = state.dictmasterLatest || {};
@@ -17435,18 +17449,19 @@ function dictMasterBlockHtml(){
     + dmtGroup('🗺️ 地名', (g.places||[]).map(placeRow))
     + dmtGroup('📌 专名', (g.propernouns||[]).map(propRow));
     return `<div class="card dm-card card-theme-dict">
-      <div class="dm-head card-head-bar">
+      <div class="dm-head card-head-bar" data-dm-card-toggle role="button" tabindex="0" style="cursor:pointer">
         <div class="ch-left">
           <span class="ch-badge ch-badge-dict">📚</span>
           <h3 class="ch-title">词典达人 · 专有名词与设定库</h3>
           <span class="ch-subtag ch-subtag-dict">人物 ${(g.characters||[]).length} · 地名 ${(g.places||[]).length} · 专名 ${(g.propernouns||[]).length}</span>
         </div>
-        <div class="ch-right de-action-row">
+        <div class="ch-right de-action-row"><span class="dm-card-arrow sc-fold-ico" style="margin-right:4px">${dmCollapsed?'▸':'▾'}</span>
           <div class="de-action-generate"><button id="btnCardGenDictMaster" type="button" class="btn small dm-ai-action" style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成 / 重新生成词典达人">✨ 生成</button></div>
           <div class="de-action-secondary"><button type="button" class="btn small" data-dm-injection-export title="查看词典达人真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;font-weight:700">📦 注入导出</button>
           <button type="button" class="btn small" data-dm-reader title="查看并人工编辑正式词典达人资料" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 55%,#14b8a6 100%);color:#fff;border:0;font-weight:700">📖 读词典达人</button>${histN?`<button id="btnDictMasterHist" class="btn small ghost">🕘 历史(${histN}/6)</button>`:''}</div>
         </div>
       </div>
+      <div class="dm-card-body"${dmCollapsed?' hidden':''}>
       <div class="dm-toolbar">
         <span class="muted dm-strip">关系表 ${relArr.length} · 地名关联 ${pcArr.length} · 专名关联 ${prcArr.length} · 世界观规则 ${wrArr.length}</span>
       </div>
@@ -17464,24 +17479,27 @@ function dictMasterBlockHtml(){
         <div class="dmt-panel" data-dmt-panel="prc"><div class="dm-rel-table">${prcRows||'<span class="muted">（无）</span>'}</div></div>
       </div>
       ${status}
+      </div>
     </div>`;
   }
   return `<div class="card dm-card card-theme-dict">
-    <div class="dm-head card-head-bar">
+    <div class="dm-head card-head-bar" data-dm-card-toggle role="button" tabindex="0" style="cursor:pointer">
       <div class="ch-left">
         <span class="ch-badge ch-badge-dict">📚</span>
         <h3 class="ch-title">词典达人 · 专有名词与设定库</h3>
         <span class="ch-subtag ch-subtag-dict">待生成</span>
       </div>
-      <div class="ch-right de-action-row">
+      <div class="ch-right de-action-row"><span class="dm-card-arrow sc-fold-ico" style="margin-right:4px">${dmCollapsed?'▸':'▾'}</span>
         <div class="de-action-generate"><button id="btnCardGenDictMaster" type="button" class="btn small dm-ai-action" style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成词典达人">✨ 生成</button></div>
         <div class="de-action-secondary"><button type="button" class="btn small" data-dm-injection-export title="查看词典达人真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;font-weight:700">📦 注入导出</button>
         <button type="button" class="btn small" data-dm-reader title="查看并人工编辑正式词典达人资料" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 55%,#14b8a6 100%);color:#fff;border:0;font-weight:700">📖 读词典达人</button></div>
       </div>
     </div>
+    <div class="dm-card-body"${dmCollapsed?' hidden':''}>
     ${locked?`<div class="dm-locked" style="margin:6px 0;color:#2e9e5b;font-size:12px">设定已锁定，可在「编剧学院」中一键迭代。</div>`:''}
     <div class="btn-row"><p class="muted" style="margin:8px 0 0;font-size:12px">尚未生成基础词典，开学后自动构建设定库。</p></div>
     ${status}
+    </div>
   </div>`;
 }
 function openDictMasterHistoryPanel(){
@@ -17520,6 +17538,13 @@ function openDictMasterHistoryPanel(){
   ov.querySelector('[data-dm-tab="'+idx+'"]').classList.add('on');
 }
 function bindDictMaster(){
+  const dmHead=$('[data-dm-card-toggle]');
+  if(dmHead && !dmHead._dmFold){
+    dmHead._dmFold=1;
+    const toggleDM=()=>{ state.dmCollapsed=!state.dmCollapsed; persist(); const card=dmHead.closest('.dm-card'); const body=card?.querySelector('.dm-card-body'); if(body) body.hidden=state.dmCollapsed; const arrow=dmHead.querySelector('.dm-card-arrow'); if(arrow) arrow.textContent=state.dmCollapsed?'▸':'▾'; };
+    dmHead.onclick=e=>{ if(e.target.closest('button')) return; toggleDM(); };
+    dmHead.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleDM(); } };
+  }
   const gb = $('#btnCardGenDictMaster'); if(gb) gb.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); genDictMaster(gb); };
   $$('[data-dm-injection-export]').forEach(b=>{ if(b._dmBound) return; b._dmBound=1; b.onclick=(e)=>{e.preventDefault();e.stopPropagation();openDictmasterInjectionExport();}; });
   $$('[data-dm-reader]').forEach(b=>{ if(b._dmBound) return; b._dmBound=1; b.onclick=(e)=>{e.preventDefault();e.stopPropagation();openDictmasterReader();}; });
@@ -17599,7 +17624,7 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 4. 不得通过新增一个“新版本”偷偷覆盖旧实体。
 5. 不得重复创造同名实体。
 6. 如果发现达人词典与自己的理解存在差异，以达人词典为准。
-7. 你可以创造新的世界素材，但新素材必须与既有词典保持自洽。
+7. 你可以创造新的世界素材，但新素材必须与既有词典保持自洽。不得把新增人物标记为主要人物。
 8. 本阶段正式输出并被系统收录的新条目，同样会成为后续正文可以使用的正式创作事实。
 
 【核心使命】
@@ -17629,7 +17654,7 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 词典达人阶段已经先完成“核心人物体系”的建立。这里的 Foundation characters 是只读核心集合，包含 Blueprint 已确认人物，也包含词典达人判断主线必需后主动创建并定稿的新核心人物。
 禁止创造新的主角、核心人物、主线关键人物或幕后Boss。你只能在确有生活层、职业层、场景层需要时增加 support/secondary 人物；任何新人物都不得改变或升级 Foundation 核心人物体系。
 
-新增人物默认属于 dictionary_enrichment / support 层，不得把 support 人物升级为核心人物，也不得改写 Foundation 核心人物。
+新增人物默认属于 dictionary_enrichment / support 层，不得把 support 人物升级为核心人物，也不得改写 Foundation 核心人物。词典充实不得新增‘主要人物’；人物新增类别只能是‘次要配角’或‘路人’。
 
 如果输入中已经存在某个 Foundation 人物，即使其某个字段为空，也不能趁“充实”阶段替它补写并覆盖 Foundation；Foundation 是只读事实。需要新增信息时，必须作为新的 enrichment 素材存储，不能回写基础卡。
 
@@ -17956,9 +17981,6 @@ name 字段只能填写纯实体名称。
 
 只输出纯文本，不输出 JSON，不输出 Markdown 代码块，不解释过程。每条新增内容独占一行，统一使用：类别｜名称｜字段：值；字段：值
 
-【新增主要人物】
-主要人物｜姓名｜身份：…；关系：…；外貌：…；性格：…；口头禅：…；描写标签：…
-
 【新增次要配角】
 次要配角｜姓名｜身份：…；关系：…；外貌：…；性格：…；口头禅：…；描写标签：…
 
@@ -18214,7 +18236,7 @@ function parseDictEnrichText(txt){
     if(ln.startsWith('【') && ln.endsWith('】') && /新增|分类|类别|人物|地名|专名|路人|设定/.test(ln)) continue;
 
     let cat = '';
-    const m_cat_prefix = ln.match(/^[【\[\(（]?(主要人物|次要配角|重要角色|配角|人物关系|地名关联|专名关联|世界观规则|地名|专名|路人|龙套|闲人|组织|势力|机构|职业|物品|道具|规则|世界规则|术语|事件|历史事件|生活设定|生活)[】\]\)）]?[：:·\s|｜│┆丨]+(.*)$/);
+    const m_cat_prefix = ln.match(/^[【\[\(（]?(次要配角|人物关系|地名关联|专名关联|世界观规则|地名|专名|路人|龙套|组织|势力|机构|物品|道具|规则|世界规则|术语|事件|历史事件|生活设定)[】\]\)）]?[：:·\s|｜│┆丨]+(.*)$/);
     let rest = ln;
     if(m_cat_prefix){
       cat = m_cat_prefix[1];
@@ -18223,11 +18245,11 @@ function parseDictEnrichText(txt){
 
     let seg = rest.split(/[｜|│┆丨]/).map(s=>String(s||'').trim()).filter(Boolean);
     if(!cat){
-      if(seg.length && /^(主要人物|次要配角|重要角色|配角|人物关系|地名关联|专名关联|世界观规则|地名|专名|路人|龙套|闲人|组织|势力|机构|职业|物品|道具|规则|世界规则|术语|事件|历史事件|生活设定|生活)$/.test(seg[0])){
+      if(seg.length && /^(次要配角|人物关系|地名关联|专名关联|世界观规则|地名|专名|路人|龙套|组织|势力|机构|物品|道具|规则|世界规则|术语|事件|历史事件|生活设定)$/.test(seg[0])){
         cat = seg[0];
         seg = seg.slice(1);
       } else {
-        cat = '次要配角';
+        continue;
       }
     }
 
@@ -18313,8 +18335,8 @@ function parseDictEnrichText(txt){
       res.walkons.push({ name, note: detail, _auto:true, tier:'walkon' });
       continue;
     }
-    if(/人物|角色|主角|配角/.test(cat)){
-      const tier = /主要人物|主角|重要角色/.test(cat) ? 'main' : 'support';
+    if(/次要配角/.test(cat)){
+      const tier = 'support';
       const m = parsePairs(detail);
       const appParts = [
         m['外貌'] || m['外貌特征'] || m['外貌感官特征'] || m['感官特征'] || m['长相'] || '',
@@ -18357,27 +18379,6 @@ function parseDictEnrichText(txt){
       continue;
     }
   }
-
-  // 3. Ultra-resilient fallback if strict line matching produced 0 entries
-  if(!(res.characters.length || res.places.length || res.propernouns.length || res.walkons.length || res.organizations.length || res.institutions.length || res.items.length || res.rules.length || res.terms.length || res.events.length || res.lifeSettings.length || res.relationshipTable.length || res.placeContacts.length || res.properContacts.length || res.worldRules.length)){
-    for(const raw of lines){
-      let ln = String(raw||'').trim();
-      if(!ln || (ln.startsWith('【') && ln.endsWith('】'))) continue;
-      ln = ln.replace(/^[ \t]*[#*>\d.\-—•]+[ \t.]*/, '').trim();
-      const m = ln.match(/^([^\s：:（(—\-]{1,16})[\s：:（(—\-]+(.*)$/);
-      if(m){
-        const [nClean, nExtra] = cleanEntityName(m[1]);
-        if(nClean && nClean.length >= 2 && !/^(小说|章节|大纲|简介|标题|节拍|时间线)$/.test(nClean)){
-          res.characters.push(completeCharFields({
-            name: nClean,
-            tier: 'support',
-            identity: (nExtra ? nExtra + '；' : '') + m[2].trim()
-          }));
-        }
-      }
-    }
-  }
-
   return sanitizePersonCollections(res);
 }
 function mergeDictEnrich(res){
@@ -18784,7 +18785,7 @@ function _deKV(obj, keys){ return keys.map(([label,key])=>{ const v=String((obj&
 function serializeDictEnrichFinalText(glossaryOverride){
   const g=ensureGlossaryKnowledgeShape(glossaryOverride || ((state.outline&&state.outline.glossary)||{})), lines=[];
   const emit=(tag,category,arr,fields)=>{ (Array.isArray(arr)?arr:[]).forEach(x=>{ if(!x||!isGlossaryEnrichment(g,category,x)) return; const name=String(x.name||'').trim(); if(!name) return; const tail=_deKV(x,fields); lines.push(`【词典充实·${tag}】${name}${tail?'｜'+tail:''}`); }); };
-  emit('人物','characters',g.characters,[['身份','identity'],['年龄','age'],['性别','gender'],['外貌','appearance'],['爱好','hobby'],['关系','relation'],['性格','trait'],['口头禅','catchphrase']]);
+  emit('次要配角','characters',g.characters,[['身份','identity'],['年龄','age'],['性别','gender'],['外貌','appearance'],['爱好','hobby'],['关系','relation'],['性格','trait'],['口头禅','catchphrase']]);
   emit('路人','walkons',g.walkons,[['说明','note'],['身份','identity'],['关系','relation'],['特征','trait']]);
   emit('地名','places',g.places,[['类型','type'],['说明','note']]);
   emit('专名','propernouns',g.propernouns,[['说明','note']]);
@@ -18798,7 +18799,7 @@ function serializeDictEnrichFinalText(glossaryOverride){
   (g._relationshipTable||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_relationshipTable',x)) return; const a=String(x.a||'').trim(),b=String(x.b||'').trim(); if(a&&b) lines.push(`【词典充实·人物关系】${a}｜${b}｜关系：${String(x.relation||'').trim()}${x.note?'｜说明：'+String(x.note).trim():''}`); });
   (g._placeContacts||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_placeContacts',x)) return; const a=String(x.from||'').trim(),b=String(x.to||'').trim(); if(a&&b) lines.push(`【词典充实·地名关联】${a}｜${b}｜关系：${String(x.relation||'').trim()}${x.note?'｜说明：'+String(x.note).trim():''}`); });
   (g._properContacts||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_properContacts',x)) return; const a=String(x.from||'').trim(),b=String(x.to||'').trim(); if(a&&b) lines.push(`【词典充实·专名关联】${a}｜${b}｜关系：${String(x.relation||'').trim()}${x.note?'｜说明：'+String(x.note).trim():''}`); });
-  (g._worldRules||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_worldRules',x)) return; const cat=String(x.cat||'').trim(),scope=String(x.scope||'').trim(),rule=String(x.rule||'').trim(),limit=String(x.limit||'').trim(); if(rule) lines.push(`【词典充实·世界观规则】类别：${cat}｜适用范围：${scope}｜规则：${rule}${limit?'｜代价/限制：'+limit:''}`); });
+  (g._worldRules||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_worldRules',x)) return; const name=String(x.name||'').trim(),cat=String(x.cat||'').trim(),scope=String(x.scope||'').trim(),rule=String(x.rule||'').trim(),limit=String(x.limit||'').trim(); if(rule) lines.push(`【词典充实·世界观规则】${name}${name?'｜':''}类别：${cat}｜适用范围：${scope}｜规则：${rule}${limit?'｜代价/限制：'+limit:''}`); });
   return lines.join('\n');
 }
 function parseDictEnrichFinalText(text){
@@ -18806,7 +18807,7 @@ function parseDictEnrichFinalText(text){
   const src=String(text||'').replace(/^```[\s\S]*?\n/,'').replace(/```$/,'').trim();
   if(!src) return res;
   const lines=src.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-  const cats={'人物':'characters','路人':'walkons','地名':'places','专名':'propernouns','组织':'organizations','机构':'institutions','道具':'items','规则':'rules','术语':'terms','事件':'events','生活设定':'lifeSettings'};
+  const cats={'次要配角':'characters','人物':'characters','路人':'walkons','地名':'places','专名':'propernouns','组织':'organizations','机构':'institutions','道具':'items','规则':'rules','术语':'terms','事件':'events','生活设定':'lifeSettings'};
   const parseKV=parts=>{ const o={}; parts.forEach((seg,i)=>{ const m=String(seg).match(/^([^：:]{1,20})[：:](.*)$/); if(m)o[m[1].trim()]=m[2].trim(); }); return o; };
   const val=(m,...ks)=>{ for(const k of ks){ if(String(m[k]??'').trim()) return String(m[k]).trim(); } return ''; };
   for(const ln of lines){
@@ -18818,7 +18819,7 @@ function parseDictEnrichFinalText(text){
       const shortSeg=ln.split(/[｜|]/).map(x=>x.trim());
       const shortTag=String(shortSeg.shift()||'').trim();
       const shortName=String(shortSeg.shift()||'').trim();
-      const shortMap={'主要人物':'人物','次要配角':'人物','配角':'人物','路人':'路人','地名':'地名','专名':'专名','组织':'组织','机构':'机构','职业':'机构','物品':'道具','道具':'道具','规则':'规则','术语':'术语','事件':'事件','生活设定':'生活设定'};
+      const shortMap={'次要配角':'人物','路人':'路人','地名':'地名','专名':'专名','组织':'组织','机构':'机构','物品':'道具','道具':'道具','规则':'规则','术语':'术语','事件':'事件','生活设定':'生活设定'};
       if(shortMap[shortTag] && shortName){
         tag=shortMap[shortTag]; body=[shortName,...shortSeg].join('｜'); seg=body.split(/[｜|]/).map(x=>x.trim()).filter(Boolean); shorthandTier=shortTag;
       }else{
@@ -18836,14 +18837,15 @@ function parseDictEnrichFinalText(text){
       continue;
     }
     if(tag==='世界观规则'){
-      const m=parseKV(seg); const rule=val(m,'规则'); if(!rule) continue;
-      res.worldRules.push({cat:val(m,'类别','分类'),scope:val(m,'适用范围','范围'),rule,limit:val(m,'代价/限制','限制','代价')}); continue;
+      const name=String(seg.shift()||'').trim();
+      const m=parseKV(seg); const rule=val(m,'规则','规则内容'); if(!rule) continue;
+      res.worldRules.push({name,cat:val(m,'类别','分类'),scope:val(m,'适用范围','范围'),rule,limit:val(m,'代价/限制','限制','代价')}); continue;
     }
     const key=cats[tag]; if(!key) continue;
     if(!seg[0]) continue;
     const name=seg.shift(), m=parseKV(seg), x={name};
     if(key==='characters') Object.assign(x,{tier:'support',identity:val(m,'身份','简介','定位'),age:val(m,'年龄','岁数','岁'),gender:val(m,'性别'),appearance:val(m,'外貌','外貌特征'),hobby:val(m,'爱好'),relation:val(m,'关系','人际关系'),trait:val(m,'性格','性格特征','核心动机'),catchphrase:val(m,'口头禅','口癖','台词')});
-    if(key==='characters' && shorthandTier==='主要人物') x.tier='main';
+    if(key==='characters') x.tier='support';
     else if(key==='walkons') Object.assign(x,{note:val(m,'说明','备注'),identity:val(m,'身份'),relation:val(m,'关系'),trait:val(m,'特征','性格')});
     else if(key==='places') Object.assign(x,{type:val(m,'类型','类别'),note:val(m,'说明','备注')});
     else if(key==='propernouns') Object.assign(x,{note:val(m,'说明','备注')});
@@ -18886,22 +18888,12 @@ function _deValidateParsed(parsed,g){
 function normalizeDictEnrichInput(text){
   let src=String(text||'').replace(/\r/g,'');
   if(!src.trim()) return '';
-  src=src.replace(/[｜¦]/g,'|').replace(/[﹕：]/g,':');
-  const aliases={
-    '主要人物':'人物','次要配角':'人物','配角':'人物','职业':'机构','物品':'道具',
-    '人物关系':'人物关系','人物关联':'人物关系','地名关系':'地名关联','专名关系':'专名关联',
-    '世界规则':'世界观规则','世界观':'世界观规则'
-  };
-  const lines=src.split('\n').map(raw=>{
-    let line=String(raw).trim();
-    if(!line) return '';
-    const h=line.match(/^【\s*词典充实\s*[·|:]\s*([^】]+)】(.*)$/);
-    if(h){ const tag=aliases[String(h[1]).trim()]||String(h[1]).trim(); return `【词典充实·${tag}】${h[2]||''}`; }
-    const parts=line.split('|');
-    if(parts.length>=2){ const tag=String(parts[0]||'').trim(); if(aliases[tag] && aliases[tag]!==tag){ parts[0]=aliases[tag]; return parts.join('|'); } }
-    return line;
-  });
-  return lines.filter(Boolean).join('\n').replace(/[ \t]+\n/g,'\n').trim();
+  return src.replace(/[｜¦]/g,'|').replace(/[﹕：]/g,':').split('\n')
+    .map(raw=>String(raw).trim())
+    .filter(Boolean)
+    .join('\n')
+    .replace(/[ \t]+\n/g,'\n')
+    .trim();
 }
 
 function saveDictEnrichReaderChanges(text){
