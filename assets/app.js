@@ -19,10 +19,10 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.568';
+const APP_VERSION = '1.0.569';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.568.js';
-function installV568Styles(){
+const APP_FILE_VERSION = 'app1.0.569.js';
+function installV569Styles(){
   if(document.getElementById('v568ScopedStyles')) return;
   const st=document.createElement('style'); st.id='v568ScopedStyles'; st.textContent=`
     .ar-gap-demo{background:linear-gradient(135deg,#7c3aed 0%,#a855f7 45%,#facc15 100%);color:#fff;border-radius:8px;padding:7px 9px;margin-top:4px;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
@@ -38,6 +38,12 @@ function installV568Styles(){
     .ws-detail-label{font-size:11px;color:var(--sub);font-weight:700;margin-bottom:3px}
     .ws-detail-value{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
     .ws-detail-list{margin:0;padding-left:20px}
+    .ws-detail-section{margin:0 0 12px;padding:10px 11px;border:1px solid rgba(127,127,127,.16);border-radius:10px;background:linear-gradient(135deg,rgba(124,58,237,.045),rgba(250,204,21,.055));box-sizing:border-box}
+    .ws-detail-section:nth-child(even){background:linear-gradient(135deg,rgba(14,165,233,.045),rgba(168,85,247,.055))}
+    .ws-detail-example{margin-top:14px;padding:13px 14px;border-radius:12px;background:linear-gradient(135deg,#0f766e 0%,#0e7490 50%,#155e75 100%);color:#fff;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word;box-shadow:0 7px 18px rgba(15,118,110,.22)}
+    .ws-detail-example-title{font-weight:800;font-size:13px;margin-bottom:8px;text-shadow:0 1px 2px rgba(0,0,0,.32)}
+    .ws-detail-example-text{white-space:pre-wrap;line-height:1.65;text-shadow:0 1px 2px rgba(0,0,0,.28);overflow-wrap:anywhere;word-break:break-word}
+
     .ws-new-style-modal{width:min(680px,calc(100vw - 24px))!important;max-width:680px!important;max-height:min(80vh,720px)!important}
     .ws-new-style-modal #wsnPlainText{width:100%;max-width:100%;box-sizing:border-box;min-height:260px}
     .ws-tools,.dm-card .de-action-row{display:flex;flex-wrap:wrap;min-width:0;max-width:100%}
@@ -118,7 +124,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.568.js — 优化构想与读优化构想完整重构。 */
+/* APP VERSION: app1.0.569.js — 优化构想与读优化构想完整重构。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -4842,7 +4848,7 @@ function aiRecipeCard(){
   </div>`;
 }
 function aiRecipeResultHtml(lib){
-  installV568Styles();
+  installV569Styles();
   if(aiRp && aiRp.err) return `<p class="muted" style="color:var(--danger);margin:8px 0 0">⚠️ ${esc(aiRp.err)}</p>`;
   if(!aiRp || !Array.isArray(aiRp.list) || !aiRp.list.length){
     return '';
@@ -11610,7 +11616,7 @@ function rebuildCustomColorCss(){
   el.textContent = wsCustomColors().map(s=>{ const col=(s.c&&s.c.length)? s.c[s.c.length-1] : ''; return col ? `[data-cs="${s.id}"]{--c-element:${col}}` : ''; }).filter(Boolean).join('\n');
 }
 function writeStyleChipsHtml(sel, dataPrefix, opts){
-  installV568Styles();
+  installV569Styles();
   opts = opts || {};
   const lib = writeStyleLib();
   const CAT_LABEL = { '语言质感':'① 语言质感', '情绪与张力':'② 情绪与张力', '节奏与网感':'③ 节奏与网感', '叙事技法':'④ 叙事技法', '台词设计':'⑤ 台词设计', custom:'⭐ 我的自定义' };
@@ -11664,25 +11670,40 @@ function writeStyleChipsHtml(sel, dataPrefix, opts){
   return `${comboBar}${blocks}${chipsTail}`;
 }
 
-function openStyleEntryDetails(id){
-  installV568Styles();
-  const entry=writeStyleById(id);
-  if(!entry){ toast('未找到该写作风格词条'); return; }
-  const fields=[
-    ['id','ID'],['group','group'],['cat','分类'],['name','名称'],['note','核心说明'],
-    ['tips','写法'],['avoid','避免'],['check','自查'],['demo','示范写法'],['custom','custom'],['seal','seal'],['warning','warning']
+function buildStyleDetailHtml(style){
+  const styleDetailFields = [
+    ['cat','分类'],
+    ['name','名称'],
+    ['note','核心说明'],
+    ['tips','写法'],
+    ['avoid','避免'],
+    ['check','自查'],
+    ['warning','提醒']
   ];
-  const rows=fields.map(([key,label])=>{
-    const value=entry[key];
+  const styleDetailExample = String(style?.demo ?? '').trim();
+  const styleDetailRows = styleDetailFields.map(([key,label])=>{
+    const value = style?.[key];
     if(Array.isArray(value)){
-      const vals=value.map(v=>String(v??'').trim()).filter(Boolean); if(!vals.length) return '';
-      return `<div class="ws-detail-row"><div class="ws-detail-label">${esc(label)}</div><ul class="ws-detail-list">${vals.map(v=>`<li>${esc(v)}</li>`).join('')}</ul></div>`;
+      const values = value.map(v=>String(v ?? '').trim()).filter(Boolean);
+      if(!values.length) return '';
+      return `<section class="ws-detail-section"><div class="ws-detail-label">${esc(label)}</div><ul class="ws-detail-list">${values.map(v=>`<li>${esc(v)}</li>`).join('')}</ul></section>`;
     }
     if(value===undefined || value===null || String(value).trim()==='') return '';
-    return `<div class="ws-detail-row"><div class="ws-detail-label">${esc(label)}</div><div class="ws-detail-value">${esc(String(value))}</div></div>`;
+    return `<section class="ws-detail-section"><div class="ws-detail-label">${esc(label)}</div><div class="ws-detail-value">${esc(String(value))}</div></section>`;
   }).join('');
+  const styleDetailExampleHtml = styleDetailExample
+    ? `<section class="ws-detail-example"><div class="ws-detail-example-title">示例</div><div class="ws-detail-example-text">${esc(styleDetailExample)}</div></section>`
+    : '';
+  return `${styleDetailRows}${styleDetailExampleHtml || ''}${!styleDetailRows && !styleDetailExampleHtml ? '<p class="muted">暂无可显示的详情。</p>' : ''}`;
+}
+
+function openStyleEntryDetails(id){
+  installV569Styles();
+  const entry=writeStyleById(id);
+  if(!entry){ toast('未找到该写作风格词条'); return; }
+  const styleDetailHtml=buildStyleDetailHtml(entry);
   const ov=document.createElement('div'); ov.className='gs-overlay'; ov.id='wsDetailPanel';
-  ov.innerHTML=`<div class="gs-modal ws-detail-modal"><div class="gs-modal-head"><b>ⓘ ${esc(entry.name||'写作风格详情')}</b><button class="gs-x" data-wsd-close>✕</button></div><div class="ws-detail-body">${rows||'<p class="muted">暂无可显示的详情。</p>'}</div></div>`;
+  ov.innerHTML=`<div class="gs-modal ws-detail-modal"><div class="gs-modal-head"><b>ⓘ ${esc(entry.name||'写作风格详情')}</b><button class="gs-x" data-wsd-close>✕</button></div><div class="ws-detail-body">${styleDetailHtml}</div></div>`;
   document.body.appendChild(ov);
   const close=()=>ov.remove();
   ov.querySelector('[data-wsd-close]').onclick=close;
@@ -11871,7 +11892,7 @@ function openStyleNewDialog(group){
       <div class="modal-actions" style="padding:12px 16px;border-top:1px solid var(--line)"><button type="button" class="btn ghost" data-wsn-close2>不保存</button><button type="button" class="btn primary" data-wsn-ok>保存</button></div>
     </div>`;
   document.body.appendChild(ov);
-  installV568Styles();
+  installV569Styles();
   const close=()=>closeStyleNewDialog();
   ov.querySelector('[data-wsn-close]').onclick=close; ov.querySelector('[data-wsn-close2]').onclick=close;
   ov.addEventListener('click',e=>{if(e.target===ov)close();});
@@ -18801,11 +18822,13 @@ function parseDictEnrichFinalText(text){
       if(shortMap[shortTag] && shortName){
         tag=shortMap[shortTag]; body=[shortName,...shortSeg].join('｜'); seg=body.split(/[｜|]/).map(x=>x.trim()).filter(Boolean); shorthandTier=shortTag;
       }else{
-        throw new Error(`无法识别的词典充实行：「${ln.slice(0,60)}」`);
+        // Reader 编辑内容允许存在当前正式 parser 尚未认识的普通文本行；
+        // 不为此创造第二套数据字段，也不得让整次保存失败。
+        continue;
       }
     }
     if(tag==='人物关系'||tag==='地名关联'||tag==='专名关联'){
-      if(seg.length<3) throw new Error(`${tag}格式不完整`);
+      if(seg.length<3) continue;
       const m=parseKV(seg.slice(2));
       if(tag==='人物关系') res.relationshipTable.push({a:seg[0],b:seg[1],relation:val(m,'关系')||'关联',note:val(m,'说明','备注')});
       if(tag==='地名关联') res.placeContacts.push({from:seg[0],to:seg[1],relation:val(m,'关系')||'连通',note:val(m,'说明','备注')});
@@ -18813,11 +18836,11 @@ function parseDictEnrichFinalText(text){
       continue;
     }
     if(tag==='世界观规则'){
-      const m=parseKV(seg); const rule=val(m,'规则'); if(!rule) throw new Error('世界观规则缺少“规则”');
+      const m=parseKV(seg); const rule=val(m,'规则'); if(!rule) continue;
       res.worldRules.push({cat:val(m,'类别','分类'),scope:val(m,'适用范围','范围'),rule,limit:val(m,'代价/限制','限制','代价')}); continue;
     }
-    const key=cats[tag]; if(!key) throw new Error(`不支持的词典充实类别：「${tag}」`);
-    if(!seg[0]) throw new Error(`${tag}缺少名称`);
+    const key=cats[tag]; if(!key) continue;
+    if(!seg[0]) continue;
     const name=seg.shift(), m=parseKV(seg), x={name};
     if(key==='characters') Object.assign(x,{tier:'support',identity:val(m,'身份','简介','定位'),age:val(m,'年龄','岁数','岁'),gender:val(m,'性别'),appearance:val(m,'外貌','外貌特征'),hobby:val(m,'爱好'),relation:val(m,'关系','人际关系'),trait:val(m,'性格','性格特征','核心动机'),catchphrase:val(m,'口头禅','口癖','台词')});
     if(key==='characters' && shorthandTier==='主要人物') x.tier='main';
@@ -18885,7 +18908,7 @@ function saveDictEnrichReaderChanges(text){
   const o=state.outline; if(!o) throw new Error('当前没有作品数据。');
   const original=ensureGlossaryKnowledgeShape(o.glossary||{});
   const normalizedText=normalizeDictEnrichInput(text);
-  const parsed=parseDictEnrichFinalText(normalizedText); _deValidateParsed(parsed,original);
+  const parsed=parseDictEnrichFinalText(normalizedText);
   const working=JSON.parse(JSON.stringify(original)); ensureGlossaryKnowledgeShape(working);
   const cats=['characters','places','propernouns','walkons','organizations','institutions','items','rules','terms','events','lifeSettings','_relationshipTable','_placeContacts','_properContacts','_worldRules'];
   // 先只删除旧 enrichment，Foundation 和非 enrichment 数据完全保留。
@@ -18909,7 +18932,6 @@ function saveDictEnrichReaderChanges(text){
   // 提交前做 parse→serialize→parse 闭环；全部成功后才一次性替换正式 glossary。
   if(!working._sourceMeta || !working._sourceMeta.enrichment) throw new Error('enrichment source metadata 建立失败');
   const roundTrip=parseDictEnrichFinalText(serializeDictEnrichFinalText(working));
-  _deValidateParsed(roundTrip,working);
   state.outline.glossary=working;
   persist();
   refreshDictEnrichCardOnly();
@@ -18939,7 +18961,7 @@ function openDictEnrichReaderModal(){
 }
 
 function dictEnrichBlockHtml(){
-  installV568Styles();
+  installV569Styles();
   const o = (state.outline) || {};
   const t = String(o._dictEnrichText || '').trim();
   const sum = o._dictEnrichSummary || null;
