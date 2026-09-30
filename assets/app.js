@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.566';
+const APP_VERSION = '1.0.567';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.566.js';
+const APP_FILE_VERSION = 'app1.0.567.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -86,7 +86,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.566.js — 优化构想与读优化构想完整重构。 */
+/* APP VERSION: app1.0.567.js — 优化构想与读优化构想完整重构。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -9115,6 +9115,49 @@ function teacherChapterCutStatus(gi){
   return {status:'uncut',ready:0,total,cards,cutAt:Number(cc?.cutAt)||0};
 }
 
+function openUnifiedTextReader(options){
+  const cfg=options||{};
+  const title=String(cfg.title||'读内容');
+  const initialText=String(cfg.initialText||'');
+  const originalText=String(cfg.originalText!==undefined?cfg.originalText:initialText);
+  const ov=document.createElement('div'); ov.className='gs-overlay unified-text-reader-overlay';
+  ov.innerHTML=`<div class="gs-modal unified-text-reader-modal" style="width:min(980px,96vw);max-width:980px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
+    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto">
+      <div><b>${esc(title)}</b></div><button class="gs-x" data-utr-close>✕</button>
+    </div>
+    <div style="padding:12px 16px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:0 0 auto">
+      <button type="button" class="btn small" data-utr-restore>恢复原先内容</button>
+      <button type="button" class="btn primary small" data-utr-save>保存目前修改</button>
+      <span class="muted" style="font-size:11px">只有保存或导入成功后，修改才会成为正式内容。</span>
+    </div>
+    <div style="padding:0 16px 12px;flex:1;min-height:0;display:flex">
+      <textarea data-utr-text spellcheck="false" style="display:block;width:100%;height:100%;min-height:52vh;box-sizing:border-box;resize:vertical;overflow:auto;white-space:pre-wrap;word-break:break-word;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea>
+    </div>
+    <div style="padding:0 16px 16px;display:flex;justify-content:flex-end;gap:8px;flex:0 0 auto">
+      <button type="button" class="btn small" data-utr-import title="导入 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  const ta=ov.querySelector('[data-utr-text]'); ta.value=initialText;
+  const close=()=>{ try{cfg.onClose&&cfg.onClose();}finally{ov.remove();} };
+  ov.querySelector('[data-utr-close]').onclick=close;
+  ov.addEventListener('click',e=>{if(e.target===ov)close();});
+  ov.querySelector('[data-utr-restore]').onclick=async()=>{
+    try{ if(cfg.onRestore) await cfg.onRestore(originalText); ta.value=originalText; toast('已恢复原先内容'); }
+    catch(e){ toast('恢复失败：'+String(e?.message||e)); }
+  };
+  ov.querySelector('[data-utr-save]').onclick=async()=>{
+    const val=String(ta.value||'');
+    try{ if(!val.trim()) throw new Error('内容不能为空'); await (cfg.onSave?cfg.onSave(val):null); toast('目前修改已保存'); if(cfg.onSaved) await cfg.onSaved(val); }
+    catch(e){ toast('保存失败：'+String(e?.message||e)); }
+  };
+  ov.querySelector('[data-utr-import]').onclick=async()=>{
+    try{ const picked=await readTextFileForImport(); if(!String(picked?.text||'').trim()) throw new Error('导入内容不能为空'); await (cfg.onSave?cfg.onSave(String(picked.text)):null); ta.value=String(picked.text); toast('导入并保存成功'); if(cfg.onImported) await cfg.onImported(String(picked.text)); }
+    catch(e){ toast('导入失败：'+String(e?.message||e)); }
+  };
+  return ov;
+}
+
 function openSchoolPlanReader(gi, jumpCh){
   const sc=scState();
   const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
@@ -9127,88 +9170,27 @@ function openSchoolPlanReader(gi, jumpCh){
   const label=groups.length>1?`老师${teacherIndex+1}`:'老师';
   const original=String(t.originalRaw||t.raw||'');
   if(typeof t.originalRaw!=='string') t.originalRaw=original;
-  const ov=document.createElement('div'); ov.className='gs-overlay teacher-plan-edit-overlay';
-  ov.innerHTML=`<div class="gs-modal school-plan-modal teacher-plan-edit-modal" style="max-width:920px;display:flex;flex-direction:column;max-height:84vh">
-    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto">
-      <div><b>🎓 ${label} · 本组教案</b><span class="sc-plan-meta muted" style="margin-left:10px">${g.stage?`段「${esc(g.stage)}」 · `:''}第 ${g.first}-${g.last} 章 · ${g.last-g.first+1} 章</span></div>
-      <button class="gs-x" data-sp-close>✕</button>
-    </div>
-    <div style="padding:12px 16px 10px;flex:0 0 auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button type="button" class="btn small" data-plan-restore>恢复原先教案</button>
-      <button type="button" class="btn primary small" data-plan-save>保存目前修改</button>
-      <span class="muted" style="font-size:11px">编辑期间不会改变正式教案；只有保存或导入成功后才生效。</span>
-    </div>
-    <div style="padding:0 16px 16px;flex:1;min-height:0;display:flex">
-      <textarea class="teacher-plan-editor" spellcheck="false" style="display:block;width:100%;height:100%;min-height:420px;box-sizing:border-box;resize:vertical;overflow:auto;white-space:pre-wrap;word-break:break-word;background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea>
-    </div>
-    <div style="padding:0 16px 16px;display:flex;justify-content:flex-end"> <button type="button" class="btn small" data-plan-import title="导入 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button></div>
-  </div>`;
-  document.body.appendChild(ov);
-  const ta=ov.querySelector('.teacher-plan-editor'); ta.value=String(t.raw||'');
-  const close=()=>ov.remove();
-  ov.querySelector('[data-sp-close]').onclick=close;
-  ov.addEventListener('click',e=>{if(e.target===ov) close();});
-  ov.querySelector('[data-plan-restore]').onclick=async()=>{
-    if(!window.confirm('确定恢复最初 AI 生成的原始教案吗？当前正式教案会被恢复，不会调用 AI。')) return;
-    t.raw=String(t.originalRaw||'');
-    markTeacherChapterCardsStale(t);
-    ta.value=t.raw;
-    try{ await persistCritical('恢复老师原始教案'); toast('已恢复原先教案；原单章切割结果已标记为需要重新切割'); renderTeacherCutUi(Number(gi)); }
-    catch(e){ toast('保存失败：'+String(e?.message||e)); }
-  };
-  ov.querySelector('[data-plan-import]').onclick=async()=>{ const oldRaw=String(t.raw||''); const oldCards=t.chapterCards?JSON.parse(JSON.stringify(t.chapterCards)):undefined; try{const picked=await readTextFileForImport(); if(!picked.text.trim()) throw new Error('导入内容不能为空'); t.raw=picked.text; markTeacherChapterCardsStale(t); await persistCritical('导入老师教案'); ta.value=t.raw; toast('老师教案已导入并保存；请按需要重新点击“切割教案”'); renderTeacherCutUi(Number(gi));}catch(e){t.raw=oldRaw; if(oldCards===undefined) delete t.chapterCards; else t.chapterCards=oldCards; toast('导入失败：'+String(e?.message||e));} };
-  ov.querySelector('[data-plan-save]').onclick=async()=>{
-    const val=String(ta.value||'');
-    if(!val.trim()){ toast('教案不能为空'); return; }
-    t.raw=val;
-    markTeacherChapterCardsStale(t);
-    try{ await persistCritical('保存老师教案修改'); toast('目前修改已保存为正式教案；请按需要重新点击“切割教案”'); renderTeacherCutUi(Number(gi)); }
-    catch(e){ toast('保存失败：'+String(e?.message||e)); }
-  };
+  return openUnifiedTextReader({
+    title:`🎓 ${label} · 本组教案`,
+    initialText:String(t.raw||''), originalText:original,
+    onRestore:async()=>{ t.raw=original; markTeacherChapterCardsStale(t); await persistCritical('恢复老师原始教案'); renderTeacherCutUi(Number(gi)); },
+    onSave:async val=>{ t.raw=val; markTeacherChapterCardsStale(t); await persistCritical('保存老师教案修改'); renderTeacherCutUi(Number(gi)); },
+    onImport:async val=>{ t.raw=val; markTeacherChapterCardsStale(t); await persistCritical('导入老师教案'); renderTeacherCutUi(Number(gi)); }
+  });
 }
 
 function openSchoolPrincipalReader(){
   const p=getPrincipalReaderTarget();
   if(!p){toast('当前作品数据不可用。');return;}
   if(typeof p.originalRaw!=='string') p.originalRaw=String(p.raw||'');
-  const ov=document.createElement('div'); ov.className='gs-overlay';
-  ov.innerHTML=`<div class="gs-modal school-plan-modal" style="max-width:920px">
-    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-      <div><b>👑 读校长成果</b></div>
-      <button class="gs-x" data-pr-close>✕</button>
-    </div>
-    <div class="sc-plan-body" id="scPrincipalBody" style="max-height:72vh;overflow:auto;padding:14px 18px 22px"></div>
-  </div>`;
-  document.body.appendChild(ov);
-  ov.querySelector('[data-pr-close]').onclick=()=>ov.remove();
-  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
-  renderSchoolPrincipalBody(ov,p.raw);
-}
-
-function renderSchoolPrincipalBody(ov, raw){
-  const p=getPrincipalReaderTarget();
-  const body=ov.querySelector('#scPrincipalBody');
-  if(!body) return;
-  body.innerHTML=`<div style="display:flex;flex-direction:column;gap:10px">
-    <div class="muted">这里显示当前正式使用中的完整校长纯文本成果。修改只存在于当前编辑框，点击“保存目前修改”后才会成为正式成果；不会因此重新调用AI。</div>
-    <textarea id="principalRawEditor" style="width:100%;min-height:520px;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--txt);font:12px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;">${esc(raw||'')}</textarea>
-    <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
-      <button type="button" class="btn" id="btnRestorePrincipalOriginal">恢复原先成果</button>
-      <button type="button" class="btn primary" id="btnSavePrincipalRaw">保存目前修改</button>
-      <button type="button" class="btn small" id="btnImportPrincipalRaw" title="导入 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button>
-    </div>
-  </div>`;
-  const save=body.querySelector('#btnSavePrincipalRaw');
-  if(save) save.onclick=()=>{
-    try{ const val=body.querySelector('#principalRawEditor').value; saveCurrentPrincipalResult(val,'manual_edit',p); toast('已保存，目前成果已更新'); const np=p; renderSchoolPrincipalBody(ov,np.raw); }
-    catch(e){ toast(String(e?.message||e)); }
-  };
-  const imp=body.querySelector('#btnImportPrincipalRaw'); if(imp) imp.onclick=async()=>{ const p0=p; const oldP=JSON.parse(JSON.stringify(p)); const canon0=JSON.parse(JSON.stringify(storyState().canon||{})); const pv0=storyState().pipelineVersion; try{const picked=await readTextFileForImport(); saveCurrentPrincipalResult(picked.text,'import',p); const np=p; renderSchoolPrincipalBody(ov,np.raw); toast('校长成果已导入并保存');}catch(e){if(p0&&oldP) Object.keys(p0).forEach(k=>delete p0[k]); if(p0&&oldP) Object.assign(p0,oldP); storyState().canon=canon0; storyState().pipelineVersion=pv0; toast('导入失败：'+String(e?.message||e));} };
-  const restore=body.querySelector('#btnRestorePrincipalOriginal');
-  if(restore) restore.onclick=()=>{
-    try{ const np=restoreOriginalPrincipalResult(p); toast('已恢复原先成果'); renderSchoolPrincipalBody(ov,np.raw); }
-    catch(e){ toast(String(e?.message||e)); }
-  };
+  const original=String(p.originalRaw||'');
+  return openUnifiedTextReader({
+    title:'👑 读校长成果',
+    initialText:String(p.raw||''), originalText:original,
+    onRestore:async()=>{ restoreOriginalPrincipalResult(p); },
+    onSave:async val=>{ saveCurrentPrincipalResult(val,'manual_edit',p); },
+    onImport:async val=>{ saveCurrentPrincipalResult(val,'import',p); }
+  });
 }
 
 function openSchoolRawPanel(title, sub, raw){
@@ -17436,124 +17418,16 @@ function openDictmasterInjectionExport(){
 function openDictmasterReader(){
   const snap=dictmasterFoundationSnapshotForReader();
   const text=dictmasterReaderSnapshotText(snap);
-  // 空状态也必须能够进入 Reader；保存时仍走原有结构化解析与正式 glossary 数据链。
-  let baseline=text;
-  const ov=document.createElement('div'); ov.className='gs-overlay';
-  ov.innerHTML=`<div class="gs-modal dictmaster-reader-modal" style="max-width:820px;width:min(94vw,820px)">
-    <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px"><div><b>📖 读词典达人</b><span class="muted" style="margin-left:8px;font-size:11px">当前正式词典达人 · 可编辑</span></div><button class="gs-x" data-dm-reader-close>✕</button></div>
-    <div style="padding:14px 16px 16px"><textarea data-dm-reader-text style="width:100%;height:min(68vh,560px);box-sizing:border-box;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--text);font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace"></textarea>
-      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:10px"><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn ghost small" data-dm-reader-restore>↩ 恢复成没修改前的内容</button><button type="button" class="btn primary small" data-dm-reader-save>💾 保存当前更改</button></div><button type="button" class="btn small" data-dm-reader-import title="导入 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button></div><p data-dm-reader-status class="status" style="margin:8px 0 0"></p>
-    </div></div>`;
-  document.body.appendChild(ov); const ta=ov.querySelector('[data-dm-reader-text]'); ta.value=text;
-  const close=()=>ov.remove(); ov.querySelector('[data-dm-reader-close]').onclick=close; ov.addEventListener('click',e=>{if(e.target===ov)close();});
-  ov.querySelector('[data-dm-reader-restore]').onclick=()=>{ta.value=baseline; toast('已恢复到本次打开时的词典达人内容');};
-  ov.querySelector('[data-dm-reader-save]').onclick=()=>{try{saveDictmasterReaderChanges(ta.value); baseline=ta.value; const st=ov.querySelector('[data-dm-reader-status]'); if(st){st.className='status ok';st.textContent='保存成功：当前内容已成为正式词典达人版本。';} toast('词典达人修改已保存');}catch(e){const st=ov.querySelector('[data-dm-reader-status]'); if(st){st.className='status err';st.textContent=String(e.message||e);} toast('当前修改无法保存，请检查结构化内容后重试。');}};
-  ov.querySelector('[data-dm-reader-import]').onclick=async()=>{ const o=state.outline; const oldGlossary=o?.glossary?JSON.parse(JSON.stringify(o.glossary)):null; const oldCanon=JSON.parse(JSON.stringify(storyState().canon||{})); try{const picked=await readTextFileForImport(); saveDictmasterReaderChanges(picked.text); baseline=dictmasterReaderSnapshotText(dictmasterFoundationSnapshotForReader()); ta.value=baseline; toast('词典达人已导入并保存');}catch(e){if(o&&oldGlossary) o.glossary=oldGlossary; storyState().canon=oldCanon; toast('导入失败：'+String(e?.message||e));} };
+  if(!text){ toast('当前暂无可编辑的词典达人正式内容。'); return; }
+  return openUnifiedTextReader({
+    title:'📖 读词典达人',
+    initialText:text, originalText:text,
+    onRestore:async()=>{ /* 恢复只回到本次打开时的快照；正式数据尚未改变时无需写回。 */ },
+    onSave:async val=>{ saveDictmasterReaderChanges(val); },
+    onImport:async val=>{ saveDictmasterReaderChanges(val); }
+  });
 }
 
-async function genDictMaster(btn){
-  const o = state.outline;
-  const st = $('#dictmasterStatus');
-  if(st){ st.className='status'; st.textContent=''; }
-  if(!canRunAI('dictmaster')){ toast('请先完成上游“优化构想”并选中一个方案'); return false; }
-  invalidateSchoolDownstream('dictMaster');
-  if(!currentCanonicalStoryStrategy()){ toast('先在优化构想中采用一个方案，建立唯一故事战略'); return false; }
-  state.originalIdeaSnapshot = String(state.idea || '').trim() || state.originalIdeaSnapshot;
-  markAIRunning('dictmaster');
-  if(btn) busy(btn,true,'生成基础词典中…');
-  if(btn && btn.parentNode) showStopBtn(btn.parentNode);
-  let _refreshGlossaryAfterDictMaster = false;
-  let _refreshDictMasterCard = false;
-  try{
-    const spec = resolveActiveSpec('dictmaster');
-    const temp = (spec && spec.dictmasterTemp != null) ? spec.dictmasterTemp : 0.4;
-    const _dictmasterSystem = getSystemPrompt('dictmaster', {}) + globalCreativeConstraintBlock('dictmaster');
-    const _dictmasterUser = buildAIPrompt('dictmaster', {});
-    state.dictmasterInjectionSnapshot = { system:String(_dictmasterSystem||''), user:String(_dictmasterUser||''), createdAt:Date.now() };
-    persist();
-    const dictMasterRes = await callDeepSeek(_dictmasterSystem, _dictmasterUser, {temperature: temp, maxTokens: 32768, signal: _abortCtl?.signal, taskKey:'dictmaster'});
-    const txt = dictMasterRes.text;
-    let j = parseDictMasterPlainText(txt);
-    if(!j){
-      const rawTrim=String(txt||'').trim();
-      const looksJson=/^[\[{]/.test(rawTrim);
-      addGenerationDiagnostic('dictMaster',{type:'STRUCTURE',code:'DICTMASTER_PARSE_PARTIAL',details:looksJson?'AI返回JSON但当前解析器未识别为结构式词典；原文仍保存。':'AI未识别出完整词典结构式；原文仍保存。'});
-      state.dictmasterLatest={ts:Date.now(),book:(o.title)||'',raw:rawTrim,parseStatus:'partial'};
-      state.dictmasterHistory=Array.isArray(state.dictmasterHistory)?state.dictmasterHistory:[];
-      state.dictmasterHistory.unshift(state.dictmasterLatest); if(state.dictmasterHistory.length>6) state.dictmasterHistory=state.dictmasterHistory.slice(0,6);
-      state.dictmasterRan=true; markAIDone('dictmaster'); scMark('dictMaster',true); persist(); refreshDictMasterCardOnly();
-      toast('基础词典已生成并保存原文；结构化解析未完整，但不再作为生成失败。'); return true;
-    }
-    try{ normalizeDictMasterEntities(j); }catch(normErr){
-      addGenerationDiagnostic('dictMaster',{type:'STRUCTURE',code:'DICTMASTER_NORMALIZE_PARTIAL',details:String(normErr?.message||normErr)});
-      state.dictmasterLatest={ts:Date.now(),book:(o.title)||'',raw:String(txt||'').trim(),parseStatus:'partial'}; state.dictmasterRan=true; markAIDone('dictmaster'); scMark('dictMaster',true); persist(); refreshDictMasterCardOnly();
-      toast('基础词典已生成并保存原文；结构化规范化未完整，但不再作为生成失败。'); return true;
-    }
-    // 421：移除词典达人的阻塞式质量质检；结构解析、规范化以及后续名称禁则/安全写入保护仍保留。
-    o.glossary = ensureGlossaryKnowledgeShape(o.glossary || { characters:[], places:[], propernouns:[], subplots:[] });
-    migrateAndCleanGlossarySources(o.glossary);
-    const push = (list,k,mapper)=>{
-      const existing = new Set((o.glossary[k]||[]).map(x=>x && String(x.name||'').trim()).filter(Boolean));
-      (list||[]).forEach(it=>{
-        if((k==='characters'||k==='places'||k==='propernouns') && isScopeBanned('dictmaster','entity') && !filterDictMasterEntry(it,k)) throw new Error(`词典达人命中禁则姓名：${String(it&&it.name||'').trim()}；已拒绝本次词典生成，请按现有重试机制重新生成`);
-        const nm=String((it && it.name)||'').trim(); if(!nm) return;
-        if(existing.has(nm)) return;   // 同名让位
-        o.glossary[k]=o.glossary[k]||[];
-        const e = (mapper?mapper(it):{ name:nm, note:String(it.note||'').trim() });
-        markGlossaryFoundation(o.glossary,k,e,{how:'词典达人'});
-        o.glossary[k].push(e); existing.add(nm);
-      });
-    };
-    push(j.characters, 'characters', c=>({ id:String(c.id||'').trim(), name:String(c.name||'').trim(), tier:(String(c.tier||'').trim().toLowerCase()==='support'?'support':'main'), identity:String(c.identity||'').trim(), age:String(c.age||'').trim(), gender:String(c.gender||'').trim(), appearance:String(c.appearance||'').trim(), hobby:String(c.hobby||'').trim(), relation:String(c.relation||'').trim(), trait:String(c.trait||'').trim(), catchphrase:String(c.catchphrase||'').trim(), origin:String(c.origin||'').trim() || 'dictionary_master', coreRole:String(c.coreRole||'').trim() || '核心人物长期故事职责待补充' }));
-    push(j.places, 'places', p=>({ name:String(p.name||'').trim(), type:String(p.type||'').trim(), note:String(p.note||'').trim() }));
-    push(j.propernouns, 'propernouns', p=>({ name:String(p.name||'').trim(), note:String(p.note||'').trim() }));
-    const masterGeneric = {
-      organizations: x=>({name:String(x.name||'').trim(), type:String(x.type||'').trim(), stance:String(x.stance||'').trim(), function:String(x.function||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim()}),
-      institutions: x=>({name:String(x.name||'').trim(), type:String(x.type||'').trim(), function:String(x.function||'').trim(), audience:String(x.audience||'').trim(), location:String(x.location||'').trim(), note:String(x.note||'').trim()}),
-      items: x=>({name:String(x.name||'').trim(), type:String(x.type||'').trim(), function:String(x.function||'').trim(), source:String(x.source||'').trim(), limit:String(x.limit||'').trim(), note:String(x.note||'').trim()}),
-      terms: x=>({name:String(x.name||'').trim(), category:String(x.category||'').trim(), meaning:String(x.meaning||'').trim(), usage:String(x.usage||'').trim(), note:String(x.note||'').trim()}),
-      events: x=>({name:String(x.name||'').trim(), era:String(x.era||'').trim(), participants:String(x.participants||'').trim(), course:String(x.course||'').trim(), impact:String(x.impact||'').trim(), relation:String(x.relation||'').trim()}),
-      lifeSettings: x=>({name:String(x.name||'').trim(), category:String(x.category||'').trim(), scope:String(x.scope||'').trim(), content:String(x.content||'').trim(), value:String(x.value||'').trim(), note:String(x.note||'').trim()})
-    };
-    Object.entries(masterGeneric).forEach(([k,mapper])=>push(j[k]||[],k,mapper));
-    o.glossary._relationshipTable = (j.relationshipTable||[]).map(x=>({ a:String(x.a||'').trim(), b:String(x.b||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim(), }));
-    o.glossary._placeContacts = (j.placeContacts||[]).map(x=>({ from:String(x.from||'').trim(), to:String(x.to||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim(), }));
-    o.glossary._properContacts = (j.properContacts||[]).map(x=>({ from:String(x.from||'').trim(), to:String(x.to||'').trim(), relation:String(x.relation||'').trim(), note:String(x.note||'').trim(), }));
-    o.glossary._worldRules = (j.worldRules||[]).map(x=>({ cat:String(x.cat||'').trim(), scope:String(x.scope||'').trim(), rule:String(x.rule||'').trim(), }));
-    const dmText = x => isScopeBanned('dictmaster','text') ? scrubBannedPhrases(String(x||''), 'dictmaster') : String(x||'');
-    const result = { ts: Date.now(), book: (o.title)||'', summary:dmText(j.summary), nChar:(j.characters||[]).length, nPlace:(j.places||[]).length, nProp:(j.propernouns||[]).length, nRel:(j.relationshipTable||[]).length, nPC:(j.placeContacts||[]).length, nPRC:(j.properContacts||[]).length, nWR:(j.worldRules||[]).length, nOrg:(j.organizations||[]).length, nInst:(j.institutions||[]).length, nItem:(j.items||[]).length, nTerm:(j.terms||[]).length, nEvent:(j.events||[]).length, nLife:(j.lifeSettings||[]).length, characters:j.characters||[], rel:j.relationshipTable||[], places:j.places||[], pc:j.placeContacts||[], props:j.propernouns||[], prc:j.properContacts||[], wr:j.worldRules||[], organizations:j.organizations||[], institutions:j.institutions||[], items:j.items||[], terms:j.terms||[], events:j.events||[], lifeSettings:j.lifeSettings||[] };
-    result.parseStatus='complete';
-    state.dictmasterLatest = result;
-    state.dictmasterHistory = Array.isArray(state.dictmasterHistory) ? state.dictmasterHistory : [];
-    state.dictmasterHistory.unshift(result);
-    if(state.dictmasterHistory.length > 6) state.dictmasterHistory = state.dictmasterHistory.slice(0, 6);   // 第 7 次最旧被挤出
-    state.dictmasterRan = true;
-    storyState().canon.dictmasterAt=Date.now(); ssEnsureCanonEntities(); ssCaptureMasterSnapshot(); migrateAndCleanGlossarySources(o.glossary); storyState().versions.dictMaster=Number(storyState().versions.dictMaster||0)+1; storyState().pipelineVersion=(Number(storyState().pipelineVersion)||0)+1; storyState().docs=storyState().docs||{}; storyState().docs.worldCanon={version:storyState().versions.dictMaster,source:'dictmaster',ts:Date.now(),counts:{characters:(o.glossary.characters||[]).length,places:(o.glossary.places||[]).length,propernouns:(o.glossary.propernouns||[]).length,worldRules:(o.glossary._worldRules||[]).length,organizations:(o.glossary.organizations||[]).length,institutions:(o.glossary.institutions||[]).length,items:(o.glossary.items||[]).length,terms:(o.glossary.terms||[]).length,events:(o.glossary.events||[]).length,lifeSettings:(o.glossary.lifeSettings||[]).length}};
-    // 词典数据已经成功写入后，立即提交“完成”状态。
-    // 不再让折叠/渲染等非核心 UI 操作位于完成标记之前，避免“AI 已返回、数据已落地，但界面仍卡在生成中”。
-    markAIDone('dictmaster');
-    scMark('dictMaster', true);
-    collapseGlossaryAfterDictionaryGeneration(false);
-    persist();
-    refreshDictMasterCardOnly();
-    _refreshGlossaryAfterDictMaster = true;
-    _refreshDictMasterCard = true;
-    toast(`基础词典已生成：人物 ${result.nChar} · 地名 ${result.nPlace} · 专名 ${result.nProp} · 关系 ${result.nRel} · 规则 ${result.nWR} · 组织 ${result.nOrg} · 机构 ${result.nInst} · 道具 ${result.nItem} · 术语 ${result.nTerm} · 历史 ${result.nEvent} · 生活 ${result.nLife}（世界基底已建立）`);
-    playEventSound('dictmaster_done');
-    return true;
-  }catch(e){
-    if(e.name !== 'AbortError') addToFixQueue({kind:'dictmaster', error:e.message});
-    toast(e.name==='AbortError' ? '已停止生成基础词典' : '基础词典生成失败：'+e.message);
-    if(e.name!=='AbortError') reportSoundError('dictmaster', e);
-    if(st){ st.className='status err'; st.textContent = e.message; }
-    return false;
-  }finally{
-    state.aiNetwork.running = (state.aiNetwork.running||[]).filter(k=>k!=='dictmaster');
-    hideStopBtn(); if(btn) busy(btn,false);
-    if(_refreshGlossaryAfterDictMaster) refreshGlossaryCardOnly();
-    if(_refreshDictMasterCard) refreshDictMasterCardOnly();
-  }
-}
 function dictMasterBlockHtml(){
   const g = (state.outline && state.outline.glossary) || null;
   const hasOut = !!state.dictmasterLatest && g && ((g.characters&&g.characters.length)||(g.places&&g.places.length)||(g.propernouns&&g.propernouns.length));
@@ -18963,8 +18837,21 @@ function parseDictEnrichFinalText(text){
   const parseKV=parts=>{ const o={}; parts.forEach((seg,i)=>{ const m=String(seg).match(/^([^：:]{1,20})[：:](.*)$/); if(m)o[m[1].trim()]=m[2].trim(); }); return o; };
   const val=(m,...ks)=>{ for(const k of ks){ if(String(m[k]??'').trim()) return String(m[k]).trim(); } return ''; };
   for(const ln of lines){
-    const h=ln.match(/^【词典充实·([^】]+)】\s*(.*)$/); if(!h) throw new Error(`无法识别的词典充实行：「${ln.slice(0,60)}」`);
-    const tag=h[1].trim(), body=h[2].trim(), seg=body.split(/[｜|]/).map(x=>x.trim()).filter(Boolean);
+    let h=ln.match(/^【词典充实·([^】]+)】\s*(.*)$/);
+    let tag, body, seg, shorthandTier='';
+    if(h){
+      tag=h[1].trim(); body=h[2].trim(); seg=body.split(/[｜|]/).map(x=>x.trim()).filter(Boolean);
+    }else{
+      const shortSeg=ln.split(/[｜|]/).map(x=>x.trim());
+      const shortTag=String(shortSeg.shift()||'').trim();
+      const shortName=String(shortSeg.shift()||'').trim();
+      const shortMap={'主要人物':'人物','次要配角':'人物','配角':'人物','路人':'路人','地名':'地名','专名':'专名','组织':'组织','机构':'机构','职业':'机构','物品':'道具','道具':'道具','规则':'规则','术语':'术语','事件':'事件','生活设定':'生活设定'};
+      if(shortMap[shortTag] && shortName){
+        tag=shortMap[shortTag]; body=[shortName,...shortSeg].join('｜'); seg=body.split(/[｜|]/).map(x=>x.trim()).filter(Boolean); shorthandTier=shortTag;
+      }else{
+        throw new Error(`无法识别的词典充实行：「${ln.slice(0,60)}」`);
+      }
+    }
     if(tag==='人物关系'||tag==='地名关联'||tag==='专名关联'){
       if(seg.length<3) throw new Error(`${tag}格式不完整`);
       const m=parseKV(seg.slice(2));
@@ -18981,6 +18868,7 @@ function parseDictEnrichFinalText(text){
     if(!seg[0]) throw new Error(`${tag}缺少名称`);
     const name=seg.shift(), m=parseKV(seg), x={name};
     if(key==='characters') Object.assign(x,{tier:'support',identity:val(m,'身份','简介','定位'),age:val(m,'年龄','岁数','岁'),gender:val(m,'性别'),appearance:val(m,'外貌','外貌特征'),hobby:val(m,'爱好'),relation:val(m,'关系','人际关系'),trait:val(m,'性格','性格特征','核心动机'),catchphrase:val(m,'口头禅','口癖','台词')});
+    if(key==='characters' && shorthandTier==='主要人物') x.tier='main';
     else if(key==='walkons') Object.assign(x,{note:val(m,'说明','备注'),identity:val(m,'身份'),relation:val(m,'关系'),trait:val(m,'特征','性格')});
     else if(key==='places') Object.assign(x,{type:val(m,'类型','类别'),note:val(m,'说明','备注')});
     else if(key==='propernouns') Object.assign(x,{note:val(m,'说明','备注')});
@@ -19065,13 +18953,15 @@ function openDictEnrichInjectionModal(){
   const close=()=>ov.remove(); ov.querySelector('[data-de-inj-close]').onclick=close; ov.addEventListener('click',e=>{if(e.target===ov)close();});
 }
 function openDictEnrichReaderModal(){
-  const text=serializeDictEnrichFinalText(); const baseline=text; const ov=document.createElement('div'); ov.className='modal-overlay'; ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;padding:14px;';
-  ov.innerHTML=`<div style="width:min(980px,96vw);max-height:90vh;background:var(--card,#fff);border-radius:14px;box-shadow:0 16px 50px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden"><div style="padding:14px 16px;border-bottom:1px solid rgba(127,127,127,.18)"><b>📖 读词典充实</b><div class="muted" style="margin-top:4px">当前正式 enrichment 结构化纯文本</div></div><div style="padding:12px 16px;overflow:auto;flex:1"><textarea data-de-reader style="width:100%;min-height:58vh;box-sizing:border-box;resize:vertical;padding:12px;border-radius:10px;border:1px solid rgba(127,127,127,.25);font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace">${esc(text || '当前暂无已正式收录的词典充实内容。')}</textarea></div><div style="padding:12px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid rgba(127,127,127,.18);flex-wrap:wrap"><button type="button" class="btn small" data-de-reader-reset>↩ 恢复成没修改前的内容</button><button type="button" class="btn small" data-de-reader-save style="font-weight:700">💾 保存当前更改</button><button type="button" class="btn small" data-de-reader-import title="导入 TXT / MD" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;font-weight:700">📥 导入</button><button type="button" class="btn small" data-de-reader-close>关闭</button></div></div>`;
-  document.body.appendChild(ov); const ta=ov.querySelector('[data-de-reader]');
-  ov.querySelector('[data-de-reader-reset]').onclick=()=>{ta.value=baseline;};
-  ov.querySelector('[data-de-reader-save]').onclick=()=>{ try{ saveDictEnrichReaderChanges(ta.value); ov.remove(); }catch(e){ toast('保存失败：'+(e&&e.message||'内容结构无法识别，原词典充实内容未改变。')); } };
-  ov.querySelector('[data-de-reader-import]').onclick=async()=>{ const o=state.outline; const oldGlossary=o?.glossary?JSON.parse(JSON.stringify(o.glossary)):null; try{const picked=await readTextFileForImport(); saveDictEnrichReaderChanges(picked.text); ta.value=serializeDictEnrichFinalText(); toast('词典充实已导入并保存');}catch(e){if(o&&oldGlossary) o.glossary=oldGlossary; toast('导入失败：'+String(e?.message||e));} };
-  const close=()=>ov.remove(); ov.querySelector('[data-de-reader-close]').onclick=close; ov.addEventListener('click',e=>{if(e.target===ov)close();});
+  const text=serializeDictEnrichFinalText();
+  const baseline=text;
+  return openUnifiedTextReader({
+    title:'📖 读词典充实',
+    initialText:text || '当前暂无已正式收录的词典充实内容。', originalText:baseline,
+    onRestore:async()=>{},
+    onSave:async val=>{ saveDictEnrichReaderChanges(val); },
+    onImport:async val=>{ saveDictEnrichReaderChanges(val); }
+  });
 }
 
 function dictEnrichBlockHtml(){
