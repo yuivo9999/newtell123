@@ -19,17 +19,32 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.570';
+const APP_VERSION = '1.0.571';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.570.js';
+const APP_FILE_VERSION = 'app1.0.571.js';
 function installV569Styles(){
   if(document.getElementById('v570ScopedStyles')) return;
   const st=document.createElement('style'); st.id='v570ScopedStyles'; st.textContent=`
     .ar-gap-demo{background:linear-gradient(135deg,#7c3aed 0%,#a855f7 45%,#facc15 100%);color:#fff;border-radius:8px;padding:7px 9px;margin-top:4px;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
     .ai-recipe-gapitem,.ai-recipe-gapitem *{min-width:0;max-width:100%;box-sizing:border-box}
-    .ws-opt{min-width:0;max-width:100%;position:relative;background:linear-gradient(135deg,#dbeafe 0%,#ede9fe 52%,#fce7f3 100%);color:#312e81;border-color:rgba(99,102,241,.22)}
-    .ws-opt.on{background:linear-gradient(135deg,#a855f7 0%,#ec4899 52%,#f59e0b 100%);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(168,85,247,.22)}
-    .ws-opt.on .ws-opt-note,.ws-opt.on .ws-opt-name{color:#fff}
+    .ws-opt{min-width:0;max-width:100%;position:relative;color:#fff;border-width:1px;border-style:solid;transition:background-color .22s ease,color .22s ease,border-color .22s ease,box-shadow .22s ease,transform .18s ease}
+    .ws-opt.ws-cat-language{background:#263548;border-color:#3b4d63}
+    .ws-opt.ws-cat-emotion{background:#3b2461;border-color:#5b3a8c}
+    .ws-opt.ws-cat-rhythm{background:#123d4c;border-color:#1f6176}
+    .ws-opt.ws-cat-narrative{background:#51371a;border-color:#795324}
+    .ws-opt.ws-cat-dialogue{background:#18472d;border-color:#286b43}
+    .ws-opt.ws-cat-custom{background:#303238;border-color:#4a4d55}
+    .ws-opt.ws-cat-language.on{background:#3b4d63;border-color:#66809e;box-shadow:0 2px 9px rgba(59,77,99,.34)}
+    .ws-opt.ws-cat-emotion.on{background:#5b3a8c;border-color:#825db9;box-shadow:0 2px 9px rgba(91,58,140,.34)}
+    .ws-opt.ws-cat-rhythm.on{background:#1f6176;border-color:#368ba4;box-shadow:0 2px 9px rgba(31,97,118,.34)}
+    .ws-opt.ws-cat-narrative.on{background:#795324;border-color:#a87532;box-shadow:0 2px 9px rgba(121,83,36,.34)}
+    .ws-opt.ws-cat-dialogue.on{background:#286b43;border-color:#3b9360;box-shadow:0 2px 9px rgba(40,107,67,.34)}
+    .ws-opt.ws-cat-custom.on{background:#4a4d55;border-color:#70747e;box-shadow:0 2px 9px rgba(74,77,85,.34)}
+    .ws-opt.ws-combo-btn{background:#4a234f;border-color:#714073}
+    .ws-opt.ws-combo-btn.on{background:#71396f;border-color:#a45b9f;box-shadow:0 2px 9px rgba(113,57,111,.34)}
+    .ws-opt:hover{transform:translateY(-1px)}
+    .ws-opt.on{transform:translateY(-1px) scale(1.01)}
+    .ws-opt .ws-opt-note,.ws-opt .ws-opt-name{color:#fff;transition:color .22s ease}
     .ws-opt-detail{flex:0 0 auto;width:28px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--txt);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1;font-size:15px}
     .ws-opt-detail:hover{filter:brightness(1.06)}
     .ws-opt-main{min-width:0;flex:1 1 auto}
@@ -126,7 +141,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.570.js — 优化构想与读优化构想完整重构。 */
+/* APP VERSION: app1.0.571.js — 校长老师统一真实输入组装、写作风格视觉重构、主要人物 Foundation 职责明确。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -8253,6 +8268,17 @@ function teacherPerfRecord(gi, metrics){
 
 
 
+function buildTeacherInjection(g, gi){
+  const index = Number(gi);
+  const groups = teacherAssignmentGroups();
+  const group = g || groups[index];
+  if(!group || !Number.isInteger(index) || index < 0) return null;
+  const teacherUser = String(buildTeacherUser(group, index) || '').trim();
+  const teacherSystem = String(TEACHER_SYS + globalCreativeConstraintBlock('teacher') || '').trim();
+  if(!teacherSystem || !teacherUser) return null;
+  return { system:teacherSystem, user:teacherUser, group, gi:index };
+}
+
 async function genTeacher(btn, gi){
   if(!isLong()){toast('仅长篇小说模式支持老师施教');return false;}
   const groups=teacherAssignmentGroups(),g=groups[gi]; if(!g){toast('未找到该分组');return false;}
@@ -8262,18 +8288,20 @@ async function genTeacher(btn, gi){
   try{
     const spec=resolveActiveSpec('teacher'),temp=(spec&&spec.teacherTemp!=null)?spec.teacherTemp:0.4;
     const _tp0=performance.now(),_tp={gi,startedAt:Date.now()};
-    const _teacherUser=buildTeacherUser(g,gi);
-    _tp.systemChars=String(TEACHER_SYS||'').length; _tp.inputChars=String(_teacherUser||'').length;
+    const teacherInjection = buildTeacherInjection(g,gi);
+    if(!teacherInjection) throw new Error('老师真实 AI 输入组装失败');
+    const _teacherUser=teacherInjection.user;
+    _tp.systemChars=String(teacherInjection.system||'').length; _tp.inputChars=String(_teacherUser||'').length;
     const _aiStart=performance.now();
     const teacherRunId='teacher-'+Date.now().toString(36);
-    const teacherRes=await callDeepSeek(TEACHER_SYS + globalCreativeConstraintBlock('teacher'), _teacherUser, {temperature:temp,maxTokens:32768,signal:_abortCtl?.signal,taskKey:'teacher',runId:teacherRunId,attempt:1});
+    const teacherRes=await callDeepSeek(teacherInjection.system, _teacherUser, {temperature:temp,maxTokens:32768,signal:_abortCtl?.signal,taskKey:'teacher',runId:teacherRunId,attempt:1});
     const txt=teacherRes.text;
     _tp.aiReturnMs=Math.round(performance.now()-_aiStart);
     const raw=String(txt||'').trim();
     if(!raw) throw new Error('老师返回空');
     _tp.outputChars=raw.length;
     const sc=scState(); delete sc.stale[key];
-    sc.teachers[gi]={gi,teacherCode:g.teacherCode||teacherCodeForIndex(gi),teacherGroupId:g.teacherGroupId,ts:Date.now(),updatedAt:Date.now(),raw,originalRaw:raw,lastInjection:{system:String(TEACHER_SYS||''),user:String(_teacherUser||'')},parseStatus:'raw-only'};
+    sc.teachers[gi]={gi,teacherCode:g.teacherCode||teacherCodeForIndex(gi),teacherGroupId:g.teacherGroupId,ts:Date.now(),updatedAt:Date.now(),raw,originalRaw:raw,lastInjection:{system:String(teacherInjection.system||''),user:String(_teacherUser||'')},parseStatus:'raw-only'};
     const styleAudit=validateTeacherStyleCoverageAcrossGroups();
     sc.teachers[gi].styleAudit=styleAudit;
     const teacherGroupsNow=teacherAssignmentGroups();
@@ -8341,6 +8369,26 @@ function principalPerfRecord(metrics){
   }catch(e){ console.debug('[principalPerf] 记录失败',e); }
 }
 let _principalRun = null;
+function buildPrincipalInjection(ctx){
+  const sourceCtx = ctx && typeof ctx === 'object' ? ctx : {};
+  const teacherAssignment = sourceCtx.teacherAssignment || buildTeacherAssignment();
+  const targetChapterCount = Number(sourceCtx.targetChapterCount || principalTargetChapterCount() || 0);
+  if(!targetChapterCount || !teacherAssignment || !Array.isArray(teacherAssignment.groups) || !teacherAssignment.groups.length) return null;
+  const sourceBlocks = principalCompactSourceBlocks(teacherAssignment, targetChapterCount);
+  const principalUser = String(principalFinalContext(
+    buildPrincipalUser(teacherAssignment, targetChapterCount),
+    '',
+    sourceBlocks,
+    'compact-direct'
+  ) || '').trim();
+  const principalSystem = String(
+    PRINCIPAL_SYS_STRUCTURED +
+    `\n\n【运行时章节数量硬约束】本次全书目标章节数=${targetChapterCount}。必须且只能输出${targetChapterCount}个[PRINCIPAL_CHAPTER]块，chapter只能是1-${targetChapterCount}，不得输出越界章节。` +
+    globalCreativeConstraintBlock('principal')
+  ).trim();
+  if(!principalSystem || !principalUser) return null;
+  return { system:principalSystem, user:principalUser, teacherAssignment, targetChapterCount };
+}
 async function genPrincipal(btn, opts){
   if(_principalRun){ toast('校长统筹已经在运行中，请勿重复点击'); return false; }
   if(!isLong()){ toast('仅长篇小说模式支持校长统筹'); return false; }
@@ -8357,8 +8405,9 @@ async function genPrincipal(btn, opts){
   if(!scDone('dictEnrich')){ toast('校长必须接收完整词典后再统筹，请先完成“词典充实”'); return false; }
   invalidateSchoolDownstream('principal');
   scState();
-  // 417：系统层也注入运行时硬约束，避免用户层被来源资料稀释。
-  const sys = PRINCIPAL_SYS_STRUCTURED + `\n\n【运行时章节数量硬约束】本次全书目标章节数=${targetChapterCount}。必须且只能输出${targetChapterCount}个[PRINCIPAL_CHAPTER]块，chapter只能是1-${targetChapterCount}，不得输出越界章节。`;
+  const principalInjection = buildPrincipalInjection({teacherAssignment, targetChapterCount});
+  if(!principalInjection){ toast('校长真实 AI 输入组装失败，请检查当前章节与老师分配'); return false; }
+  const sys = principalInjection.system;
   const runId = 'principal-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7);
   let lastPrincipalError = null;
   _principalRun = {runId, startedAt:Date.now(), button:btn||null};
@@ -8370,10 +8419,9 @@ async function genPrincipal(btn, opts){
       const _tp0 = performance.now();
       const _tp = {attempt, runId, targetChapterCount};
       try{
-        const sourceBlocks = principalCompactSourceBlocks(teacherAssignment, targetChapterCount);
-        const principalUser = principalFinalContext(buildPrincipalUser(teacherAssignment, targetChapterCount), '', sourceBlocks, 'compact-direct');
+        const principalUser = principalInjection.user;
         _tp.inputChars=String(principalUser||'').length; _tp.systemChars=String(sys||'').length;
-        const principalRes = await callDeepSeek(sys + globalCreativeConstraintBlock('principal'), principalUser, { temperature:temp, maxTokens:32768, signal:_abortCtl?.signal, retry:1, taskKey:'principal', runId, attempt });
+        const principalRes = await callDeepSeek(sys, principalUser, { temperature:temp, maxTokens:32768, signal:_abortCtl?.signal, retry:1, taskKey:'principal', runId, attempt });
         const txt = principalRes.text;
         _tp.aiReturnMs = Math.round(performance.now()-_tp0);
         if(!txt || !String(txt||'').trim()){ setScRetry('principal', attempt); scRefreshBadge(btn,'principal'); throw new Error('校长返回空'); }
@@ -8754,25 +8802,9 @@ function restoreOriginalPrincipalResult(target){
 }
 
 function principalInjectionData(){
-  const p=principalCurrentResult();
-  if(!p) return null;
-  const cached=p.lastInjection&&typeof p.lastInjection==='object' ? p.lastInjection : null;
-  let system=String(cached?.system||'').trim();
-  let user=String(cached?.user||'').trim();
-  // 历史项目没有缓存时，只重建当前真实请求链，不发送任何 AI/API 请求。
-  if(!system || !user){
-    try{
-      const targetChapterCount=Number(p.targetChapterCount||principalTargetChapterCount()||0);
-      const teacherAssignment=buildTeacherAssignment();
-      const sourceBlocks=principalCompactSourceBlocks(teacherAssignment,targetChapterCount);
-      system=String(PRINCIPAL_SYS_STRUCTURED + `\n\n【运行时章节数量硬约束】本次全书目标章节数=${targetChapterCount}。必须且只能输出${targetChapterCount}个[PRINCIPAL_CHAPTER]块，chapter只能是1-${targetChapterCount}，不得输出越界章节。`).trim();
-      user=String(principalFinalContext(buildPrincipalUser(teacherAssignment,targetChapterCount),'',sourceBlocks,'compact-direct')||'').trim();
-    }catch(e){
-      console.debug('[Principal injection] rebuild failed',e);
-    }
-  }
-  if(!system || !user) return null;
-  return {system,user,label:'校长'};
+  const injection=buildPrincipalInjection();
+  if(!injection) return null;
+  return {system:String(injection.system||''),user:String(injection.user||''),label:'校长'};
 }
 function optimizationInjectionData(){
   const snap=state.polishInjectionSnapshot;
@@ -9100,13 +9132,11 @@ function teacherCurrentResultForGroup(g){
 }
 
 function teacherInjectionTextForGroup(gi){
-  const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
+  const groups=teacherAssignmentGroups(), index=Number(gi), g=groups[index];
   if(!g) return null;
-  const resolved=teacherResultForAssignmentGroup(g), t=resolved.t;
-  if(!t || !String(t.raw||'').trim()) return null;
-  // 纯读取：直接复用老师真实 AI 请求的 SYSTEM + USER 组装逻辑，不调用 AI。
-  const cached=t.lastInjection&&typeof t.lastInjection==='object'&&String(t.lastInjection.system||'').trim()&&String(t.lastInjection.user||'').trim() ? t.lastInjection : null;
-  return { gi:Number(gi), label:groups.length>1?`老师${Number(gi)+1}`:'老师', system:cached?String(cached.system):String(TEACHER_SYS||''), user:cached?String(cached.user):String(buildTeacherUser(g,Number(gi))||'') };
+  const injection=buildTeacherInjection(g,index);
+  if(!injection) return null;
+  return { gi:index, label:groups.length>1?`老师${index+1}`:'老师', system:String(injection.system), user:String(injection.user) };
 }
 function teacherInjectionFileName(gi){
   const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
@@ -9115,7 +9145,7 @@ function teacherInjectionFileName(gi){
 }
 function openTeacherInjectionExport(gi){
   const inj=teacherInjectionTextForGroup(gi);
-  if(!inj){ toast('该老师教案尚未生成，暂时没有可导出的真实 AI 注入'); return; }
+  if(!inj){ toast('该老师当前无法组装真实 AI 注入，请检查老师分组上下文'); return; }
   const text=`【SYSTEM】\n${inj.system}\n\n【USER】\n${inj.user}`;
   const ov=document.createElement('div'); ov.className='gs-overlay teacher-injection-overlay';
   ov.innerHTML=`<div class="gs-modal teacher-injection-modal" role="dialog" aria-modal="true" aria-label="老师注入导出">
@@ -11642,7 +11672,8 @@ function writeStyleChipsHtml(sel, dataPrefix, opts){
   const CAT_LABEL = { '语言质感':'① 语言质感', '情绪与张力':'② 情绪与张力', '节奏与网感':'③ 节奏与网感', '叙事技法':'④ 叙事技法', '台词设计':'⑤ 台词设计', custom:'⭐ 我的自定义' };
   const CAT_ORDER = ['语言质感','情绪与张力','节奏与网感','叙事技法','台词设计','custom'];
   const items = lib.filter(s=>s.group==='element');
-  const mkOpt = s=>`<div class="ws-opt ${(sel.tags||[]).includes(s.id)?'on':''}" data-${dataPrefix}-tag="${s.id}">
+  const CAT_CLASS = { '语言质感':'language', '情绪与张力':'emotion', '节奏与网感':'rhythm', '叙事技法':'narrative', '台词设计':'dialogue', custom:'custom' };
+  const mkOpt = s=>`<div class="ws-opt ws-cat-${CAT_CLASS[s.cat||'custom']||'custom'} ${(sel.tags||[]).includes(s.id)?'on':''}" data-${dataPrefix}-tag="${s.id}">
     <div class="ws-opt-main"><div class="ws-opt-name">${esc(s.name)}</div><div class="ws-opt-note">${esc(s.note)}</div></div>
     <button type="button" class="ws-opt-detail" data-ws-detail="${esc(s.id)}" title="查看详情" aria-label="查看详情">ⓘ</button>
   </div>`;
@@ -16736,6 +16767,8 @@ const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人�
 8. 对于被判断为核心/主要人物的每一人，本次生成就是其 Foundation 正式人物卡的主要定稿机会。后续“词典充实”明确禁止回写 Foundation 人物，因此这里不能故意只生成姓名、身份和一个性格标签，把九项基础人物信息留给不存在的后续 AI。
 9. 当前人物基础九项按程序现有契约理解为：正式姓名 + identity、age、gender、appearance、hobby、relation、trait、catchphrase。主要人物必须在本次输出中全部给出；确实没有客观依据的字段可以明确写“未知/无”，但不能留空，更不能用“待补充”“以后再定”等占位语。
 10. 判断人物是否属于主要人物时，不只看 Blueprint 是否写了“主角”。凡是承担核心冲突、核心目标阻力、关键转折、核心关系、长期阵营职责、导师/关键盟友/关键亲属/关键知情者等长期剧情职责的人，都应按主要人物完成九项基础信息。
+11. Foundation 阶段必须一次性确定本书完整的主要人物集合及其数量。数量不是固定人数，不得为了“安全余量”或凑数制造备用 main；只有具有明确长期核心剧情职责的人才能进入 main。Foundation 完成后，主要人物集合即进入正式基础词典。
+12. 后续词典充实不得新增 main；如果后续发现某个外围人物需要素材，只能作为 support/secondary 或 walkon 等外围资料处理，不得升级为 Foundation 主要人物。
 
 【人物创造的两种来源必须区分】
 A. 有依据的创造：从 Blueprint 已明确事实、世界规则、人物目标、冲突、关系、阵营和题材逻辑中推导出的合理补全。
