@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.564';
+const APP_VERSION = '1.0.565';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.564.js';
+const APP_FILE_VERSION = 'app1.0.565.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -86,7 +86,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.564.js — 优化构想与读优化构想完整重构。 */
+/* APP VERSION: app1.0.565.js — 优化构想与读优化构想完整重构。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -1515,7 +1515,7 @@ function applyProject(p){
   state.polishRevision = Number.isFinite(+p.polishRevision) ? +p.polishRevision : 0;
   state.polishInjectionSnapshot = (p.polishInjectionSnapshot && typeof p.polishInjectionSnapshot === 'object') ? p.polishInjectionSnapshot : null;
   state.polishSelectedFinal = (p.polishSelectedFinal && typeof p.polishSelectedFinal === 'object') ? p.polishSelectedFinal : null;
-  // v1.0.564：旧存档若只有 canonicalStoryStrategy，则只在加载时迁移一次到最终方案事实源；运行态不再反向以 canonical 推导最终方案。
+  // v1.0.565：旧存档若只有 canonicalStoryStrategy，则只在加载时迁移一次到最终方案事实源；运行态不再反向以 canonical 推导最终方案。
   if(!state.polishSelectedFinal && state.canonicalStoryStrategy && state.canonicalStoryStrategy.machineTrace?.status==='adopted'){
     try{ state.polishSelectedFinal = canonicalToPolishCandidate(state.canonicalStoryStrategy); }catch(_e){ state.polishSelectedFinal = null; }
   }
@@ -3620,7 +3620,7 @@ async function generateOptimizationConcept(btn, force){
   if(!idea){ toast('请先输入故事构想'); return false; }
   const kept=Array.isArray(state.polishOptions)&&state.polishOptions.length;
   if(kept && !force){ if(!confirm(`已有 ${kept} 个优化方案，重新生成将覆盖当前批次。继续？`)) return false; }
-  // v1.0.564：优化构想固定四方案，不再读取单/多方案开关，也不进入质检/修复链。
+  // v1.0.565：优化构想固定四方案，不再读取单/多方案开关，也不进入质检/修复链。
   state.polishMode='four';
   state.strategyStage1Status='generating';
   state.strategyStage2Status='generating';
@@ -4091,17 +4091,7 @@ function renderPolishCards(container){
     b.onclick = (e)=>{ e.preventDefault();
       const o = (state.polishOptions||[])[+b.dataset.polUse]; if(!o) return;
       if(state.outline){ openOptimizationReader(); return; }
-      state.polishAdopted = o.name || null;
-      state.polishSelectedId = o._id || null;
-      state.polishSelectedFinal = JSON.parse(JSON.stringify(o));
-      state.polishStatus = 'adopted';
-      state.strategyStage2Status = 'adopted';
-      state.polishRevision = Number(state.polishRevision||0) + 1;
-      syncPolishMetaFromCandidate(o);
-      state.canonicalStoryStrategy = buildPolishCanonical(o, state.polishRevision);
-      state.canonicalStoryStrategy = Object.assign({}, state.canonicalStoryStrategy, { sourceType:'canonical_story_strategy', sourceVersion:'phase5', sourceOfTruth:'creativeBlueprint', machineTrace:Object.assign({}, state.canonicalStoryStrategy.machineTrace||{}, {status:'adopted'}) });
-        invalidateAfterStoryStrategyChange();
-      persist(); render();
+      if(!adoptOptimizationOption(+b.dataset.polUse+1)) return;
       toast('已选中：'+(o.name||('方案'+(+b.dataset.polUse+1)))+'（不覆盖原始构想；可点「生成大纲」搬入书名/简介/全书节拍）');
     };
   });
@@ -8753,10 +8743,10 @@ function polishAnalysisHeader(){
   const dp=(state.strategicDiversityProfile||((state.polishOptions||[])[0]?.diversityProfile)||{});
   return ['【原始构想锚点】',`人物：${(analysis.characters||[]).join('、')}`,`关系：${(analysis.relationships||[]).join('、')}`,`目标：${(analysis.goals||[]).join('、')}`,`核心冲突：${analysis.coreConflict||''}`,`固定事实：${(analysis.fixedFacts||[]).join('、')}`,'','【动态战略维度】',...dims.map(d=>`- ${d?.name||''}｜${d?.description||''}｜契合：${d?.whyFit||''}`),'','【战略多样性】',`固定核心：${(dp.fixedCore||[]).join('、')}`,`可变轴：${(dp.variableAxes||[]).join('、')}`,`避免重复：${(dp.avoidRepetition||[]).join('、')}`,`推荐组合：${dp.recommendedMix||''}`,''].join('\n');
 }
-function parseEditedPolishText(text,multi){
+function parseEditedPolishText(text,multi,allowSingle){
   const src=String(text||'').trim();
-  if(multi || /【原始构想锚点】|【动态战略维度】|【战略多样性】/i.test(src)) return parseOptimizationPlainText(src,!!multi);
-  return parseOptimizationPlainText(`${polishAnalysisHeader()}\n${src}`,false);
+  if(multi || /【原始构想锚点】|【动态战略维度】|【战略多样性】/i.test(src)) return parseOptimizationPlainText(src,!!multi,!!allowSingle);
+  return parseOptimizationPlainText(`${polishAnalysisHeader()}\n${src}`,false,!!allowSingle);
 }
 async function readTextFileForImport(acceptExts=['.txt','.md','.markdown']){
   return await new Promise((resolve,reject)=>{
@@ -8803,7 +8793,10 @@ function renderOptimizationFinalCard(card, draft, optionIndex){
   card.querySelector('[data-or-final-text]').value=draft ? polishCandidateToStructuredText(draft,Math.max(0,optionIndex||0)) : '';
 }
 function parseOptimizationReaderText(text, multi){
-  const parsed=parseEditedPolishText(String(text||''),!!multi);
+  const src=String(text||'').trim();
+  if(!src) throw new Error(multi?'没有有效的多方案':'没有有效的最终方案');
+  const normalized = multi ? src : `【方案1｜最终方案】\n${src}`;
+  const parsed=parseEditedPolishText(normalized,!!multi,!multi);
   if(!parsed?.ok) throw new Error(parsed?.error||'结构化纯文本解析失败');
   if(!Array.isArray(parsed.options)||!parsed.options.length) throw new Error(multi?'没有有效的多方案':'没有有效的最终方案');
   if(multi && parsed.options.length!==4) throw new Error(`多方案必须包含4个方案，当前解析到${parsed.options.length}个`);
@@ -8822,7 +8815,9 @@ function adoptOptimizationOption(selectedOptionIndex){
   state.strategyStage2Status='adopted';
   state.polishRevision=Number(state.polishRevision||0)+1;
   state.polishSelectedFinal=copy;
+  syncPolishMetaFromCandidate(copy);
   rebuildCanonicalFromSelectedFinal();
+  invalidateAfterStoryStrategyChange();
   persist();
   render();
   return true;
@@ -8909,6 +8904,8 @@ function openOptimizationReader(){
     const adopt=e.target.closest('[data-or-adopt]');
     if(adopt){
       const n=Number(multiCard.querySelector('[data-or-number]')?.value);
+      try{ draft.multi=saveOptimizationMulti(multiCard.querySelector('[data-or-multi-text]').value); baseline.multi=JSON.parse(JSON.stringify(draft.multi)); }
+      catch(err){ toast('转换前保存多方案失败：'+String(err?.message||err)); return; }
       if(!adoptOptimizationOption(n)) return;
       const fresh=createOptimizationReaderBaselines(); draft.multi=JSON.parse(JSON.stringify(fresh.multi)); draft.final=JSON.parse(JSON.stringify(fresh.final));
       renderOptimizationMultiCard(multiCard,draft.multi); renderOptimizationFinalCard(finalCard,draft.final,n-1); toast(`已将方案${n}转换为最终方案`); return;
@@ -9938,7 +9935,7 @@ function validateOptimizationPersonNaming(parsed){
   });
   return bad.length ? bad.join('；') : '';
 }
-function parseOptimizationPlainText(raw, multi){
+function parseOptimizationPlainText(raw, multi, allowSingle){
   const text=String(raw||'').replace(/\r/g,'').trim();
   if(!text) return {ok:false,error:'AI未返回内容',options:[],analysis:null};
   const section=(label,src)=>{ const re=new RegExp(`【${label}】\\s*([\\s\\S]*?)(?=\\n【(?:原始构想锚点|动态战略维度|战略多样性|方案[一二三四五六七八九十\\d]+)】|$)`, 'i'); const m=String(src).match(re); return m?m[1].trim():''; };
@@ -9953,7 +9950,7 @@ function parseOptimizationPlainText(raw, multi){
   const optionMatches=[...text.matchAll(/(?:^|\n)【方案([一二三四五六七八九十\d]+)(?:\s*[｜|：:]\s*([^】\n]+))?】\s*([\s\S]*?)(?=\n【方案[一二三四五六七八九十\d]+(?:\s*[｜|：:])?|$)/g)];
   const optionBlocks=optionMatches.map(m=>({num:m[1],title:String(m[2]||'').trim(),body:m[3].trim()}));
   const expectedAdherence=[100,80,50,30];
-  if(optionBlocks.length!==4) return {ok:false,error:`纯文本解析得到 ${optionBlocks.length} 个方案（固定要求4个：100%、80%、50%、30%贴合）`,options:[],analysis};
+  if(optionBlocks.length!==4 && !(allowSingle && optionBlocks.length===1)) return {ok:false,error:`纯文本解析得到 ${optionBlocks.length} 个方案（固定要求4个：100%、80%、50%、30%贴合）`,options:[],analysis};
   const options=optionBlocks.map((sec,idx)=>{
     const sb=parseOptimizationStructuredBlock(sec.body);
     if(sb.fullBookBeat.length) sb.fullBookBeatText=sb.fullBookBeat.join('\n');
