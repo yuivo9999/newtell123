@@ -19,9 +19,41 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.567';
+const APP_VERSION = '1.0.568';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.567.js';
+const APP_FILE_VERSION = 'app1.0.568.js';
+function installV568Styles(){
+  if(document.getElementById('v568ScopedStyles')) return;
+  const st=document.createElement('style'); st.id='v568ScopedStyles'; st.textContent=`
+    .ar-gap-demo{background:linear-gradient(135deg,#7c3aed 0%,#a855f7 45%,#facc15 100%);color:#fff;border-radius:8px;padding:7px 9px;margin-top:4px;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+    .ai-recipe-gapitem,.ai-recipe-gapitem *{min-width:0;max-width:100%;box-sizing:border-box}
+    .ws-opt{min-width:0;max-width:100%;position:relative}
+    .ws-opt-detail{flex:0 0 auto;width:28px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--txt);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1;font-size:15px}
+    .ws-opt-detail:hover{filter:brightness(1.06)}
+    .ws-opt-main{min-width:0;flex:1 1 auto}
+    .ws-opt-note,.ws-opt-name{max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+    .ws-detail-modal{width:min(680px,calc(100vw - 24px))!important;max-width:680px!important;max-height:min(80vh,720px)!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
+    .ws-detail-body{overflow:auto;min-width:0;max-width:100%;padding:12px 16px 18px}
+    .ws-detail-row{margin:0 0 10px;min-width:0;overflow-wrap:anywhere;word-break:break-word}
+    .ws-detail-label{font-size:11px;color:var(--sub);font-weight:700;margin-bottom:3px}
+    .ws-detail-value{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+    .ws-detail-list{margin:0;padding-left:20px}
+    .ws-new-style-modal{width:min(680px,calc(100vw - 24px))!important;max-width:680px!important;max-height:min(80vh,720px)!important}
+    .ws-new-style-modal #wsnPlainText{width:100%;max-width:100%;box-sizing:border-box;min-height:260px}
+    .ws-tools,.dm-card .de-action-row{display:flex;flex-wrap:wrap;min-width:0;max-width:100%}
+    .dm-card .de-action-row{gap:8px;align-items:center}
+    .dm-card .de-action-row .de-action-generate{flex:0 0 100%;width:max-content;max-width:100%}
+    .dm-card .de-action-row .de-action-secondary{display:flex;gap:8px;flex-wrap:wrap;min-width:0;max-width:100%}
+    .dm-card .de-action-row .btn{box-sizing:border-box;max-width:100%}
+    .dm-card .de-action-row .de-action-secondary .btn{white-space:normal}
+    .ws-opt-list{min-width:0;max-width:100%}
+    @media(max-width:600px){
+      .ws-detail-modal,.ws-new-style-modal{width:calc(100vw - 24px)!important;max-height:82vh!important}
+      .ws-opt-detail{width:30px;height:30px}
+      .dm-card .de-action-row .de-action-secondary{width:100%}
+    }
+  `; document.head.appendChild(st);
+}
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -86,7 +118,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.567.js — 优化构想与读优化构想完整重构。 */
+/* APP VERSION: app1.0.568.js — 优化构想与读优化构想完整重构。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -4810,6 +4842,7 @@ function aiRecipeCard(){
   </div>`;
 }
 function aiRecipeResultHtml(lib){
+  installV568Styles();
   if(aiRp && aiRp.err) return `<p class="muted" style="color:var(--danger);margin:8px 0 0">⚠️ ${esc(aiRp.err)}</p>`;
   if(!aiRp || !Array.isArray(aiRp.list) || !aiRp.list.length){
     return '';
@@ -11577,14 +11610,15 @@ function rebuildCustomColorCss(){
   el.textContent = wsCustomColors().map(s=>{ const col=(s.c&&s.c.length)? s.c[s.c.length-1] : ''; return col ? `[data-cs="${s.id}"]{--c-element:${col}}` : ''; }).filter(Boolean).join('\n');
 }
 function writeStyleChipsHtml(sel, dataPrefix, opts){
+  installV568Styles();
   opts = opts || {};
   const lib = writeStyleLib();
   const CAT_LABEL = { '语言质感':'① 语言质感', '情绪与张力':'② 情绪与张力', '节奏与网感':'③ 节奏与网感', '叙事技法':'④ 叙事技法', '台词设计':'⑤ 台词设计', custom:'⭐ 我的自定义' };
   const CAT_ORDER = ['语言质感','情绪与张力','节奏与网感','叙事技法','台词设计','custom'];
   const items = lib.filter(s=>s.group==='element');
   const mkOpt = s=>`<div class="ws-opt ${(sel.tags||[]).includes(s.id)?'on':''}" data-${dataPrefix}-tag="${s.id}">
-    <div class="ws-opt-name">${esc(s.name)}</div>
-    <div class="ws-opt-note">${esc(s.note)}</div>
+    <div class="ws-opt-main"><div class="ws-opt-name">${esc(s.name)}</div><div class="ws-opt-note">${esc(s.note)}</div></div>
+    <button type="button" class="ws-opt-detail" data-ws-detail="${esc(s.id)}" title="查看详情" aria-label="查看详情">ⓘ</button>
   </div>`;
   const plus = opts.plus ? `<button type="button" class="ws-chip ws-chip-plus" data-${dataPrefix}-add="element" title="点击新建文风词条">＋</button>` : '';
   const useFold = dataPrefix === 'ws';
@@ -11628,6 +11662,31 @@ function writeStyleChipsHtml(sel, dataPrefix, opts){
   const chipsTail = (opts.plus || opts.showTip !== false)
     ? `<div class="ws-chips">${opts.showTip !== false ? '<span class="ws-group-tip">可多选</span>' : ''}${plus}</div>` : '';
   return `${comboBar}${blocks}${chipsTail}`;
+}
+
+function openStyleEntryDetails(id){
+  installV568Styles();
+  const entry=writeStyleById(id);
+  if(!entry){ toast('未找到该写作风格词条'); return; }
+  const fields=[
+    ['id','ID'],['group','group'],['cat','分类'],['name','名称'],['note','核心说明'],
+    ['tips','写法'],['avoid','避免'],['check','自查'],['demo','示范写法'],['custom','custom'],['seal','seal'],['warning','warning']
+  ];
+  const rows=fields.map(([key,label])=>{
+    const value=entry[key];
+    if(Array.isArray(value)){
+      const vals=value.map(v=>String(v??'').trim()).filter(Boolean); if(!vals.length) return '';
+      return `<div class="ws-detail-row"><div class="ws-detail-label">${esc(label)}</div><ul class="ws-detail-list">${vals.map(v=>`<li>${esc(v)}</li>`).join('')}</ul></div>`;
+    }
+    if(value===undefined || value===null || String(value).trim()==='') return '';
+    return `<div class="ws-detail-row"><div class="ws-detail-label">${esc(label)}</div><div class="ws-detail-value">${esc(String(value))}</div></div>`;
+  }).join('');
+  const ov=document.createElement('div'); ov.className='gs-overlay'; ov.id='wsDetailPanel';
+  ov.innerHTML=`<div class="gs-modal ws-detail-modal"><div class="gs-modal-head"><b>ⓘ ${esc(entry.name||'写作风格详情')}</b><button class="gs-x" data-wsd-close>✕</button></div><div class="ws-detail-body">${rows||'<p class="muted">暂无可显示的详情。</p>'}</div></div>`;
+  document.body.appendChild(ov);
+  const close=()=>ov.remove();
+  ov.querySelector('[data-wsd-close]').onclick=close;
+  ov.addEventListener('click',e=>{if(e.target===ov)close();});
 }
 
 function toggleWriteTag(sel, id){
@@ -11680,6 +11739,7 @@ function bindWriteStyle(){
     const body = $('.ws-body'); if(body) body.hidden = st.collapsed;
     const ico = head.querySelector('.sc-fold-ico'); if(ico) ico.textContent = st.collapsed?'▸':'▾';
   };
+  $$('[data-ws-detail]').forEach(b=> b.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); openStyleEntryDetails(b.dataset.wsDetail); });
   $$('[data-ws-tag]').forEach(b=> b.onclick = ()=>{
     toggleWriteTag(wsDraftInit(), b.dataset.wsTag);
     refreshWsUI();
@@ -11794,133 +11854,27 @@ function bindWriteStyle(){
   }
   $$('[data-ws-add]').forEach(b=> b.onclick = ()=> openStyleNewDialog(b.dataset.wsAdd));
 }
-function buildStyleEntryPlainText(){
-  const v = id => String(document.querySelector(id)?.value || '').trim();
-  const lines = id => v(id).split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-  const tips=lines('#wsnTips'), avoid=lines('#wsnAvoid'), check=lines('#wsnCheck');
-  return [
-    '分类：'+(v('#wsnCat')||'custom'),
-    '词条名字：'+v('#wsnName'),
-    '核心说明：'+v('#wsnNote'),
-    '写法：'+tips.map((x,i)=>(i+1)+'. '+x).join('\n'),
-    '避免：'+avoid.map((x,i)=>(i+1)+'. '+x).join('\n'),
-    '自查：'+check.map((x,i)=>(i+1)+'. '+x).join('\n'),
-    '示范写法：'+v('#wsnDemo')
-  ].join('\n\n');
-}
-function parseStyleEntryPlainText(text){
-  const src=String(text||'').replace(/\r/g,'').trim();
-  const sections={cat:'custom',name:'',note:'',tips:[],avoid:[],check:[],demo:''};
-  const headerMap={
-    '分类':'cat','词条名字':'name','总纲':'note','核心说明':'note',
-    '写法':'tips','避免':'avoid','自查':'check','示范写法':'demo','示例写法':'demo'
-  };
-  let mode=null;
-  const cleanList=(line,kind)=>{
-    let x=String(line||'').trim();
-    if(!x) return '';
-    x=x.replace(/^(?:\d+|[①②③④⑤⑥⑦⑧⑨⑩]|[一二三四五六七八九十]+)[.、)）:\s]+/,'');
-    if(kind==='avoid') x=x.replace(/^[✗×-]+\s*/,'');
-    if(kind==='check') x=x.replace(/^[✅◇-]+\s*/,'');
-    return x.trim();
-  };
-  src.split('\n').forEach(raw=>{
-    const line=String(raw||'').trim();
-    if(!line) return;
-    const m=line.match(/^([^：:]{2,10})\s*[：:]\s*(.*)$/);
-    if(m && headerMap[m[1]]){
-      mode=headerMap[m[1]];
-      const value=m[2].trim();
-      if(mode==='cat') sections.cat=value||'custom';
-      else if(mode==='name') sections.name=value;
-      else if(mode==='note') sections.note=value;
-      else if(mode==='demo') sections.demo=value;
-      else if(value) sections[mode].push(cleanList(value,mode));
-      return;
-    }
-    if(mode==='tips'||mode==='avoid'||mode==='check'){
-      const x=cleanList(line,mode); if(x) sections[mode].push(x);
-    }else if(mode==='note'){
-      sections.note=sections.note ? sections.note+'\n'+line : line;
-    }else if(mode==='demo'){
-      sections.demo=sections.demo ? sections.demo+'\n'+line : line;
-    }
-  });
-  sections.tips=sections.tips.filter(Boolean); sections.avoid=sections.avoid.filter(Boolean); sections.check=sections.check.filter(Boolean);
-  if(!sections.name.trim()) return {ok:false,error:'纯文本中缺少“词条名字”'};
-  if(!['语言质感','情绪与张力','节奏与网感','叙事技法','台词设计','custom'].includes(sections.cat)) sections.cat='custom';
-  return {ok:true,entry:sections};
-}
-function updateStylePlainTextSection(text, sectionName, value){
-  const labels={cat:'分类',name:'词条名字',note:'核心说明',tips:'写法',avoid:'避免',check:'自查',demo:'示范写法'};
-  const label=labels[sectionName]; if(!label) return String(text||'');
-  let src=String(text||'').replace(/\r/g,'');
-  if(!src.trim()) src=['分类：custom','词条名字：','核心说明：','写法：','避免：','自查：','示范写法：'].join('\n\n');
-  const lines=src.split('\n');
-  const headerRe=/^(分类|词条名字|总纲|核心说明|写法|避免|自查|示范写法|示例写法)\s*[：:]/;
-  const wanted=new RegExp('^'+label+'\\s*[：:]');
-  let idx=lines.findIndex(x=>wanted.test(String(x).trim()));
-  if(idx<0 && sectionName==='note') idx=lines.findIndex(x=>/^总纲\s*[：:]/.test(String(x).trim()));
-  if(idx<0){ src += '\n\n'+label+'：'+String(value||'').trim(); return src.trim(); }
-  let end=idx+1; while(end<lines.length && !headerRe.test(String(lines[end]).trim())) end++;
-  const v=String(value||'').trim();
-  const body=(sectionName==='tips'||sectionName==='avoid'||sectionName==='check')
-    ? v.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).map((x,i)=>(i+1)+'. '+x.replace(/^(?:\d+|[①②③④⑤⑥⑦⑧⑨⑩]|[一二三四五六七八九十]+)[.、)）:\s]+/,'')).join('\n')
-    : v;
-  const replacement=[label+'：'+body];
-  lines.splice(idx,end-idx,...replacement);
-  return lines.join('\n').replace(/\n{3,}/g,'\n\n').trim();
-}
-function syncStyleEntryPlainText(ov, sectionName){
-  const ta=ov?.querySelector('#wsnPlainText'); if(!ta) return;
-  if(!sectionName){ ta.value=buildStyleEntryPlainText(); return; }
-  const ids={cat:'#wsnCat',name:'#wsnName',note:'#wsnNote',tips:'#wsnTips',avoid:'#wsnAvoid',check:'#wsnCheck',demo:'#wsnDemo'};
-  const value=ov.querySelector(ids[sectionName])?.value || '';
-  ta.value=updateStylePlainTextSection(ta.value,sectionName,value);
-}
 function openStyleNewDialog(group){
   closeStyleNewDialog();
-  const CAT_LABEL = { '语言质感':'① 语言质感', '情绪与张力':'② 情绪与张力', '节奏与网感':'③ 节奏与网感', '叙事技法':'④ 叙事技法', '台词设计':'⑤ 台词设计', custom:'⭐ 我的自定义' };
   const validGroup=['语言质感','情绪与张力','节奏与网感','叙事技法','台词设计','custom'];
   const initialGroup=validGroup.includes(group)?group:'custom';
-  const ov = document.createElement('div'); ov.id='wsNewPanel'; ov.className='gs-overlay';
-  ov.innerHTML = `
+  const ov=document.createElement('div'); ov.id='wsNewPanel'; ov.className='gs-overlay';
+  ov.innerHTML=`
     <div class="gs-modal ws-new-style-modal">
       <div class="gs-modal-head"><b>＋ 新建写作风格词条</b><button class="gs-x" data-wsn-close>✕</button></div>
-      <div class="cv-body">
-        <label style="font-size:12px;color:var(--sub)">归属分类</label>
-        <select id="wsnCat" style="margin:4px 0 10px">
-          <option value="语言质感"${initialGroup==='语言质感'?' selected':''}>① 语言质感</option>
-          <option value="情绪与张力"${initialGroup==='情绪与张力'?' selected':''}>② 情绪与张力</option>
-          <option value="节奏与网感"${initialGroup==='节奏与网感'?' selected':''}>③ 节奏与网感</option>
-          <option value="叙事技法"${initialGroup==='叙事技法'?' selected':''}>④ 叙事技法</option>
-          <option value="台词设计"${initialGroup==='台词设计'?' selected':''}>⑤ 台词设计</option>
-          <option value="custom"${initialGroup==='custom'?' selected':''}>⭐ 我的自定义</option>
-        </select>
-        <label style="font-size:12px;color:var(--sub)">词条名字 *</label><input type="text" id="wsnName" maxlength="80" placeholder="请输入词条名字" style="margin:4px 0 10px" />
-        <label style="font-size:12px;color:var(--sub)">总纲 / 核心说明</label><textarea id="wsnNote" rows="3" placeholder="允许为空" style="margin:4px 0 10px"></textarea>
-        <label style="font-size:12px;color:var(--sub)">写法</label><textarea id="wsnTips" rows="3" placeholder="每行一条；允许为空" style="margin:4px 0 10px"></textarea>
-        <label style="font-size:12px;color:var(--sub)">避免</label><textarea id="wsnAvoid" rows="3" placeholder="每行一条；允许为空" style="margin:4px 0 10px"></textarea>
-        <label style="font-size:12px;color:var(--sub)">自查</label><textarea id="wsnCheck" rows="3" placeholder="每行一条；允许为空" style="margin:4px 0 10px"></textarea>
-        <label style="font-size:12px;color:var(--sub)">示范写法</label><textarea id="wsnDemo" rows="3" placeholder="允许为空" style="margin:4px 0 6px"></textarea>
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0 4px"><label style="font-size:12px;color:var(--sub)">纯文本内容（最终保存源）</label><button type="button" class="btn small ghost" data-wsn-copy>📋 复制</button></div>
-        <textarea id="wsnPlainText" rows="8" spellcheck="false" style="width:100%;box-sizing:border-box;margin:0 0 6px;resize:vertical"></textarea>
-        <div class="muted" style="font-size:11px">结构化字段只负责辅助填写；你可以直接修改这份纯文本，保存时以纯文本为最终数据源。</div>
-        <div class="muted" style="font-size:11px;margin-top:4px">保存后解析为兼容的 <code>cfg.styleCustom.added</code> entry，不建立第二套写作风格数据源。</div>
+      <div class="cv-body" style="overflow:auto;min-width:0">
+        <div class="muted" style="font-size:11px;margin-bottom:6px">以下纯文本就是最终保存内容；可直接编辑，不再提供结构化填写框。</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0 4px"><label style="font-size:12px;color:var(--sub)">纯文本内容（唯一保存源）</label><button type="button" class="btn small ghost" data-wsn-copy>📋 复制</button></div>
+        <textarea id="wsnPlainText" rows="14" spellcheck="false" style="width:100%;box-sizing:border-box;margin:0 0 6px;resize:vertical"></textarea>
+        <div class="muted" style="font-size:11px">格式提示可直接写在文本中：分类、词条名字、核心说明、写法、避免、自查、示范写法。</div>
       </div>
       <div class="modal-actions" style="padding:12px 16px;border-top:1px solid var(--line)"><button type="button" class="btn ghost" data-wsn-close2>不保存</button><button type="button" class="btn primary" data-wsn-ok>保存</button></div>
     </div>`;
   document.body.appendChild(ov);
-  if(!document.getElementById('wsNewStyleScopedStyle')){
-    const st=document.createElement('style'); st.id='wsNewStyleScopedStyle'; st.textContent='#wsNewPanel .ws-new-style-modal{width:min(480px,92vw)!important;max-width:480px!important;max-height:72vh!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}#wsNewPanel .ws-new-style-modal .cv-body{overflow:auto;min-height:0}@media(max-width:600px){#wsNewPanel .ws-new-style-modal{width:92vw!important;max-height:78vh!important}}'; document.head.appendChild(st);
-  }
-  const catSel=ov.querySelector('#wsnCat');
+  installV568Styles();
   const close=()=>closeStyleNewDialog();
   ov.querySelector('[data-wsn-close]').onclick=close; ov.querySelector('[data-wsn-close2]').onclick=close;
-  ov.addEventListener('click',e=>{if(e.target===ov) close();});
-  const fieldIds=['#wsnCat','#wsnName','#wsnNote','#wsnTips','#wsnAvoid','#wsnCheck','#wsnDemo'];
-  const fieldMap={'#wsnCat':'cat','#wsnName':'name','#wsnNote':'note','#wsnTips':'tips','#wsnAvoid':'avoid','#wsnCheck':'check','#wsnDemo':'demo'};
-  fieldIds.forEach(sel=>{ const el=ov.querySelector(sel); if(el) el.addEventListener('input',()=>syncStyleEntryPlainText(ov,fieldMap[sel])); });
+  ov.addEventListener('click',e=>{if(e.target===ov)close();});
   ov.querySelector('[data-wsn-ok]').onclick=()=>{
     const text=String(ov.querySelector('#wsnPlainText')?.value||'').trim();
     const parsed=parseStyleEntryPlainText(text);
@@ -11932,9 +11886,8 @@ function openStyleNewDialog(group){
     closeStyleNewDialog(); render(); toast('已新建并加入「'+e.name+'」');
   };
   const cp=ov.querySelector('[data-wsn-copy]'); if(cp) cp.onclick=()=>copyText(ov.querySelector('#wsnPlainText')?.value||'');
-  // 初始化为空白结构；绝不预填实际词条内容。
   const ta=ov.querySelector('#wsnPlainText'); if(ta) ta.value=['分类：'+initialGroup,'词条名字：','核心说明：','写法：','避免：','自查：','示范写法：'].join('\n\n');
-  const inp=ov.querySelector('#wsnName'); if(inp) inp.focus();
+  if(ta) ta.focus();
 }
 function closeStyleNewDialog(){ const p=$('#wsNewPanel'); if(p) p.remove(); }
 function applyWritePresetDraft(v){
@@ -17467,11 +17420,10 @@ function dictMasterBlockHtml(){
           <h3 class="ch-title">词典达人 · 专有名词与设定库</h3>
           <span class="ch-subtag ch-subtag-dict">人物 ${(g.characters||[]).length} · 地名 ${(g.places||[]).length} · 专名 ${(g.propernouns||[]).length}</span>
         </div>
-        <div class="ch-right">
-          <button id="btnCardGenDictMaster" type="button" class="btn small dm-ai-action" style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成 / 重新生成词典达人">✨ 生成</button>
-          <button type="button" class="btn small" data-dm-injection-export title="查看词典达人真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;font-weight:700">📦 注入导出</button>
-          <button type="button" class="btn small" data-dm-reader title="查看并人工编辑正式词典达人资料" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 55%,#14b8a6 100%);color:#fff;border:0;font-weight:700">📖 读词典达人</button>
-          ${histN?`<button id="btnDictMasterHist" class="btn small ghost">🕘 历史(${histN}/6)</button>`:''}
+        <div class="ch-right de-action-row">
+          <div class="de-action-generate"><button id="btnCardGenDictMaster" type="button" class="btn small dm-ai-action" style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成 / 重新生成词典达人">✨ 生成</button></div>
+          <div class="de-action-secondary"><button type="button" class="btn small" data-dm-injection-export title="查看词典达人真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;font-weight:700">📦 注入导出</button>
+          <button type="button" class="btn small" data-dm-reader title="查看并人工编辑正式词典达人资料" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 55%,#14b8a6 100%);color:#fff;border:0;font-weight:700">📖 读词典达人</button>${histN?`<button id="btnDictMasterHist" class="btn small ghost">🕘 历史(${histN}/6)</button>`:''}</div>
         </div>
       </div>
       <div class="dm-toolbar">
@@ -17500,10 +17452,10 @@ function dictMasterBlockHtml(){
         <h3 class="ch-title">词典达人 · 专有名词与设定库</h3>
         <span class="ch-subtag ch-subtag-dict">待生成</span>
       </div>
-      <div class="ch-right">
-        <button id="btnCardGenDictMaster" type="button" class="btn small dm-ai-action" style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成词典达人">✨ 生成</button>
-        <button type="button" class="btn small" data-dm-injection-export title="查看词典达人真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;font-weight:700">📦 注入导出</button>
-        <button type="button" class="btn small" data-dm-reader title="查看并人工编辑正式词典达人资料" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 55%,#14b8a6 100%);color:#fff;border:0;font-weight:700">📖 读词典达人</button>
+      <div class="ch-right de-action-row">
+        <div class="de-action-generate"><button id="btnCardGenDictMaster" type="button" class="btn small dm-ai-action" style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成词典达人">✨ 生成</button></div>
+        <div class="de-action-secondary"><button type="button" class="btn small" data-dm-injection-export title="查看词典达人真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;font-weight:700">📦 注入导出</button>
+        <button type="button" class="btn small" data-dm-reader title="查看并人工编辑正式词典达人资料" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 55%,#14b8a6 100%);color:#fff;border:0;font-weight:700">📖 读词典达人</button></div>
       </div>
     </div>
     ${locked?`<div class="dm-locked" style="margin:6px 0;color:#2e9e5b;font-size:12px">设定已锁定，可在「编剧学院」中一键迭代。</div>`:''}
@@ -18908,10 +18860,32 @@ function _deValidateParsed(parsed,g){
   }
   return true;
 }
+function normalizeDictEnrichInput(text){
+  let src=String(text||'').replace(/\r/g,'');
+  if(!src.trim()) return '';
+  src=src.replace(/[｜¦]/g,'|').replace(/[﹕：]/g,':');
+  const aliases={
+    '主要人物':'人物','次要配角':'人物','配角':'人物','职业':'机构','物品':'道具',
+    '人物关系':'人物关系','人物关联':'人物关系','地名关系':'地名关联','专名关系':'专名关联',
+    '世界规则':'世界观规则','世界观':'世界观规则'
+  };
+  const lines=src.split('\n').map(raw=>{
+    let line=String(raw).trim();
+    if(!line) return '';
+    const h=line.match(/^【\s*词典充实\s*[·|:]\s*([^】]+)】(.*)$/);
+    if(h){ const tag=aliases[String(h[1]).trim()]||String(h[1]).trim(); return `【词典充实·${tag}】${h[2]||''}`; }
+    const parts=line.split('|');
+    if(parts.length>=2){ const tag=String(parts[0]||'').trim(); if(aliases[tag] && aliases[tag]!==tag){ parts[0]=aliases[tag]; return parts.join('|'); } }
+    return line;
+  });
+  return lines.filter(Boolean).join('\n').replace(/[ \t]+\n/g,'\n').trim();
+}
+
 function saveDictEnrichReaderChanges(text){
   const o=state.outline; if(!o) throw new Error('当前没有作品数据。');
   const original=ensureGlossaryKnowledgeShape(o.glossary||{});
-  const parsed=parseDictEnrichFinalText(text); _deValidateParsed(parsed,original);
+  const normalizedText=normalizeDictEnrichInput(text);
+  const parsed=parseDictEnrichFinalText(normalizedText); _deValidateParsed(parsed,original);
   const working=JSON.parse(JSON.stringify(original)); ensureGlossaryKnowledgeShape(working);
   const cats=['characters','places','propernouns','walkons','organizations','institutions','items','rules','terms','events','lifeSettings','_relationshipTable','_placeContacts','_properContacts','_worldRules'];
   // 先只删除旧 enrichment，Foundation 和非 enrichment 数据完全保留。
@@ -18957,7 +18931,7 @@ function openDictEnrichReaderModal(){
   const baseline=text;
   return openUnifiedTextReader({
     title:'📖 读词典充实',
-    initialText:text || '当前暂无已正式收录的词典充实内容。', originalText:baseline,
+    initialText:text || '', originalText:baseline,
     onRestore:async()=>{},
     onSave:async val=>{ saveDictEnrichReaderChanges(val); },
     onImport:async val=>{ saveDictEnrichReaderChanges(val); }
@@ -18965,6 +18939,7 @@ function openDictEnrichReaderModal(){
 }
 
 function dictEnrichBlockHtml(){
+  installV568Styles();
   const o = (state.outline) || {};
   const t = String(o._dictEnrichText || '').trim();
   const sum = o._dictEnrichSummary || null;
@@ -19045,11 +19020,12 @@ function dictEnrichBlockHtml(){
         ${foldBtn}
       </div>
     </div>
-    <div class="de-action-row" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px;align-items:center">
-      <button type="button" class="btn small" id="btnDictEnrichInjectionExport" title="查看词典充实真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(245,158,11,.24);font-weight:700">📦 注入导出</button>
-      <button type="button" class="btn small" id="btnDictEnrichReader" title="读取并编辑当前正式词典充实" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(6,182,212,.24);font-weight:700">📖 读词典充实</button>
-
-      <button id="btnCardGenDictEnrich" type="button" class="btn small dm-ai-action" style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成 / 重新生成词典充实">✨ 生成</button>
+    <div class="de-action-row" style="margin:0 0 10px">
+      <div class="de-action-generate"><button id="btnCardGenDictEnrich" type="button" class="btn small dm-ai-action" style="background:linear-gradient(135deg,#7c3aed 0%,#db2777 52%,#f59e0b 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(124,58,237,.24);font-weight:700" title="立即生成 / 重新生成词典充实">✨ 生成</button></div>
+      <div class="de-action-secondary">
+        <button type="button" class="btn small" id="btnDictEnrichInjectionExport" title="查看词典充实真实 AI 请求的 SYSTEM + USER" style="background:linear-gradient(135deg,#f59e0b 0%,#eab308 50%,#facc15 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(245,158,11,.24);font-weight:700">📦 注入导出</button>
+        <button type="button" class="btn small" id="btnDictEnrichReader" title="读取并编辑当前正式词典充实" style="background:linear-gradient(135deg,#06b6d4 0%,#0891b2 50%,#22d3ee 100%);color:#fff;border:0;box-shadow:0 2px 8px rgba(6,182,212,.24);font-weight:700">📖 读词典充实</button>
+      </div>
     </div>
     <div class="de-body"${deCollapsed?' style="display:none"':''}>
       ${stream}
