@@ -1,4 +1,4 @@
-/* v1.0.558 THREE-LAYER-INTEGRATION-CLEANUP: STYLE_STRATEGY contains the single principal GLOBAL authority; teacher performs chapter-level HYBRID/CHAPTER application.
+/* v1.0.559 THREE-LAYER-INTEGRATION-CLEANUP: STYLE_STRATEGY contains the single principal GLOBAL authority; teacher performs chapter-level HYBRID/CHAPTER application.
  * v1.0.536 STYLE-LAYER-OUTPUT-ORGANIZATION: principal outputs only the single GLOBAL source; teacher owns chapter-level HYBRID/CHAPTER application and receives GLOBAL once as the locked baseline.
  * v1.0.532 STYLE-BASIS-LOCK: principal/teacher dynamic style decisions must be grounded in chapter microbeat + plot situation; preserve raw-teacher-only transmission.
  * v1.0.527 STYLE-LAYER-TRANSMISSION: principal style-layer decision + teacher three-layer execution +正文 three-layer transmission; preserve optimized writing style source and keep layer responsibilities separate.
@@ -8,7 +8,7 @@
 /* v1.0.519 COMPLETE-TEACHER-CONTEXT: teacher AI receives the complete authoritative upstream context and returns a complete raw teaching plan. */
 /* v1.0.519 RAW-TEACHER-ONLY: the teacher AI return is saved verbatim; chapter reads are deterministic raw-text slices only. */
 'use strict';
-/* v1.0.551 SAFE-OPTIMIZATION-READER-INJECTION: 优化构想注入导出 + 读优化构想；纯读取/本地编辑；保留 canonicalStoryStrategy 唯一事实源。 */
+/* v1.0.559 SAFE-READER-EMPTY-STATE: 六大 Reader 空状态可打开并回写原正式数据链；不改变 AI 生成流程。 */
 /* v1.0.547 SAFE-AI-CONTRACT-RETIREMENT: 旧 callAIGuarded/callAIWithContract 安全退役；保留 callDeepSeek、text、finishReason、usage、Parser/Normalize/Validator、Abort 与业务数据链；finishReason=length 不再作为统一业务失败条件。 */
 
 /* v1.0.519 IRON LAW — 本章教案传导链永久锁定：
@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.558';
+const APP_VERSION = '1.0.559';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.558.js';
+const APP_FILE_VERSION = 'app1.0.559.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -86,7 +86,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.558.js — 校长注入链安全去重：唯一GLOBAL来源、合并重复风格资料、移除重复上下文包装。 */
+/* APP VERSION: app1.0.559.js — 校长注入链安全去重：唯一GLOBAL来源、合并重复风格资料、移除重复上下文包装。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -5835,11 +5835,20 @@ function chapterOfPlan(ci){
 function openChapterTeacherPlanReader(i){
   const chapterNo=Number(i)+1,groups=teacherAssignmentGroups();
   const g=groups.find(x=>chapterNo>=Number(x.first||1)&&chapterNo<=Number(x.last||Infinity));
-  const t=g?teacherResultForAssignmentGroup(g).t:null;
-  const card=t?.chapterCards?.chapters?.[chapterNo];
+  if(!g){ toast(`第${chapterNo}章未找到对应老师分组。`); return; }
+  const sc=scState();
+  if(!Array.isArray(sc.teachers)) sc.teachers=[];
+  let t=teacherResultForAssignmentGroup(g).t;
+  if(!t){
+    // 空状态只建立原正式老师容器，不标记完成、不伪造 AI 结果。
+    t=sc.teachers[Number(g.gi)||Math.max(0,groups.indexOf(g))] || {};
+    const gi=Number(g.gi)||Math.max(0,groups.indexOf(g));
+    sc.teachers[gi]=t;
+  }
+  if(!t.chapterCards||typeof t.chapterCards!=='object') t.chapterCards={chapters:{}};
+  if(!t.chapterCards.chapters||typeof t.chapterCards.chapters!=='object') t.chapterCards.chapters={};
+  const card=t.chapterCards.chapters[chapterNo];
   const text=String(card?.rawText||'');
-  if(!t){toast(`第${chapterNo}章对应老师尚未完成备课。`);return;}
-  if(!text.trim()){toast(`第${chapterNo}章的本章纯文本教案尚未切割，请先点击“✂️ 切割教案”。`);return;}
   const title=String(state.chapters?.[i]?.title||'').trim();
   let baseline=text;
   const ov=document.createElement('div');ov.className='gs-overlay';
@@ -6501,7 +6510,7 @@ function buildChapterStrategiesFromPrincipal(plans, targetCount, strategy){
   return out;
 }
 
-/* v1.0.558：全书节拍呼吸空间 + 校长阶段解释；内部说明书｜继承＋补充
+/* v1.0.559：全书节拍呼吸空间 + 校长阶段解释；内部说明书｜继承＋补充
  * 优化构想先形成完整风格资料：继承=用户已选原词条；补充=仅在明确风格缺口存在时新增的完整词条。
  * extractOptimizationStyleInheritanceSupplement 只提取，不生成、不改义、不扩展。
  * 校长：只负责确定唯一GLOBAL来源；HYBRID/CHAPTER由老师按章施工。
@@ -7712,7 +7721,7 @@ function normalizePrincipalStageStrategy(r, idx, canonical){
     settlement:String(r.settlement||'').trim(), newProblem:String(r.newProblem||'').trim(), irreversibleChange:String(r.irreversibleChange||'').trim(),
     previousStageHandoff:String(r.previousStageHandoff||'').trim(), nextStageLaunch:String(r.nextStageLaunch||'').trim(),
     stageRhythm:parsePrincipalJsonField(r.stageRhythm,{}),
-    // v1.0.558：校长只解释用户已确认的 fullBookBeat，不生成第二套节拍。
+    // v1.0.559：校长只解释用户已确认的 fullBookBeat，不生成第二套节拍。
     stageBeatInterpretation:String(r.stageBeatInterpretation||'').trim()
   };
 }
@@ -8831,8 +8840,14 @@ function principalCurrentResult(){
   if(!p || !String(p.raw||'').trim()) return null;
   return p;
 }
-function saveCurrentPrincipalResult(raw, reason){
-  const p=principalCurrentResult();
+function getPrincipalReaderTarget(){
+  const sc=scState();
+  if(!sc || typeof sc!=='object') return null;
+  if(!sc.principal || typeof sc.principal!=='object') sc.principal={};
+  return sc.principal;
+}
+function saveCurrentPrincipalResult(raw, reason, target){
+  const p=target || principalCurrentResult();
   if(!p) throw new Error('当前“读校长成果”不存在，无法保存');
   const nextRaw=String(raw||'').trim();
   if(!nextRaw) throw new Error('校长成果不能为空');
@@ -8867,12 +8882,12 @@ function saveCurrentPrincipalResult(raw, reason){
   refreshPrincipalUi();
   return p;
 }
-function restoreOriginalPrincipalResult(){
-  const p=principalCurrentResult();
+function restoreOriginalPrincipalResult(target){
+  const p=target || principalCurrentResult();
   if(!p) throw new Error('当前“读校长成果”不存在，无法恢复');
   const original=String(p.originalRaw||'').trim();
   if(!original) throw new Error('当前没有可恢复的原先成果');
-  return saveCurrentPrincipalResult(original,'restore_original');
+  return saveCurrentPrincipalResult(original,'restore_original',p);
 }
 
 function principalInjectionData(){
@@ -8995,7 +9010,6 @@ async function readTextFileForImport(acceptExts=['.txt','.md','.markdown']){
 }
 function openOptimizationReader(){
   const opts=Array.isArray(state.polishOptions)?state.polishOptions:[];
-  if(!opts.length && !state.polishSelectedFinal && !state.canonicalStoryStrategy){ toast('优化构想尚未生成'); return; }
   const multiText=polishOptionsToStructuredText();
   const selectedObj=state.polishSelectedFinal || (state.canonicalStoryStrategy ? canonicalToPolishCandidate(state.canonicalStoryStrategy) : (state.polishSelectedId ? opts.find(o=>o._id===state.polishSelectedId) : null));
   const selectedText=selectedObj ? polishCandidateToStructuredText(selectedObj,Math.max(0,opts.findIndex(o=>o._id===selectedObj._id))) : '';
@@ -9219,12 +9233,12 @@ function openSchoolPlanReader(gi, jumpCh){
   const sc=scState();
   const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
   if(!g){ toast('未找到该章节分组'); return; }
-  const resolved=teacherResultForAssignmentGroup(g), t=resolved.t;
-  if(!t || !String(t.raw||'').trim()){
-    toast(`第${g.first}-${g.last}章的老师教案尚未生成，请先完成对应老师备课`);
-    return;
-  }
-  const label=groups.length>1?`老师${Number(gi)+1}`:'老师';
+  const resolved=teacherResultForAssignmentGroup(g);
+  const sc2=scState();
+  if(!Array.isArray(sc2.teachers)) sc2.teachers=[];
+  const teacherIndex=Number(gi);
+  const t=resolved.t || (sc2.teachers[teacherIndex] || (sc2.teachers[teacherIndex]={}));
+  const label=groups.length>1?`老师${teacherIndex+1}`:'老师';
   const original=String(t.originalRaw||t.raw||'');
   if(typeof t.originalRaw!=='string') t.originalRaw=original;
   const ov=document.createElement('div'); ov.className='gs-overlay teacher-plan-edit-overlay';
@@ -9268,12 +9282,9 @@ function openSchoolPlanReader(gi, jumpCh){
 }
 
 function openSchoolPrincipalReader(){
-  const p=principalCurrentResult();
-  if(!p){toast('校长成果尚未生成。');return;}
-  if(typeof p.originalRaw!=='string' || !p.originalRaw.trim()){
-    p.originalRaw=String(p.raw||'');
-    persist();
-  }
+  const p=getPrincipalReaderTarget();
+  if(!p){toast('当前作品数据不可用。');return;}
+  if(typeof p.originalRaw!=='string') p.originalRaw=String(p.raw||'');
   const ov=document.createElement('div'); ov.className='gs-overlay';
   ov.innerHTML=`<div class="gs-modal school-plan-modal" style="max-width:920px">
     <div class="gs-modal-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px">
@@ -9289,6 +9300,7 @@ function openSchoolPrincipalReader(){
 }
 
 function renderSchoolPrincipalBody(ov, raw){
+  const p=getPrincipalReaderTarget();
   const body=ov.querySelector('#scPrincipalBody');
   if(!body) return;
   body.innerHTML=`<div style="display:flex;flex-direction:column;gap:10px">
@@ -9302,13 +9314,13 @@ function renderSchoolPrincipalBody(ov, raw){
   </div>`;
   const save=body.querySelector('#btnSavePrincipalRaw');
   if(save) save.onclick=()=>{
-    try{ const val=body.querySelector('#principalRawEditor').value; saveCurrentPrincipalResult(val,'manual_edit'); toast('已保存，目前成果已更新'); const np=principalCurrentResult(); renderSchoolPrincipalBody(ov,np.raw); }
+    try{ const val=body.querySelector('#principalRawEditor').value; saveCurrentPrincipalResult(val,'manual_edit',p); toast('已保存，目前成果已更新'); const np=p; renderSchoolPrincipalBody(ov,np.raw); }
     catch(e){ toast(String(e?.message||e)); }
   };
-  const imp=body.querySelector('#btnImportPrincipalRaw'); if(imp) imp.onclick=async()=>{ const p0=principalCurrentResult(); const oldP=p0?JSON.parse(JSON.stringify(p0)):null; const canon0=JSON.parse(JSON.stringify(storyState().canon||{})); const pv0=storyState().pipelineVersion; try{const picked=await readTextFileForImport(); saveCurrentPrincipalResult(picked.text,'import'); const np=principalCurrentResult(); renderSchoolPrincipalBody(ov,np.raw); toast('校长成果已导入并保存');}catch(e){if(p0&&oldP) Object.keys(p0).forEach(k=>delete p0[k]); if(p0&&oldP) Object.assign(p0,oldP); storyState().canon=canon0; storyState().pipelineVersion=pv0; toast('导入失败：'+String(e?.message||e));} };
+  const imp=body.querySelector('#btnImportPrincipalRaw'); if(imp) imp.onclick=async()=>{ const p0=p; const oldP=JSON.parse(JSON.stringify(p)); const canon0=JSON.parse(JSON.stringify(storyState().canon||{})); const pv0=storyState().pipelineVersion; try{const picked=await readTextFileForImport(); saveCurrentPrincipalResult(picked.text,'import',p); const np=p; renderSchoolPrincipalBody(ov,np.raw); toast('校长成果已导入并保存');}catch(e){if(p0&&oldP) Object.keys(p0).forEach(k=>delete p0[k]); if(p0&&oldP) Object.assign(p0,oldP); storyState().canon=canon0; storyState().pipelineVersion=pv0; toast('导入失败：'+String(e?.message||e));} };
   const restore=body.querySelector('#btnRestorePrincipalOriginal');
   if(restore) restore.onclick=()=>{
-    try{ const np=restoreOriginalPrincipalResult(); toast('已恢复原先成果'); renderSchoolPrincipalBody(ov,np.raw); }
+    try{ const np=restoreOriginalPrincipalResult(p); toast('已恢复原先成果'); renderSchoolPrincipalBody(ov,np.raw); }
     catch(e){ toast(String(e?.message||e)); }
   };
 }
@@ -17443,7 +17455,7 @@ function openDictmasterInjectionExport(){
 function openDictmasterReader(){
   const snap=dictmasterFoundationSnapshotForReader();
   const text=dictmasterReaderSnapshotText(snap);
-  if(!text){ toast('当前尚未生成词典达人。'); return; }
+  // 空状态也必须能够进入 Reader；保存时仍走原有结构化解析与正式 glossary 数据链。
   let baseline=text;
   const ov=document.createElement('div'); ov.className='gs-overlay';
   ov.innerHTML=`<div class="gs-modal dictmaster-reader-modal" style="max-width:820px;width:min(94vw,820px)">
