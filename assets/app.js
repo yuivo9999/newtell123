@@ -1,4 +1,4 @@
-/* v1.0.559 THREE-LAYER-INTEGRATION-CLEANUP: STYLE_STRATEGY contains the single principal GLOBAL authority; teacher performs chapter-level HYBRID/CHAPTER application.
+/* v1.0.560 THREE-LAYER-INTEGRATION-CLEANUP: STYLE_STRATEGY contains the single principal GLOBAL authority; teacher performs chapter-level HYBRID/CHAPTER application.
  * v1.0.536 STYLE-LAYER-OUTPUT-ORGANIZATION: principal outputs only the single GLOBAL source; teacher owns chapter-level HYBRID/CHAPTER application and receives GLOBAL once as the locked baseline.
  * v1.0.532 STYLE-BASIS-LOCK: principal/teacher dynamic style decisions must be grounded in chapter microbeat + plot situation; preserve raw-teacher-only transmission.
  * v1.0.527 STYLE-LAYER-TRANSMISSION: principal style-layer decision + teacher three-layer execution +正文 three-layer transmission; preserve optimized writing style source and keep layer responsibilities separate.
@@ -8,7 +8,7 @@
 /* v1.0.519 COMPLETE-TEACHER-CONTEXT: teacher AI receives the complete authoritative upstream context and returns a complete raw teaching plan. */
 /* v1.0.519 RAW-TEACHER-ONLY: the teacher AI return is saved verbatim; chapter reads are deterministic raw-text slices only. */
 'use strict';
-/* v1.0.559 SAFE-READER-EMPTY-STATE: 六大 Reader 空状态可打开并回写原正式数据链；不改变 AI 生成流程。 */
+/* v1.0.560 SAFE-READER-EMPTY-STATE: 六大 Reader 空状态可打开并回写原正式数据链；不改变 AI 生成流程。 */
 /* v1.0.547 SAFE-AI-CONTRACT-RETIREMENT: 旧 callAIGuarded/callAIWithContract 安全退役；保留 callDeepSeek、text、finishReason、usage、Parser/Normalize/Validator、Abort 与业务数据链；finishReason=length 不再作为统一业务失败条件。 */
 
 /* v1.0.519 IRON LAW — 本章教案传导链永久锁定：
@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.559';
+const APP_VERSION = '1.0.560';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.559.js';
+const APP_FILE_VERSION = 'app1.0.560.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -86,7 +86,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.559.js — 校长注入链安全去重：唯一GLOBAL来源、合并重复风格资料、移除重复上下文包装。 */
+/* APP VERSION: app1.0.560.js — 校长注入链安全去重：唯一GLOBAL来源、合并重复风格资料、移除重复上下文包装。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -5232,7 +5232,7 @@ function addGapEntryToLib(g){
   const id = (g.id && /^[a-z][a-z0-9_]*$/i.test(g.id)) ? g.id : ('c'+Math.random().toString(36).slice(2,8));
   let finalId = id, mx = 1; const existing = writeStyleLib().map(s=>s.id);
   while(existing.includes(finalId)) finalId = id + (mx++);
-  cfg.styleCustom.added.push({ id:finalId, group, name:(g.name||'').trim(), note:(g.note||'').trim(),
+  cfg.styleCustom.added.push({ id:finalId, group:'element', cat:group, name:(g.name||'').trim(), note:(g.note||'').trim(),
     tips:Array.isArray(g.tips)?g.tips.map(x=>String(x||'').trim()).filter(Boolean):[],
     avoid:Array.isArray(g.avoid)?g.avoid.map(x=>String(x||'').trim()).filter(Boolean):[],
     check:Array.isArray(g.check)?g.check.map(x=>String(x||'').trim()).filter(Boolean):[],
@@ -5319,10 +5319,15 @@ function writeStyleLib(){
     return { ...s, group:'element', cat, note: notes[s.id] || s.note };
   });
   const customs = added.map(a=>{
-    const hasStruc = (Array.isArray(a.tips)&&a.tips.length) || (Array.isArray(a.avoid)&&a.avoid.length) || (Array.isArray(a.check)&&a.check.length);
-    const parsed = hasStruc ? { tips:a.tips||[], avoid:a.avoid||[], check:a.check||[], demo:a.demo||'' } : parseCustomStyleNote(a.note||'');
-    const cat = ['语言质感','情绪与张力','节奏与网感','叙事技法','台词设计'].includes(a.group) ? a.group : 'custom';
-    return { id:a.id, group:'element', name:a.name||'未命名', note:a.note||'', custom:true, cat, tips:parsed.tips||[], avoid:parsed.avoid||[], check:parsed.check||[], demo:parsed.demo||a.demo||'', seal:(a.seal===undefined?0:a.seal), warning:a.warning||'' };
+    const hasStructuredFields = ['tips','avoid','check','demo','cat'].some(k=> Object.prototype.hasOwnProperty.call(a,k));
+    const parsed = hasStructuredFields
+      ? { tips:Array.isArray(a.tips)?a.tips:[], avoid:Array.isArray(a.avoid)?a.avoid:[], check:Array.isArray(a.check)?a.check:[], demo:typeof a.demo==='string'?a.demo:'' }
+      : parseCustomStyleNote(a.note||'');
+    const legacyCat = ['语言质感','情绪与张力','节奏与网感','叙事技法','台词设计'].includes(a.group) ? a.group : '';
+    const cat = ['语言质感','情绪与张力','节奏与网感','叙事技法','台词设计'].includes(a.cat) ? a.cat : (legacyCat || 'custom');
+    return { id:a.id, group:'element', cat, name:String(a.name||'未命名'), note:String(a.note||''), custom:true,
+      tips:parsed.tips||[], avoid:parsed.avoid||[], check:parsed.check||[], demo:parsed.demo||a.demo||'',
+      seal:(a.seal===undefined?0:a.seal), warning:a.warning||'' };
   });
   return base.concat(customs);
 }
@@ -6510,7 +6515,7 @@ function buildChapterStrategiesFromPrincipal(plans, targetCount, strategy){
   return out;
 }
 
-/* v1.0.559：全书节拍呼吸空间 + 校长阶段解释；内部说明书｜继承＋补充
+/* v1.0.560：全书节拍呼吸空间 + 校长阶段解释；内部说明书｜继承＋补充
  * 优化构想先形成完整风格资料：继承=用户已选原词条；补充=仅在明确风格缺口存在时新增的完整词条。
  * extractOptimizationStyleInheritanceSupplement 只提取，不生成、不改义、不扩展。
  * 校长：只负责确定唯一GLOBAL来源；HYBRID/CHAPTER由老师按章施工。
@@ -7721,7 +7726,7 @@ function normalizePrincipalStageStrategy(r, idx, canonical){
     settlement:String(r.settlement||'').trim(), newProblem:String(r.newProblem||'').trim(), irreversibleChange:String(r.irreversibleChange||'').trim(),
     previousStageHandoff:String(r.previousStageHandoff||'').trim(), nextStageLaunch:String(r.nextStageLaunch||'').trim(),
     stageRhythm:parsePrincipalJsonField(r.stageRhythm,{}),
-    // v1.0.559：校长只解释用户已确认的 fullBookBeat，不生成第二套节拍。
+    // v1.0.560：校长只解释用户已确认的 fullBookBeat，不生成第二套节拍。
     stageBeatInterpretation:String(r.stageBeatInterpretation||'').trim()
   };
 }
@@ -11776,7 +11781,8 @@ function writeStyleCard(){
         <h3 class="ch-title">写作风格基调</h3>
         <span class="ch-subtag ch-subtag-style${dirty?' dirty':''}">${sumTxt}</span>
       </div>
-      <div class="ch-right">
+      <div class="ch-right" style="display:flex;align-items:center;gap:6px">
+        <button type="button" class="btn small ws-new-entry-top" data-ws-add="element" title="新建写作风格词条" style="background:linear-gradient(135deg,#d97706 0%,#f59e0b 50%,#facc15 100%);color:#fff;border:0;box-shadow:0 1px 4px rgba(0,0,0,.18)">＋ 新词条</button>
         <button type="button" class="btn ghost ws-manage-btn" data-ws-lib title="编辑风格词库与我的收藏">⚙️ 管理</button>
         <span class="sc-fold-ico">${st.collapsed?'▸':'▾'}</span>
       </div>
@@ -11788,7 +11794,6 @@ function writeStyleCard(){
       </div>
       ${writeStyleChipsHtml(draft, 'ws', { plus:false, cardFold:true, showTip:false })}
       <div class="ws-tools">
-        <button type="button" class="ws-chip ws-chip-plus" data-ws-add="element" title="点击新建文风词条">＋</button>
         <button type="button" class="btn small primary ws-apply${dirty?'':' disabled'}" data-ws-apply ${dirty?'':'disabled'} title="把当前草稿设为生效配置（从此生成用这套风格）">✔ 应用并保存</button>
         <button type="button" class="btn small ghost" data-ws-save title="把当前草稿收藏为预设（跨作品可用）">💾 收藏当前</button>
         <button type="button" class="btn small ghost" data-ws-clear>✕ 清空</button>
@@ -11926,7 +11931,7 @@ function openStyleNewDialog(group){
   const ov = document.createElement('div'); ov.id='wsNewPanel'; ov.className='gs-overlay';
   ov.innerHTML = `
     <div class="gs-modal">
-      <div class="gs-modal-head"><b>＋ 新建文风词条</b>
+      <div class="gs-modal-head"><b>＋ 新建写作风格词条</b>
         <button class="gs-x" data-wsn-close>✕</button></div>
       <div class="cv-body">
         <label style="font-size:12px;color:var(--sub)">归属分类</label>
@@ -11938,36 +11943,47 @@ function openStyleNewDialog(group){
           <option value="台词设计"${group==='台词设计'?' selected':''}>⑤ 台词设计</option>
           <option value="custom"${group==='custom'?' selected':''}>⭐ 我的自定义</option>
         </select>
-        <label style="font-size:12px;color:var(--sub)">风格名称（≤20字）*</label>
-        <input type="text" id="wsnName" maxlength="20" placeholder="如：民国腔调 / 冷硬悬疑" style="margin:4px 0 10px" />
-        <label style="font-size:12px;color:var(--sub)">指令文本（≤500字）</label>
-        <textarea id="wsnNote" rows="4" maxlength="500" placeholder="推荐三行配方：&#10;写法：…&#10;避免：…&#10;自查：…" style="margin:4px 0 6px"></textarea>
-        <div class="muted" style="font-size:11px">确认后将于「<span data-wsn-catlab>${catLabel()}</span>」分类下添加并默认勾选（草稿态，点「✔ 应用并保存」正式生效）。</div>
+        <label style="font-size:12px;color:var(--sub)">词条名字 *</label>
+        <input type="text" id="wsnName" maxlength="80" placeholder="请输入词条名字" style="margin:4px 0 10px" />
+        <label style="font-size:12px;color:var(--sub)">总纲 / 核心说明</label>
+        <textarea id="wsnNote" rows="3" placeholder="允许为空" style="margin:4px 0 10px"></textarea>
+        <label style="font-size:12px;color:var(--sub)">写法</label>
+        <textarea id="wsnTips" rows="3" placeholder="每行一条；允许为空" style="margin:4px 0 10px"></textarea>
+        <label style="font-size:12px;color:var(--sub)">避免</label>
+        <textarea id="wsnAvoid" rows="3" placeholder="每行一条；允许为空" style="margin:4px 0 10px"></textarea>
+        <label style="font-size:12px;color:var(--sub)">自查</label>
+        <textarea id="wsnCheck" rows="3" placeholder="每行一条；允许为空" style="margin:4px 0 10px"></textarea>
+        <label style="font-size:12px;color:var(--sub)">示范写法</label>
+        <textarea id="wsnDemo" rows="3" placeholder="允许为空" style="margin:4px 0 6px"></textarea>
+        <div class="muted" style="font-size:11px">保存后直接进入现有 <code>cfg.styleCustom.added</code> 词库，并沿用原有写作风格读取与下游注入链。</div>
       </div>
       <div class="modal-actions" style="padding:12px 16px;border-top:1px solid var(--line)">
-        <button type="button" class="btn ghost" data-wsn-close2>取消</button>
-        <button type="button" class="btn primary" data-wsn-ok>✔ 确认新建</button>
+        <button type="button" class="btn ghost" data-wsn-close2>不保存</button>
+        <button type="button" class="btn primary" data-wsn-ok>保存</button>
       </div>
     </div>`;
   document.body.appendChild(ov);
-  const lab = ov.querySelector('[data-wsn-catlab]');
   const catSel = ov.querySelector('#wsnCat');
-  if(catSel && lab) catSel.onchange = ()=> lab.textContent = CAT_LABEL[catSel.value] || '自定义';
   const close = ()=> closeStyleNewDialog();
   ov.querySelector('[data-wsn-close]').onclick = close;
   ov.querySelector('[data-wsn-close2]').onclick = close;
   ov.addEventListener('click', e=>{ if(e.target===ov) close(); });
   ov.querySelector('[data-wsn-ok]').onclick = ()=>{
-    const name = ($('#wsnName') && $('#wsnName').value.trim()) || '';
-    if(!name){ toast('请填写风格名称'); return; }
-    const note = ($('#wsnNote') && $('#wsnNote').value.trim().slice(0,500)) || '';
+    const val = id => ((ov.querySelector(id)?.value || '').trim());
+    const name = val('#wsnName');
+    if(!name){ toast('请填写词条名字'); return; }
     const cat = (catSel && catSel.value) || group || 'custom';
+    const lines = id => val(id).split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    const entry = {
+      id:'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,8),
+      group:'element', cat, name,
+      note:val('#wsnNote'), tips:lines('#wsnTips'), avoid:lines('#wsnAvoid'), check:lines('#wsnCheck'), demo:val('#wsnDemo')
+    };
     const c = getCfg(); c.styleCustom = c.styleCustom || { notes:{}, added:[], removed:[] };
-    c.styleCustom.added = c.styleCustom.added || [];
-    const id = 'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-    c.styleCustom.added.push({ id, group:cat, name, note });
+    c.styleCustom.added = Array.isArray(c.styleCustom.added) ? c.styleCustom.added : [];
+    c.styleCustom.added.push(entry);
     saveCfg(c);
-    const d = wsDraftInit(); if(!d.tags.includes(id)) d.tags.push(id);
+    const d = wsDraftInit(); if(!d.tags.includes(entry.id)) d.tags.push(entry.id);
     closeStyleNewDialog();
     render();
     toast('已新建并加入「'+name+'」');
@@ -13667,8 +13683,12 @@ function showImportPreview(st){
 }
 function applyBundleSelection(st, ov){
   const cfg = getCfg(); cfg.styleCustom = cfg.styleCustom || { notes:{}, added:[], removed:[], comboRemoved:[] };
-  const normEl = el=>({ id:String(el.id), group:['语言质感','情绪与张力','节奏与网感','叙事技法','台词设计'].includes(el.group)?el.group:'custom',
-    name:String(el.name), note:String(el.note||''), demo:el.demo?String(el.demo):'', seal:(el.seal===undefined?0:el.seal), warning:el.warning?String(el.warning):'' });
+  const normEl = el=>({ id:String(el.id), group:'element', cat:['语言质感','情绪与张力','节奏与网感','叙事技法','台词设计'].includes(el.cat)?el.cat:(['语言质感','情绪与张力','节奏与网感','叙事技法','台词设计'].includes(el.group)?el.group:'custom'),
+    name:String(el.name||''), note:String(el.note||''),
+    tips:Array.isArray(el.tips)?el.tips.map(x=>String(x||'').trim()).filter(Boolean):[],
+    avoid:Array.isArray(el.avoid)?el.avoid.map(x=>String(x||'').trim()).filter(Boolean):[],
+    check:Array.isArray(el.check)?el.check.map(x=>String(x||'').trim()).filter(Boolean):[],
+    demo:el.demo?String(el.demo):'', seal:(el.seal===undefined?0:el.seal), warning:el.warning?String(el.warning):'' });
   let elAdded=0, elRepl=0;
   ov.querySelectorAll('[data-ip-el]:checked').forEach(cb=>{
     const x = st.elStates[+cb.dataset.ipEl]; if(!x || !x.el) return;
