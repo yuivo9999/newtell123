@@ -19,9 +19,9 @@
    5) 后续版本不得把结构化教案重新接回本链。
 */
 
-const APP_VERSION = '1.0.565';
+const APP_VERSION = '1.0.566';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.565.js';
+const APP_FILE_VERSION = 'app1.0.566.js';
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
@@ -86,7 +86,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.565.js — 优化构想与读优化构想完整重构。 */
+/* APP VERSION: app1.0.566.js — 优化构想与读优化构想完整重构。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -1443,6 +1443,10 @@ function projectSnapshot(){
   };
 }
 function applyProject(p){
+  // v1.0.566：切换项目时先恢复完整干净项目状态，再应用目标项目快照。
+  // 防止旧项目运行态中未写入 snapshot 的项目级字段残留到新项目。
+  clearState();
+  p = (p && typeof p === 'object') ? p : {};
   state.mode = (p.mode === 'longnovel') ? 'longnovel' : 'shortfilm';
   state.wordRange = (p.wordRange && p.wordRange.min && p.wordRange.max) ? {min:+p.wordRange.min, max:+p.wordRange.max} : (p.chapterRange ? null : null);
   state.chapterRange = (p.chapterRange && p.chapterRange.min && p.chapterRange.max) ? {min:+p.chapterRange.min, max:+p.chapterRange.max} : null;
@@ -1515,7 +1519,7 @@ function applyProject(p){
   state.polishRevision = Number.isFinite(+p.polishRevision) ? +p.polishRevision : 0;
   state.polishInjectionSnapshot = (p.polishInjectionSnapshot && typeof p.polishInjectionSnapshot === 'object') ? p.polishInjectionSnapshot : null;
   state.polishSelectedFinal = (p.polishSelectedFinal && typeof p.polishSelectedFinal === 'object') ? p.polishSelectedFinal : null;
-  // v1.0.565：旧存档若只有 canonicalStoryStrategy，则只在加载时迁移一次到最终方案事实源；运行态不再反向以 canonical 推导最终方案。
+  // v1.0.566：旧存档若只有 canonicalStoryStrategy，则只在加载时迁移一次到最终方案事实源；运行态不再反向以 canonical 推导最终方案。
   if(!state.polishSelectedFinal && state.canonicalStoryStrategy && state.canonicalStoryStrategy.machineTrace?.status==='adopted'){
     try{ state.polishSelectedFinal = canonicalToPolishCandidate(state.canonicalStoryStrategy); }catch(_e){ state.polishSelectedFinal = null; }
   }
@@ -1600,6 +1604,48 @@ function clearState(){
   state._chapterPartial = {};
   state.aiNetwork = { stage:'idle', running:[], completed:[], blockedBy:{} };
   state._lastCpRaw = '';
+
+  // v1.0.566：完整清理当前小说级“优化构想”生命周期数据，禁止从上一部小说继承。
+  state.polishMode = 'single';
+  state.polishStatus = 'empty';
+  state.ideaOptimizationStrictQc = true;
+  state.strategyStage1Status = 'empty';
+  state.strategyStage2Status = 'empty';
+  state.polishSelectedId = null;
+  state.polishAdopted = null;
+  state.polishDiagnosis = null;
+  state.polishFailureTrace = null;
+  state.polishStrategies = [];
+  state.strategicDimensions = [];
+  state.strategicDiversityProfile = null;
+  state.aiValidationHistory = [];
+  state.originalIdeaAnchors = null;
+  state.canonicalStoryStrategy = null;
+  state.polishRevision = 0;
+  state.polishInjectionSnapshot = null;
+  state.polishSelectedFinal = null;
+  state.polishPendingSuggestions = null;
+  state.polishHistory = [];
+  state.polishRawFallback = '';
+  state.polishOptions = [];
+
+  // v1.0.566：其它项目级运行/UI状态也必须在新建/切换时获得干净值。
+  state.cpCollapsed = false;
+  state.ctCollapsed = false;
+  state.soCollapsed = false;
+  state.gsCatFold = { main:false, support:false, walkon:false, place:false, proper:false, sub:false };
+  state.deCollapsed = false;
+  state.subAutoFill = true;
+  state.subRecallRatio = 0.4;
+  state.timeAnchor = true;
+  state.timeAnchorsAuto = true;
+  state.bookBeat = 7;
+  state.dictmasterInjectionSnapshot = null;
+  state.dictEnrichInjectionSnapshot = null;
+  state.titleWriteBack = false;
+  state.characterNaming = {locked:false, lockedAt:0, version:0};
+  state.plannerFinalized = false;
+  state.expOpenGroups = [];
   wsDraft = null;
   currentStep = 1;
 }
@@ -3620,7 +3666,7 @@ async function generateOptimizationConcept(btn, force){
   if(!idea){ toast('请先输入故事构想'); return false; }
   const kept=Array.isArray(state.polishOptions)&&state.polishOptions.length;
   if(kept && !force){ if(!confirm(`已有 ${kept} 个优化方案，重新生成将覆盖当前批次。继续？`)) return false; }
-  // v1.0.565：优化构想固定四方案，不再读取单/多方案开关，也不进入质检/修复链。
+  // v1.0.566：优化构想固定四方案，不再读取单/多方案开关，也不进入质检/修复链。
   state.polishMode='four';
   state.strategyStage1Status='generating';
   state.strategyStage2Status='generating';
@@ -8743,10 +8789,10 @@ function polishAnalysisHeader(){
   const dp=(state.strategicDiversityProfile||((state.polishOptions||[])[0]?.diversityProfile)||{});
   return ['【原始构想锚点】',`人物：${(analysis.characters||[]).join('、')}`,`关系：${(analysis.relationships||[]).join('、')}`,`目标：${(analysis.goals||[]).join('、')}`,`核心冲突：${analysis.coreConflict||''}`,`固定事实：${(analysis.fixedFacts||[]).join('、')}`,'','【动态战略维度】',...dims.map(d=>`- ${d?.name||''}｜${d?.description||''}｜契合：${d?.whyFit||''}`),'','【战略多样性】',`固定核心：${(dp.fixedCore||[]).join('、')}`,`可变轴：${(dp.variableAxes||[]).join('、')}`,`避免重复：${(dp.avoidRepetition||[]).join('、')}`,`推荐组合：${dp.recommendedMix||''}`,''].join('\n');
 }
-function parseEditedPolishText(text,multi,allowSingle){
+function parseEditedPolishText(text,multi,allowSingle,strictParallel=true){
   const src=String(text||'').trim();
-  if(multi || /【原始构想锚点】|【动态战略维度】|【战略多样性】/i.test(src)) return parseOptimizationPlainText(src,!!multi,!!allowSingle);
-  return parseOptimizationPlainText(`${polishAnalysisHeader()}\n${src}`,false,!!allowSingle);
+  if(multi || /【原始构想锚点】|【动态战略维度】|【战略多样性】/i.test(src)) return parseOptimizationPlainText(src,!!multi,!!allowSingle,strictParallel);
+  return parseOptimizationPlainText(`${polishAnalysisHeader()}\n${src}`,false,!!allowSingle,strictParallel);
 }
 async function readTextFileForImport(acceptExts=['.txt','.md','.markdown']){
   return await new Promise((resolve,reject)=>{
@@ -8796,7 +8842,8 @@ function parseOptimizationReaderText(text, multi){
   const src=String(text||'').trim();
   if(!src) throw new Error(multi?'没有有效的多方案':'没有有效的最终方案');
   const normalized = multi ? src : `【方案1｜最终方案】\n${src}`;
-  const parsed=parseEditedPolishText(normalized,!!multi,!multi);
+  // 用户 Reader 是人工编辑入口：仍要求能识别标准四方案/单方案结构，但不再把结构块之外的用户补充文字误判为“AI第二版本”。
+  const parsed=parseEditedPolishText(normalized,!!multi,!multi,false);
   if(!parsed?.ok) throw new Error(parsed?.error||'结构化纯文本解析失败');
   if(!Array.isArray(parsed.options)||!parsed.options.length) throw new Error(multi?'没有有效的多方案':'没有有效的最终方案');
   if(multi && parsed.options.length!==4) throw new Error(`多方案必须包含4个方案，当前解析到${parsed.options.length}个`);
@@ -9935,7 +9982,7 @@ function validateOptimizationPersonNaming(parsed){
   });
   return bad.length ? bad.join('；') : '';
 }
-function parseOptimizationPlainText(raw, multi, allowSingle){
+function parseOptimizationPlainText(raw, multi, allowSingle, strictParallel=true){
   const text=String(raw||'').replace(/\r/g,'').trim();
   if(!text) return {ok:false,error:'AI未返回内容',options:[],analysis:null};
   const section=(label,src)=>{ const re=new RegExp(`【${label}】\\s*([\\s\\S]*?)(?=\\n【(?:原始构想锚点|动态战略维度|战略多样性|方案[一二三四五六七八九十\\d]+)】|$)`, 'i'); const m=String(src).match(re); return m?m[1].trim():''; };
@@ -9981,7 +10028,7 @@ function parseOptimizationPlainText(raw, multi, allowSingle){
       const re=new RegExp(`\\[${tag}\\]\\s*[\\s\\S]*?\\[\\/${tag}\\]`,'gi');
       rest=rest.replace(re,'');
     }
-    if(String(rest||'').trim()) return {ok:false,error:`方案${i+1}包含结构式协议之外的平行内容，禁止生成第二版本`,options,analysis};
+    if(strictParallel && String(rest||'').trim()) return {ok:false,error:`方案${i+1}包含结构式协议之外的平行内容，禁止生成第二版本`,options,analysis};
   }
   return {ok:true,options,analysis};
 }
