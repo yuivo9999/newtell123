@@ -102,14 +102,90 @@ label.field>span{display:block;font-size:12px;color:var(--sub);margin-bottom:6px
 }
 .btn.ghost.is-busy:hover{background:linear-gradient(135deg,#fbbf24 0%,#f59e0b 100%);opacity:1}
 .btn.ghost.is-busy .spinner{border-color:rgba(255,255,255,.4);border-top-color:#fff}
-/* v10.48 生成章节内容 · 跨主题统一（固定色，不随主题变量漂移；#app 抬特异度抗主题覆写）
-   重生成=蓝渐变常态/金黄渐变生成中 · 阅读=金黄渐变 */
-#app .btn.ghost[data-regen]{background:linear-gradient(135deg,#4db8ff 0%,#2a7fe3 100%);border:1px solid transparent;color:#fff;font-weight:600;box-shadow:0 1px 6px rgba(45,130,230,.35)}
-#app .btn.ghost[data-regen]:hover:not(:disabled):not(.is-busy){background:linear-gradient(135deg,#69c6ff 0%,#3a93e8 100%);color:#fff}
-#app .btn.ghost[data-regen].is-busy{background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);border-color:transparent;color:#fff;font-weight:600;opacity:1;box-shadow:0 1px 6px rgba(245,158,11,.4)}
-#app .btn.ghost[data-regen].is-busy .spinner{border-color:rgba(255,255,255,.45);border-top-color:#fff}
-#app .btn.ghost[data-read]{background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);border:1px solid transparent;color:#fff;font-weight:600;box-shadow:0 1px 6px rgba(245,158,11,.4)}
-#app .btn.ghost[data-read]:hover{background:linear-gradient(135deg,#fbbf24 0%,#f59e0b 100%);color:#fff}
+/* 正文卡片按钮：跨主题统一规范（圆角矩形 8px、无渐变虚影、实色与语义分层） */
+#app .ch-card .btn-row .btn,
+.ch-card .btn-row .btn{
+  height:26px;
+  min-height:26px;
+  line-height:24px;
+  padding:0 11px;
+  font-size:12px;
+  font-weight:700;
+  border-radius:8px;
+  box-shadow:none;
+  border:1px solid var(--line);
+  background:var(--panel2);
+  color:var(--txt);
+  cursor:pointer;
+  transition:all 0.15s ease;
+  white-space:nowrap;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  box-sizing:border-box;
+}
+#app .ch-card .btn-row .btn:hover,
+.ch-card .btn-row .btn:hover{
+  background:color-mix(in srgb, var(--accent) 14%, var(--panel2));
+  border-color:var(--accent);
+  color:var(--accent);
+}
+/* 🔄 重生成按钮：accent2 实色 + 白字 + 8px圆角矩形 */
+#app .btn.ghost[data-regen],
+#app .ch-card .btn-row .btn[data-regen],
+.ch-card .btn-row .btn[data-regen]{
+  background:var(--accent2);
+  border-color:transparent;
+  color:var(--on-accent,#ffffff);
+  border-radius:8px;
+  font-weight:700;
+  box-shadow:none;
+}
+#app .btn.ghost[data-regen]:hover:not(:disabled):not(.is-busy),
+#app .ch-card .btn-row .btn[data-regen]:hover:not(:disabled):not(.is-busy),
+.ch-card .btn-row .btn[data-regen]:hover:not(:disabled):not(.is-busy){
+  filter:brightness(1.1);
+  color:#ffffff;
+  background:var(--accent2);
+}
+#app .btn.ghost[data-regen].is-busy,
+#app .ch-card .btn-row .btn[data-regen].is-busy,
+.ch-card .btn-row .btn[data-regen].is-busy{
+  background:var(--warn,#d97706);
+  border-color:transparent;
+  color:#ffffff;
+  font-weight:700;
+  opacity:1;
+  box-shadow:none;
+}
+#app .btn.ghost[data-regen].is-busy .spinner,
+#app .ch-card .btn-row .btn[data-regen].is-busy .spinner{
+  border-color:rgba(255,255,255,.45);
+  border-top-color:#fff;
+}
+/* 📖 读单章教案 与 📖 阅读按钮：主题强调色 accent 实色 + 白字 + 8px圆角矩形 */
+#app .btn.ghost[data-read],
+#app .ch-card .btn-row .btn[data-read],
+.ch-card .btn-row .btn[data-read],
+#app .ch-card .btn-row .btn[data-plan-ch],
+.ch-card .btn-row .btn[data-plan-ch]{
+  background:var(--accent);
+  border-color:transparent;
+  color:var(--on-accent,#ffffff);
+  border-radius:8px;
+  font-weight:700;
+  box-shadow:none;
+}
+#app .btn.ghost[data-read]:hover:not(:disabled),
+#app .ch-card .btn-row .btn[data-read]:hover:not(:disabled),
+.ch-card .btn-row .btn[data-read]:hover:not(:disabled),
+#app .ch-card .btn-row .btn[data-plan-ch]:hover:not(:disabled),
+.ch-card .btn-row .btn[data-plan-ch]:hover:not(:disabled){
+  filter:brightness(1.1);
+  color:#ffffff;
+  background:var(--accent);
+}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 /* v1.0.205 阶段5.5 ① 优化构想「第一步」强调按钮：未生成方案时红色渐变、拉长醒目 */
 #app .btn.first{flex:1;padding:12px 16px;font-size:15px;line-height:1.3;font-weight:700;letter-spacing:.5px;background:linear-gradient(135deg,#E3371E 0%,#C8102E 52%,#A90612 100%);border:1px solid transparent;color:#fff;box-shadow:0 2px 12px rgba(200,16,46,.38)}
@@ -1758,17 +1834,15 @@ textarea[readonly]::selection{ background:color-mix(in srgb, var(--accent2) 45%,
 @keyframes gsFlashKf{ 0%,60%{ background:rgba(184,134,11,.18); outline:2px solid rgba(184,134,11,.55); outline-offset:-2px; } 100%{ background:transparent; outline:2px solid transparent; } }
 .gs-flash{ animation: gsFlashKf 1.6s ease-out both; border-radius:8px; }
 
-/* 章节正文卡片按钮：统一为「AI配方助手 · 生成配方」按钮的尺寸（高 22px / 字号 12px / padding 0 10px）
-   对应原 .ai-recipe-tool .btn 规则（第 1135 行）；选择器特异性 0,3,0，能压过 .btn 基类与 style-polish 主题规则。
-   9 个按钮（重生成/阅读/确认风格/取消确认/🔧/本章梗概/沙盘/版本/撤销编辑）全部生效。 */
+/* 章节正文卡片按钮：规范尺寸与样式（高 26px / 字号 12px / 8px圆角矩形） */
 .ch-card .btn-row>.btn{
-  height:22px;
-  line-height:20px;
-  padding:0 10px;
+  height:26px;
+  line-height:24px;
+  padding:0 11px;
   font-size:12px;
-  min-height:0;
+  min-height:26px;
   box-sizing:border-box;
-  border-radius:10px;
+  border-radius:8px;
 }
 
 /* 批量生成多章 / 区间生成 / 小说内容总字数：与章节卡片「重生成」按钮完全同尺寸

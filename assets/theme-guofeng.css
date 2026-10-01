@@ -733,3 +733,70 @@
   letter-spacing: 8px !important;
   text-indent: 8px !important;
 }
+
+/* 古风国潮主题：正文卡片按钮样式（8px圆角矩形、经典黛蓝与朱砂红、宣纸浅底辅助按钮） */
+[data-theme="guofeng"] #app .ch-card .btn-row .btn,
+[data-theme="guofeng"] .ch-card .btn-row .btn {
+  height: 26px !important;
+  min-height: 26px !important;
+  line-height: 24px !important;
+  padding: 0 11px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  border: 1px solid #c9b896 !important;
+  background: #faf6ed !important;
+  color: #2e1a11 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  white-space: nowrap !important;
+}
+
+[data-theme="guofeng"] #app .ch-card .btn-row .btn:hover,
+[data-theme="guofeng"] .ch-card .btn-row .btn:hover {
+  background: #f0e6ce !important;
+  border-color: #a63232 !important;
+  color: #a63232 !important;
+}
+
+/* 🔄 重生成按钮：黛蓝纯色 + 白字 + 8px圆角矩形 */
+[data-theme="guofeng"] #app .ch-card .btn-row .btn[data-regen],
+[data-theme="guofeng"] .ch-card .btn-row .btn[data-regen] {
+  background: #2a6f97 !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+}
+
+[data-theme="guofeng"] #app .ch-card .btn-row .btn[data-regen]:hover:not(:disabled):not(.is-busy),
+[data-theme="guofeng"] .ch-card .btn-row .btn[data-regen]:hover:not(:disabled):not(.is-busy) {
+  background: #3b88b7 !important;
+  filter: brightness(1.08) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="guofeng"] #app .ch-card .btn-row .btn[data-regen].is-busy,
+[data-theme="guofeng"] .ch-card .btn-row .btn[data-regen].is-busy {
+  background: #b88a2a !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+}
+
+/* 📖 读单章教案 与 📖 阅读按钮：朱砂红纯色 + 白字 + 8px圆角矩形 */
+[data-theme="guofeng"] #app .ch-card .btn-row .btn[data-read],
+[data-theme="guofeng"] .ch-card .btn-row .btn[data-read],
+[data-theme="guofeng"] #app .ch-card .btn-row .btn[data-plan-ch],
+[data-theme="guofeng"] .ch-card .btn-row .btn[data-plan-ch] {
+  background: #a63232 !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+}
+
+[data-theme="guofeng"] #app .ch-card .btn-row .btn[data-read]:hover,
+[data-theme="guofeng"] .ch-card .btn-row .btn[data-read]:hover,
+[data-theme="guofeng"] #app .ch-card .btn-row .btn[data-plan-ch]:hover,
+[data-theme="guofeng"] .ch-card .btn-row .btn[data-plan-ch]:hover {
+  background: #bf3e3e !important;
+  filter: brightness(1.08) !important;
+  color: #ffffff !important;
+}

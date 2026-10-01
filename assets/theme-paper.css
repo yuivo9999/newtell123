@@ -335,3 +335,71 @@
   letter-spacing: 8px !important;
   text-indent: 8px !important;
 }
+
+/* 暖阳米纸主题：正文卡片按钮样式（参考图片2：圆角矩形 8px、纯色白字、深石板蓝与焙茶琥珀暖褐） */
+[data-theme="paper"] #app .ch-card .btn-row .btn,
+[data-theme="paper"] .ch-card .btn-row .btn {
+  height: 26px !important;
+  min-height: 26px !important;
+  line-height: 24px !important;
+  padding: 0 11px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  border: 1px solid #d8c8b0 !important;
+  background: #f7f2e9 !important;
+  color: #33291d !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  white-space: nowrap !important;
+}
+
+[data-theme="paper"] #app .ch-card .btn-row .btn:hover,
+[data-theme="paper"] .ch-card .btn-row .btn:hover {
+  background: #fffdf7 !important;
+  border-color: #b45309 !important;
+  color: #b45309 !important;
+}
+
+/* 🔄 重生成按钮：借用图片2“📥 导入项目”深石板蓝（#1e588f）纯色 + 白字 + 8px圆角矩形 */
+[data-theme="paper"] #app .ch-card .btn-row .btn[data-regen],
+[data-theme="paper"] .ch-card .btn-row .btn[data-regen] {
+  background: #1e588f !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+}
+
+[data-theme="paper"] #app .ch-card .btn-row .btn[data-regen]:hover:not(:disabled):not(.is-busy),
+[data-theme="paper"] .ch-card .btn-row .btn[data-regen]:hover:not(:disabled):not(.is-busy) {
+  background: #256cae !important;
+  filter: brightness(1.08) !important;
+  color: #ffffff !important;
+}
+
+[data-theme="paper"] #app .ch-card .btn-row .btn[data-regen].is-busy,
+[data-theme="paper"] .ch-card .btn-row .btn[data-regen].is-busy {
+  background: #b45309 !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+}
+
+/* 📖 读单章教案 与 📖 阅读按钮：借用图片2“+ 新建长篇 / + 新建小说”焙茶暖褐（#b45309）纯色 + 白字 + 8px圆角矩形 */
+[data-theme="paper"] #app .ch-card .btn-row .btn[data-read],
+[data-theme="paper"] .ch-card .btn-row .btn[data-read],
+[data-theme="paper"] #app .ch-card .btn-row .btn[data-plan-ch],
+[data-theme="paper"] .ch-card .btn-row .btn[data-plan-ch] {
+  background: #b45309 !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+}
+
+[data-theme="paper"] #app .ch-card .btn-row .btn[data-read]:hover,
+[data-theme="paper"] .ch-card .btn-row .btn[data-read]:hover,
+[data-theme="paper"] #app .ch-card .btn-row .btn[data-plan-ch]:hover,
+[data-theme="paper"] .ch-card .btn-row .btn[data-plan-ch]:hover {
+  background: #c25e00 !important;
+  filter: brightness(1.08) !important;
+  color: #ffffff !important;
+}
+
