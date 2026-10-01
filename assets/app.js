@@ -11305,31 +11305,44 @@ function openStyleLibReader(){
 }
 function closeStyleLibReader(){ const p=$('#wsLibReader'); if(p) p.remove(); }
 
-const FLOW_NAV = [
-  ['风','[data-flow="1"]'],     // 用户写作风格：表达层最高权威
-  ['基','[data-flow="2"]'],     // 章节数/全书四七十二十五拍/叙事主体：优化前置决策
-  ['构','[data-flow="3"], [data-flow="2"]'],     // 原始构想 + 优化构想：AI建议层
-  ['配方','.ai-recipe-card, [data-flow="4"], [data-flow="3"]', 'recipe'],     // 写作配方：把已锁定风格转成可执行规则
-  ['节','[data-flow="5"], [data-flow="4"]'],     // 全书节拍成果
-  ['典','[data-flow="6"], [data-flow="5"]'],     // 词典达人：建设者
-  ['充','[data-flow="7"], [data-flow="6"]'],     // 词典充实：深化者
-  ['校','[data-flow="8"], [data-flow="7"]'],     // 校长/学校统筹
-  ['词','[data-flow="7.5"], [data-flow="8.5"], .card-theme-glossary, .gs-card'],     // 基础词典：全书共享事实数据库
-  ['正','[data-flow="9"], [data-flow="8"]']      // 正文作家 · 章节创作
-];
 function flowNavItems(){
-  return FLOW_NAV.filter(([l, sel, key])=>{
+  const longMode = isLong();
+  const raw = longMode ? [
+    ['风', '[data-flow="1"]', '风', '写作风格'],
+    ['基', '[data-flow="2"]', '基', '创作基础'],
+    ['构', '[data-flow="3"]', '构', '故事构想'],
+    ['配方', '[data-flow="4"], .ai-recipe-card', 'recipe', '写作配方'],
+    ['节', '[data-flow="5"]', '节', '全书节拍'],
+    ['典', '[data-flow="6"]', '典', '词典达人'],
+    ['充', '[data-flow="7"]', '充', '词典充实'],
+    ['校', '[data-flow="8"]', '校', '学校统筹'],
+    ['词', '[data-flow="7.5"]', '词', '基础词典'],
+    ['正', '[data-flow="9"]', '正', '正文作家']
+  ] : [
+    ['风', '[data-flow="1"]', '风', '写作风格'],
+    ['构', '[data-flow="2"]', '构', '故事构想'],
+    ['配方', '[data-flow="3"], .ai-recipe-card', 'recipe', '写作配方'],
+    ['节', '[data-flow="4"]', '节', '全书节拍'],
+    ['典', '[data-flow="5"]', '典', '词典达人'],
+    ['充', '[data-flow="6"]', '充', '词典充实'],
+    ['校', '[data-flow="7"]', '校', '学校统筹'],
+    ['词', '[data-flow="7.5"]', '词', '基础词典'],
+    ['正', '[data-flow="8"]', '正', '正文作家']
+  ];
+
+  return raw.filter(([l, sel, key])=>{
     try{
-      if(l === '配方' || key === 'recipe') return !!(document && (document.querySelector('.ai-recipe-card') || document.querySelector(sel)));
-      return !!(document && document.querySelector(sel));
+      if(key === 'recipe') return !!(document && (document.querySelector('.ai-recipe-card') || document.querySelector('[data-flow="4"]') || document.querySelector('[data-flow="3"]')));
+      const targetSel = sel.split(',')[0].trim();
+      return !!(document && document.querySelector(targetSel));
     }catch(e){ return false; }
   });
 }
 function flowNavHtml(){
   const items = flowNavItems();
-  return `<div class="flow-sidenav">${items.map(([l, sel, key])=>{
+  return `<div class="flow-sidenav">${items.map(([l, sel, key, fullName])=>{
     const isRecipe = (l === '配方' || key === 'recipe');
-    return `<button type="button" class="fsd-btn${isRecipe?' fsd-btn-recipe':''}" ${isRecipe?'data-nav-key="recipe"':''} title="跳到「${l}」">${l}</button>`;
+    return `<button type="button" class="fsd-btn${isRecipe?' fsd-btn-recipe':''}" ${isRecipe?'data-nav-key="recipe"':''} title="跳到「${fullName||l}」">${l}</button>`;
   }).join('')}</div>`;
 }
 function bindFlowSideNav(){
@@ -11337,21 +11350,22 @@ function bindFlowSideNav(){
   const items = flowNavItems(); if(!items.length) return;
   const nav = document.createElement('div');
   nav.className = 'flow-sidenav';
-  items.forEach(([l, sel, key])=>{
+  items.forEach(([l, sel, key, fullName])=>{
     const b = document.createElement('button');
     b.type = 'button';
     const isRecipe = (l === '配方' || key === 'recipe');
     b.className = 'fsd-btn' + (isRecipe ? ' fsd-btn-recipe' : '');
     b.dataset.navSel = sel;
     if(isRecipe) b.dataset.navKey = 'recipe';
-    b.title = '跳到「'+l+'」';
+    b.title = '跳到「'+(fullName||l)+'」';
     b.textContent = l;
     b.onclick = ()=>{
+      const primarySel = sel.split(',')[0].trim();
       let el = null;
       if(isRecipe){
-        el = document.querySelector('.ai-recipe-card') || document.querySelector('[data-ai-recipe-fold]') || document.querySelector(sel);
+        el = document.querySelector('.ai-recipe-card') || document.querySelector('[data-ai-recipe-fold]') || document.querySelector(primarySel);
       } else {
-        el = document.querySelector(sel);
+        el = document.querySelector(primarySel);
       }
       if(el){
         if(isRecipe){
@@ -11364,31 +11378,55 @@ function bindFlowSideNav(){
             cfg.aiRecipeCollapsed = false;
             saveCfg(cfg);
           }
-          try{
-            el.scrollIntoView({ behavior:'smooth', block:'center', inline:'nearest' });
-          }catch(e){
-            el.scrollIntoView(true);
-          }
-        } else if(l === '正'){
-          const targetCard = el.querySelector('#chaptersWrap') || el.querySelector('.ch-card') || el.querySelector('.card') || el;
-          try{
-            targetCard.scrollIntoView({ behavior:'smooth', block:'center', inline:'nearest' });
-          }catch(e){
-            targetCard.scrollIntoView(true);
-          }
-          targetCard.classList.add('gs-flash');
-          setTimeout(()=> targetCard.classList.remove('gs-flash'), 1600);
-          return;
-        } else {
-          el.scrollIntoView({ behavior:'smooth', block:'start' });
         }
-        el.classList.add('gs-flash');
-        setTimeout(()=> el.classList.remove('gs-flash'), 1600);
+        let targetEl = el;
+        if(l === '正'){
+          targetEl = el.querySelector('#chaptersWrap') || el.querySelector('.ch-card') || el;
+        }
+        const topbarHeight = 56;
+        const rect = targetEl.getBoundingClientRect();
+        const absoluteTop = (window.pageYOffset || document.documentElement.scrollTop || 0) + rect.top - topbarHeight;
+        window.scrollTo({
+          top: Math.max(0, absoluteTop),
+          behavior: 'smooth'
+        });
+        targetEl.classList.add('gs-flash');
+        setTimeout(()=> targetEl.classList.remove('gs-flash'), 1600);
       }
     };
     nav.appendChild(b);
   });
-  ((document.getElementById('view') ? document.getElementById('view').parentElement : document.body) || document.body).appendChild(nav);
+  const parent = (document.getElementById('view') ? document.getElementById('view').parentElement : document.body) || document.body;
+  parent.appendChild(nav);
+
+  const onScroll = ()=>{
+    const curItems = flowNavItems();
+    const btns = nav.querySelectorAll('.fsd-btn');
+    if(!curItems.length || !btns.length) return;
+    const scrollY = (window.pageYOffset || document.documentElement.scrollTop || 0) + 110;
+    let activeIdx = 0;
+    curItems.forEach(([l, sel, key], idx)=>{
+      const primarySel = sel.split(',')[0].trim();
+      const target = document.querySelector(primarySel);
+      if(target && scrollY >= target.offsetTop){
+        activeIdx = idx;
+      }
+    });
+    btns.forEach((btn, idx)=>{
+      if(idx === activeIdx){
+        btn.classList.add('cur');
+      } else {
+        btn.classList.remove('cur');
+      }
+    });
+  };
+
+  if(window._flowNavScrollFn){
+    window.removeEventListener('scroll', window._flowNavScrollFn);
+  }
+  window._flowNavScrollFn = onScroll;
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
 }
 function flowPlaceholderSec(n, name, note, icon, desc){
   return `<section class="flow-sec" data-flow="${n}">
