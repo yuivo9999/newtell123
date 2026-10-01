@@ -19,35 +19,36 @@
    5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.573';
+const APP_VERSION = '1.0.574';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.573.js';
+const APP_FILE_VERSION = 'app1.0.574.js';
 function installV569Styles(){
   if(document.getElementById('v570ScopedStyles')) return;
   const st=document.createElement('style'); st.id='v570ScopedStyles'; st.textContent=`
     .ar-gap-demo{background:linear-gradient(135deg,#7c3aed 0%,#a855f7 45%,#facc15 100%);color:#fff;border-radius:8px;padding:7px 9px;margin-top:4px;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
     .ai-recipe-gapitem,.ai-recipe-gapitem *{min-width:0;max-width:100%;box-sizing:border-box}
-    :root{--ws-language-bg:#eaf3ff;--ws-language-border:#5b8fd8;--ws-language-text:#17345f;--ws-emotion-bg:#f8eafa;--ws-emotion-border:#b35ac2;--ws-emotion-text:#5b1f67;--ws-rhythm-bg:#e5f8f7;--ws-rhythm-border:#36a5a0;--ws-rhythm-text:#145b59;--ws-narrative-bg:#fff1df;--ws-narrative-border:#d58a32;--ws-narrative-text:#713e0d;--ws-dialogue-bg:#e8f7ed;--ws-dialogue-border:#45a467;--ws-dialogue-text:#1d5b34;--ws-custom-bg:#eef0f3;--ws-custom-border:#7b8089;--ws-custom-text:#343840;--ws-combo-bg:#eee9ff;--ws-combo-border:#7564c7;--ws-combo-text:#40327f}
-    [data-theme="light"],[data-theme="paper"],[data-theme="guofeng"],[data-theme="aurora"]{--ws-language-bg:#eaf3ff;--ws-language-border:#5b8fd8;--ws-language-text:#17345f;--ws-emotion-bg:#f8eafa;--ws-emotion-border:#b35ac2;--ws-emotion-text:#5b1f67;--ws-rhythm-bg:#e5f8f7;--ws-rhythm-border:#36a5a0;--ws-rhythm-text:#145b59;--ws-narrative-bg:#fff1df;--ws-narrative-border:#d58a32;--ws-narrative-text:#713e0d;--ws-dialogue-bg:#e8f7ed;--ws-dialogue-border:#45a467;--ws-dialogue-text:#1d5b34;--ws-custom-bg:#eef0f3;--ws-custom-border:#7b8089;--ws-custom-text:#343840;--ws-combo-bg:#eee9ff;--ws-combo-border:#7564c7;--ws-combo-text:#40327f}
-    [data-theme="dark"],[data-theme="blackboard"],[data-theme="mecha"],[data-theme="cyber"]{--ws-language-bg:#263548;--ws-language-border:#66809e;--ws-language-text:#f4f8ff;--ws-emotion-bg:#3b2461;--ws-emotion-border:#825db9;--ws-emotion-text:#fff7ff;--ws-rhythm-bg:#123d4c;--ws-rhythm-border:#368ba4;--ws-rhythm-text:#efffff;--ws-narrative-bg:#51371a;--ws-narrative-border:#a87532;--ws-narrative-text:#fff7e9;--ws-dialogue-bg:#18472d;--ws-dialogue-border:#3b9360;--ws-dialogue-text:#f0fff5;--ws-custom-bg:#303238;--ws-custom-border:#70747e;--ws-custom-text:#f4f5f7;--ws-combo-bg:#4a234f;--ws-combo-border:#a45b9f;--ws-combo-text:#fff4ff}
-    .ws-opt{min-width:0;max-width:100%;position:relative;color:inherit;border-width:1px;border-style:solid;transition:background-color .22s ease,color .22s ease,border-color .22s ease,box-shadow .22s ease,transform .18s ease}
+    :root{--ws-language-bg:linear-gradient(135deg,#dbeafe 0%,#818cf8 100%);--ws-language-border:#4f46e5;--ws-language-text:#172554;--ws-emotion-bg:linear-gradient(135deg,#f5d0fe 0%,#d946ef 100%);--ws-emotion-border:#a21caf;--ws-emotion-text:#581c87;--ws-rhythm-bg:linear-gradient(135deg,#cffafe 0%,#14b8a6 100%);--ws-rhythm-border:#0f766e;--ws-rhythm-text:#134e4a;--ws-narrative-bg:linear-gradient(135deg,#fed7aa 0%,#ef4444 100%);--ws-narrative-border:#c2410c;--ws-narrative-text:#7c2d12;--ws-dialogue-bg:linear-gradient(135deg,#bbf7d0 0%,#10b981 100%);--ws-dialogue-border:#047857;--ws-dialogue-text:#064e3b;--ws-custom-bg:linear-gradient(135deg,#e9d5ff 0%,#8b5cf6 100%);--ws-custom-border:#6d28d9;--ws-custom-text:#3b0764;--ws-combo-bg:linear-gradient(135deg,#c084fc 0%,#ec4899 52%,#f97316 100%);--ws-combo-border:#a21caf;--ws-combo-text:#4a044e}
+    [data-theme="light"],[data-theme="paper"],[data-theme="guofeng"],[data-theme="aurora"]{--ws-language-bg:linear-gradient(135deg,#dbeafe 0%,#818cf8 100%);--ws-language-border:#4f46e5;--ws-language-text:#172554;--ws-emotion-bg:linear-gradient(135deg,#f5d0fe 0%,#d946ef 100%);--ws-emotion-border:#a21caf;--ws-emotion-text:#581c87;--ws-rhythm-bg:linear-gradient(135deg,#cffafe 0%,#14b8a6 100%);--ws-rhythm-border:#0f766e;--ws-rhythm-text:#134e4a;--ws-narrative-bg:linear-gradient(135deg,#fed7aa 0%,#ef4444 100%);--ws-narrative-border:#c2410c;--ws-narrative-text:#7c2d12;--ws-dialogue-bg:linear-gradient(135deg,#bbf7d0 0%,#10b981 100%);--ws-dialogue-border:#047857;--ws-dialogue-text:#064e3b;--ws-custom-bg:linear-gradient(135deg,#e9d5ff 0%,#8b5cf6 100%);--ws-custom-border:#6d28d9;--ws-custom-text:#3b0764;--ws-combo-bg:linear-gradient(135deg,#c084fc 0%,#ec4899 52%,#f97316 100%);--ws-combo-border:#a21caf;--ws-combo-text:#4a044e}
+    [data-theme="dark"],[data-theme="blackboard"],[data-theme="mecha"],[data-theme="cyber"]{--ws-language-bg:linear-gradient(135deg,#1e3a8a 0%,#4f46e5 100%);--ws-language-border:#818cf8;--ws-language-text:#eef2ff;--ws-emotion-bg:linear-gradient(135deg,#581c87 0%,#c026d3 100%);--ws-emotion-border:#e879f9;--ws-emotion-text:#fff7ff;--ws-rhythm-bg:linear-gradient(135deg,#164e63 0%,#0d9488 100%);--ws-rhythm-border:#5eead4;--ws-rhythm-text:#ecfeff;--ws-narrative-bg:linear-gradient(135deg,#7c2d12 0%,#dc2626 100%);--ws-narrative-border:#fb923c;--ws-narrative-text:#fff7ed;--ws-dialogue-bg:linear-gradient(135deg,#14532d 0%,#059669 100%);--ws-dialogue-border:#6ee7b7;--ws-dialogue-text:#ecfdf5;--ws-custom-bg:linear-gradient(135deg,#3b0764 0%,#7c3aed 100%);--ws-custom-border:#c4b5fd;--ws-custom-text:#faf5ff;--ws-combo-bg:linear-gradient(135deg,#581c87 0%,#be185d 52%,#c2410c 100%);--ws-combo-border:#f0abfc;--ws-combo-text:#fff7ff}
+    .ws-card{border:1px solid rgba(124,58,237,.34);background:linear-gradient(135deg,rgba(59,130,246,.055) 0%,rgba(168,85,247,.075) 52%,rgba(249,115,22,.055) 100%)}
+    .ws-card .ws-head{background:linear-gradient(135deg,rgba(59,130,246,.14) 0%,rgba(168,85,247,.16) 52%,rgba(249,115,22,.13) 100%)}
+    .ws-opt{min-width:0;max-width:100%;position:relative;color:inherit;border-width:1px;border-style:solid;transition:background-color .18s ease,color .18s ease,border-color .18s ease,box-shadow .18s ease}
     .ws-opt.ws-cat-language{background:var(--ws-language-bg);border-color:var(--ws-language-border);color:var(--ws-language-text)}
     .ws-opt.ws-cat-emotion{background:var(--ws-emotion-bg);border-color:var(--ws-emotion-border);color:var(--ws-emotion-text)}
     .ws-opt.ws-cat-rhythm{background:var(--ws-rhythm-bg);border-color:var(--ws-rhythm-border);color:var(--ws-rhythm-text)}
     .ws-opt.ws-cat-narrative{background:var(--ws-narrative-bg);border-color:var(--ws-narrative-border);color:var(--ws-narrative-text)}
     .ws-opt.ws-cat-dialogue{background:var(--ws-dialogue-bg);border-color:var(--ws-dialogue-border);color:var(--ws-dialogue-text)}
     .ws-opt.ws-cat-custom{background:var(--ws-custom-bg);border-color:var(--ws-custom-border);color:var(--ws-custom-text)}
-    .ws-opt.ws-cat-language.on{background:var(--ws-language-border);border-color:#66809e;box-shadow:0 2px 9px rgba(59,77,99,.34);color:#fff}
-    .ws-opt.ws-cat-emotion.on{background:var(--ws-emotion-border);border-color:#825db9;box-shadow:0 2px 9px rgba(91,58,140,.34);color:#fff}
-    .ws-opt.ws-cat-rhythm.on{background:var(--ws-rhythm-border);border-color:#368ba4;box-shadow:0 2px 9px rgba(31,97,118,.34);color:#fff}
-    .ws-opt.ws-cat-narrative.on{background:var(--ws-narrative-border);border-color:#a87532;box-shadow:0 2px 9px rgba(121,83,36,.34);color:#fff}
-    .ws-opt.ws-cat-dialogue.on{background:var(--ws-dialogue-border);border-color:#3b9360;box-shadow:0 2px 9px rgba(40,107,67,.34);color:#fff}
-    .ws-opt.ws-cat-custom.on{background:var(--ws-custom-border);border-color:#70747e;box-shadow:0 2px 9px rgba(74,77,85,.34);color:#fff}
+    .ws-opt.ws-cat-language.on{background:linear-gradient(135deg,#4f46e5 0%,#312e81 100%);border-color:#818cf8;box-shadow:0 3px 12px rgba(79,70,229,.38);color:#fff}
+    .ws-opt.ws-cat-emotion.on{background:linear-gradient(135deg,#c026d3 0%,#86198f 100%);border-color:#f0abfc;box-shadow:0 3px 12px rgba(192,38,211,.36);color:#fff}
+    .ws-opt.ws-cat-rhythm.on{background:linear-gradient(135deg,#0d9488 0%,#115e59 100%);border-color:#5eead4;box-shadow:0 3px 12px rgba(13,148,136,.36);color:#fff}
+    .ws-opt.ws-cat-narrative.on{background:linear-gradient(135deg,#ea580c 0%,#b91c1c 100%);border-color:#fdba74;box-shadow:0 3px 12px rgba(234,88,12,.36);color:#fff}
+    .ws-opt.ws-cat-dialogue.on{background:linear-gradient(135deg,#059669 0%,#047857 100%);border-color:#6ee7b7;box-shadow:0 3px 12px rgba(5,150,105,.36);color:#fff}
+    .ws-opt.ws-cat-custom.on{background:linear-gradient(135deg,#8b5cf6 0%,#6d28d9 100%);border-color:#c4b5fd;box-shadow:0 3px 12px rgba(109,40,217,.36);color:#fff}
     .ws-opt.ws-combo-btn{background:var(--ws-combo-bg);border-color:var(--ws-combo-border);color:var(--ws-combo-text)}
-    .ws-opt.ws-combo-btn.on{background:var(--ws-combo-border);border-color:#a45b9f;box-shadow:0 2px 9px rgba(113,57,111,.34);color:#fff}
-    .ws-opt:hover{transform:translateY(-1px)}
-    .ws-opt.on{transform:translateY(-1px) scale(1.01)}
-    .ws-opt .ws-opt-note,.ws-opt .ws-opt-name{color:inherit;transition:color .22s ease}
+    .ws-opt.ws-combo-btn.on{background:linear-gradient(135deg,#a855f7 0%,#db2777 52%,#ea580c 100%);border-color:#f5d0fe;box-shadow:0 3px 13px rgba(219,39,119,.38);color:#fff}
+    .ws-opt.on{box-shadow:0 3px 12px rgba(79,70,229,.24)}
+    .ws-opt .ws-opt-note,.ws-opt .ws-opt-name{color:inherit;transition:color .18s ease}
     .ws-opt-detail{flex:0 0 auto;width:28px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--txt);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1;font-size:15px}
     .ws-opt-detail:hover{filter:brightness(1.06)}
     .ws-opt-main{min-width:0;flex:1 1 auto}
@@ -8014,6 +8015,36 @@ function endingDiversityInstruction(audit,scope='本组'){
 }
 
 
+function buildChapterOpeningHandoff(chapter, currentPlan, previousState){
+  const n=Number(chapter);
+  if(!Number.isFinite(n) || n<=1){
+    return `【本章章头承接】\n本章为全书开篇，无上一章需要承接。\n\n【开篇进入要求】\n依据本章既有章节计划直接建立开篇状态，不虚构不存在的上一章事件。`;
+  }
+  const plan=currentPlan||{};
+  const previousPlan=state.school?.principal?.plans?.[n-1]||{};
+  const ending=previousPlan.ending||{};
+  const opening=plan.openingLink||{};
+  const openingExecution=compileExecutionGuide(plan).openingExecution||opening;
+  let actual=String(previousState||'').trim();
+  const teacherMarker='【本章老师教案｜原始AI返回内容｜只读】';
+  const markerAt=actual.indexOf(teacherMarker);
+  if(markerAt>=0) actual=actual.slice(0,markerAt).trim();
+  if(!actual) actual=String(storyStateChapterBlock(n-1)||'').trim();
+  const actualMarkerAt=actual.indexOf(teacherMarker);
+  if(actualMarkerAt>=0) actual=actual.slice(0,actualMarkerAt).trim();
+  const pick=(obj,names)=>{for(const key of names){const v=obj?.[key];if(v!=null&&String(v).trim()!=='')return String(v).trim();}return '';};
+  const openingRequirement=pick(opening,['entryState','openingRequirement','requirement','handoff','firstScene','opening','description']);
+  const firstFact=pick(opening,['firstScene','entryState','firstBeat','firstEvent','mustKeep','requiredFact','firstFact']);
+  const entryPoint=pick(opening,['entryState','entryPoint','openingState','sceneEntry','startingState']);
+  const openingDetail=Object.keys(openingExecution||{}).length ? teacherPromptText(openingExecution,5000) : '（本章未提供独立openingExecution；只能依据已有章节计划与上一章真实状态承接，不得自行补写剧情。）';
+  const previousBasis=[
+    ending.nextTransitionType ? `下一章承接方式：${ending.nextTransitionType}` : '',
+    ending.nextTransitionBasis ? `承接依据：${ending.nextTransitionBasis}` : '',
+    ending.handoff ? `交接信息：${ending.handoff}` : ''
+  ].filter(Boolean).join('\n');
+  return `【本章章头承接】\n\n【上一章实际结束状态】\n${actual||'（暂无可用的上一章正文结算状态；不得自行补写缺失事实。）'}\n\n【上一章最后有效事件】\n${String(ending.lastEffectiveEvent||'未指定').trim()}\n\n【上一章结尾方式】\n${String(ending.form||'未指定').trim()}\n\n【上一章结尾强度】\n${String(ending.intensity||'未指定').trim()}\n\n【上一章留给本章的承接依据】\n${previousBasis||'（未提供明确的nextTransition信息；只承接已经成立的上一章事实与本章既有计划。）'}\n\n【本章章头承接要求】\n${openingRequirement||openingDetail}\n\n【本章第一场必须承接的事实】\n${firstFact||'只能从上一章实际结束状态、本章opening信息和本章既有章节计划中读取；不得新增未经授权的事件。'}\n\n【承接完成后的本章进入点】\n${entryPoint||'以本章既有opening信息与章节计划确定的进入状态为准，不自行改变校长原有战略。'}\n\n【本章已有opening施工资料｜只读整理】\n${openingDetail}`;
+}
+
 function previousChapterEndingBrief(chapter, gi){
   const n=Number(chapter); if(n<=1) return '【上一章结尾方式】无；本章为全书开篇。';
   const p=state.school?.principal?.plans?.[n-1];
@@ -8261,9 +8292,11 @@ function buildTeacherUser(g,gi){
 
   for(let n=g.first;n<=g.last;n++){
     const p=plans[n]||{}, stage=stageForChapter(n)||{}, middle=middleByChapter[String(n)]||getChapterMiddleShape(n)||null, time=timeSource?.plannedChapters?.find(x=>Number(x.chapter)===n)||null, previousEnding=previousChapterEndingBrief(n,gi);
+    const previousState=String(storyStateChapterBlock(n-1)||'').trim();
     const chapterData=compileTeacherChapterPlan(p,n,state.chapters?.[n-1]?.title||'');
+    const openingHandoff=buildChapterOpeningHandoff(n,p,previousState);
     const stageLabel=teacherPromptCompact({stage:stage.stage||stage.name||'',startChapter:stage.startChapter,endChapter:stage.endChapter,goal:stage.goal||stage.mission||stage.stageGoal||'',teacherTask:stage.teacherTask||stage.task||'',stageBeatInterpretation:String(stage.stageBeatInterpretation||'').trim(),handoff:stage.handoff||''});
-    lines.push(`【第${n}章｜章节施工信息】\n【章节战略与剧情事实】\n${teacherPromptText(chapterData,14000)}\n\n【本章所属阶段｜只给本章必要信息】\n${teacherPromptText(stageLabel,5000)}\n\n【本章微拍 / 中段结构｜唯一一次】\n${teacherPromptText(middle||{},9000)}\n规则：这里仅提供结构形状、节奏分段与边界，不把它改写成第二套剧情事件清单。\n\n${teacherMiddleStructureInstruction(middle,n)}\n\n【本章时间要求】\n${compileTeacherTimeContext(timeSource,n)||'本章没有额外明确的结构化时间范围；以已成立正文状态和章节事实为准，不得臆造。'}\n\n${previousEnding}\n\n【本章三层施工责任】\nGLOBAL：完整继承上方唯一GLOBAL。\nHYBRID：只有本章确有需要时，由老师把GLOBAL语义与本章环境/阶段/剧情融合为自然语言施工规则。\nCHAPTER：只有本章确有需要时，由老师形成章节级具体施工规则。\n不得把校长数据、旧style对象或机器字段再次作为第二来源。\n\n【本章完整章末设计要求】\n必须落实章节授权中的ending信息：function、intensity、lastEffectiveEvent、form、nextTransitionType、nextTransitionBasis、handoff、diversityNote；章末必须形成真正停止边界，并明确最后有效事件之后不再追加内容。`);
+    lines.push(`【第${n}章｜章节施工信息】\n【章节战略与剧情事实】\n${teacherPromptText(chapterData,14000)}\n\n【本章所属阶段｜只给本章必要信息】\n${teacherPromptText(stageLabel,5000)}\n\n【本章微拍 / 中段结构｜唯一一次】\n${teacherPromptText(middle||{},9000)}\n规则：这里仅提供结构形状、节奏分段与边界，不把它改写成第二套剧情事件清单。\n\n${teacherMiddleStructureInstruction(middle,n)}\n\n【本章时间要求】\n${compileTeacherTimeContext(timeSource,n)||'本章没有额外明确的结构化时间范围；以已成立正文状态和章节事实为准，不得臆造。'}\n\n${previousEnding}\n\n${openingHandoff}\n\n【本章三层施工责任】\nGLOBAL：完整继承上方唯一GLOBAL。\nHYBRID：只有本章确有需要时，由老师把GLOBAL语义与本章环境/阶段/剧情融合为自然语言施工规则。\nCHAPTER：只有本章确有需要时，由老师形成章节级具体施工规则。\n不得把校长数据、旧style对象或机器字段再次作为第二来源。\n\n【本章完整章末设计要求】\n必须落实章节授权中的ending信息：function、intensity、lastEffectiveEvent、form、nextTransitionType、nextTransitionBasis、handoff、diversityNote；章末必须形成真正停止边界，并明确最后有效事件之后不再追加内容。`);
   }
 
   lines.push(`【本组授权词典｜仅保留实际相关创作事实】\n${teacherScopedGlossary(g,gi,9000)}`);
@@ -8291,7 +8324,44 @@ GLOBAL：这里只放校长唯一GLOBAL的完整正式内容，不得混入HYBRI
 每个CHAPTER独立成一个规则块，写正文AI可以直接执行的自然语言施工规则。章节归属只由第四区决定，不得因为规则正文提到其他章节而改变归属。
 
 【七、正式章节教案】
-随后依次输出第${g.first}章至第${g.last}章正式章节教案。每章必须保留完整剧情安排、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。正式章节教案中必须显式出现“本章微拍”，按实际微拍阶段依次写出“阶段/结构职责/本章对应推进”，并明确“推进骨架”与“中段施工”；不得把微拍阶段名称直接当作剧情事件，不得建立第二套结构骨架。正式章节教案不重新定义全书HYBRID/CHAPTER。
+随后依次输出第${g.first}章至第${g.last}章正式章节教案。每章必须保留完整剧情安排、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。每章正式章节教案必须显式、肉眼可见地包含以下三个固定施工区，不能把三者混写成一大段普通正文：
+【本章章头承接】
+【本章中段施工】
+【本章章末设计】
+
+每章至少按以下顺序组织：
+第X章……
+【本章章头承接】
+……
+【本章剧情安排】
+……
+【本章时间地点人物状态】
+……
+【本章核心变化】
+……
+【本章微拍】
+阶段：
+结构职责：
+本章对应推进：
+推进骨架：
+中段施工：
+【本章中段施工】
+……
+【本章动态推进】
+……
+【本章章末设计】
+结尾功能：
+结尾强度：
+最后有效事件：
+收尾方式：
+下一章承接方式：
+承接依据：
+交接信息：
+章末差异化要求：
+【本章创作边界】
+……
+
+其中“本章章头承接”必须承接上一章真实状态与上一章ending，并执行本章已有opening信息；“本章章末设计”必须只使用本章真实授权的ending字段。不得把上一章ending复制成下一章ending。正式章节教案不重新定义全书HYBRID/CHAPTER。
 
 【职责硬约束】
 老师负责安排HYBRID/CHAPTER；切割教案只按第三、四区的章节索引提取第五、六区对应规则，再加GLOBAL、世界观规则和当前正式章节教案。切割阶段不得重新分析剧情、重新判断风格或新增AI请求。
