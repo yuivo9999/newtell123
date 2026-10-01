@@ -13,15 +13,15 @@
 
 /* v1.0.519 IRON LAW — 本章教案传导链永久锁定：
    1) 唯一章节教案来源 = 老师总教案原始纯文本；
-   2) 唯一切割方式 = parseTeacherRawChapters 按“第X章”到下一章章头直接切出完整 rawText；
+   2) 唯一切割方式 = parseTeacherRawChapters；新版总教案按七区结构确定性提取，旧存档继续按“第X章”到下一章章头切割；
    3) 正文AI、正文“教案”、阅读“概”只允许读取 chapterCards.chapters[章号].rawText；
    4) 本链禁止结构化转换、结构化教案链、PlotUnit、ScenePlan、旧骨架或任何第二套教案读取链；
-   5) 后续版本不得把结构化教案重新接回本链。
+   5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.571';
+const APP_VERSION = '1.0.572';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.571.js';
+const APP_FILE_VERSION = 'app1.0.572.js';
 function installV569Styles(){
   if(document.getElementById('v570ScopedStyles')) return;
   const st=document.createElement('style'); st.id='v570ScopedStyles'; st.textContent=`
@@ -141,7 +141,7 @@ const VALIDATION_RETRY_MAX = 2; // 语义校验失败最多定向修复2次；�
 let lib = { curId: null, items: [] }; // {curId, items:[{id, idea, outline, ..., step, title, logline, updatedAt}]}
 let gglib = [];
 
-/* APP VERSION: app1.0.571.js — 校长老师统一真实输入组装、写作风格视觉重构、主要人物 Foundation 职责明确。 */
+/* APP VERSION: app1.0.572.js — 校长老师统一真实输入组装、写作风格视觉重构、主要人物 Foundation 职责明确。 */
 /* ================================================================
  * 【GLOBAL / HYBRID / CHAPTER｜内部开发者说明】
  * 1. GLOBAL：全书恒定风格。校长单独确定的全书风格原规则；老师只能原义继承，不能修改、弱化、删除或稀释，正文继续按原义执行。
@@ -664,36 +664,44 @@ function openTeacherChapterTitleRules(gi){
   };
   ov.addEventListener('click',e=>{if(e.target===ov)close();});
 }
-function parseTeacherRawChapters(raw, first, last){
+function teacherSectionByHeading(raw, heading, nextHeadings){
   const src=String(raw||'').replace(/\r\n?/g,'\n');
-  const out={};
-  // 1.0.520：章节边界必须以“完整章标题行”的真实起点/终点为准。
-  // 不再通过标题文本重组、trim、substring 偏移来计算边界；标题行本身必须进入该章 rawText。
-  const lines=src.split('\n');
-  const hits=[];
-  let offset=0;
-  for(let i=0;i<lines.length;i++){
-    const line=String(lines[i]||'');
-    const parsed=teacherChapterNoFromTitleLine(line);
-    if(parsed&&Number.isFinite(parsed.chapterNo)){
-      hits.push({ch:parsed.chapterNo,title:String(parsed.title||'').replace(/^[\s:：\-–—|｜]+/,'').replace(/[《》【】（）()]/g,'').trim(),startLine:i,startOffset:offset});
-    }
-    offset += line.length + 1;
-  }
-  for(let i=0;i<hits.length;i++){
-    const cur=hits[i];
-    const next=hits[i+1];
-    const endOffset=next ? next.startOffset : src.length;
-    // 从完整章标题行的第一个字符开始，直到下一章完整标题行的第一个字符之前。
-    // 不做首尾 trim，避免误删本章标题或第一节；只允许规范化后的 CRLF。
-    const rawText=src.slice(cur.startOffset,endOffset);
-    if(rawText.trim()) out[cur.ch]={chapter:cur.ch,title:cur.title,rawText,startLine:cur.startLine+1,endLine:next?next.startLine:lines.length};
-  }
-  const lo=Number.isFinite(Number(first))?Number(first):1;
-  const hi=Number.isFinite(Number(last))?Number(last):Infinity;
-  const filtered={};
-  Object.keys(out).forEach(k=>{ const n=Number(k); if(n>=lo&&n<=hi) filtered[n]=out[k]; });
-  return filtered;
+  const re=new RegExp('^\\s*(?:#{1,6}\\s*)?'+escapeRegExp(String(heading||''))+'\\s*$','mi');
+  const m=re.exec(src); if(!m) return '';
+  const start=m.index, tail=src.slice(start+m[0].length); let end=tail.length;
+  (Array.isArray(nextHeadings)?nextHeadings:[]).forEach(h=>{const r=new RegExp('^\\s*(?:#{1,6}\\s*)?'+escapeRegExp(String(h||''))+'\\s*$','mi');const x=r.exec(tail);if(x&&x.index<end)end=x.index;});
+  return (src.slice(start,start+m[0].length)+tail.slice(0,end)).trim();
+}
+function teacherSectionBody(raw, heading, nextHeadings){const sec=teacherSectionByHeading(raw,heading,nextHeadings);if(!sec)return '';const lines=sec.split('\n');lines.shift();return lines.join('\n').trim();}
+function teacherSectionExists(raw, heading){return new RegExp('^\\s*(?:#{1,6}\\s*)?'+escapeRegExp(String(heading||''))+'\\s*$','mi').test(String(raw||''));}
+function teacherChapterNumbersFromIndexBlock(block){const nums=[];String(block||'').split('\n').forEach(line=>{const m=String(line||'').match(/^\s*(?:[-*]\s*)?第\s*(\d{1,4})\s*章(?:\s|$)/);if(m){const n=Number(m[1]);if(Number.isFinite(n)&&!nums.includes(n))nums.push(n);}});return nums;}
+function teacherNamedRuleBlocks(sectionBody, kind){const out={};const re=new RegExp('^\\s*'+kind+'\\s*[：:]\\s*(.+?)\\s*$','gmi');const matches=[];let m;while((m=re.exec(String(sectionBody||''))))matches.push({name:String(m[1]||'').trim(),start:m.index});for(let i=0;i<matches.length;i++){const cur=matches[i],next=matches[i+1],body=String(sectionBody||'').slice(cur.start,next?next.start:String(sectionBody||'').length).trim();const key=cur.name.toLowerCase();if(!out[key])out[key]=body;}return out;}
+function parseTeacherStructuredPlan(raw){
+  const src=String(raw||'').replace(/\r\n?/g,'\n');
+  const heads=['【一、GLOBAL继承与风格层级归属】','【二、世界观规则执行说明】','【三、HYBRID章节索引】','【四、CHAPTER章节索引】','【五、HYBRID执行规则】','【六、CHAPTER执行规则】','【七、正式章节教案】'];
+  if(!heads.every(h=>teacherSectionExists(src,h)))return null;
+  const hybridIndex=teacherSectionBody(src,heads[2],heads.slice(3)),chapterIndex=teacherSectionBody(src,heads[3],heads.slice(4));
+  const hybridRules=teacherSectionBody(src,heads[4],heads.slice(5)),chapterRules=teacherSectionBody(src,heads[5],heads.slice(6));
+  const hybridItems=[],hRe=/^\s*HYBRID\s*[：:]\s*(.+?)\s*$/gmi;let hm;while((hm=hRe.exec(hybridIndex))){const start=hm.index,next=hRe.exec(hybridIndex),end=next?next.index:hybridIndex.length;const block=hybridIndex.slice(start,end).trim();hybridItems.push({name:String(hm[1]||'').trim(),chapters:teacherChapterNumbersFromIndexBlock(block)});if(!next)break;hRe.lastIndex=next.index;}
+  const chapterItems=[],cRe=/^\s*CHAPTER\s*[：:]\s*(.+?)\s*$/gmi;let cm;while((cm=cRe.exec(chapterIndex))){const start=cm.index,next=cRe.exec(chapterIndex),end=next?next.index:chapterIndex.length;const block=chapterIndex.slice(start,end).trim();chapterItems.push({name:String(cm[1]||'').trim(),chapters:teacherChapterNumbersFromIndexBlock(block)});if(!next)break;cRe.lastIndex=next.index;}
+  return {global:teacherSectionByHeading(src,heads[0],heads.slice(1)),world:teacherSectionByHeading(src,heads[1],heads.slice(2)),hybridItems,chapterItems,hybridRuleMap:teacherNamedRuleBlocks(hybridRules,'HYBRID'),chapterRuleMap:teacherNamedRuleBlocks(chapterRules,'CHAPTER'),formal:teacherSectionBody(src,heads[6],[])};
+}
+function teacherStructuredChapterText(parsed, chapterNo){
+  if(!parsed)return '';const n=Number(chapterNo);if(!Number.isFinite(n))return '';const parts=[parsed.global,parsed.world];
+  const add=(items,map,label)=>items.forEach(item=>{if(item.chapters.includes(n)){const rule=map[String(item.name||'').toLowerCase()];if(rule)parts.push(`【${label}执行规则】\n${rule}`);}});
+  add(parsed.hybridItems,parsed.hybridRuleMap,'HYBRID');add(parsed.chapterItems,parsed.chapterRuleMap,'CHAPTER');
+  const lines=String(parsed.formal||'').split('\n'),head=new RegExp('^\\s*(?:#{1,6}\\s*)?第\\s*'+n+'\\s*章.*$','i');let st=-1,en=lines.length;
+  for(let i=0;i<lines.length;i++){if(head.test(lines[i])){st=i;break;}}if(st<0)return '';
+  for(let i=st+1;i<lines.length;i++){if(/^\s*(?:#{1,6}\s*)?第\s*\d{1,4}\s*章.*$/i.test(lines[i])){en=i;break;}}
+  const chapterBlock=lines.slice(st,en).join('\n').trim();if(chapterBlock)parts.push(chapterBlock);return parts.map(x=>String(x||'').trim()).filter(Boolean).join('\n\n');
+}
+function parseTeacherRawChapters(raw, first, last){
+  const src=String(raw||'').replace(/\r\n?/g,'\n'),out={};
+  const structured=parseTeacherStructuredPlan(src);
+  if(structured){const lo=Number.isFinite(Number(first))?Number(first):1,hi=Number.isFinite(Number(last))?Number(last):Infinity;for(let n=lo;n<=hi;n++){const text=teacherStructuredChapterText(structured,n);if(text)out[n]={chapter:n,title:(state.outline?.chapters?.[n-1]?.title||''),rawText:text,structured:true};}return out;}
+  const lines=src.split('\n'),hits=[];let offset=0;for(let i=0;i<lines.length;i++){const line=String(lines[i]||''),parsed=teacherChapterNoFromTitleLine(line);if(parsed&&Number.isFinite(parsed.chapterNo))hits.push({ch:parsed.chapterNo,title:String(parsed.title||'').replace(/^[\s:：\-–—|｜]+/,'').replace(/[《》【】（）()]/g,'').trim(),startLine:i,startOffset:offset});offset+=line.length+1;}
+  for(let i=0;i<hits.length;i++){const cur=hits[i],next=hits[i+1],endOffset=next?next.startOffset:src.length,rawText=src.slice(cur.startOffset,endOffset);if(rawText.trim())out[cur.ch]={chapter:cur.ch,title:cur.title,rawText,startLine:cur.startLine+1,endLine:next?next.startLine:lines.length,structured:false};}
+  const lo=Number.isFinite(Number(first))?Number(first):1,hi=Number.isFinite(Number(last))?Number(last):Infinity,filtered={};Object.keys(out).forEach(k=>{const n=Number(k);if(n>=lo&&n<=hi)filtered[n]=out[k];});return filtered;
 }
 function getCurrentChapterTeacherRawText(i){
   const chapterNo=Number(i)+1;
@@ -8245,7 +8253,38 @@ function buildTeacherUser(g,gi){
 
   lines.push(`【本组授权词典｜仅保留实际相关创作事实】\n${teacherScopedGlossary(g,gi,9000)}`);
   lines.push(`【前序正文状态｜连续性事实】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态；不得自行假定缺失事实）'):'（首组，无前序正文）'}`);
-  lines.push(`【最终输出执行口令】\n现在一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。不得输出摘要、章节概述或第二套机器教案。每章必须覆盖章节定位、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。除正文教案外，必须在教案中明确写出本组承担的风格层级归属：HYBRID：ID｜词条名｜本章施工说明；CHAPTER：ID｜词条名｜本章施工说明；GLOBAL只引用上方唯一来源，不重新分配。不得遗漏本组已经认领的待归属ID。世界观规则必须保留并视为唯一正式来源；不得复制成第二套规则对象。输出只作为正文AI唯一章节教案来源。`);
+  lines.push(`【最终输出执行口令】
+现在一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。不得输出摘要、章节概述或第二套机器教案。
+
+【总教案固定七区结构｜必须严格按顺序、一次且仅一次输出】
+【一、GLOBAL继承与风格层级归属】
+GLOBAL：这里只放校长唯一GLOBAL的完整正式内容，不得混入HYBRID/CHAPTER章节分配。
+
+【二、世界观规则执行说明】
+这里只放词典正式唯一世界观规则的正文执行说明，不得凭空新增规则，不得把普通扩充规则改写成世界观规则；世界观规则不得参与HYBRID/CHAPTER章节归属判断。
+
+【三、HYBRID章节索引】
+每个HYBRID独立成一个项目，固定写“HYBRID：名称”以及“适用章节：”，每个章节编号单独一行，例如“第1章”。只能列老师实际决定执行的章节，不得使用模糊范围。
+
+【四、CHAPTER章节索引】
+每个CHAPTER独立成一个项目，固定写“CHAPTER：名称”以及“适用章节：”，每个章节编号单独一行。未列出的章节不得继承，不得把执行说明混入索引。
+
+【五、HYBRID执行规则】
+每个HYBRID独立成一个规则块，写正文AI可以直接执行的自然语言施工规则。不得在这里承担章节归属判断，不得重复完整章节索引，不得写程序语言。
+
+【六、CHAPTER执行规则】
+每个CHAPTER独立成一个规则块，写正文AI可以直接执行的自然语言施工规则。章节归属只由第四区决定，不得因为规则正文提到其他章节而改变归属。
+
+【七、正式章节教案】
+随后依次输出第${g.first}章至第${g.last}章正式章节教案。每章必须保留完整剧情安排、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。正式章节教案不重新定义全书HYBRID/CHAPTER。
+
+【职责硬约束】
+老师负责安排HYBRID/CHAPTER；切割教案只按第三、四区的章节索引提取第五、六区对应规则，再加GLOBAL、世界观规则和当前正式章节教案。切割阶段不得重新分析剧情、重新判断风格或新增AI请求。
+
+【禁止事项】
+不得新增QC、audit、validator、mainCountCheck、自动重试、自动补齐、隐藏AI请求、新的章节分析AI、新的HYBRID判断AI或新的CHAPTER判断AI。不得删除或改写已有有效GLOBAL、世界观规则、HYBRID、CHAPTER及正式章节剧情内容。
+
+输出只作为正文AI唯一章节教案来源。`);
 
   return lines.join('\n\n');
 }
