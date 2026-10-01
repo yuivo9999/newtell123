@@ -19,52 +19,41 @@
    5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.574';
+const APP_VERSION = '1.0.575';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.574.js';
+const APP_FILE_VERSION = 'app1.0.575.js';
 function installV569Styles(){
   if(document.getElementById('v570ScopedStyles')) return;
   const st=document.createElement('style'); st.id='v570ScopedStyles'; st.textContent=`
     .ar-gap-demo{background:linear-gradient(135deg,#7c3aed 0%,#a855f7 45%,#facc15 100%);color:#fff;border-radius:8px;padding:7px 9px;margin-top:4px;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
     .ai-recipe-gapitem,.ai-recipe-gapitem *{min-width:0;max-width:100%;box-sizing:border-box}
-    :root{--ws-language-bg:linear-gradient(135deg,#dbeafe 0%,#818cf8 100%);--ws-language-border:#4f46e5;--ws-language-text:#172554;--ws-emotion-bg:linear-gradient(135deg,#f5d0fe 0%,#d946ef 100%);--ws-emotion-border:#a21caf;--ws-emotion-text:#581c87;--ws-rhythm-bg:linear-gradient(135deg,#cffafe 0%,#14b8a6 100%);--ws-rhythm-border:#0f766e;--ws-rhythm-text:#134e4a;--ws-narrative-bg:linear-gradient(135deg,#fed7aa 0%,#ef4444 100%);--ws-narrative-border:#c2410c;--ws-narrative-text:#7c2d12;--ws-dialogue-bg:linear-gradient(135deg,#bbf7d0 0%,#10b981 100%);--ws-dialogue-border:#047857;--ws-dialogue-text:#064e3b;--ws-custom-bg:linear-gradient(135deg,#e9d5ff 0%,#8b5cf6 100%);--ws-custom-border:#6d28d9;--ws-custom-text:#3b0764;--ws-combo-bg:linear-gradient(135deg,#c084fc 0%,#ec4899 52%,#f97316 100%);--ws-combo-border:#a21caf;--ws-combo-text:#4a044e}
-    [data-theme="light"],[data-theme="paper"],[data-theme="guofeng"],[data-theme="aurora"]{--ws-language-bg:linear-gradient(135deg,#dbeafe 0%,#818cf8 100%);--ws-language-border:#4f46e5;--ws-language-text:#172554;--ws-emotion-bg:linear-gradient(135deg,#f5d0fe 0%,#d946ef 100%);--ws-emotion-border:#a21caf;--ws-emotion-text:#581c87;--ws-rhythm-bg:linear-gradient(135deg,#cffafe 0%,#14b8a6 100%);--ws-rhythm-border:#0f766e;--ws-rhythm-text:#134e4a;--ws-narrative-bg:linear-gradient(135deg,#fed7aa 0%,#ef4444 100%);--ws-narrative-border:#c2410c;--ws-narrative-text:#7c2d12;--ws-dialogue-bg:linear-gradient(135deg,#bbf7d0 0%,#10b981 100%);--ws-dialogue-border:#047857;--ws-dialogue-text:#064e3b;--ws-custom-bg:linear-gradient(135deg,#e9d5ff 0%,#8b5cf6 100%);--ws-custom-border:#6d28d9;--ws-custom-text:#3b0764;--ws-combo-bg:linear-gradient(135deg,#c084fc 0%,#ec4899 52%,#f97316 100%);--ws-combo-border:#a21caf;--ws-combo-text:#4a044e}
-    [data-theme="dark"],[data-theme="blackboard"],[data-theme="mecha"],[data-theme="cyber"]{--ws-language-bg:linear-gradient(135deg,#1e3a8a 0%,#4f46e5 100%);--ws-language-border:#818cf8;--ws-language-text:#eef2ff;--ws-emotion-bg:linear-gradient(135deg,#581c87 0%,#c026d3 100%);--ws-emotion-border:#e879f9;--ws-emotion-text:#fff7ff;--ws-rhythm-bg:linear-gradient(135deg,#164e63 0%,#0d9488 100%);--ws-rhythm-border:#5eead4;--ws-rhythm-text:#ecfeff;--ws-narrative-bg:linear-gradient(135deg,#7c2d12 0%,#dc2626 100%);--ws-narrative-border:#fb923c;--ws-narrative-text:#fff7ed;--ws-dialogue-bg:linear-gradient(135deg,#14532d 0%,#059669 100%);--ws-dialogue-border:#6ee7b7;--ws-dialogue-text:#ecfdf5;--ws-custom-bg:linear-gradient(135deg,#3b0764 0%,#7c3aed 100%);--ws-custom-border:#c4b5fd;--ws-custom-text:#faf5ff;--ws-combo-bg:linear-gradient(135deg,#581c87 0%,#be185d 52%,#c2410c 100%);--ws-combo-border:#f0abfc;--ws-combo-text:#fff7ff}
-    .ws-card{border:1px solid rgba(124,58,237,.34);background:linear-gradient(135deg,rgba(59,130,246,.055) 0%,rgba(168,85,247,.075) 52%,rgba(249,115,22,.055) 100%)}
-    .ws-card .ws-head{background:linear-gradient(135deg,rgba(59,130,246,.14) 0%,rgba(168,85,247,.16) 52%,rgba(249,115,22,.13) 100%)}
-    .ws-opt{min-width:0;max-width:100%;position:relative;color:inherit;border-width:1px;border-style:solid;transition:background-color .18s ease,color .18s ease,border-color .18s ease,box-shadow .18s ease}
-    .ws-opt.ws-cat-language{background:var(--ws-language-bg);border-color:var(--ws-language-border);color:var(--ws-language-text)}
-    .ws-opt.ws-cat-emotion{background:var(--ws-emotion-bg);border-color:var(--ws-emotion-border);color:var(--ws-emotion-text)}
-    .ws-opt.ws-cat-rhythm{background:var(--ws-rhythm-bg);border-color:var(--ws-rhythm-border);color:var(--ws-rhythm-text)}
-    .ws-opt.ws-cat-narrative{background:var(--ws-narrative-bg);border-color:var(--ws-narrative-border);color:var(--ws-narrative-text)}
-    .ws-opt.ws-cat-dialogue{background:var(--ws-dialogue-bg);border-color:var(--ws-dialogue-border);color:var(--ws-dialogue-text)}
-    .ws-opt.ws-cat-custom{background:var(--ws-custom-bg);border-color:var(--ws-custom-border);color:var(--ws-custom-text)}
-    .ws-opt.ws-cat-language.on{background:linear-gradient(135deg,#4f46e5 0%,#312e81 100%);border-color:#818cf8;box-shadow:0 3px 12px rgba(79,70,229,.38);color:#fff}
-    .ws-opt.ws-cat-emotion.on{background:linear-gradient(135deg,#c026d3 0%,#86198f 100%);border-color:#f0abfc;box-shadow:0 3px 12px rgba(192,38,211,.36);color:#fff}
-    .ws-opt.ws-cat-rhythm.on{background:linear-gradient(135deg,#0d9488 0%,#115e59 100%);border-color:#5eead4;box-shadow:0 3px 12px rgba(13,148,136,.36);color:#fff}
-    .ws-opt.ws-cat-narrative.on{background:linear-gradient(135deg,#ea580c 0%,#b91c1c 100%);border-color:#fdba74;box-shadow:0 3px 12px rgba(234,88,12,.36);color:#fff}
-    .ws-opt.ws-cat-dialogue.on{background:linear-gradient(135deg,#059669 0%,#047857 100%);border-color:#6ee7b7;box-shadow:0 3px 12px rgba(5,150,105,.36);color:#fff}
-    .ws-opt.ws-cat-custom.on{background:linear-gradient(135deg,#8b5cf6 0%,#6d28d9 100%);border-color:#c4b5fd;box-shadow:0 3px 12px rgba(109,40,217,.36);color:#fff}
+    :root{--ws-ink:#34312D;--ws-ink-soft:#5B5650;--ws-paper:#FFFDF8;--ws-paper-deep:#F7F3EA;--ws-paper-warm:#EFE7D8;--ws-border:#D8CCBB;--ws-brown:#795548;--ws-brown-deep:#5A4030;--ws-brown-light:#B89A78;--ws-gold:#A7865A;--ws-combo-bg:var(--ws-paper);--ws-combo-border:var(--ws-border);--ws-combo-text:var(--ws-ink)}
+    [data-theme="light"],[data-theme="paper"],[data-theme="guofeng"],[data-theme="aurora"]{--ws-ink:#34312D;--ws-ink-soft:#5B5650;--ws-paper:#FFFDF8;--ws-paper-deep:#F7F3EA;--ws-paper-warm:#EFE7D8;--ws-border:#D8CCBB;--ws-brown:#795548;--ws-brown-deep:#5A4030;--ws-brown-light:#B89A78;--ws-gold:#A7865A;--ws-combo-bg:#F7F3EA;--ws-combo-border:#D8CCBB;--ws-combo-text:#34312D}
+    [data-theme="dark"],[data-theme="blackboard"],[data-theme="mecha"],[data-theme="cyber"]{--ws-ink:#DDD5C8;--ws-ink-soft:#B9AEA0;--ws-paper:#28221D;--ws-paper-deep:#201E1B;--ws-paper-warm:#332A22;--ws-border:#59493B;--ws-brown:#A9825B;--ws-brown-deep:#6E5039;--ws-brown-light:#C1A27D;--ws-gold:#B89A78;--ws-combo-bg:#332A22;--ws-combo-border:#59493B;--ws-combo-text:#DDD5C8}
+    .ws-card{border:1px solid var(--ws-border);background:var(--ws-paper);color:var(--ws-ink);box-shadow:0 4px 14px rgba(75,58,43,.08)}
+    .ws-card .ws-head{background:var(--ws-paper-deep);color:var(--ws-brown-deep);position:relative}
+    .ws-card .ws-head:after,.ws-combo-title:after,.ws-cat-title:after{content:"";display:block;height:3px;margin-top:7px;background:repeating-linear-gradient(90deg,transparent 0 8px,var(--ws-brown-light) 8px 12px,transparent 12px 20px);opacity:.55}
+    .ws-opt{min-width:0;max-width:100%;position:relative;color:var(--ws-ink);background:var(--ws-paper-deep);border:1px solid var(--ws-border);transition:none}
+    .ws-opt.ws-cat-language,.ws-opt.ws-cat-emotion,.ws-opt.ws-cat-rhythm,.ws-opt.ws-cat-narrative,.ws-opt.ws-cat-dialogue,.ws-opt.ws-cat-custom{background:var(--ws-paper-deep);border-color:var(--ws-border);color:var(--ws-ink)}
+    .ws-opt.ws-cat-language.on,.ws-opt.ws-cat-emotion.on,.ws-opt.ws-cat-rhythm.on,.ws-opt.ws-cat-narrative.on,.ws-opt.ws-cat-dialogue.on,.ws-opt.ws-cat-custom.on{background:var(--ws-brown-deep);border-color:var(--ws-brown-light);box-shadow:inset 0 1px 3px rgba(0,0,0,.18);color:var(--ws-paper)}
     .ws-opt.ws-combo-btn{background:var(--ws-combo-bg);border-color:var(--ws-combo-border);color:var(--ws-combo-text)}
-    .ws-opt.ws-combo-btn.on{background:linear-gradient(135deg,#a855f7 0%,#db2777 52%,#ea580c 100%);border-color:#f5d0fe;box-shadow:0 3px 13px rgba(219,39,119,.38);color:#fff}
-    .ws-opt.on{box-shadow:0 3px 12px rgba(79,70,229,.24)}
-    .ws-opt .ws-opt-note,.ws-opt .ws-opt-name{color:inherit;transition:color .18s ease}
-    .ws-opt-detail{flex:0 0 auto;width:28px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--txt);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1;font-size:15px}
-    .ws-opt-detail:hover{filter:brightness(1.06)}
+    .ws-opt.ws-combo-btn.on{background:var(--ws-brown-deep);border-color:var(--ws-brown-light);box-shadow:inset 0 1px 3px rgba(0,0,0,.18);color:var(--ws-paper)}
+    .ws-opt.on{box-shadow:inset 0 1px 3px rgba(0,0,0,.18)}
+    .ws-opt .ws-opt-note,.ws-opt .ws-opt-name{color:inherit;transition:none}
+    .ws-opt-detail{flex:0 0 auto;width:28px;height:28px;border:1px solid var(--ws-border);border-radius:7px;background:var(--ws-paper-warm);color:var(--ws-ink);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1;font-size:15px}
     .ws-opt-main{min-width:0;flex:1 1 auto}
     .ws-opt-note,.ws-opt-name{max-width:100%;overflow-wrap:anywhere;word-break:break-word}
     .ws-detail-modal{width:min(680px,calc(100vw - 24px))!important;max-width:680px!important;max-height:min(80vh,720px)!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
     .ws-detail-body{overflow:auto;min-width:0;max-width:100%;padding:12px 16px 18px}
     .ws-detail-row{margin:0 0 10px;min-width:0;overflow-wrap:anywhere;word-break:break-word}
-    .ws-detail-label{font-size:11px;color:var(--sub);font-weight:700;margin-bottom:3px}
+    .ws-detail-label{font-size:11px;color:var(--ws-ink-soft);font-weight:700;margin-bottom:3px}
     .ws-detail-value{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
     .ws-detail-list{margin:0;padding-left:20px}
-    .ws-detail-section{margin:0 0 12px;padding:10px 11px;border:1px solid rgba(127,127,127,.16);border-radius:10px;background:linear-gradient(135deg,rgba(124,58,237,.045),rgba(250,204,21,.055));box-sizing:border-box}
-    .ws-detail-section:nth-child(even){background:linear-gradient(135deg,rgba(14,165,233,.045),rgba(168,85,247,.055))}
-    .ws-detail-example{margin-top:14px;padding:13px 14px;border-radius:12px;background:linear-gradient(135deg,#0f766e 0%,#0e7490 50%,#155e75 100%);color:#fff;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word;box-shadow:0 7px 18px rgba(15,118,110,.22)}
-    .ws-detail-example-title{font-weight:800;font-size:13px;margin-bottom:8px;text-shadow:0 1px 2px rgba(0,0,0,.32)}
-    .ws-detail-example-text{white-space:pre-wrap;line-height:1.65;text-shadow:0 1px 2px rgba(0,0,0,.28);overflow-wrap:anywhere;word-break:break-word}
-
+    .ws-detail-section{margin:0 0 12px;padding:10px 11px;border:1px solid var(--ws-border);border-radius:10px;background:var(--ws-paper-deep);box-sizing:border-box}
+    .ws-detail-section:nth-child(even){background:var(--ws-paper-warm)}
+    .ws-detail-example{margin-top:14px;padding:13px 14px;border-radius:12px;background:var(--ws-brown-deep);color:var(--ws-paper);box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word;box-shadow:0 7px 18px rgba(75,58,43,.18)}
+    .ws-detail-example-title{font-weight:800;font-size:13px;margin-bottom:8px}
+    .ws-detail-example-text{white-space:pre-wrap;line-height:1.65;overflow-wrap:anywhere;word-break:break-word}
     .ws-new-style-modal{width:min(680px,calc(100vw - 24px))!important;max-width:680px!important;max-height:min(80vh,720px)!important}
     .ws-new-style-modal #wsnPlainText{width:100%;max-width:100%;box-sizing:border-box;min-height:260px}
     .ws-tools,.dm-card .de-action-row{display:flex;flex-wrap:wrap;min-width:0;max-width:100%}
@@ -8078,13 +8067,17 @@ function teacherScopedGlossary(g, gi, maxChar){
   return text||'（本组未从校长计划实际提及中授权额外词典资源；不得因为词典存在某条素材就自行扩大剧情。）';
 }
 
-const TEACHER_SYS = `你是长篇小说创作链中的“老师AI”。你的唯一职责是：接收校长提供的唯一全书GLOBAL与本组章节战略，结合本章剧情、微拍、人物状态、环境与施工条件，为负责章节形成可直接供正文AI执行的完整原始教案。
+const TEACHER_SYS = `你是长篇小说创作链中的“老师AI”。你的唯一职责是：接收合法的校长战略来源、系统事实和本组章节施工资料，把上游的“写什么、为什么写、写到哪里”转化为可以直接供正文AI执行的完整章节教案。
 
-【唯一主链】校长 → 老师 → 正文。
-【三层职责】GLOBAL只由校长确定；老师必须完整继承GLOBAL，不得重新选择、改义、弱化或创造第二套GLOBAL。校长没有进入GLOBAL的词条会作为REMAINING原始资料交给老师；老师必须先完成REMAINING→HYBRID/CHAPTER的唯一层级归属，再按章施工。HYBRID与CHAPTER只由老师按章判断、融合、详细化。
-【风格数据硬约束】老师只能使用上游给出的原始style ID；不得自创style ID，不得改写原始definition。允许新增的只有本章施工说明、usage、implementation等应用信息。
-【正文出口】老师输出的是正文AI唯一的章节教案来源。正文不得再寻找校长原始STYLE_STRATEGY、globalStyleEntries、globalStyleDefinitions或其他旧三层对象。
-【输出原则】最终必须让全部ALL词条都有且只有一个层级归属：GLOBAL、HYBRID或CHAPTER。GLOBAL由校长锁定；REMAINING必须全部归入HYBRID或CHAPTER。某一章可以没有HYBRID或CHAPTER，但全书不能有未分配词条。不得建立第二套风格词条体系。
+【唯一主链】校长 → 老师 → 正文。不得建立第二条老师AI生成链、第二个Prompt入口或第二次章节分析AI。
+【第一权威：校长战略】校长负责WHAT、WHY、WHERE TO END，即全书GLOBAL、阶段战略、本组战略、章节任务、关键剧情方向及章末边界。老师不得擅自修改这些战略事实。
+【第二权威：系统事实】世界观规则、词典事实、时间连续性、前序正文真实状态、已成立人物/剧情事实及施工条件属于系统事实；老师只能理解并执行，不得重新创造或改写。
+【第三职责：老师施工】老师负责HOW：安排中段、场景、人物调度、信息释放、节奏、情绪、台词，以及把HYBRID/CHAPTER落地为正文可执行的章节教案。
+【GLOBAL】GLOBAL的战略权威只来自校长。老师只能原义继承，不得自行创造第二套GLOBAL。
+【REMAINING接力】校长未进入GLOBAL的风格词条进入REMAINING。当前老师只处理本组能够合法施工的部分；适合本组的归入HYBRID或CHAPTER，不适合本组的必须保留并交由后续老师继续接力。不能要求每一组老师一次性清空全部REMAINING。只有整个老师链完成后REMAINING才应为0。
+【风格数据硬约束】老师只能使用上游给出的原始style ID，不得自创style ID，不得改写原始definition；允许新增的只有本章施工说明、usage、implementation等应用信息。
+【正文出口】老师形成的章节教案是正文AI的主要且唯一章节教案来源。正文不得重新寻找校长原始STYLE_STRATEGY、globalStyleEntries、globalStyleDefinitions或其他旧三层对象。
+【输出原则】GLOBAL、HYBRID、CHAPTER三层归属必须清晰；GLOBAL由校长锁定，HYBRID/CHAPTER由老师按章施工。不得建立第二套风格词条体系。
 【安全原则】优先忠实执行校长战略与已成立事实；不要越权改变章节任务、人物事实、因果关系、时间连续性或章末边界。输出完整、可执行、自然语言化的老师原始教案，不生成另一套并行机器教案。`;
 
 function teacherPromptCompact(value, options={}){
@@ -8174,7 +8167,7 @@ function compileTeacherGlobal(pr){
     global:globalText || '沿用已经确定的优化后写作风格。',
     selectedSemantics:entries,
     remainingStyleEntries:remaining,
-    rule:'GLOBAL 是校长唯一提供的全书风格来源；老师原义继承。REMAINING=ALL-GLOBAL，必须最终归入HYBRID或CHAPTER，不得遗漏、重复或改写原始定义。'
+    rule:'GLOBAL 的战略权威只来自校长；老师原义继承。REMAINING=ALL-GLOBAL，本组仅处理能够合法施工的部分并归入HYBRID或CHAPTER，不适合本组的必须保留给后续老师接力，不得遗漏、重复或改写原始定义。'
   };
 }
 function validateTeacherInjection(text){
@@ -8273,14 +8266,16 @@ function buildTeacherUser(g,gi){
   const timeSource=principalTimeSystemSource(targetCount);
   const assignmentFacts={teacherCode:code,role:role.role,roleLabel:role.roleLabel,startChapter:g.first,endChapter:g.last,chapterCount:g.chapterCount,finalTeacher:finalFacts.finalTeacher,finalResponsible:finalFacts.finalResponsible,hasNextTeacher:finalFacts.hasNextTeacher,nextTeacherCode:finalFacts.nextTeacherCode};
 
-  lines.push(`【老师身份与职责】\n老师代号=${code}\n系统角色=${role.role}（${role.roleLabel}）\n负责章节=${g.first}-${g.last}。\n本次必须完整覆盖负责范围内每一章；老师是章节施工总负责人。校长负责全书战略与唯一GLOBAL，老师负责按章施工HYBRID/CHAPTER，正文AI只读取老师形成的最终章节教案。`);
+  lines.push(`【老师身份与施工责任】\n老师代号=${code}\n系统角色=${role.role}（${role.roleLabel}）\n负责章节=${g.first}-${g.last}。\n老师负责把校长战略与系统事实落实为具体施工：安排中段、场景、人物、信息释放、节奏、情绪与台词，并按章施工HYBRID/CHAPTER。校长负责战略，老师负责施工，正文AI执行老师形成的最终章节教案。`);
   lines.push(`【最终责任边界｜系统事实】\n${teacherPromptText(assignmentFacts,4000)}`);
+  lines.push(`【系统事实｜FACTS】\n以下已成立事实属于系统约束，不由老师重新定义：世界观规则、词典事实、时间连续性、前序正文真实状态、已成立人物/剧情事实及施工条件。`);
   lines.push(storyStateCanonBlock());
 
   const global=compileTeacherGlobal(pr);
   const previousStyleAudit=teacherStyleLedgerForPriorGroups(gi);
   const remainingForThisGroup=Array.isArray(global.remainingStyleEntries) ? global.remainingStyleEntries.filter(x=>!previousStyleAudit.assignedIds.includes(String(x.id))) : [];
-  lines.push(`【校长唯一GLOBAL｜全书只出现一次】\n${teacherPromptText(global,9000)}\n\n【本组风格分层接力】\n此前老师组已经完成的归属ID：${previousStyleAudit.assignedIds.join('、')||'无'}\n本组当前仍待归属ID：${remainingForThisGroup.map(x=>String(x.id)).join('、')||'无'}\n本组不是重新定义风格；如果本组负责章节确实适合某个待归属词条，请在最终教案中明确将其归入HYBRID或CHAPTER并给出本章施工说明。若不适合本组，请不要吞掉该ID，由后续老师继续接力。最后一位老师必须确保全书剩余归属为0。`);
+  lines.push(`【校长战略来源｜WHAT / WHY / WHERE TO END】\n以下战略来自校长；老师不得改写战略事实。\n${teacherPromptText({global:global.global,selectedSemantics:global.selectedSemantics},9000)}\n
+【校长唯一GLOBAL｜全书只出现一次】\n\n【本组风格分层接力】\n此前老师组已经完成的归属ID：${previousStyleAudit.assignedIds.join('、')||'无'}\n本组当前仍待归属ID：${remainingForThisGroup.map(x=>String(x.id)).join('、')||'无'}\n本组不是重新定义风格；如果本组负责章节确实适合某个待归属词条，请在最终教案中明确将其归入HYBRID或CHAPTER并给出本章施工说明。若不适合本组，请不要吞掉该ID，由后续老师继续接力。最后一位老师必须确保全书剩余归属为0。`);
 
   const stageRows=(pr.stageStrategies||[]).filter(x=>Number(x.endChapter)>=Number(g.first)&&Number(x.startChapter)<=Number(g.last));
   const compiledStages=compileTeacherStageRows(stageRows);
