@@ -19,32 +19,35 @@
    5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.572';
+const APP_VERSION = '1.0.573';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.572.js';
+const APP_FILE_VERSION = 'app1.0.573.js';
 function installV569Styles(){
   if(document.getElementById('v570ScopedStyles')) return;
   const st=document.createElement('style'); st.id='v570ScopedStyles'; st.textContent=`
     .ar-gap-demo{background:linear-gradient(135deg,#7c3aed 0%,#a855f7 45%,#facc15 100%);color:#fff;border-radius:8px;padding:7px 9px;margin-top:4px;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
     .ai-recipe-gapitem,.ai-recipe-gapitem *{min-width:0;max-width:100%;box-sizing:border-box}
-    .ws-opt{min-width:0;max-width:100%;position:relative;color:#fff;border-width:1px;border-style:solid;transition:background-color .22s ease,color .22s ease,border-color .22s ease,box-shadow .22s ease,transform .18s ease}
-    .ws-opt.ws-cat-language{background:#263548;border-color:#3b4d63}
-    .ws-opt.ws-cat-emotion{background:#3b2461;border-color:#5b3a8c}
-    .ws-opt.ws-cat-rhythm{background:#123d4c;border-color:#1f6176}
-    .ws-opt.ws-cat-narrative{background:#51371a;border-color:#795324}
-    .ws-opt.ws-cat-dialogue{background:#18472d;border-color:#286b43}
-    .ws-opt.ws-cat-custom{background:#303238;border-color:#4a4d55}
-    .ws-opt.ws-cat-language.on{background:#3b4d63;border-color:#66809e;box-shadow:0 2px 9px rgba(59,77,99,.34)}
-    .ws-opt.ws-cat-emotion.on{background:#5b3a8c;border-color:#825db9;box-shadow:0 2px 9px rgba(91,58,140,.34)}
-    .ws-opt.ws-cat-rhythm.on{background:#1f6176;border-color:#368ba4;box-shadow:0 2px 9px rgba(31,97,118,.34)}
-    .ws-opt.ws-cat-narrative.on{background:#795324;border-color:#a87532;box-shadow:0 2px 9px rgba(121,83,36,.34)}
-    .ws-opt.ws-cat-dialogue.on{background:#286b43;border-color:#3b9360;box-shadow:0 2px 9px rgba(40,107,67,.34)}
-    .ws-opt.ws-cat-custom.on{background:#4a4d55;border-color:#70747e;box-shadow:0 2px 9px rgba(74,77,85,.34)}
-    .ws-opt.ws-combo-btn{background:#4a234f;border-color:#714073}
-    .ws-opt.ws-combo-btn.on{background:#71396f;border-color:#a45b9f;box-shadow:0 2px 9px rgba(113,57,111,.34)}
+    :root{--ws-language-bg:#eaf3ff;--ws-language-border:#5b8fd8;--ws-language-text:#17345f;--ws-emotion-bg:#f8eafa;--ws-emotion-border:#b35ac2;--ws-emotion-text:#5b1f67;--ws-rhythm-bg:#e5f8f7;--ws-rhythm-border:#36a5a0;--ws-rhythm-text:#145b59;--ws-narrative-bg:#fff1df;--ws-narrative-border:#d58a32;--ws-narrative-text:#713e0d;--ws-dialogue-bg:#e8f7ed;--ws-dialogue-border:#45a467;--ws-dialogue-text:#1d5b34;--ws-custom-bg:#eef0f3;--ws-custom-border:#7b8089;--ws-custom-text:#343840;--ws-combo-bg:#eee9ff;--ws-combo-border:#7564c7;--ws-combo-text:#40327f}
+    [data-theme="light"],[data-theme="paper"],[data-theme="guofeng"],[data-theme="aurora"]{--ws-language-bg:#eaf3ff;--ws-language-border:#5b8fd8;--ws-language-text:#17345f;--ws-emotion-bg:#f8eafa;--ws-emotion-border:#b35ac2;--ws-emotion-text:#5b1f67;--ws-rhythm-bg:#e5f8f7;--ws-rhythm-border:#36a5a0;--ws-rhythm-text:#145b59;--ws-narrative-bg:#fff1df;--ws-narrative-border:#d58a32;--ws-narrative-text:#713e0d;--ws-dialogue-bg:#e8f7ed;--ws-dialogue-border:#45a467;--ws-dialogue-text:#1d5b34;--ws-custom-bg:#eef0f3;--ws-custom-border:#7b8089;--ws-custom-text:#343840;--ws-combo-bg:#eee9ff;--ws-combo-border:#7564c7;--ws-combo-text:#40327f}
+    [data-theme="dark"],[data-theme="blackboard"],[data-theme="mecha"],[data-theme="cyber"]{--ws-language-bg:#263548;--ws-language-border:#66809e;--ws-language-text:#f4f8ff;--ws-emotion-bg:#3b2461;--ws-emotion-border:#825db9;--ws-emotion-text:#fff7ff;--ws-rhythm-bg:#123d4c;--ws-rhythm-border:#368ba4;--ws-rhythm-text:#efffff;--ws-narrative-bg:#51371a;--ws-narrative-border:#a87532;--ws-narrative-text:#fff7e9;--ws-dialogue-bg:#18472d;--ws-dialogue-border:#3b9360;--ws-dialogue-text:#f0fff5;--ws-custom-bg:#303238;--ws-custom-border:#70747e;--ws-custom-text:#f4f5f7;--ws-combo-bg:#4a234f;--ws-combo-border:#a45b9f;--ws-combo-text:#fff4ff}
+    .ws-opt{min-width:0;max-width:100%;position:relative;color:inherit;border-width:1px;border-style:solid;transition:background-color .22s ease,color .22s ease,border-color .22s ease,box-shadow .22s ease,transform .18s ease}
+    .ws-opt.ws-cat-language{background:var(--ws-language-bg);border-color:var(--ws-language-border);color:var(--ws-language-text)}
+    .ws-opt.ws-cat-emotion{background:var(--ws-emotion-bg);border-color:var(--ws-emotion-border);color:var(--ws-emotion-text)}
+    .ws-opt.ws-cat-rhythm{background:var(--ws-rhythm-bg);border-color:var(--ws-rhythm-border);color:var(--ws-rhythm-text)}
+    .ws-opt.ws-cat-narrative{background:var(--ws-narrative-bg);border-color:var(--ws-narrative-border);color:var(--ws-narrative-text)}
+    .ws-opt.ws-cat-dialogue{background:var(--ws-dialogue-bg);border-color:var(--ws-dialogue-border);color:var(--ws-dialogue-text)}
+    .ws-opt.ws-cat-custom{background:var(--ws-custom-bg);border-color:var(--ws-custom-border);color:var(--ws-custom-text)}
+    .ws-opt.ws-cat-language.on{background:var(--ws-language-border);border-color:#66809e;box-shadow:0 2px 9px rgba(59,77,99,.34);color:#fff}
+    .ws-opt.ws-cat-emotion.on{background:var(--ws-emotion-border);border-color:#825db9;box-shadow:0 2px 9px rgba(91,58,140,.34);color:#fff}
+    .ws-opt.ws-cat-rhythm.on{background:var(--ws-rhythm-border);border-color:#368ba4;box-shadow:0 2px 9px rgba(31,97,118,.34);color:#fff}
+    .ws-opt.ws-cat-narrative.on{background:var(--ws-narrative-border);border-color:#a87532;box-shadow:0 2px 9px rgba(121,83,36,.34);color:#fff}
+    .ws-opt.ws-cat-dialogue.on{background:var(--ws-dialogue-border);border-color:#3b9360;box-shadow:0 2px 9px rgba(40,107,67,.34);color:#fff}
+    .ws-opt.ws-cat-custom.on{background:var(--ws-custom-border);border-color:#70747e;box-shadow:0 2px 9px rgba(74,77,85,.34);color:#fff}
+    .ws-opt.ws-combo-btn{background:var(--ws-combo-bg);border-color:var(--ws-combo-border);color:var(--ws-combo-text)}
+    .ws-opt.ws-combo-btn.on{background:var(--ws-combo-border);border-color:#a45b9f;box-shadow:0 2px 9px rgba(113,57,111,.34);color:#fff}
     .ws-opt:hover{transform:translateY(-1px)}
     .ws-opt.on{transform:translateY(-1px) scale(1.01)}
-    .ws-opt .ws-opt-note,.ws-opt .ws-opt-name{color:#fff;transition:color .22s ease}
+    .ws-opt .ws-opt-note,.ws-opt .ws-opt-name{color:inherit;transition:color .22s ease}
     .ws-opt-detail{flex:0 0 auto;width:28px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--txt);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1;font-size:15px}
     .ws-opt-detail:hover{filter:brightness(1.06)}
     .ws-opt-main{min-width:0;flex:1 1 auto}
@@ -8213,6 +8216,18 @@ function validateTeacherStyleCoverageAcrossGroups(){
   return report;
 }
 
+function teacherMiddleStructureInstruction(shape, chapterNumber){
+  if(!shape || typeof shape!=='object') return '';
+  const label=String(shape.patternLabel||shape.patternName||shape.label||shape.patternId||'本章微拍').trim();
+  const phases=Array.isArray(shape.phases)?shape.phases:(Array.isArray(shape.phaseList)?shape.phaseList:[]);
+  const rows=phases.map((phase,i)=>{
+    const name=String(phase.name||phase.label||phase.title||phase.phaseName||`阶段${i+1}`).trim();
+    const duty=String(phase.structureDuty||phase.duty||phase.responsibility||phase.function||phase.description||'').trim();
+    return `${i+1}. ${name}${duty?`\n   结构职责：${duty}`:''}\n   本章对应推进：由老师结合本章战略、剧情事实与人物状态，将该阶段落实为具体推进，不得把阶段名称直接当作剧情事件。`;
+  });
+  return `【本章微拍施工要求｜第${Number(chapterNumber)||''}章】\n本章微拍：${label}\n\n${rows.length?rows.join('\n\n'):'本章微拍没有可展开的阶段列表；保持现有结构形状，不自行创建第二套微拍。'}\n\n施工关系：微拍规定中段节奏形状；校长规定本章战略、目标、核心事件与边界；老师负责把两者结合为推进骨架，再落实为中段施工。微拍不是剧情节点，不是人物行动清单，也不是旧结构骨架。`;
+}
+
 function buildTeacherUser(g,gi){
   const pr=principalCurrentResult()||{},lines=[],code=g.teacherCode||teacherCodeForIndex(gi),groups=teacherAssignmentGroups(),role=teacherRoleForIndex(gi,groups.length),assignment=buildTeacherAssignment(),finalFacts=teacherGroupBoundaryFacts(gi,assignment);
   const plans=state.school?.principal?.plans||{};
@@ -8248,7 +8263,7 @@ function buildTeacherUser(g,gi){
     const p=plans[n]||{}, stage=stageForChapter(n)||{}, middle=middleByChapter[String(n)]||getChapterMiddleShape(n)||null, time=timeSource?.plannedChapters?.find(x=>Number(x.chapter)===n)||null, previousEnding=previousChapterEndingBrief(n,gi);
     const chapterData=compileTeacherChapterPlan(p,n,state.chapters?.[n-1]?.title||'');
     const stageLabel=teacherPromptCompact({stage:stage.stage||stage.name||'',startChapter:stage.startChapter,endChapter:stage.endChapter,goal:stage.goal||stage.mission||stage.stageGoal||'',teacherTask:stage.teacherTask||stage.task||'',stageBeatInterpretation:String(stage.stageBeatInterpretation||'').trim(),handoff:stage.handoff||''});
-    lines.push(`【第${n}章｜章节施工信息】\n【章节战略与剧情事实】\n${teacherPromptText(chapterData,14000)}\n\n【本章所属阶段｜只给本章必要信息】\n${teacherPromptText(stageLabel,5000)}\n\n【本章微拍 / 中段结构｜唯一一次】\n${teacherPromptText(middle||{},9000)}\n规则：这里仅提供结构形状、节奏分段与边界，不把它改写成第二套剧情事件清单。\n\n【本章时间要求】\n${compileTeacherTimeContext(timeSource,n)||'本章没有额外明确的结构化时间范围；以已成立正文状态和章节事实为准，不得臆造。'}\n\n${previousEnding}\n\n【本章三层施工责任】\nGLOBAL：完整继承上方唯一GLOBAL。\nHYBRID：只有本章确有需要时，由老师把GLOBAL语义与本章环境/阶段/剧情融合为自然语言施工规则。\nCHAPTER：只有本章确有需要时，由老师形成章节级具体施工规则。\n不得把校长数据、旧style对象或机器字段再次作为第二来源。\n\n【本章完整章末设计要求】\n必须落实章节授权中的ending信息：function、intensity、lastEffectiveEvent、form、nextTransitionType、nextTransitionBasis、handoff、diversityNote；章末必须形成真正停止边界，并明确最后有效事件之后不再追加内容。`);
+    lines.push(`【第${n}章｜章节施工信息】\n【章节战略与剧情事实】\n${teacherPromptText(chapterData,14000)}\n\n【本章所属阶段｜只给本章必要信息】\n${teacherPromptText(stageLabel,5000)}\n\n【本章微拍 / 中段结构｜唯一一次】\n${teacherPromptText(middle||{},9000)}\n规则：这里仅提供结构形状、节奏分段与边界，不把它改写成第二套剧情事件清单。\n\n${teacherMiddleStructureInstruction(middle,n)}\n\n【本章时间要求】\n${compileTeacherTimeContext(timeSource,n)||'本章没有额外明确的结构化时间范围；以已成立正文状态和章节事实为准，不得臆造。'}\n\n${previousEnding}\n\n【本章三层施工责任】\nGLOBAL：完整继承上方唯一GLOBAL。\nHYBRID：只有本章确有需要时，由老师把GLOBAL语义与本章环境/阶段/剧情融合为自然语言施工规则。\nCHAPTER：只有本章确有需要时，由老师形成章节级具体施工规则。\n不得把校长数据、旧style对象或机器字段再次作为第二来源。\n\n【本章完整章末设计要求】\n必须落实章节授权中的ending信息：function、intensity、lastEffectiveEvent、form、nextTransitionType、nextTransitionBasis、handoff、diversityNote；章末必须形成真正停止边界，并明确最后有效事件之后不再追加内容。`);
   }
 
   lines.push(`【本组授权词典｜仅保留实际相关创作事实】\n${teacherScopedGlossary(g,gi,9000)}`);
@@ -8276,7 +8291,7 @@ GLOBAL：这里只放校长唯一GLOBAL的完整正式内容，不得混入HYBRI
 每个CHAPTER独立成一个规则块，写正文AI可以直接执行的自然语言施工规则。章节归属只由第四区决定，不得因为规则正文提到其他章节而改变归属。
 
 【七、正式章节教案】
-随后依次输出第${g.first}章至第${g.last}章正式章节教案。每章必须保留完整剧情安排、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。正式章节教案不重新定义全书HYBRID/CHAPTER。
+随后依次输出第${g.first}章至第${g.last}章正式章节教案。每章必须保留完整剧情安排、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。正式章节教案中必须显式出现“本章微拍”，按实际微拍阶段依次写出“阶段/结构职责/本章对应推进”，并明确“推进骨架”与“中段施工”；不得把微拍阶段名称直接当作剧情事件，不得建立第二套结构骨架。正式章节教案不重新定义全书HYBRID/CHAPTER。
 
 【职责硬约束】
 老师负责安排HYBRID/CHAPTER；切割教案只按第三、四区的章节索引提取第五、六区对应规则，再加GLOBAL、世界观规则和当前正式章节教案。切割阶段不得重新分析剧情、重新判断风格或新增AI请求。
