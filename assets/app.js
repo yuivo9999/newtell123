@@ -11880,39 +11880,41 @@ function viewStory(){
         <div class="flow-sec-head"><span class="fs-no">1</span><span class="fs-name">写作风格</span><span class="fs-note">用户先定表达方式 · 全书共享</span></div>
         ${ safeCard(()=>writeStyleCard()) }
       </section>
-<section class="flow-sec flow-action-sec" data-flow="2">
-  <div class="flow-sec-head"><span class="fs-no">2</span><span class="fs-name">创作基础</span><span class="fs-note">先确定章节数与全书宏观拍子，再交给优化构想</span></div>
-  <div class="card card-theme-idea decision-base-card">
-    <div class="card-head-bar">
-      <div class="ch-left"><span class="ch-badge ch-badge-beat">🧭</span><h3 class="ch-title">故事基础设置</h3><span class="ch-subtag ch-subtag-beat">优化构想读取这里的选择</span></div>
-      <div class="ch-right"><span class="muted" style="font-size:12px">先定骨架</span></div>
+<section class="flow-sec card card-theme-idea decision-base-card" data-flow="2" style="margin-bottom:8px">
+  <div class="card-head-bar">
+    <div class="ch-left">
+      <span class="fs-no" style="flex:0 0 auto;width:24px;height:24px;line-height:24px;text-align:center;border-radius:50%;font-size:13px;font-weight:700;color:var(--on-accent,#fff);background:var(--accent2);margin-right:6px">2</span>
+      <span class="ch-badge ch-badge-beat">🧭</span>
+      <h3 class="ch-title">创作基础 · 故事设置</h3>
+      <span class="ch-subtag ch-subtag-beat">先确定章节数与全书宏观拍子，再交给优化构想</span>
     </div>
-    ${isLong() ? `
-    <div class="tw-panel" style="margin-bottom:10px">
-      <div class="poly-head"><span class="poly-ic">📐</span><b>全书章节数</b><span class="poly-rule">必填 · 1-200 整数</span></div>
-      <div class="tw-row">
-        <input type="number" id="chapterCountIn" class="tw-in cc-in" min="1" max="200" step="1" inputmode="numeric" placeholder="如 30" value="${chapterCountVal()||''}" />
-        <span class="tw-unit">章</span>
-        ${chapterCountVal()?`<span class="pill tag-ok">${chapterCountHint()}</span>`:''}
-      </div>
-    </div>
-    ${bookBeatHtml()}
-    ${openingStrategyHtml()}
-    ` : ''}
-    <details class="app-idea-fold" data-fold-key="narrativePerspective">
-      <summary><span>👁️</span><b>叙事视角</b><span class="poly-rule">点击展开</span></summary>
-      <div class="app-idea-fold-body">
-        <div class="team-pick" id="teamPick">
-          ${TEAM_OPTIONS.map(o=>`
-          <label class="team-item ${o.id===currentTeamShape().id?'sel':''}" data-team="${o.id}" title="${esc(o.desc)}">
-            <span class="team-ic">${o.id==='solo'?'👤':o.id==='dual'?'👫':o.id==='trio'?'🤝':o.id==='quad'?'👥':'🧑‍🤝‍🧑'}</span>
-            <span class="team-txt"><b>${esc(o.label)}</b><i>${esc(o.desc)}</i></span>
-            <input type="radio" name="teamShape" value="${o.id}" style="display:none" ${o.id===currentTeamShape().id?'checked':''}>
-          </label>`).join('')}
-        </div>
-      </div>
-    </details>
+    <div class="ch-right"><span class="muted" style="font-size:12px">先定骨架</span></div>
   </div>
+  ${isLong() ? `
+  <div class="tw-panel" style="margin-bottom:10px">
+    <div class="poly-head"><span class="poly-ic">📐</span><b>全书章节数</b><span class="poly-rule">必填 · 1-200 整数</span></div>
+    <div class="tw-row">
+      <input type="number" id="chapterCountIn" class="tw-in cc-in" min="1" max="200" step="1" inputmode="numeric" placeholder="如 30" value="${chapterCountVal()||''}" />
+      <span class="tw-unit">章</span>
+      ${chapterCountVal()?`<span class="pill tag-ok">${chapterCountHint()}</span>`:''}
+    </div>
+  </div>
+  ${bookBeatHtml()}
+  ${openingStrategyHtml()}
+  ` : ''}
+  <details class="app-idea-fold" data-fold-key="narrativePerspective">
+    <summary><span>👁️</span><b>叙事视角</b><span class="poly-rule">点击展开</span></summary>
+    <div class="app-idea-fold-body">
+      <div class="team-pick" id="teamPick">
+        ${TEAM_OPTIONS.map(o=>`
+        <label class="team-item ${o.id===currentTeamShape().id?'sel':''}" data-team="${o.id}" title="${esc(o.desc)}">
+          <span class="team-ic">${o.id==='solo'?'👤':o.id==='dual'?'👫':o.id==='trio'?'🤝':o.id==='quad'?'👥':'🧑‍🤝‍🧑'}</span>
+          <span class="team-txt"><b>${esc(o.label)}</b><i>${esc(o.desc)}</i></span>
+          <input type="radio" name="teamShape" value="${o.id}" style="display:none" ${o.id===currentTeamShape().id?'checked':''}>
+        </label>`).join('')}
+      </div>
+    </div>
+  </details>
 </section>
 <section class="flow-sec flow-action-sec" data-flow="3">
   <div class="flow-sec-head"><span class="fs-no">3</span><span class="fs-name">故事构想与优化</span><span class="fs-note">AI 只在已确定的表达与全书骨架上优化故事</span></div>

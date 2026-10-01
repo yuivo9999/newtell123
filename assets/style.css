@@ -2203,7 +2203,8 @@ textarea[readonly]::selection{ background:color-mix(in srgb, var(--accent2) 45%,
 .flow-sec[data-flow="1"] > .flow-sec-head .fs-no{background:var(--accent)}
 .flow-style-lock-note{margin:4px 0 10px;padding:9px 11px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));border-radius:10px;background:color-mix(in srgb,var(--accent) 7%,var(--panel2));color:var(--sub);font-size:11.5px;line-height:1.65}
 .flow-style-lock-note b{color:var(--txt)}
-.flow-sec[data-flow="2"]{border-style:dashed}
+.flow-sec[data-flow="2"]:not(.decision-base-card){border-style:dashed}
+.flow-sec.decision-base-card{border:1px solid var(--line) !important;border-style:solid !important}
 .flow-sec[data-flow="2"] > .flow-sec-head .fs-no{background:var(--accent2)}
 .flow-sec[data-flow="2"] .pol-box{border-style:dashed}
 .flow-sec[data-flow="2"] .pol-cand{border-left-style:dashed}
