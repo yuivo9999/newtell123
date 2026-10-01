@@ -69,19 +69,175 @@
  *    此处恢复暗底，并按需求将主线简述文字改为蓝色。
  * ========================================================= */
 
-/* —— 1. 写作风格 · 词条选中态：浅底黑字 —— */
-[data-theme="paper"] .ws-chip.on,
-[data-theme="paper"] [data-cs] .ws-group .ws-chip.on,
-[data-theme="paper"] [data-cs] .ws-group[data-g="element"] .ws-chip.on{
-  background: color-mix(in srgb, var(--c-element, var(--accent2)) 38%, #fff);
-  border-color: color-mix(in srgb, var(--c-element, var(--accent2)) 65%, var(--line));
-  color:#1a1408;
-  font-weight:700;
+/* =========================================================
+ * 暖阳米纸主题（paper）· 写作风格/配方卡片视觉升维
+ * 借鉴图片 2 设计风格：人文米纸白底 + 焙茶高对比字 + 双圈暖光亮色高光选中态
+ * ========================================================= */
+[data-theme="paper"] .ws-card,
+[data-theme="paper"] .card.ai-recipe-card {
+  background: #fffdf7 !important;
+  border: 1px solid #e2d8c2 !important;
+  box-shadow: 0 4px 20px rgba(120, 90, 40, 0.06), 0 1px 3px rgba(120, 90, 40, 0.03) !important;
+  border-radius: 16px !important;
 }
-[data-theme="paper"] .ws-chip.on:hover,
-[data-theme="paper"] [data-cs] .ws-group .ws-chip.on:hover{
-  background: color-mix(in srgb, var(--c-element, var(--accent2)) 52%, #fff);
-  color:#000;
+[data-theme="paper"] .ws-head,
+[data-theme="paper"] .ai-recipe-card .ws-head {
+  background: #f5edd8 !important;
+  border-bottom: 1px solid #e2d8c2 !important;
+  color: #33291d !important;
+}
+[data-theme="paper"] .ws-head h3 {
+  color: #33291d !important;
+  font-weight: 700 !important;
+}
+[data-theme="paper"] .ws-sum {
+  color: #615038 !important;
+}
+[data-theme="paper"] .ws-group-t {
+  color: #33291d !important;
+  font-weight: 700 !important;
+}
+[data-theme="paper"] .ws-manage-btn {
+  color: #33291d !important;
+  border-color: #d8c8b0 !important;
+  background: #f7f2e9 !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+}
+[data-theme="paper"] .ws-manage-btn:hover {
+  background: #fffdf7 !important;
+  border-color: #b45309 !important;
+  color: #b45309 !important;
+}
+
+/* 我的配方 顶部 Chip 标签（借鉴图片 2 按钮风格：米纸底 + 焙茶深字 / 选中暖焙茶琥珀渐变 + 纯白字 + 双圈亮边） */
+[data-theme="paper"] .ws-chip {
+  color: #33291d !important;
+  border: 1px solid #e2d8c2 !important;
+  background: #f7f2e9 !important;
+  font-weight: 600 !important;
+  border-radius: 20px !important;
+  transition: all 0.15s ease !important;
+}
+[data-theme="paper"] .ws-chip:hover {
+  border-color: #c25e00 !important;
+  background: #fffdf7 !important;
+  color: #c25e00 !important;
+  box-shadow: 0 2px 8px rgba(194, 94, 0, 0.15) !important;
+}
+[data-theme="paper"] .ws-chip.on {
+  background: linear-gradient(135deg, #c25e00 0%, #9a4800 100%) !important;
+  border: 1px solid #ffffff !important;
+  box-shadow: 0 0 0 2px #c25e00, 0 3px 10px rgba(194, 94, 0, 0.35) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+[data-theme="paper"] .ws-chip.on * {
+  color: #ffffff !important;
+}
+
+/* 分类折叠标题栏（① 语言质感 / ② 情绪与张力 / ③ 节奏与网感 / ④ 叙事技法） */
+[data-theme="paper"] .ws-subcat {
+  border: 1px solid #e2d8c2 !important;
+  border-radius: 12px !important;
+  background: #f5edd8 !important;
+  margin-bottom: 8px !important;
+}
+[data-theme="paper"] .ws-subcat-t {
+  color: #33291d !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  padding: 8px 10px !important;
+}
+
+/* 未选中的风格词条 & 组合配方按钮 */
+[data-theme="paper"] .ws-opt,
+[data-theme="paper"] .ws-combo-btn {
+  border: 1px solid #e2d8c2 !important;
+  background: #f7f2e9 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(80,60,30,0.04) !important;
+  transition: all 0.15s ease !important;
+}
+[data-theme="paper"] .ws-opt:hover,
+[data-theme="paper"] .ws-combo-btn:hover {
+  border-color: #c25e00 !important;
+  background: #fffdf7 !important;
+  box-shadow: 0 3px 10px rgba(194, 94, 0, 0.15) !important;
+  transform: translateY(-1px) !important;
+}
+[data-theme="paper"] .ws-opt-name,
+[data-theme="paper"] .ws-combo-btn .ws-opt-name {
+  color: #33291d !important;
+  font-weight: 700 !important;
+}
+[data-theme="paper"] .ws-opt-note {
+  color: #615038 !important;
+  font-weight: 400 !important;
+}
+
+/* 选中的组合配方按钮（参考图片 2“新建长篇”按钮：双圈亮边 + 暖焙茶琥珀渐变 + 纯白文字） */
+[data-theme="paper"] .ws-combo-btn.on {
+  background: linear-gradient(135deg, #c25e00 0%, #9a4800 100%) !important;
+  border: 1px solid #ffffff !important;
+  box-shadow: 0 0 0 2px #c25e00, 0 4px 14px rgba(194, 94, 0, 0.35) !important;
+  color: #ffffff !important;
+}
+[data-theme="paper"] .ws-combo-btn.on .ws-opt-name,
+[data-theme="paper"] .ws-combo-btn.on .ws-opt-note,
+[data-theme="paper"] .ws-combo-btn.on * {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2) !important;
+}
+
+/* 选中的具体风格词条卡片（借用图片 2 双圈亮边 + 沉稳高对比米纸调色 + 纯白清晰文字） */
+[data-theme="paper"] .ws-opt.on {
+  border: 1px solid #ffffff !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 2px #1e588f, 0 4px 14px rgba(30, 88, 143, 0.35) !important;
+}
+[data-theme="paper"] .ws-opt.ws-cat-language.on {
+  background: linear-gradient(135deg, #1e588f 0%, #154275 100%) !important;
+  box-shadow: 0 0 0 2px #1e588f, 0 4px 14px rgba(30, 88, 143, 0.35) !important;
+}
+[data-theme="paper"] .ws-opt.ws-cat-emotion.on {
+  background: linear-gradient(135deg, #8b3a62 0%, #6e274c 100%) !important;
+  box-shadow: 0 0 0 2px #8b3a62, 0 4px 14px rgba(139, 58, 98, 0.35) !important;
+}
+[data-theme="paper"] .ws-opt.ws-cat-rhythm.on {
+  background: linear-gradient(135deg, #c25e00 0%, #9a4800 100%) !important;
+  box-shadow: 0 0 0 2px #c25e00, 0 4px 14px rgba(194, 94, 0, 0.35) !important;
+}
+[data-theme="paper"] .ws-opt.ws-cat-narrative.on {
+  background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%) !important;
+  box-shadow: 0 0 0 2px #2e7d32, 0 4px 14px rgba(46, 125, 50, 0.35) !important;
+}
+[data-theme="paper"] .ws-opt.ws-cat-dialogue.on {
+  background: linear-gradient(135deg, #3d5a80 0%, #293d59 100%) !important;
+  box-shadow: 0 0 0 2px #3d5a80, 0 4px 14px rgba(61, 90, 128, 0.35) !important;
+}
+[data-theme="paper"] .ws-opt.ws-cat-custom.on {
+  background: linear-gradient(135deg, #c25e00 0%, #9a4800 100%) !important;
+  box-shadow: 0 0 0 2px #c25e00, 0 4px 14px rgba(194, 94, 0, 0.35) !important;
+}
+
+[data-theme="paper"] .ws-opt.on .ws-opt-name {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2) !important;
+}
+[data-theme="paper"] .ws-opt.on .ws-opt-note {
+  color: rgba(255, 255, 255, 0.95) !important;
+  font-weight: 400 !important;
+}
+[data-theme="paper"] .ws-opt.on .ws-opt-detail {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+  border: 1px solid rgba(255, 255, 255, 0.45) !important;
+}
+[data-theme="paper"] .ws-combo-btn.on .ws-combo-del {
+  color: rgba(255, 255, 255, 0.9) !important;
 }
 /* 配方候选 · 标签与选中卡 */
 [data-theme="paper"] .ai-recipe-tg{

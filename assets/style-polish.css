@@ -747,7 +747,7 @@ html {
 body {
   font-size: clamp(14px, 3.8vw, 15.5px);
   padding-top: env(safe-area-inset-top, 0);
-  padding-bottom: max(20px, env(safe-area-inset-bottom, 0));
+  padding-bottom: 0;
   padding-left: env(safe-area-inset-left, 0);
   padding-right: env(safe-area-inset-right, 0);
   overflow-x: hidden;
@@ -925,9 +925,8 @@ input::placeholder {
 .ws-opt.on .ws-opt-note {
   color: var(--txt) !important;
 }
-[data-theme="light"] .ws-opt.on .ws-opt-name,
-[data-theme="paper"] .ws-opt.on .ws-opt-name {
-  color: var(--accent2) !important;
+[data-theme="light"] .ws-opt.on .ws-opt-name {
+  color: #ffffff !important;
 }
 [data-theme="guofeng"] .ws-opt.on .ws-opt-name {
   color: #fff !important;
@@ -1009,6 +1008,21 @@ input::placeholder {
 }
 .cv-div, .cv-time, .cv-wc {
   color: var(--sub) !important;
+}
+
+/* 17. 底部导航栏紧贴屏幕最底部保障 */
+.tabbar {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  margin: 0 auto !important;
+  transform: none !important;
+  width: 100% !important;
+  max-width: 580px !important;
+  padding-bottom: max(8px, env(safe-area-inset-bottom, 8px)) !important;
+  box-sizing: border-box !important;
+  z-index: 90 !important;
 }
 
 

@@ -1941,7 +1941,12 @@ textarea[readonly]::selection{ background:color-mix(in srgb, var(--accent2) 45%,
 .flow-sec > .flow-sec-head .fs-note{font-size:11px;color:var(--muted);margin-left:auto}
 .flow-sec .card:last-child{margin-bottom:8px}
 /* 右侧页码侧边条 */
-.flow-sidenav{position:fixed;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;z-index:50;background:color-mix(in srgb, var(--panel) 86%, transparent);border:1px solid var(--line);border-radius:12px;padding:8px 6px;backdrop-filter:blur(6px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+.flow-sidenav{position:fixed;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;z-index:50;background:color-mix(in srgb, var(--panel) 86%, transparent);border:1px solid var(--line);border-radius:12px;padding:8px 6px;backdrop-filter:blur(6px);box-shadow:0 4px 14px rgba(0,0,0,.18)}
+@media (min-width: 580px) {
+  .flow-sidenav {
+    right: calc(50% - 280px + 10px);
+  }
+}
 .flow-sidenav .fsd-btn{width:30px;height:30px;line-height:30px;text-align:center;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--txt);font-size:13px;font-weight:700;cursor:pointer;transition:background .15s,color .15s,transform .15s,box-shadow .15s;padding:0;box-sizing:border-box}
 .flow-sidenav .fsd-btn:hover{background:color-mix(in srgb, var(--accent2) 22%, var(--panel2));transform:scale(1.08)}
 .flow-sidenav .fsd-btn.cur{background:var(--accent2);color:var(--on-accent,#fff);border-color:var(--accent2)}
