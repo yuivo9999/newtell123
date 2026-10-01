@@ -479,24 +479,176 @@
   --wc-border: rgba(166,50,50,.4);
 }
 
-/* 写作风格卡片适配宣纸底色，文字改为深墨色 */
-[data-theme="guofeng"] .ws-card { background: #faf6ed; border-color: #d9cbb0; }
-[data-theme="guofeng"] .ws-head h3 { color: var(--gf-red); }
-[data-theme="guofeng"] .ws-sum { color: var(--gf-dim); }
-[data-theme="guofeng"] .ws-group-t { color: var(--gf-ink); }
-[data-theme="guofeng"] .ws-manage-btn { color: var(--gf-ink); border-color: rgba(212,168,75,0.4); background: rgba(212,168,75,0.12); }
-[data-theme="guofeng"] .ws-manage-btn:hover { background: rgba(212,168,75,0.25); color: var(--gf-ink); }
-[data-theme="guofeng"] .ws-chip { color: var(--gf-ink); border-color: #c9b896; background: rgba(244,236,216,0.6); }
-[data-theme="guofeng"] .ws-chip:hover { border-color: var(--gf-gold); background: rgba(212,168,75,0.15); }
-[data-theme="guofeng"] .ws-chip.on { background: var(--gf-red); border-color: var(--gf-red); color: #fff; }
-[data-theme="guofeng"] .ws-subcat-t { color: var(--gf-dim); }
-[data-theme="guofeng"] .ws-opt { border-color: #c9b896; background: rgba(244,236,216,0.6); }
-[data-theme="guofeng"] .ws-opt:hover { border-color: var(--gf-gold); background: rgba(212,168,75,0.15); }
-[data-theme="guofeng"] .ws-opt-name { color: var(--gf-ink); }
-[data-theme="guofeng"] .ws-opt-note { color: var(--gf-dim); }
-[data-theme="guofeng"] .ws-opt.on { border-color: var(--gf-red); background: var(--gf-red); box-shadow: none; color: #fff; }
-[data-theme="guofeng"] .ws-opt.on .ws-opt-name { color: #fff; }
-[data-theme="guofeng"] .ws-opt.on .ws-opt-note { color: rgba(255,255,255,.85); }
+/* =========================================================
+ * 古风国潮主题（guofeng）· 写作风格/配方卡片视觉升维
+ * 借鉴图片 2 设计风格：古风宣纸底 + 墨棕高对比字 + 双圈金边朱砂红高光选中态
+ * ========================================================= */
+[data-theme="guofeng"] .ws-card,
+[data-theme="guofeng"] .card.ai-recipe-card {
+  background: #faf6ed !important;
+  border: 1px solid #d9cbb0 !important;
+  box-shadow: 0 4px 20px rgba(74, 44, 31, 0.08), 0 1px 3px rgba(74, 44, 31, 0.04) !important;
+  border-radius: 16px !important;
+}
+[data-theme="guofeng"] .ws-head,
+[data-theme="guofeng"] .ai-recipe-card .ws-head {
+  background: #f4ecd8 !important;
+  border-bottom: 1px solid #d9cbb0 !important;
+  color: #a63232 !important;
+}
+[data-theme="guofeng"] .ws-head h3 {
+  color: #a63232 !important;
+  font-weight: 700 !important;
+}
+[data-theme="guofeng"] .ws-sum {
+  color: #615038 !important;
+}
+[data-theme="guofeng"] .ws-group-t {
+  color: #2e1a11 !important;
+  font-weight: 700 !important;
+}
+[data-theme="guofeng"] .ws-manage-btn {
+  color: #2e1a11 !important;
+  border-color: rgba(212, 168, 75, 0.45) !important;
+  background: rgba(212, 168, 75, 0.12) !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+}
+[data-theme="guofeng"] .ws-manage-btn:hover {
+  background: rgba(212, 168, 75, 0.28) !important;
+  border-color: #a63232 !important;
+  color: #a63232 !important;
+}
+
+/* 我的配方 顶部 Chip 标签（借鉴图片 2 按钮风格：宣纸底 + 深墨字 / 选中朱砂红渐变 + 纯白字 + 双圈金边） */
+[data-theme="guofeng"] .ws-chip {
+  color: #2e1a11 !important;
+  border: 1px solid #c9b896 !important;
+  background: rgba(244, 236, 216, 0.8) !important;
+  font-weight: 600 !important;
+  border-radius: 20px !important;
+  transition: all 0.15s ease !important;
+}
+[data-theme="guofeng"] .ws-chip:hover {
+  border-color: #a63232 !important;
+  background: #faf6ed !important;
+  color: #a63232 !important;
+  box-shadow: 0 2px 8px rgba(166, 50, 50, 0.18) !important;
+}
+[data-theme="guofeng"] .ws-chip.on {
+  background: linear-gradient(135deg, #a63232 0%, #7a2626 100%) !important;
+  border: 1px solid #d4a84b !important;
+  box-shadow: 0 0 0 2px #a63232, 0 3px 10px rgba(166, 50, 50, 0.35) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+[data-theme="guofeng"] .ws-chip.on * {
+  color: #ffffff !important;
+}
+
+/* 分类折叠标题栏（① 语言质感 / ② 情绪与张力 / ③ 节奏与网感 / ④ 叙事技法） */
+[data-theme="guofeng"] .ws-subcat {
+  border: 1px solid #c9b896 !important;
+  border-radius: 12px !important;
+  background: #f4ecd8 !important;
+  margin-bottom: 8px !important;
+}
+[data-theme="guofeng"] .ws-subcat-t {
+  color: #2e1a11 !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  padding: 8px 10px !important;
+}
+
+/* 未选中的风格词条 & 组合配方按钮 */
+[data-theme="guofeng"] .ws-opt,
+[data-theme="guofeng"] .ws-combo-btn {
+  border: 1px solid #c9b896 !important;
+  background: rgba(244, 236, 216, 0.8) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(74, 44, 31, 0.04) !important;
+  transition: all 0.15s ease !important;
+}
+[data-theme="guofeng"] .ws-opt:hover,
+[data-theme="guofeng"] .ws-combo-btn:hover {
+  border-color: #a63232 !important;
+  background: #faf6ed !important;
+  box-shadow: 0 3px 10px rgba(166, 50, 50, 0.15) !important;
+  transform: translateY(-1px) !important;
+}
+[data-theme="guofeng"] .ws-opt-name,
+[data-theme="guofeng"] .ws-combo-btn .ws-opt-name {
+  color: #2e1a11 !important;
+  font-weight: 700 !important;
+}
+[data-theme="guofeng"] .ws-opt-note {
+  color: #615038 !important;
+  font-weight: 400 !important;
+}
+
+/* 选中的组合配方按钮（参考图片 2“新建长篇”按钮：双圈亮边 + 朱砂红渐变 + 纯白文字） */
+[data-theme="guofeng"] .ws-combo-btn.on {
+  background: linear-gradient(135deg, #a63232 0%, #7a2626 100%) !important;
+  border: 1px solid #d4a84b !important;
+  box-shadow: 0 0 0 2px #a63232, 0 4px 14px rgba(166, 50, 50, 0.35) !important;
+  color: #ffffff !important;
+}
+[data-theme="guofeng"] .ws-combo-btn.on .ws-opt-name,
+[data-theme="guofeng"] .ws-combo-btn.on .ws-opt-note,
+[data-theme="guofeng"] .ws-combo-btn.on * {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3) !important;
+}
+
+/* 选中的具体风格词条卡片（借用图片 2 双圈亮边 + 古风典雅调色 + 纯白清晰文字） */
+[data-theme="guofeng"] .ws-opt.on {
+  border: 1px solid #d4a84b !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 2px #a63232, 0 4px 14px rgba(166, 50, 50, 0.35) !important;
+}
+[data-theme="guofeng"] .ws-opt.ws-cat-language.on {
+  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%) !important;
+  box-shadow: 0 0 0 2px #1e40af, 0 4px 14px rgba(30, 64, 175, 0.35) !important;
+}
+[data-theme="guofeng"] .ws-opt.ws-cat-emotion.on {
+  background: linear-gradient(135deg, #a63232 0%, #7a2626 100%) !important;
+  box-shadow: 0 0 0 2px #a63232, 0 4px 14px rgba(166, 50, 50, 0.35) !important;
+}
+[data-theme="guofeng"] .ws-opt.ws-cat-rhythm.on {
+  background: linear-gradient(135deg, #b88a2a 0%, #8c6218 100%) !important;
+  box-shadow: 0 0 0 2px #b88a2a, 0 4px 14px rgba(184, 138, 42, 0.35) !important;
+}
+[data-theme="guofeng"] .ws-opt.ws-cat-narrative.on {
+  background: linear-gradient(135deg, #065f46 0%, #044e34 100%) !important;
+  box-shadow: 0 0 0 2px #065f46, 0 4px 14px rgba(6, 95, 70, 0.35) !important;
+}
+[data-theme="guofeng"] .ws-opt.ws-cat-dialogue.on {
+  background: linear-gradient(135deg, #831843 0%, #581c87 100%) !important;
+  box-shadow: 0 0 0 2px #831843, 0 4px 14px rgba(131, 24, 67, 0.35) !important;
+}
+[data-theme="guofeng"] .ws-opt.ws-cat-custom.on {
+  background: linear-gradient(135deg, #a63232 0%, #7a2626 100%) !important;
+  box-shadow: 0 0 0 2px #a63232, 0 4px 14px rgba(166, 50, 50, 0.35) !important;
+}
+
+[data-theme="guofeng"] .ws-opt.on .ws-opt-name {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3) !important;
+}
+[data-theme="guofeng"] .ws-opt.on .ws-opt-note {
+  color: rgba(255, 255, 255, 0.95) !important;
+  font-weight: 400 !important;
+}
+[data-theme="guofeng"] .ws-opt.on .ws-opt-detail {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+  border: 1px solid rgba(255, 255, 255, 0.45) !important;
+}
+[data-theme="guofeng"] .ws-combo-btn.on .ws-combo-del {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
 
 
 /* 主线简述卡片适配古风宣纸底色 */
