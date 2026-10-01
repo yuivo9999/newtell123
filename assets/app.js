@@ -10554,14 +10554,8 @@ function fullStoryText(){
 function isLong(){ return state.mode === 'longnovel'; }
 
 function renderStepper(){
-  const steps = [
-    {n:1,t:'故事构想'},{n:2,t:'角色提示词'},{n:3,t:'场景提示词'},
-    {n:4,t:'分镜文字'},{n:5,t:'导出资产包'}
-  ];
-  $('#stepper').innerHTML = steps.map(s=>{
-    const cls = s.n===currentStep ? 'active' : (s.n<currentStep ? 'done' : '');
-    return `<span class="chip ${cls}">${s.n<currentStep?'✓ ':''}${s.t}</span>`;
-  }).join('');
+  const s = $('#stepper');
+  if(s) s.innerHTML = '';
 }
 
 function updateMechaNav(){
@@ -11762,36 +11756,8 @@ function openCreationProgressModal(){
 
 function longNovelControlDeckHtml(){
   if(!isLong()) return '';
-  const d=longNovelMemoryData(); const total=(state.outline&&state.outline.chapters||[]).length||chapterCountVal()||0, written=writtenChapterCount();
-  const current=written?written:0; const pct=total?Math.round(written/total*100):0;
-  const steps = getDeckStepStatus();
-  const stepsHtml = steps.map(st=>{
-    const cls = st.done ? 'done' : (st.active ? 'active' : '');
-    return `<span class="${cls}" data-deck-jump="${st.target}" title="点击定位到「${st.name}」环节" style="cursor:pointer">${esc(st.name)}</span>`;
-  }).join('<b>→</b>');
-
-  return `<section class="novel-control-deck" data-novel-deck>
-    <div class="ncd-head">
-      <div>
-        <span class="ncd-kicker">🎬 LONGFORM CONTROL DESK</span>
-        <h2>长篇导演台</h2>
-        <p>只显示“现在最重要的状态与动作”；详细资料收进下方资料仓。</p>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px">
-        <button type="button" class="btn small ghost ncd-view-progress" data-ncd-progress title="点击打开长篇全景创作进度与健康体检">📊 创作进度查看</button>
-        <div class="ncd-progress" data-ncd-progress style="cursor:pointer" title="点击查看创作全景进度">
-          <b>${current}/${total||'?'}</b>
-          <span>章节落地 · ${pct}%</span>
-          <i><em style="width:${pct}%"></em></i>
-        </div>
-      </div>
-    </div>
-    <div class="ncd-steps">${stepsHtml}</div>
-    <div class="ncd-grid">
-      <div class="ncd-card"><small>当前小说状态</small><b>${written?`第 ${written} 章已落地`:'尚未落地正文'}</b><span>${esc(d.fc.lastScene||'等待第一章形成真实世界状态')}</span></div>
-      <div class="ncd-card"><small>下一关键动作</small><b>${written<total?'继续生成下一章':'检查全书收束'}</b><span>${written<total?'正文将从上一章真实状态继续，不另起炉灶。':'全书已达到计划章节数，可进入体检与收束检查。'}</span></div>
-      <div class="ncd-card" data-ncd-progress style="cursor:pointer"><small>长篇健康</small><b>${written?'记忆链已启用':'等待首章'}</b><span>状态账本 · 因果地图 · 伏笔银行 · 章间接缝</span></div>
-    </div>
+  return `<section class="novel-mode-title-card" data-novel-deck>
+    <h2 class="novel-mode-title">长篇小说创作模式</h2>
   </section>`;
 }
 function longNovelMemoryRepoHtml(){

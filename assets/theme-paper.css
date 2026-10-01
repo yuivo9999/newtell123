@@ -309,3 +309,29 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* 暖阳米纸主题：版本号徽标美化 */
+[data-theme="paper"] .ver-badge {
+  background: #f7f2e9 !important;
+  border: 1px solid #e2d8c2 !important;
+  color: #33291d !important;
+}
+[data-theme="paper"] .ver-badge:hover {
+  background: #fffdf7 !important;
+  border-color: #c25e00 !important;
+  color: #c25e00 !important;
+  box-shadow: 0 3px 10px rgba(194, 94, 0, 0.15) !important;
+}
+
+/* 暖阳米纸主题：长篇小说创作模式标题栏 */
+[data-theme="paper"] .novel-mode-title-card {
+  background: #fdfaf2 !important;
+  border: 1.5px solid #d9ccb2 !important;
+  box-shadow: 0 3px 10px rgba(80, 60, 30, 0.08) !important;
+}
+[data-theme="paper"] .novel-mode-title {
+  color: #8c4200 !important;
+  font-weight: 800 !important;
+  letter-spacing: 8px !important;
+  text-indent: 8px !important;
+}
