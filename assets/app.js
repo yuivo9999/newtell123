@@ -19,54 +19,53 @@
    5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.577';
+const APP_VERSION = '1.0.578';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
-const APP_FILE_VERSION = 'app1.0.577.js';
+const APP_FILE_VERSION = 'app1.0.578.js';
 function installV569Styles(){
   if(document.getElementById('v570ScopedStyles')) return;
   const st=document.createElement('style'); st.id='v570ScopedStyles'; st.textContent=`
     .ar-gap-demo{background:linear-gradient(135deg,#7c3aed 0%,#a855f7 45%,#facc15 100%);color:#fff;border-radius:8px;padding:7px 9px;margin-top:4px;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
     .ai-recipe-gapitem,.ai-recipe-gapitem *{min-width:0;max-width:100%;box-sizing:border-box}
-    :root{--ws-bg:#F7F9FC;--ws-bg-soft:rgba(255,255,255,.68);--ws-bg-elevated:rgba(255,255,255,.82);--ws-text:#172033;--ws-text-soft:#596579;--ws-border:rgba(74,94,125,.22);--ws-border-strong:rgba(74,94,125,.42);--ws-accent:#415A77;--ws-accent-strong:#29415F;--ws-glass-bg:rgba(255,255,255,.62);--ws-glass-shadow:0 10px 28px rgba(31,45,68,.10);--ws-language:#2F80ED;--ws-emotion:#A855F7;--ws-rhythm:#F59E0B;--ws-narrative:#10B981;--ws-dialogue:#6366F1;--ws-custom:#64748B;--ws-combo-a:#6366F1;--ws-combo-b:#06B6D4;--ws-combo-c:#EC4899;--ws-combo-d:#F59E0B;--ws-selected-text:#FFFFFF}
+
+    :root{--ws-bg:#F7F9FC;--ws-bg-soft:rgba(255,255,255,.68);--ws-bg-elevated:rgba(255,255,255,.84);--ws-text:#172033;--ws-text-soft:#596579;--ws-border:rgba(74,94,125,.22);--ws-border-strong:rgba(74,94,125,.42);--ws-accent:#415A77;--ws-accent-strong:#29415F;--ws-glass-bg:rgba(255,255,255,.62);--ws-glass-shadow:0 10px 28px rgba(31,45,68,.10);--ws-language:#2F80ED;--ws-emotion:#A855F7;--ws-rhythm:#B7791F;--ws-narrative:#17845B;--ws-dialogue:#5961B3;--ws-custom:#64748B;--ws-combo:#526273;--ws-selected-text:#FFFFFF}
     [data-theme="light"],[data-theme="paper"],[data-theme="guofeng"],[data-theme="aurora"]{--ws-bg:#F7F9FC;--ws-bg-soft:rgba(255,255,255,.68);--ws-bg-elevated:rgba(255,255,255,.84);--ws-text:#172033;--ws-text-soft:#596579;--ws-border:rgba(74,94,125,.22);--ws-border-strong:rgba(74,94,125,.42);--ws-accent:#415A77;--ws-accent-strong:#29415F;--ws-glass-bg:rgba(255,255,255,.62);--ws-glass-shadow:0 10px 28px rgba(31,45,68,.10);--ws-selected-text:#FFFFFF}
     [data-theme="dark"],[data-theme="blackboard"],[data-theme="mecha"],[data-theme="cyber"]{--ws-bg:#111827;--ws-bg-soft:rgba(31,41,55,.72);--ws-bg-elevated:rgba(39,51,70,.84);--ws-text:#EEF4FF;--ws-text-soft:#C5D0E0;--ws-border:rgba(180,199,224,.22);--ws-border-strong:rgba(180,199,224,.40);--ws-accent:#93C5FD;--ws-accent-strong:#BFDBFE;--ws-glass-bg:rgba(17,24,39,.68);--ws-glass-shadow:0 12px 32px rgba(0,0,0,.28);--ws-selected-text:#102033}
-    .ws-card{position:relative;border:1px solid var(--ws-border);background:linear-gradient(135deg,rgba(255,255,255,.70),rgba(255,255,255,.42));color:var(--ws-text);box-shadow:var(--ws-glass-shadow);border-radius:16px;overflow:hidden;backdrop-filter:blur(12px) saturate(120%);-webkit-backdrop-filter:blur(12px) saturate(120%)}
-    [data-theme="dark"] .ws-card,[data-theme="blackboard"] .ws-card,[data-theme="mecha"] .ws-card,[data-theme="cyber"] .ws-card{background:linear-gradient(135deg,rgba(31,41,55,.78),rgba(17,24,39,.58))}
-    [data-theme="dark"] .ws-card .ws-head,[data-theme="blackboard"] .ws-card .ws-head,[data-theme="mecha"] .ws-card .ws-head,[data-theme="cyber"] .ws-card .ws-head{background:linear-gradient(135deg,rgba(31,41,55,.78),rgba(17,24,39,.54));color:var(--ws-accent-strong)}
-    [data-theme="dark"] .ws-opt.ws-cat-language,[data-theme="blackboard"] .ws-opt.ws-cat-language,[data-theme="mecha"] .ws-opt.ws-cat-language,[data-theme="cyber"] .ws-opt.ws-cat-language{background:rgba(37,99,235,.16);border-color:rgba(96,165,250,.34)}
-    [data-theme="dark"] .ws-opt.ws-cat-emotion,[data-theme="blackboard"] .ws-opt.ws-cat-emotion,[data-theme="mecha"] .ws-opt.ws-cat-emotion,[data-theme="cyber"] .ws-opt.ws-cat-emotion{background:rgba(168,85,247,.16);border-color:rgba(216,180,254,.34)}
-    [data-theme="dark"] .ws-opt.ws-cat-rhythm,[data-theme="blackboard"] .ws-opt.ws-cat-rhythm,[data-theme="mecha"] .ws-opt.ws-cat-rhythm,[data-theme="cyber"] .ws-opt.ws-cat-rhythm{background:rgba(245,158,11,.16);border-color:rgba(252,211,77,.34)}
-    [data-theme="dark"] .ws-opt.ws-cat-narrative,[data-theme="blackboard"] .ws-opt.ws-cat-narrative,[data-theme="mecha"] .ws-opt.ws-cat-narrative,[data-theme="cyber"] .ws-opt.ws-cat-narrative{background:rgba(16,185,129,.16);border-color:rgba(110,231,183,.34)}
-    [data-theme="dark"] .ws-opt.ws-cat-dialogue,[data-theme="blackboard"] .ws-opt.ws-cat-dialogue,[data-theme="mecha"] .ws-opt.ws-cat-dialogue,[data-theme="cyber"] .ws-opt.ws-cat-dialogue{background:rgba(99,102,241,.16);border-color:rgba(165,180,252,.34)}
-    [data-theme="dark"] .ws-opt.ws-cat-custom,[data-theme="blackboard"] .ws-opt.ws-cat-custom,[data-theme="mecha"] .ws-opt.ws-cat-custom,[data-theme="cyber"] .ws-opt.ws-cat-custom{background:rgba(100,116,139,.16);border-color:rgba(203,213,225,.30)}
-    .ws-card .ws-head{background:linear-gradient(135deg,rgba(255,255,255,.72),rgba(226,232,240,.42));color:var(--ws-accent-strong);position:relative;border-bottom:1px solid var(--ws-border);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-    .ws-card .ws-head:after,.ws-combo-title:after,.ws-cat-title:after{content:"";display:block;height:2px;margin-top:7px;background:linear-gradient(90deg,var(--ws-combo-a),var(--ws-combo-b),var(--ws-combo-c),var(--ws-combo-d));opacity:.72;border-radius:999px}
-    .ws-opt{min-width:0;max-width:100%;position:relative;color:var(--ws-text);background:var(--ws-glass-bg);border:1px solid var(--ws-border);transition:none;border-radius:12px;box-shadow:0 3px 12px rgba(31,45,68,.05);backdrop-filter:blur(8px) saturate(115%);-webkit-backdrop-filter:blur(8px) saturate(115%)}
-    .ws-opt.ws-cat-language{--ws-cat:var(--ws-language);background:linear-gradient(135deg,rgba(47,128,237,.10),rgba(255,255,255,.54));border-color:rgba(47,128,237,.30);color:var(--ws-text)}
-    .ws-opt.ws-cat-emotion{--ws-cat:var(--ws-emotion);background:linear-gradient(135deg,rgba(168,85,247,.10),rgba(255,255,255,.54));border-color:rgba(168,85,247,.30);color:var(--ws-text)}
-    .ws-opt.ws-cat-rhythm{--ws-cat:var(--ws-rhythm);background:linear-gradient(135deg,rgba(245,158,11,.11),rgba(255,255,255,.54));border-color:rgba(245,158,11,.34);color:var(--ws-text)}
-    .ws-opt.ws-cat-narrative{--ws-cat:var(--ws-narrative);background:linear-gradient(135deg,rgba(16,185,129,.10),rgba(255,255,255,.54));border-color:rgba(16,185,129,.30);color:var(--ws-text)}
-    .ws-opt.ws-cat-dialogue{--ws-cat:var(--ws-dialogue);background:linear-gradient(135deg,rgba(99,102,241,.10),rgba(255,255,255,.54));border-color:rgba(99,102,241,.30);color:var(--ws-text)}
-    .ws-opt.ws-cat-custom{--ws-cat:var(--ws-custom);background:linear-gradient(135deg,rgba(100,116,139,.10),rgba(255,255,255,.54));border-color:rgba(100,116,139,.30);color:var(--ws-text)}
-    .ws-opt.ws-cat-language.on{background:linear-gradient(135deg,#2563EB,#1D4ED8);border-color:#60A5FA;box-shadow:0 7px 18px rgba(37,99,235,.24);color:#fff}
-    .ws-opt.ws-cat-emotion.on{background:linear-gradient(135deg,#A855F7,#7E22CE);border-color:#D8B4FE;box-shadow:0 7px 18px rgba(168,85,247,.24);color:#fff}
-    .ws-opt.ws-cat-rhythm.on{background:linear-gradient(135deg,#F59E0B,#D97706);border-color:#FCD34D;box-shadow:0 7px 18px rgba(245,158,11,.24);color:#fff}
-    .ws-opt.ws-cat-narrative.on{background:linear-gradient(135deg,#10B981,#047857);border-color:#6EE7B7;box-shadow:0 7px 18px rgba(16,185,129,.24);color:#fff}
-    .ws-opt.ws-cat-dialogue.on{background:linear-gradient(135deg,#6366F1,#4338CA);border-color:#A5B4FC;box-shadow:0 7px 18px rgba(99,102,241,.24);color:#fff}
-    .ws-opt.ws-cat-custom.on{background:linear-gradient(135deg,#64748B,#475569);border-color:#CBD5E1;box-shadow:0 7px 18px rgba(100,116,139,.22);color:#fff}
-    [data-theme="dark"] .ws-opt.ws-cat-language.on,[data-theme="blackboard"] .ws-opt.ws-cat-language.on,[data-theme="mecha"] .ws-opt.ws-cat-language.on,[data-theme="cyber"] .ws-opt.ws-cat-language.on{background:#67E8F9;border-color:#A5F3FC;color:#102033}
-    [data-theme="dark"] .ws-opt.ws-cat-emotion.on,[data-theme="blackboard"] .ws-opt.ws-cat-emotion.on,[data-theme="mecha"] .ws-opt.ws-cat-emotion.on,[data-theme="cyber"] .ws-opt.ws-cat-emotion.on{background:#E9D5FF;border-color:#F3E8FF;color:#24113A}
-    [data-theme="dark"] .ws-opt.ws-cat-rhythm.on,[data-theme="blackboard"] .ws-opt.ws-cat-rhythm.on,[data-theme="mecha"] .ws-opt.ws-cat-rhythm.on,[data-theme="cyber"] .ws-opt.ws-cat-rhythm.on{background:#FCD34D;border-color:#FEF3C7;color:#3A2600}
-    [data-theme="dark"] .ws-opt.ws-cat-narrative.on,[data-theme="blackboard"] .ws-opt.ws-cat-narrative.on,[data-theme="mecha"] .ws-opt.ws-cat-narrative.on,[data-theme="cyber"] .ws-opt.ws-cat-narrative.on{background:#6EE7B7;border-color:#D1FAE5;color:#063B2A}
-    [data-theme="dark"] .ws-opt.ws-cat-dialogue.on,[data-theme="blackboard"] .ws-opt.ws-cat-dialogue.on,[data-theme="mecha"] .ws-opt.ws-cat-dialogue.on,[data-theme="cyber"] .ws-opt.ws-cat-dialogue.on{background:#A5B4FC;border-color:#E0E7FF;color:#171A42}
+
+    .ws-card{position:relative;border:1px solid var(--ws-border);background:var(--ws-bg-soft);color:var(--ws-text);box-shadow:var(--ws-glass-shadow);border-radius:16px;overflow:hidden;backdrop-filter:blur(12px) saturate(115%);-webkit-backdrop-filter:blur(12px) saturate(115%)}
+    .ws-card .ws-head{background:var(--ws-bg-elevated);color:var(--ws-accent-strong);position:relative;border-bottom:1px solid var(--ws-border);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+    .ws-card .ws-head:after,.ws-combo-title:after,.ws-cat-title:after{content:"";display:block;height:1px;margin-top:7px;background:var(--ws-border-strong);opacity:.8;border-radius:999px}
+
+    .ws-opt{min-width:0;max-width:100%;position:relative;color:var(--ws-text);background:var(--ws-glass-bg);border:1px solid var(--ws-border);transition:none;border-radius:12px;box-shadow:0 3px 12px rgba(31,45,68,.05);backdrop-filter:blur(8px) saturate(110%);-webkit-backdrop-filter:blur(8px) saturate(110%)}
+    .ws-opt.ws-cat-language{--ws-cat:var(--ws-language);background:rgba(47,128,237,.08);border-color:rgba(47,128,237,.28);color:var(--ws-text)}
+    .ws-opt.ws-cat-emotion{--ws-cat:var(--ws-emotion);background:rgba(168,85,247,.08);border-color:rgba(168,85,247,.28);color:var(--ws-text)}
+    .ws-opt.ws-cat-rhythm{--ws-cat:var(--ws-rhythm);background:rgba(183,121,31,.09);border-color:rgba(183,121,31,.30);color:var(--ws-text)}
+    .ws-opt.ws-cat-narrative{--ws-cat:var(--ws-narrative);background:rgba(23,132,91,.08);border-color:rgba(23,132,91,.28);color:var(--ws-text)}
+    .ws-opt.ws-cat-dialogue{--ws-cat:var(--ws-dialogue);background:rgba(89,97,179,.08);border-color:rgba(89,97,179,.28);color:var(--ws-text)}
+    .ws-opt.ws-cat-custom{--ws-cat:var(--ws-custom);background:rgba(100,116,139,.08);border-color:rgba(100,116,139,.28);color:var(--ws-text)}
+
+    .ws-opt.ws-cat-language.on{background:#245B9E;border-color:#7DB2E8;box-shadow:0 7px 18px rgba(36,91,158,.20);color:#fff}
+    .ws-opt.ws-cat-emotion.on{background:#6E468A;border-color:#C9A8DF;box-shadow:0 7px 18px rgba(110,70,138,.20);color:#fff}
+    .ws-opt.ws-cat-rhythm.on{background:#8A641F;border-color:#E1C276;box-shadow:0 7px 18px rgba(138,100,31,.20);color:#fff}
+    .ws-opt.ws-cat-narrative.on{background:#176C4E;border-color:#8BC8B0;box-shadow:0 7px 18px rgba(23,108,78,.20);color:#fff}
+    .ws-opt.ws-cat-dialogue.on{background:#4D548F;border-color:#AEB6E8;box-shadow:0 7px 18px rgba(77,84,143,.20);color:#fff}
+    .ws-opt.ws-cat-custom.on{background:#526273;border-color:#CBD5E1;box-shadow:0 7px 18px rgba(82,98,115,.20);color:#fff}
+
+    [data-theme="dark"] .ws-opt.ws-cat-language.on,[data-theme="blackboard"] .ws-opt.ws-cat-language.on,[data-theme="mecha"] .ws-opt.ws-cat-language.on,[data-theme="cyber"] .ws-opt.ws-cat-language.on{background:#9BC7E8;border-color:#D5E8F6;color:#102033}
+    [data-theme="dark"] .ws-opt.ws-cat-emotion.on,[data-theme="blackboard"] .ws-opt.ws-cat-emotion.on,[data-theme="mecha"] .ws-opt.ws-cat-emotion.on,[data-theme="cyber"] .ws-opt.ws-cat-emotion.on{background:#C8A8DC;border-color:#EADCF2;color:#24113A}
+    [data-theme="dark"] .ws-opt.ws-cat-rhythm.on,[data-theme="blackboard"] .ws-opt.ws-cat-rhythm.on,[data-theme="mecha"] .ws-opt.ws-cat-rhythm.on,[data-theme="cyber"] .ws-opt.ws-cat-rhythm.on{background:#D8B965;border-color:#F1E4BB;color:#3A2600}
+    [data-theme="dark"] .ws-opt.ws-cat-narrative.on,[data-theme="blackboard"] .ws-opt.ws-cat-narrative.on,[data-theme="mecha"] .ws-opt.ws-cat-narrative.on,[data-theme="cyber"] .ws-opt.ws-cat-narrative.on{background:#82C4A8;border-color:#D7F0E3;color:#063B2A}
+    [data-theme="dark"] .ws-opt.ws-cat-dialogue.on,[data-theme="blackboard"] .ws-opt.ws-cat-dialogue.on,[data-theme="mecha"] .ws-opt.ws-cat-dialogue.on,[data-theme="cyber"] .ws-opt.ws-cat-dialogue.on{background:#AAB1DF;border-color:#E1E5F8;color:#171A42}
     [data-theme="dark"] .ws-opt.ws-cat-custom.on,[data-theme="blackboard"] .ws-opt.ws-cat-custom.on,[data-theme="mecha"] .ws-opt.ws-cat-custom.on,[data-theme="cyber"] .ws-opt.ws-cat-custom.on{background:#CBD5E1;border-color:#F1F5F9;color:#1E293B}
-    .ws-opt.ws-combo-btn{background:linear-gradient(135deg,rgba(99,102,241,.13),rgba(6,182,212,.10),rgba(236,72,153,.10),rgba(245,158,11,.10));border-color:rgba(99,102,241,.34);color:var(--ws-text);border-radius:14px;box-shadow:0 6px 18px rgba(79,70,229,.08);backdrop-filter:blur(10px) saturate(125%);-webkit-backdrop-filter:blur(10px) saturate(125%)}
-    .ws-opt.ws-combo-btn.on{background:linear-gradient(135deg,var(--ws-combo-a),var(--ws-combo-b),var(--ws-combo-c),var(--ws-combo-d));border-color:rgba(255,255,255,.72);box-shadow:0 9px 22px rgba(79,70,229,.20);color:#fff}
+
+    .ws-opt.ws-combo-btn{background:rgba(82,98,115,.09);border-color:rgba(82,98,115,.34);color:var(--ws-text);border-radius:14px;box-shadow:0 6px 18px rgba(31,45,68,.08);backdrop-filter:blur(10px) saturate(115%);-webkit-backdrop-filter:blur(10px) saturate(115%)}
+    .ws-opt.ws-combo-btn.on{background:#526273;border-color:rgba(255,255,255,.72);box-shadow:0 9px 22px rgba(31,45,68,.18);color:#fff}
     .ws-opt.on{box-shadow:0 7px 18px rgba(31,45,68,.12)}
     .ws-opt .ws-opt-note,.ws-opt .ws-opt-name{color:inherit;transition:none}
     .ws-opt-detail{flex:0 0 auto;width:28px;height:28px;border:1px solid var(--ws-border);border-radius:8px;background:var(--ws-bg-elevated);color:var(--ws-text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;line-height:1;font-size:15px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
     .ws-opt-main{min-width:0;flex:1 1 auto}
     .ws-opt-note,.ws-opt-name{max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+
     .ws-detail-modal{width:min(680px,calc(100vw - 24px))!important;max-width:680px!important;max-height:min(80vh,720px)!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
     .ws-detail-body{overflow:auto;min-width:0;max-width:100%;padding:12px 16px 18px}
     .ws-detail-row{margin:0 0 10px;min-width:0;overflow-wrap:anywhere;word-break:break-word}
@@ -75,7 +74,7 @@ function installV569Styles(){
     .ws-detail-list{margin:0;padding-left:20px}
     .ws-detail-section{margin:0 0 12px;padding:10px 11px;border:1px solid var(--ws-border);border-radius:11px;background:var(--ws-glass-bg);box-sizing:border-box;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
     .ws-detail-section:nth-child(even){background:var(--ws-bg-elevated)}
-    .ws-detail-example{margin-top:14px;padding:13px 14px;border-radius:12px;background:linear-gradient(135deg,var(--ws-accent-strong),#475569);color:#fff;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word;box-shadow:0 7px 18px rgba(31,45,68,.18)}
+    .ws-detail-example{margin-top:14px;padding:13px 14px;border-radius:12px;background:var(--ws-accent-strong);color:#fff;box-sizing:border-box;max-width:100%;overflow-wrap:anywhere;word-break:break-word;box-shadow:0 7px 18px rgba(31,45,68,.18)}
     .ws-detail-example-title{font-weight:800;font-size:13px;margin-bottom:8px}
     .ws-detail-example-text{white-space:pre-wrap;line-height:1.65;overflow-wrap:anywhere;word-break:break-word}
     .ws-opt-list{min-width:0;max-width:100%}
@@ -94,6 +93,7 @@ function installV569Styles(){
     }
   `; document.head.appendChild(st);
 }
+
 // Version line: app1.0.520.js — 校长不得进入正文输入链；正文只接收老师原始教案及允许的运行时事实。
 const KEY_CFG = nsKey('cfg');
 
