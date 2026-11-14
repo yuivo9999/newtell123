@@ -1,3 +1,6 @@
+/* v1.0.589 DICTMASTER-REPAIR: 词典达人修复与内核调整。①「读词典达人」保存/导入：词典尚不存在时数据写进临时对象、没挂回项目（保存了但主界面不显示）已修；WORLD 一句话现在取粘贴内容里的 summary；保存/导入成功后向学校状态层发出 dictMaster 完成信号（词典充实/校长/一键老师可接上）；内容有变化且下游已有成果时，词典充实/校长/老师标记为「已过期」并提示。②补回丢失的 genDictMaster（✨生成按钮）：流式生成、解析容错、写入词典、历史版本、完成信号。③内核提示词整理：去掉 SYSTEM/USER 重复与编号空缺；新增「开篇状态原则」（设定不写剧情）；人物 tier 收紧（中途加入的外部人物默认 support）；新增 secret 秘密字段（人物/地点/专名/规则），校长可读到、老师与正文不会读到。 */
+/* v1.0.588 BANLIST-IRON-TIDY: 「禁则清单」「叙事铁律」整理修理。禁则：生效范围勾选保存失效已修；新增/删除规则不再丢字且可多选 AI；人名“百家姓+两字”格式规则降为提示（不再拒绝人物）；命中禁则只提示、不拦截、不再自动删除（由提示词让 AI 改写）；新增“载入网文模板词预设”。铁律：逐条可开关、面板显示实际注入全文；写作风格优先于铁律；视角铁律改为可选项；章首开法上收到校长/老师规划层；语言分层补全；本地检查只提示不拦截，模板词改读禁则清单，重复句检查忽略对白。 */
+/* v1.0.587 STYLE-PACK-TOLERANT + RECIPE-PICK-GAPS: 优化构想风格资料包解析容错（少一格自动修复、原因前缀、缺原因给默认），提示词加格数硬要求与示例；AI 配方助手 gap id 规范化、选用时提示并可一并加入新词条。
 /* v1.0.586 AI-RECIPE-REPORT-READER: 「AI 配方助手」新增「📦 注入导出」（SYSTEM + 输入框内容，可复制/导出 TXT，供外部 AI 使用）与「📖 读AI配方助手」（粘贴外部 AI 返回的 JSON，严格要求 4 个配方 100/80/50/30，保存/导入后主界面出现与直接生成完全相同的候选）；候选配方持久化到项目；选用后候选保留；保存/导入记入配方历史。 */
 /* v1.0.585 DICTMASTER-READER-ALWAYS-OPEN: 「读词典达人」不再受上游/空内容限制，可随时打开弹窗；弹窗内「保存目前更改」与「导入」成功后视为词典达人已完成；生成中禁止保存/导入；重新生成前若已有内容则二次确认。 */
 /* v1.0.584 OPTIMIZE-IDEA-FIX: 优化构想——风格资料包防错位解析(剥离字面id与字段名前缀)+缺失结束标签自动补齐；STORY_ARC/FULL_BOOK_BEAT 阶段数跟随所选全书拍子并严格校验；移除 WORLD 区块(世界设定交给词典达人)；输出模式文案统一为固定四方案；风格词条不得违背叙事铁律。界面结构未改(仅 WORLD 为空时不显示空的“故事背景”折叠项)。 */
@@ -27,7 +30,7 @@
    5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.586';
+const APP_VERSION = '1.0.589';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
 const APP_FILE_VERSION = 'app1.0.586.js';
 function installV569Styles(){
@@ -256,6 +259,7 @@ const state = {
   titleWriteBack: false,
   langLayer: true,
   _narrIron: true,
+  _ironOff: [],
   banList: null,
   characterNaming: { locked:false, lockedAt:0, version:0 },
   useChapterPlans: true,
@@ -1481,6 +1485,7 @@ function projectSnapshot(){
     glossSeenTs: Number(state._glossSeenTs) || 0,
     langLayer: (typeof state.langLayer === 'boolean') ? state.langLayer : true,
     _narrIron: state._narrIron,
+    _ironOff: Array.isArray(state._ironOff) ? state._ironOff.slice() : [],
     banList: (state.banList && typeof state.banList === 'object') ? normalizeBanList(state.banList) : null,
     gsCollapsed: state.gsCollapsed,
     cpCollapsed: state.cpCollapsed,
@@ -1580,6 +1585,7 @@ function applyProject(p){
   state._glossSeenTs = Number(p.glossSeenTs) || 0;
   state.langLayer = (typeof p.langLayer === 'boolean') ? p.langLayer : true;
   state._narrIron = (typeof p._narrIron === 'boolean') ? p._narrIron : true;
+  state._ironOff = Array.isArray(p._ironOff) ? p._ironOff.map(String) : [];
   state.banList = (p.banList && typeof p.banList === 'object') ? normalizeBanList(p.banList) : null;
   state.gsCollapsed = (typeof p.gsCollapsed === 'boolean') ? p.gsCollapsed : false;
   state.cpCollapsed = (typeof p.cpCollapsed === 'boolean') ? p.cpCollapsed : true;
@@ -1695,6 +1701,7 @@ function clearState(){
   state.glossAdherence = 60; state.glossAllowFill = false; state.gsCollapsed = false;
   state.langLayer = true;
   state._narrIron = true;
+  state._ironOff = [];
   state.banList = null;
   state.useChapterPlans = true;
   state.chapters = []; state.characters = []; state.scenes = []; state.storyboard = []; state.boardConcepts = []; state.titleHistory = []; state.raw = {};
@@ -1901,6 +1908,7 @@ function normalizeLegacyProject(p){
   out.glossAdherence = (typeof s.glossAdherence === 'number') ? s.glossAdherence : 60;
   out.langLayer = (s.langLayer === undefined) ? true : !!s.langLayer;
   out._narrIron = (s._narrIron === undefined) ? true : !!s._narrIron;
+  out._ironOff = Array.isArray(s._ironOff) ? s._ironOff.map(String) : [];
   out.banList = (s.banList && typeof s.banList === 'object') ? normalizeBanList(s.banList) : null;
   out.ctAdviceHist = Array.isArray(s.ctAdviceHist) ? s.ctAdviceHist : [];
   out.contentAdviceHist = Array.isArray(s.contentAdviceHist) ? s.contentAdviceHist : [];
@@ -4005,6 +4013,17 @@ function dedupeRecipeList(list){
   return out;
 }
 // v1.0.586：生成与「读AI配方助手」共用同一条严格处理线：必须恰好 4 个，档位 100/80/50/30 各一。
+function normalizeRecipeGapIds(list){
+  return list.map(c=>{
+    if(!c || !Array.isArray(c.gap)) return c;
+    return {...c, gap:c.gap.map(g=>{
+      if(!g || typeof g!=='object') return g;
+      let id=String(g.id||'').trim().replace(/[^A-Za-z0-9_]+/g,'_').replace(/^_+|_+$/g,'');
+      if(!id || !/^[A-Za-z]/.test(id)) id='g_'+(id||Math.random().toString(36).slice(2,7));
+      return {...g, id};
+    })};
+  });
+}
 function aiRecipeNormalize(cands, stat){
   if(!Array.isArray(cands)) return null;
   cands = cands.filter(c=>c && typeof c==='object');
@@ -4012,6 +4031,7 @@ function aiRecipeNormalize(cands, stat){
   const wanted=[100,80,50,30];
   const picked=wanted.map(v=>cands.find(c=>Number(c.adherence)===v)).filter(Boolean);
   if(picked.length!==4) return null;
+  picked.splice(0,4,...normalizeRecipeGapIds(picked));   // v1.0.587：id 含连字符会导致入库后仍显示未入库
   const rawTagN = picked.reduce((n,c)=>n+new Set((Array.isArray(c.tags)?c.tags:[]).map(t=>String(t||'').trim()).filter(Boolean)).size,0);
   let out=dedupeRecipeList(picked).slice(0,4);
   if(out.length!==4) return null;
@@ -4106,12 +4126,24 @@ function applyChosenCandidate(c, opts){
   toast('已应用到「写作风格」：'+stored.name);
   return stored;
 }
+// v1.0.587：选用时若配方带有尚未入库的新词条，提示并可一并加入词库（否则这些方法不会生效）。
+function aiRecipeEnsureGaps(c){
+  const pend = (Array.isArray(c&&c.gap)?c.gap:[]).filter(g=>g && g.id && !libHas(g.id) && !(c.tags||[]).includes(g.id));
+  if(!pend.length) return;
+  const names = pend.map(g=>String(g.name||g.id)).join('、');
+  if(!confirm(`这个配方有 ${pend.length} 条新词条还没加入词库：${names}\n\n不加入的话，选用后这些新方法不会生效。\n\n【确定】一并加入词库再选用\n【取消】只选用现有词条`)) return;
+  c.tags = Array.isArray(c.tags)?c.tags:[];
+  pend.forEach(g=>{ const fid = addGapEntryToLib(g); if(fid && !c.tags.includes(fid)) c.tags.push(fid); });
+  aiRecipeSyncLatest();
+}
 function aiRecipePick(ci){
   if(!aiRp || !Array.isArray(aiRp.list)) return;
+  aiRecipeEnsureGaps(aiRp.list[ci]);
   applyChosenCandidate(aiRp.list[ci]);
 }
 function aiRecipeApply(idx){
   if(!aiRp || !aiRp.list[idx]) return;
+  aiRecipeEnsureGaps(aiRp.list[idx]);
   applyChosenCandidate(aiRp.list[idx], {keep:true});   // v1.0.586：选用后候选保留，直到重新生成或点「清空」
 }
 function aiRecipeSave(ci){
@@ -4905,6 +4937,7 @@ function scMark(key, done, save=true){
     // 完成时直接清零，不再通过 setScRetry() 触发第二次全项目 persist。
     sc.retries[key] = 0;
     if(sc.failed) delete sc.failed[key];
+    if(sc.stale) delete sc.stale[key];   // v1.0.589：重新完成该步骤即清除「已过期」标记
   }
   if(save) persist();
 }
@@ -6512,6 +6545,7 @@ hintStyle=铺垫方式：只能暗示什么、不能说破什么
 redactTerms=词典原文中会泄露该真相的片段，必须与词典里的文字逐字一致，用“；”分隔，没有写“无”
 [/REVEAL_PLAN]
 REVEAL_PLAN只写真正会因“提前揭示”而破坏阅读体验的核心秘密（身份/血缘真相、关键反转、终局真相等），按故事需要写0到8个，普通信息不要写；每个秘密一个区块。揭示章节要与全书节拍和阶段战略一致。老师和正文只会按各自权限获得揭示计划：揭示章在本组之后的老师不会拿到真相，只拿到表象和铺垫规则，所以publicFace、hintChapters、hintStyle必须写清楚。
+词典里带有 secret 字段的条目（人物、地点、专名、规则）是词典达人标出的“秘密候选”：你来决定其中哪些真正需要保护、何时揭示，需要保护的才写进REVEAL_PLAN（secret 以词典所写为准，除非与全书节拍冲突）；不需要保护的直接忽略。词典其他字段写的只是表象。redactTerms 只写词典里除 secret 字段以外、仍会泄露该真相的片段。
 
 硬要求：BOOK_STRATEGY只能一个；REVEAL_PLAN可以有0到8个；STAGE_STRATEGY数量等于系统阶段数；TEACHER_GROUP_STRATEGY数量等于老师组数；PRINCIPAL_CHAPTER数量等于目标章节数；STYLE_STRATEGY只能有一个。STYLE_STRATEGY只能提供唯一GLOBAL，不得输出HYBRID/CHAPTER池、章节三层分配表或第二套三层来源。`;
 const PRINCIPAL_SYS_STRUCTURED = PRINCIPAL_SYS + STRUCTURED_PRINCIPAL_PROTOCOL;
@@ -7761,7 +7795,7 @@ async function genPrincipal(btn, opts){
         if(!txt || !String(txt||'').trim()){ setScRetry('principal', attempt); scRefreshBadge(btn,'principal'); throw new Error('校长返回空'); }
         const principalViolations = isScopeBanned('principal') ? banEntityTextViolations(txt, 'principal').filter(x=>x.type==='name') : [];
         if(principalViolations.length){
-          throw new Error('校长输出命中禁用姓名：'+principalViolations.map(x=>x.value).join('、'));
+          warnBanHits('principal', principalViolations, '输出（人名）');   // v1.0.588：只提示，不拦截；由提示词要求 AI 改写
         }
         const sc = scState();
         const _parse0 = performance.now();
@@ -8656,12 +8690,12 @@ const BANLIST_DEFAULT = {
   text: {
     enabled: true,
     words: { enabled: true, items: [] },
-    phrases: { enabled: true, items: ['天刚蒙蒙亮','破旧的窗棂','窗棂'] },
+    phrases: { enabled: true, items: ['天刚蒙蒙亮','破旧的窗棂'] },
     sentences: { enabled: true, items: [] }
   },
   rules: [],
   entityScopeAi: ['ideaOptimization','dictmaster','dictEnrich','principal','teacher','chapter'],
-  textScopeAi: ['ideaOptimization','dictmaster','dictEnrich','principal','chapter'],
+  textScopeAi: ['ideaOptimization','dictmaster','dictEnrich','principal','teacher','chapter','titles'],
   // legacy compatibility fields
   chars: [], names: [], phrases: [],
   scopeAi: ['chapter','dictmaster','dictEnrich','principal']
@@ -8669,8 +8703,9 @@ const BANLIST_DEFAULT = {
 function _banStrArr(v){ return Array.isArray(v) ? [...new Set(v.map(x=>String(x??'').trim()).filter(Boolean))] : []; }
 function _banScopeArr(v, fallback){
   const allowed=['ideaOptimization','idea','titles','dictmaster','dictEnrich','principal','teacher','chapter','planner','outline'];
-  // 字段不存在/非数组：使用默认范围；字段明确存在但为空数组：保留为空。
-  if(Array.isArray(v)) return [...new Set(v.map(x=>String(x??'').trim()).filter(x=>allowed.includes(x)))];
+  // v1.0.588：空数组视为“未设置”。旧版保存勾选框的 bug 会写入空数组（曾被当成“全部 AI”），统一回落到默认范围；
+  // 想整体关闭某一套禁则，请用“启用”开关，不要取消全部 AI 勾选。
+  if(Array.isArray(v)){ const out=[...new Set(v.map(x=>String(x??'').trim()).filter(x=>allowed.includes(x)))]; if(out.length) return out; }
   return fallback.slice();
 }
 function _legacyBanMigration(b){
@@ -8680,7 +8715,7 @@ function _legacyBanMigration(b){
   const legacyScope=_banStrArr(b.scopeAi);
   // 旧逻辑中：姓名/禁字对 ideaOptimization、teacher 有特殊生效路径；文本短语对 ideaOptimization 生效但不默认作用 teacher。
   const entityScope=_banScopeArr(b.entityScopeAi, [...new Set(['ideaOptimization','teacher',...(legacyScope.length?legacyScope:['chapter','dictmaster','dictEnrich','principal'])])]);
-  const textScope=_banScopeArr(b.textScopeAi, [...new Set(['ideaOptimization',...(legacyScope.length?legacyScope:['chapter','dictmaster','dictEnrich','principal'])])]);
+  const textScope=_banScopeArr(b.textScopeAi, [...new Set(['ideaOptimization','teacher','titles',...(legacyScope.length?legacyScope:['chapter','dictmaster','dictEnrich','principal'])])]);
   return {
     // 旧项目没有顶层 enabled 时，迁移后的默认值必须是 OFF；只有用户明确保存 true 才启用。
     enabled: b.enabled === true,
@@ -8720,12 +8755,11 @@ function _legacyBanMigration(b){
     scopeAi: legacyScope.length ? legacyScope : ['chapter','dictmaster','dictEnrich','principal']
   };
 }
-function nmNameRuleViolation(nm){
+// v1.0.588：“百家姓+两字名、不叠字”只是格式【提示】（用于人物卡的 ⚠ 标记），不再拒绝人物；只有用户在禁则清单里写明的名字才是硬禁。
+function nmNameFormatAdvice(nm){
   const s = String(nm||'').trim();
   if(!s) return '';
   if(!/^[\u4e00-\u9fa5]+$/.test(s)) return '';
-  const bv = banListViolation(s, 'person');
-  if(bv) return bv;
   let surLen = 0;
   if(NM_SURNAME_2.has(s.slice(0,2))) surLen = 2;
   else if(NM_SURNAME_1.has(s.charAt(0))) surLen = 1;
@@ -8735,6 +8769,14 @@ function nmNameRuleViolation(nm){
   const given = s.slice(surLen);
   if(/([\u4e00-\u9fa5])\1/.test(given)) return `名字不得叠字（「${s}」）`;
   return '';
+}
+function nmNameRuleViolation(nm){
+  const s = String(nm||'').trim();
+  if(!s) return '';
+  if(!/^[\u4e00-\u9fa5]+$/.test(s)) return '';
+  const bv = banListViolation(s, 'person');
+  if(bv) return bv;
+  return nmNameFormatAdvice(s);
 }
 function normalizeBanList(b){
   if(!b || typeof b !== 'object') return null;
@@ -8749,7 +8791,7 @@ function banListTextScope(){ return banListRaw().textScopeAi || []; }
 function banListAiActive(role, type='entity'){
   if(!stateBanEnabled()) return false;
   const sc = type==='text' ? banListTextScope() : banListEntityScope();
-  return !Array.isArray(sc) || !sc.length || sc.indexOf(role)>=0;
+  return !Array.isArray(sc) || sc.indexOf(role)>=0;
 }
 function banListChars(type='person'){
   const b=banListRaw();
@@ -9374,10 +9416,30 @@ function parseOptimizationStructuredBlock(body){
         base={id:map.id||'',name:map.name||'',definition:map.definition||'',attributes:map.attributes||'',features:map.features||'',manifestations:map.manifestations||'',examples:map.examples||''};
         if(styleSection==='supplements') base.reason=map.reason||'';
       }else{
+        // v1.0.587：位置容错。AI 常少写一格（把属性/特征合并）、行尾补空格、把补充原因写成“原因：…”。
+        const rsRe=/^(补充原因|原因|reason)\s*[=：:]\s*/i;
+        let reasonCell=null;
+        if(styleSection==='supplements'){
+          const ri=vals.findIndex((v,ix)=>ix>=3 && rsRe.test(v));
+          if(ri>=0){ reasonCell=vals[ri].replace(rsRe,'').trim(); vals.splice(ri,1); }
+        }
         vals=vals.map(v=>v.replace(keyRe,'').trim());
         if(/^id$/i.test(vals[0]||'') && vals.length>=2) vals=vals.slice(1);
-        base={id:vals[0]||'',name:vals[1]||'',definition:vals[2]||'',attributes:vals[3]||'',features:vals[4]||'',manifestations:vals[5]||'',examples:vals[6]||''};
-        if(styleSection==='supplements') base.reason=vals[7]||'';
+        while(vals.length>3 && !vals[vals.length-1]) vals.pop();   // 去掉行尾补的空格
+        let rest=vals.slice(3), repaired='';
+        if(styleSection==='supplements' && reasonCell===null && rest.length>=5){ reasonCell=rest[4]; rest=rest.slice(0,4); }
+        if(rest.length>4) rest=rest.slice(0,3).concat([rest.slice(3).join('｜')]);
+        let at='',ft='',mf='',ex='';
+        if(rest.length>=4){ [at,ft,mf,ex]=rest; }
+        else if(rest.length===3){ at=rest[0]; ft=rest[0]; mf=rest[1]; ex=rest[2]; repaired='少一格：详细属性与核心特征共用同一内容'; }
+        else if(rest.length===2){ at=rest[0]; ft=rest[0]; mf=rest[1]; ex=rest[1]; repaired='少两格：属性/特征共用一格，具体表现与例子共用一格'; }
+        else { at=rest[0]||''; }
+        base={id:vals[0]||'',name:vals[1]||'',definition:vals[2]||'',attributes:at,features:ft,manifestations:mf,examples:ex};
+        if(styleSection==='supplements'){
+          base.reason=(reasonCell||'').trim();
+          if(!base.reason){ base.reason='（AI 未给出补充原因）'; repaired=(repaired?repaired+'；':'')+'缺补充原因'; }
+        }
+        if(repaired) base._repaired=repaired;
       }
       if(base.id||base.name) stylePackage[styleSection].push(base);
     }
@@ -9637,7 +9699,7 @@ function buildIdeaOptimizationUser(ctx){
     parts.push(`【全书拍子阶段硬约束】${state.bookBeat?'':'（用户未单独选择，使用项目默认全书拍子）'}全书拍子「${bb.label}」共${st.length}个阶段，必须逐一对应：\n${st.map((x,k)=>`第${k+1}阶段「${x}」${du[k]?`：${du[k]}`:''}`).join('\n')}\n每个方案的STORY_ARC必须输出phase_1至phase_${st.length}共${st.length}行；FULL_BOOK_BEAT必须正好${st.length}条，第k条以对应阶段名开头（格式“阶段名：内容”）。阶段不得合并、拆分、增删或改名，也不得再按固定五阶段输出。`);
   }
   const upstreamRules = [];
-  if(state._narrIron!==false) upstreamRules.push(NARRATIVE_IRON_PLANNING);
+  if(state._narrIron!==false){ const _ip=ironPlanningText(); if(_ip) upstreamRules.push(_ip); }
   const ban = banListBlockFor('ideaOptimization');
   if(ban) upstreamRules.push(ban);
   upstreamRules.push('【人物命名边界】优化构想只负责人物角色需求、功能、关系、性格与发展方向。除非用户原始构想已经明确给出正式姓名，否则不得创造新的正式人物姓名；未正式命名的人物必须使用稳定人物ID，如 CHAR_001、CHAR_002。正式姓名由后续词典达人统一确定。');
@@ -9768,39 +9830,66 @@ function addToFixQueue(entry){
 }
 
 const LANG_LAYER_SYS = `【语言分层（硬约束）】
-可读性自检：逐句自问"读者需要拐弯才能懂吗？"需要即改大白话。`;
+· 书面语造氛围、口语推剧情：旁白与环境描写可随题材适度书面；人物对白与快节奏推进场景一律口语化大白话。
+· 语言底色随题材确定并全书稳定，不得中途漂移：都市/网游/沙雕→贴近生活口语；仙侠/红楼风等→适度书面高级感。
+· 可读性自检：逐句自问"读者需要拐弯才能懂吗？"需要即改大白话。`;
 
 function langLayerInjection(){
-  if(!isLong() || !state.langLayer) return '';
+  if(!isLong() || state.langLayer === false) return '';
   return '\n\n' + LANG_LAYER_SYS;
 }
 
-const NARRATIVE_IRON_HARD = `〔硬约束 · 铁律，不可逾越，冲突时以此为准〕
-· 禁止直接叙述人物内心情绪。禁止出现直白内心描写；必须尽量改用选择、动作、停顿、语气、回避、让步、反问、具体需求与后果外显情绪。外显动作必须克制且有变化：同章内同一种微表情/小动作（如咬牙、攥拳、拧眉、垂眸、绞手）原则上最多一次，不得把动作当固定情绪标签。
-· 禁止频繁使用网文模板词（倏然、眸光、眼底、凤眸、邪魅一笑、轻嗤）。同章内同类模板词原则上最多一次，能删必修。
-· 对白必须口语化，禁止「端着」的书面腔台词。允许半截话、打断、停顿、反问、回避、试探、误解与没说完的话；古风也必须写现代人能读懂的人话。
-· 对话禁止承担“百科广播”职责：人物知道什么、为什么做、过去发生什么，优先通过当下目标、冲突、行动和潜台词体现；只有对方确实需要知道、角色确实愿意说、且说出口本身有戏剧功能时，才直接交代背景。
-· 人物行为必须有清晰动机，禁止无故推进剧情。禁止过度美化人物：言行必须与境界相符，允许小瑕疵、怯懦、私心、口误、误判与嘴硬。
-· 【人物鲜明原则】人物不是靠口癖区分，而是靠“稳定内核 + 情境变化 + 层次反应”区分。同一件事，不同人物应因目标、经验、关系、利益和性格产生不同反应；同一人物也不能每次都机械复用同一个动作、句式或情绪标签。
-· 【信息单次落地】本章内一个关键事实/设定/人物关系首次让读者理解后，后文默认读者已经知道；除非发生新证据、新视角、新后果或认知变化，不得换一种说法再完整解释一遍。自然提及可以，重复科普不可以。
-· 【事实一致】人物身份、年龄、关系、时间、地点、道具、能力、知情边界和事件因果一旦在本章成立，后文必须把它当既成事实；如新信息与旧信息冲突，必须通过明确的新发现/误解纠正来解释，禁止无提示自相矛盾。
-· 【句式变化】连续段落不得长期使用同一语法骨架、同一“人物+动作+对白+然后”模式或同一种情绪收束方式；变化来自叙述焦点、句长、动作、对白、环境和信息位置，而不是机械要求每句换结构。
-· 书面语是藏起来的底牌：旁白可按题材适度书面，但对白必须口语；书面语只在确有表达价值时使用。`;
+/* ===== 叙事铁律（v1.0.588：条目化，可逐条开关；面板与实际注入共用同一份数据）=====
+ * grp: hard=正文硬约束  soft=正文软约束  special=正文专项  planning=规划层（校长/老师/优化构想）
+ * 写作风格词条优先于铁律：冲突时以风格为准（已写进各段标题）。 */
+const IRON_HARD_HEAD = '〔硬约束 · 铁律，不可逾越；若与用户已选写作风格词条的明确要求冲突，以写作风格为准〕';
+const IRON_SOFT_HEAD = '〔软约束 · 尽力而为、随题材微调〕';
+const IRON_PLAN_HEAD = '【全书叙事铁律·规划层】这是用户对整部小说的长期硬要求，校长、老师、构想规划阶段必须据此设计，不能等正文写完再补救（若与用户已选写作风格词条的明确要求冲突，以写作风格为准）：';
+const IRON_PLAN_FOOT = '· 以上只约束叙事方式与剧情设计，不限制题材、人物、世界观的正常创造，也不剥夺 AI 的创造自由。';
+const IRON_POV_MULTI_NOTE = '（本书为多主角：上文“只写主角感知”改为“每个场景只取该场景视角人物的受限感知”，视角切换仍须有明确触发与衔接。）';
+const IRON_ITEMS = [
+  { id:'h_inner', grp:'hard', title:'内心外显', text:`禁止直接叙述人物内心情绪。禁止出现直白内心描写；必须尽量改用选择、动作、停顿、语气、回避、让步、反问、具体需求与后果外显情绪。外显动作必须克制且有变化：同章内同一种微表情/小动作（如咬牙、攥拳、拧眉、垂眸、绞手）原则上最多一次，不得把动作当固定情绪标签。` },
+  { id:'h_template', grp:'hard', title:'网文模板词', text:`禁止频繁使用网文模板词（如倏然、眸光、凤眸、邪魅一笑、轻嗤；更多词可在「禁则清单」里一键载入预设）。同章内同类模板词原则上最多一次，能删必修。` },
+  { id:'h_dialogue', grp:'hard', title:'对白口语化', text:`对白必须口语化，禁止「端着」的书面腔台词。允许半截话、打断、停顿、反问、回避、试探、误解与没说完的话；古风也必须写现代人能读懂的人话。` },
+  { id:'h_broadcast', grp:'hard', title:'对话不广播', text:`对话禁止承担“百科广播”职责：人物知道什么、为什么做、过去发生什么，优先通过当下目标、冲突、行动和潜台词体现；只有对方确实需要知道、角色确实愿意说、且说出口本身有戏剧功能时，才直接交代背景。` },
+  { id:'h_motive', grp:'hard', title:'动机与不美化', text:`人物行为必须有清晰动机，禁止无故推进剧情。禁止过度美化人物：言行必须与境界相符，允许小瑕疵、怯懦、私心、口误、误判与嘴硬。` },
+  { id:'h_char', grp:'hard', title:'人物鲜明', text:`【人物鲜明原则】人物不是靠口癖区分，而是靠“稳定内核 + 情境变化 + 层次反应”区分。同一件事，不同人物应因目标、经验、关系、利益和性格产生不同反应；同一人物也不能每次都机械复用同一个动作、句式或情绪标签。` },
+  { id:'h_info', grp:'hard', title:'信息单次落地', text:`【信息单次落地】本章内一个关键事实/设定/人物关系首次让读者理解后，后文默认读者已经知道；除非发生新证据、新视角、新后果或认知变化，不得换一种说法再完整解释一遍。自然提及可以，重复科普不可以。` },
+  { id:'h_fact', grp:'hard', title:'事实一致', text:`【事实一致】人物身份、年龄、关系、时间、地点、道具、能力、知情边界和事件因果一旦在本章成立，后文必须把它当既成事实；如新信息与旧信息冲突，必须通过明确的新发现/误解纠正来解释，禁止无提示自相矛盾。` },
+  { id:'h_syntax', grp:'hard', title:'句式变化', text:`【句式变化】连续段落不得长期使用同一语法骨架、同一“人物+动作+对白+然后”模式或同一种情绪收束方式；变化来自叙述焦点、句长、动作、对白、环境和信息位置，而不是机械要求每句换结构。` },
+  { id:'h_written', grp:'hard', title:'书面语是底牌', text:`书面语是藏起来的底牌：旁白可按题材适度书面，但对白必须口语；书面语只在确有表达价值时使用。` },
 
+  { id:'s_voice', grp:'soft', title:'说话方式差异', text:`核心人物的说话方式应有可辨识差异，来自立场、经验与说话习惯；不强制口头禅，若用则每人至多1个、自然出现，不得每章重复。` },
+  { id:'s_detail', grp:'soft', title:'生活化细节', text:`生活化细碎细节（真实毛边）应随情节自然分布：只在能推进氛围/塑造人物时出现，禁止为凑数量而每章硬塞、禁止同一种细节反复复用。` },
+  { id:'s_tone', grp:'soft', title:'语言底色稳定', text:`语言底色必须随题材稳定贯穿全书，禁止中途漂移：都市/网游/沙雕→贴近生活口语；仙侠/红楼风→适度书面高级感。` },
+  { id:'s_fast', grp:'soft', title:'快节奏短句', text:`快节奏场景必须优先大白话短句，禁止绕弯长句，保证读者一目十行不卡壳。` },
 
-const NARRATIVE_IRON_SOFT = `〔软约束 · 尽力而为、随题材微调〕
-· 可给核心人物绑定 1-2 个专属口头禅，写到自然出现、不刻意。
-· 生活化细碎细节（真实毛边）应随情节自然分布：只在能推进氛围/塑造人物时出现，禁止为凑数量而每章硬塞、禁止同一种细节反复复用。
-· 语言底色必须随题材稳定贯穿全书，禁止中途漂移：都市/网游/沙雕→贴近生活口语；仙侠/红楼风→适度书面高级感。
-· 快节奏场景必须优先大白话短句，禁止绕弯长句，保证读者一目十行不卡壳。`;
+  { id:'c_open', grp:'special', title:'章首按教案起点', text:`【章首】按本章教案规定的起点切入，不自行套用固定开法；教案没有写明起点时，优先从上一章已发生的事实直接回接，不预告下一步。（各章开法的轮换与分布由校长/老师在规划层分配。）` },
+  { id:'c_pov', grp:'special', title:'视角与反剧透（可选）', text:`【视角与反剧透铁律】全章以主角的受限感知推进：只写主角能看到听到摸到感知到的；想表现他人内心，一律从主角的观察与推断出发，禁止直接钻进路人/配角/反派的内心“读心”。禁止提前揭示读者与主角尚不该知道的答案：伏笔只许一笔带过地埋伏笔，不点破、不解释、不揭示答案（不剥夺读者的“侦探权”）。背景/世界观/前史情报必须“寄生”在角色的即时感官里（听/闻/触）传达，禁止作者跳出来大段广播。仅在章/节分界明显、或关键时刻“只展示不解释”的客观动作、或悬念兑现时，才可短暂切出并立即回到主角。` },
+  { id:'c_team', grp:'special', when:'team', title:'团队铁律', text:`【团队铁律】本书为团队叙事，核心团各成员凡在本章出场就必须有"存在性"——有对话、有动作、或有专属于该成员的反应/细节，不得被写成背景板或纯提线木偶；禁止主角一人单刷全篇、队友全程挂机——凡危机须体现靠成员互补能力/配合拆解；多人对话要有可辨识的声口与立场，避免把多条声音堆成一片没有区别的对白。` },
+  { id:'c_dual', grp:'special', when:'dual', title:'双主角铁律', text:`【双主角铁律】本书为双主角叙事，两名主角各有独立行动场景与弧线：本章凡涉及双主角，须给双方各自实质性的镜头与推进，不得把某一方写成另一方的附庸/背景；双视角切换必须有明确触发点与衔接（换场景/换段），禁止在同一场景内无节制的视角跳转；两人同场时，其对视/争执/配合要写得有张力与辨识声口。` },
 
-const NARRATIVE_IRON_PLANNING = `【全书叙事铁律·规划层】这是用户对整部小说的长期硬要求，校长、老师、构想规划阶段必须据此设计，不能等正文写完再补救：
-· 禁止把“人物内心独白/情绪解释”当作主要叙事推进手段；人物心理应尽量转化为可观察的行动、选择、对话、停顿、反应与后果。
-· 禁止以全知上帝视角提前替读者解释答案、幕后真相或配角内心；规划时必须保留合理的信息差与侦探权。
-· 禁止设计依赖大段作者广播、百科式背景倾倒才能成立的情节；世界观应能通过角色行动、场景、对话与具体事件自然显露。
-· 禁止把网文模板词、固定开场、重复情绪动作当成章节节奏工具；章节开法、冲突触发方式与场景推进应有变化。
-· 任何“为了显得有深度而增加心理解释/全知旁白”的设计均视为错误设计；优先设计可被拍出来、演出来、说出来的剧情动作。
-· 以上只约束叙事方式与剧情设计，不限制题材、人物、世界观的正常创造，也不剥夺 AI 的创造自由。`;
+  { id:'p_inner', grp:'planning', title:'内心不当推进手段', text:`禁止把“人物内心独白/情绪解释”当作主要叙事推进手段；人物心理应尽量转化为可观察的行动、选择、对话、停顿、反应与后果。` },
+  { id:'p_omni', grp:'planning', title:'保留信息差', text:`禁止以全知上帝视角提前替读者解释答案、幕后真相或配角内心；规划时必须保留合理的信息差与侦探权。` },
+  { id:'p_broadcast', grp:'planning', title:'不靠广播成立', text:`禁止设计依赖大段作者广播、百科式背景倾倒才能成立的情节；世界观应能通过角色行动、场景、对话与具体事件自然显露。` },
+  { id:'p_template', grp:'planning', title:'不套模板节奏', text:`禁止把网文模板词、固定开场、重复情绪动作当成章节节奏工具；冲突触发方式与场景推进应有变化。` },
+  { id:'p_deep', grp:'planning', title:'不为深度加戏', text:`任何“为了显得有深度而增加心理解释/全知旁白”的设计均视为错误设计；优先设计可被拍出来、演出来、说出来的剧情动作。` },
+  { id:'p_open', grp:'planning', title:'章首开法分配', text:`章首开法由规划层分配（正文AI看不到其他章，不会自己轮换）：校长统筹全书分布，老师在每章教案的“起点”里明确本章如何切入——①续写式 ②场景/环境式 ③人物开句式 ④时间开句式 ⑤他人/群像式 ⑥直接回接式；各种开法轮流换着来，任一种不超过三成，不得连续两章相同，不得每章都以同一类人物动作或同一类时间词起句。` }
+];
+function ironOffSet(){ return new Set(Array.isArray(state._ironOff) ? state._ironOff : []); }
+function ironLines(grp){ const off=ironOffSet(); return IRON_ITEMS.filter(x=>x.grp===grp && !off.has(x.id)).map(x=>'· '+x.text).join('\n'); }
+function ironHardText(){ const b=ironLines('hard'); return b ? IRON_HARD_HEAD+'\n'+b : ''; }
+function ironSoftText(){ const b=ironLines('soft'); return b ? IRON_SOFT_HEAD+'\n'+b : ''; }
+function ironPlanningText(){ const b=ironLines('planning'); return b ? IRON_PLAN_HEAD+'\n'+b+'\n'+IRON_PLAN_FOOT : ''; }
+function ironSpecialText(){
+  const off=ironOffSet(), sk=shapeKind(), out=[];
+  IRON_ITEMS.filter(x=>x.grp==='special').forEach(x=>{
+    if(off.has(x.id)) return;
+    if(x.when && x.when!==sk) return;
+    out.push(x.id==='c_pov' && (sk==='team'||sk==='dual') ? x.text+IRON_POV_MULTI_NOTE : x.text);
+  });
+  return out.join('\n');
+}
 
 function globalCreativeConstraintBlock(kind){
   const creative = ['idea','ideaOptimization','principal','teacher','chapter','planner','outline'];
@@ -9810,10 +9899,14 @@ function globalCreativeConstraintBlock(kind){
     const ban=banListBlockFor(kind);
     if(ban) parts.push(ban);
   }
-  if(creative.indexOf(kind)>=0 && kind!=='chapter' && state._narrIron!==false) parts.push(NARRATIVE_IRON_PLANNING);
+  if(creative.indexOf(kind)>=0 && kind!=='chapter' && state._narrIron!==false){
+    const plan=ironPlanningText();
+    if(plan) parts.push(plan);
+  }
   return parts.length ? '\n\n'+parts.join('\n') : '';
 }
-function narrativeIronBlock(role, opts){
+// 正文层：禁则 → 语言分层 → 铁律。规划层（校长/老师/优化构想）的铁律由 globalCreativeConstraintBlock 注入。
+function narrativeIronBlock(role){
   const parts = [];
   const ban = banListBlockFor(role);
   if(ban) parts.push(ban);
@@ -9822,33 +9915,15 @@ function narrativeIronBlock(role, opts){
     if(lang) parts.push(lang);
   }
   const sep = '\n\n';
-  opts = opts || {};
-  if(opts.lean){
-    const head = '【规划纪律（精简）】节拍事件须有清晰动机、禁止无故推进剧情、禁止各章事件雷同或套模板。';
-    return parts.filter(Boolean).length ? sep + head + '\n' + parts.join('\n') : head;
-  }
+  if(role !== 'chapter') return parts.length ? sep + parts.join('\n') : '';
   if(state._narrIron === false){
     const block = parts.filter(Boolean).join('\n');
     return block ? sep + '【叙事纪律（铁律已关闭，仅保留禁则/语言分层等中间件）】\n' + block : '';
   }
-  const iron = role === 'chapter' ? NARRATIVE_IRON_HARD + '\n' + NARRATIVE_IRON_SOFT : NARRATIVE_IRON_HARD;
-  let ironFull = iron;
-  if(role === 'chapter' && shapeKind() === 'team'){
-    ironFull += '\n【团队铁律】本书为团队叙事，核心团各成员凡在本章出场就必须有"存在性"——有对话、有动作、或有专属于该成员的反应/细节，不得被写成背景板或纯提线木偶；禁止主角一人单刷全篇、队友全程挂机——凡危机须体现靠成员互补能力/配合拆解；多人对话要有可辨识的声口与立场，避免把多条声音堆成一片没有区别的对白。';
-  } else if(role === 'chapter' && shapeKind() === 'dual'){
-    ironFull += '\n【双主角铁律】本书为双主角叙事，两名主角各有独立行动场景与弧线：本章凡涉及双主角，须给双方各自实质性的镜头与推进，不得把某一方写成另一方的附庸/背景；双视角切换必须有明确触发点与衔接（换场景/换段），禁止在同一场景内无节制的视角跳转；两人同场时，其对视/争执/配合要写得有张力与辨识声口。';
-  }
-  if(role === 'chapter'){
-    ironFull += '\n【章首铁律】章首开法**必须**有变化：**禁止**全书或连续多章重复同一种开法、**禁止**每章都以同一类人物动作或同一类时间词起句、也**禁止**连续两章雷同，小说整体**禁止**某一种开法超过三成。下面各方式**可以**混用、**必须**轮流换着来：①续写式（优先）：优先从本章教案规定的起点、事件现场或已提供的状态依据切入；例："『这话可说不得。』上回话到一半，屋里便只剩扇子敲桌沿的声响。"；②场景/环境式：从能即时带出情绪与冲突的场景细节/物件/光线/动静切入，人物稍后才点名；例："檐角铜铃被夜风拨响时，堂屋的灯还亮着，桌上摊着两封未拆的信。"；③人物开句式：以人物称谓开句**可以**，但须与前后章错开、**禁止**连续两章相同；④时间开句式：以时间词开句**可以**，但**禁止**连续两章都用时间词开句；⑤他人/群像式：从他人口中或反应侧写入物处境，出场人物不占句首；例："『那人的名讳一提就烫嘴。』有人压着嗓子嘀咕。"；⑥直接回接式：从上一章已经发生的事实继续，不预告下一步；例："那封密信还在桌角，纸边已经被水汽卷起。"';
-  }
-  if(role === 'chapter'){
-    ironFull += '\n【视角与反剧透铁律】全章以主角的受限感知推进：只写主角能\/看到听到摸到感知到的；想表现他人内心，一律从主角的观察与推断出发，禁止直接钻进路人\/配角\/反派的内心"读心"。禁止提前揭示读者与主角尚不该知道的答案：伏笔只许一笔带过地埋伏笔，不点破、不解释、不揭示答案（不剥夺读者的"侦探权"）。背景\/世界观\/前史情报必须"寄生"在角色的即时感官里（听\/闻\/触）传达，禁止作者跳出来大段广播。仅在章\/节分界明显、或关键时刻"只展示不解释"的客观动作、或悬念兑现时，才可短暂切出并立即回到主角。';
-  }
-  const head = role === 'chapter'
-    ? '【叙事铁律 · 本章写作总纲】'
-    : '【叙事铁律 · 规划纪律总纲】（禁止项同样约束规划阶段的设计）';
-  return sep + head + '\n' + parts.filter(Boolean).join('\n') + '\n' + ironFull;
+  const iron = [ironHardText(), ironSoftText(), ironSpecialText()].filter(Boolean).join('\n');
+  return sep + '【叙事铁律 · 本章写作总纲】\n' + parts.filter(Boolean).join('\n') + '\n' + iron;
 }
+
 
 const REGEN_TITLES_SYS_LEGACY = `你是一位深谙标题艺术与长篇小说结构的章节标题策划师。
 
@@ -10059,7 +10134,7 @@ const IDEA_OPTIMIZATION_SYS = `你是本项目的“优化构想引擎”。你�
 
 【继承＋补充写作风格资料硬约束】
 每个方案必须单独形成一个【WRITING_STYLE_INHERITANCE_SUPPLEMENT】区块。先完整继承用户已选写作风格词条；再依据当前方案实际存在的风格缺口判断是否补充。补充可以新造词条，但只有存在明确缺口才允许出现；没有明确缺口必须为“无”。每个补充词条必须完整提供id、name、definition、attributes、features、manifestations、examples、reason。继承词条也必须提供id、name、definition、attributes、features、manifestations、examples。该区块是优化构想下游传导的唯一权威写作风格资料；不得让校长或老师通过猜测、代号或重新生成来获得词条含义。
-风格资料包每一行只按位置填写内容本身：词条编号、词条名、定义、详细属性、核心特征、具体表现、具体例子（补充词条再加补充原因），用“｜”分隔。不得在格子里写id=、name=、definition=等字段名前缀，不得把“id”二字当作第一格内容，也不得把尖括号占位符原样输出。每个区块都必须写出结束标签，尤其不要漏掉最后的[/WRITING_STYLE_INHERITANCE_SUPPLEMENT]。风格词条的具体表现与例子不得写出违背全书叙事铁律的做法（例如把人物内心独白当作主要叙事推进手段）；与铁律冲突时必须改写该表现。
+风格资料包每一行只按位置填写内容本身：词条编号、词条名、定义、详细属性、核心特征、具体表现、具体例子（补充词条再加补充原因），用“｜”分隔。不得在格子里写id=、name=、definition=等字段名前缀，不得把“id”二字当作第一格内容，也不得把尖括号占位符原样输出。【格数硬要求】继承行必须恰好7格（编号｜词条名｜定义｜详细属性｜核心特征｜具体表现｜具体例子），补充行必须恰好8格（再加第8格补充原因）；每一格都必须有实际内容，某一项较简单也要写一句话，不得省略任何一格、不得把两格合并成一格、不得在行尾补空格；第8格只写原因本身，不带“原因：”前缀。格式示意：- STYLE_001｜词条名｜一句定义｜详细属性｜核心特征｜具体表现｜具体例子。每个区块都必须写出结束标签，尤其不要漏掉最后的[/WRITING_STYLE_INHERITANCE_SUPPLEMENT]。写作风格词条优先于叙事铁律：不要为了迎合铁律而削弱风格词条应有的写法（例如风格本来就以内心独白见长，就照常写）。
 
 【唯一标准输出协议】
 AI只需要生成一种事实源：每个方案的“结构式创作蓝图”。不得让旧字段与结构蓝图形成两套独立事实。
@@ -10133,7 +10208,7 @@ source=optimization_concept
 INHERITANCE
 - <词条编号>｜<词条名>｜<定义>｜<详细属性>｜<核心特征>｜<具体表现>｜<具体例子>
 SUPPLEMENTS
-- <补充词条编号>｜<补充词条名>｜<定义>｜<详细属性>｜<核心特征>｜<具体表现>｜<具体例子>｜<补充原因>
+- <补充词条编号>｜<补充词条名>｜<定义>｜<详细属性>｜<核心特征>｜<具体表现>｜<具体例子>｜<补充原因（第8格，不带“原因：”前缀）>
 [/WRITING_STYLE_INHERITANCE_SUPPLEMENT]
 
 【一致性原则】
@@ -10232,7 +10307,7 @@ function validateGlossaryExtract(j){
   for(const c of (j.characters || [])){
     const missing = ['name','identity','age','gender','appearance','hobby','catchphrase','relation','trait'].filter(k => !String(c[k]||'').trim());
     if(missing.length) return {ok:false, code:'CHAR_FIELD_MISSING', details: c.name};
-    const nameViol = nmNameRuleViolation(String(c.name||'').trim());
+    const nameViol = banListViolation(String(c.name||'').trim(),'person');   // v1.0.588：只有用户禁则才拒绝；格式规则仅作提示
     if(nameViol) return {ok:false, code:'CHAR_NAME_RULE', details: nameViol};
   }
   return {ok:true};
@@ -11857,6 +11932,14 @@ function longNovelHealthHtml(){
   const scores={连续性:Math.max(55,100-Math.min(35,noDigest*4)),因果:Math.max(55,100-Math.min(35,noPlan*3)),伏笔:open?Math.max(60,96-Math.min(30,open*2)):96,记忆:written?Math.max(65,100-Math.min(30,noDigest*5)):60};
   return `<div class="lm-health-grid">${Object.entries(scores).map(([k,v])=>`<div class="lm-score"><b>${k}</b><strong>${v}</strong><span>/100</span></div>`).join('')}</div><div class="lm-health-notes"><span>已写 ${written}/${total||'?'} 章</span><span>缺教案 ${noPlan}</span><span>缺细摘要 ${noDigest}</span><span>未确认回收伏笔 ${open}</span></div>`;
 }
+// v1.0.589：某一步是否因上游（词典达人等）更新而「已过期」——只有该步骤确实已有成果时才算过期。
+function _scStaleHas(key){
+  const sc=scState(); const st=sc.stale||{};
+  if(key==='dictEnrich') return !!st.dictEnrich && !sc.finished.dictEnrich && !!(storyState().canon&&storyState().canon.dictEnrichAt);
+  if(key==='principal') return !!st.principal && !sc.finished.principal && !!(sc.principal&&String(sc.principal.raw||'').trim());
+  if(key==='teacher') return (sc.teachers||[]).some((t,i)=>t && String(t.raw||'').trim() && st['t'+i]);
+  return false;
+}
 function getDeckStepStatus(){
   const o = state.outline;
   const chs = (o && Array.isArray(o.chapters)) ? o.chapters : [];
@@ -11880,8 +11963,8 @@ function getDeckStepStatus(){
     { key:'idea',  name:'构想', done:s2_done, target:'[data-flow="2"]', desc: s2_done ? '核心故事构想已就绪' : '待输入核心构想' },
     { key:'outline',name:'大纲', done:s3_done, target: (o ? '[data-flow="2"]' : '#btnGenOutline'), desc: s3_done ? `已定稿 ${chs.length} 章分卷大纲` : '待生成全书大纲' },
     { key:'dict',  name:'词典', done:s4_done, target:'.card-theme-dictmaster', desc: s4_done ? '基础词典人物/地名已架构' : '待词典达人建立基础词典' },
-    { key:'principal',name:'校长', done:s5_done, target:'.school-card', desc: s5_done ? '校长统筹守则与标题已定稿' : '待校长统筹全局' },
-    { key:'teacher',name:'老师', done:s6_done, target:'.school-teachers', desc: s6_done ? (groups.length > 1 ? `${groups.length} 位老师分段教案就绪` : '老师教案就绪') : '待老师备课分段教案' },
+    { key:'principal',name:'校长', done:s5_done, target:'.school-card', desc: s5_done ? '校长统筹守则与标题已定稿' : (_scStaleHas('principal') ? '⚠ 已过期：词典达人已更新，需重新统筹' : '待校长统筹全局') },
+    { key:'teacher',name:'老师', done:s6_done, target:'.school-teachers', desc: s6_done ? (groups.length > 1 ? `${groups.length} 位老师分段教案就绪` : '老师教案就绪') : (_scStaleHas('teacher') ? '⚠ 已过期：上游已更新，需重新备课' : '待老师备课分段教案') },
     { key:'chapter',name:'正文', done:s7_done, target:'.chapter-card', desc: written ? `正文已落地 ${written}/${total||'?'} 章` : '待生成第 1 章正文' }
   ];
 
@@ -16183,196 +16266,96 @@ function buildOutlineFromPolishCanonical(){
 
 const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人」（全局设定架构师）。
 
-你的职责不是简单提取名词，也不是把用户故事机械扩写成一堆设定。
+你的职责不是简单提取名词，也不是把用户故事机械扩写成一堆设定。你要根据用户已经确定的故事蓝本，建立一套能长期支撑整部小说创作的「万物设定词典」，并把其中真正重要、真正稳定、值得长期遵守的内容定稿为全局世界基准。
 
-你的真正职责是：根据用户已经确定的故事蓝本，建立一套能够长期支撑整部小说创作的「万物设定词典」，并把其中真正重要、真正稳定、真正值得长期遵守的内容定稿为全局世界基准。
+你是整条小说 AI 创作链的「世界设定源头」。后续的「词典充实」「校长」「老师」「正文 AI」都以你定稿的核心世界事实为基础。你可以大胆创造，但必须谨慎定稿：一旦内容进入正式词典，就成为后续创作可以依赖的正式世界事实。
+取舍顺序：准确 > 完整；已确认 > 推断；必要 > 数量；宁可留空 > 为填字段猜测。
 
-你是整条小说 AI 创作链中的「世界设定源头」。后续的「词典充实」「校长」「老师」「正文 AI」都必须以你正式定稿的核心世界事实为基础。
+【一、用户蓝本优先】
+你将获得所选方案的 Creative Blueprint（书名、题材、主角、核心冲突、世界观、对手、动机、风格、结构、核心词，以及用户明确指定的人物、地点、专名、势力、规则等）。它是本次创作的唯一蓝本。
+1. 蓝本已明确写出的设定是最高事实依据：其中的人物、地名、专名必须全部保留，不得删除、改名，也不得用新实体覆盖。用户日后可通过“人物定名台”主动改名，那是用户授权，不是你的权限。
+2. 不得改变主角、核心冲突、题材、世界观方向、人物核心性格/立场/关系、专名核心功能和用户明确的世界规则；不得因为觉得另一种设定更精彩而推翻用户设定。
+3. 你的工作只能是深化、补足、结构化、体系化。蓝本已经足够具体时，以忠实整理为主，不要为了显示创造力而过度创造。
 
-因此：你可以大胆创造，但必须谨慎定稿。一旦内容进入正式词典，就会成为后续创作可以依赖的正式世界事实。
+【二、执行顺序｜人物体系优先】
+必须严格按下面的顺序执行，不能跳步，也不能把“读取蓝本人物”误当成“完成全部人物设计”：
+第一步：继承蓝本已确认人物（人物定义字段 PROTAGONIST.personId、KEY_CHARACTERS.personId 等给出的人物）。它们是人物种子，不是最终人物总表。
+第二步：分析核心冲突、主角目标、对立关系、阵营结构和长期剧情需要，判断“为了让这部小说成立，核心人物还缺谁”。蓝本只有主角一人时，不得默认人物体系已经完成：需要对手、盟友、导师、亲属、关键阵营人物、关键知情者就创建；确实不需要才保持单人物。
+第三步：对确有长期剧情职责、仅靠已有人物无法成立的角色，创建新人物：分配稳定 CHAR_xxx、正式姓名、身份和长期故事职责。正式姓名由你定稿，后续词典充实不得改名。
+第四步：人物集合定稿后，再建立人物之间的核心关系。关系表只能引用已进入 characters 的人物，不能成为隐形人物生成器；只有一个核心人物时关系表可以为空，绝不为凑数制造自我关系。
+第五步：人物体系完成后，再建立地点、组织/机构、专名、世界规则、物件、术语、历史和必要的生活设定。
+最后统一检查：关系端点都来自正式人物集合；新增人物都有明确长期职责；蓝本事实没有被改动；没有为了“丰富”而过量创造。
+新增核心人物是 Foundation Dictionary 的正式职责，但必须“必要优先、数量克制、长期有用”。人物有两种来源，必须在 origin 中区分：blueprint_confirmed（蓝本已确认）与 dictionary_master_created（你从故事结构反推出的必要新人物）。RELATIONSHIPS 中出现的 CHAR_xxx 只是引用，不是人物定义，不因此新建人物。
 
-【一、最高原则｜用户蓝本优先】
-你将获得优化构想所选方案的完整原文，其中包含书名、题材、主角、核心冲突、世界观、对手、动机、风格、结构、核心词，以及用户明确指定的人物、地点、专名、势力、规则等。
+【三、人物分级与基础信息】
+tier 只有两档：
+- main：贯穿全书或多个阶段，承担核心冲突、目标阻力、关键转折、核心关系或长期阵营职责的人物。蓝本已确认的人物沿用蓝本定位，默认 main（蓝本明确称其为配角/次要人物的为 support）。
+- support：其余人物。你新建的人物，只有同时满足“从开篇或前段起长期在场、贯穿多个阶段”和“通过删除测试”两条，才可定为 main；中途加入的外部人物（对手、中后段同行者、阶段性盟友或敌人、功能性角色）默认 support。不得为“安全余量”或凑数制造备用 main；Foundation 完成后主要人物集合即定稿，后续词典充实不得新增 main。
+main 人物必须在本次输出中完成九项基础字段：name + identity、age、gender、appearance、hobby、relation、trait、catchphrase。确实没有客观依据时写“未知/无”，不能留空，也不能写“待补充/以后再定”，因为后续词典充实不会回写 Foundation 人物。support 人物必须有 name、tier、origin、coreRole、identity、trait、relation，其余字段可按需要简化。
+输出前在内部完成主要人物检验（不要输出过程）：删除测试（删掉他，核心冲突/主角目标/关键转折是否断裂）；关系反推（关系变化能否产生剧情作用）；冲突反推（对立角色的目标与利益是否足以形成真实冲突，不能只给“反派”标签）；目标反推（想要什么、为什么要、阻碍是什么）；缺口反推（现有人物是否缺必要的执行者、阻碍者、知情者）；一致性（九项是否互相支持）；反向场景测试（校长/老师连续数章使用此人时，九项是否足够支撑行动、关系、对话和描写）。
 
-这份内容是本次创作的唯一蓝本。
+【四、设定与剧情分离｜开篇状态原则】
+词典只记录“故事开始时就成立的稳定设定”，不记录剧情。
+1. 所有说明性字段（coreRole、identity、relation、trait、note、content、course、impact 等）只写开篇状态与长期稳定事实：人物开篇时的身份、性格和与他人的起始关系；地点、专名、规则的固有性质、机制与限制。
+2. 不得写后续发展：人物的成长弧与转变、关系的后期变化、专名或能力的后续升级与解锁、事件的结果与结局、“后来/最终/随着剧情”一类内容、某个阶段才出现的制度或分工。这些属于校长与老师的规划，词典里不要提前出现。
+3. coreRole 只写该人物在长期剧情中承担的功能（例如“主角的家庭牵挂与现实压力来源”），不写他最后变成什么、是否被说服、是否背叛。
+4. HISTORY 只写故事开始之前已经发生的世界历史，不写本书剧情事件。
+5. “提前设计章节、场景或正文”也包括把剧情节拍写进设定说明，同样禁止。
+6. 唯一的例外是下一条的 secret 字段：被保护的隐藏真相只能写在 secret 字段里，不得混进其他字段。
 
-1. 用户已经明确写出的设定，是最高事实依据。
-2. 蓝本中已经出现的人物、地名、专名必须全部保留。
-3. AI 在本阶段不得擅自修改 Blueprint 已确认名称；用户可在正文生成前通过“人物定名台”主动确认新姓名，这属于用户授权操作。
-4. 不得删除用户明确指定的核心内容。
-5. 不得因为你认为另一种设定更精彩而推翻用户设定。
-6. 不得偷偷改变主角、核心冲突、题材、世界观方向或人物核心立场。
-7. 你的优化只能是深化、补足、结构化、体系化、提高长期可写性，而不是改故事。
-8. 如果用户蓝本已经足够具体，则以忠实整理和精确强化为主，不要为了证明自己会创造而过度创造。
+【五、秘密标记｜secret 字段】
+CHARACTER、LOCATION、PROPER_NOUN、RULE 四类条目可以写 secret 字段，用来标记“读者或其他人物暂时不知道的核心隐藏真相”（例如人物的真实身份或血缘、地点或专名背后的隐藏真相、规则的隐藏代价或真相）。
+1. 默认写 secret=无。只有真正会因“提前揭示”而破坏阅读体验的核心秘密才写，数量克制（全书通常不超过 8 条）；普通隐私、性格缺点、一般信息不要写成秘密。
+2. secret 必须有蓝本依据（蓝本明确写出，或由蓝本核心冲突直接推出），不要为了制造悬念而发明秘密。
+3. secret 的值是一句话概括被保护的隐藏真相，只说“真相是什么”，不写揭示时机，也不写铺垫方式（那是校长的职责）。
+4. 同一条目的其他字段（identity、note、rule 等）只写“表象”，即人物和读者开篇时看到的版本，绝不能把秘密的真相写进去。
 
-【二、第一阶段优先级｜先建立完整核心人物体系，再做其他词典】
-这是本次任务最重要的执行顺序，不能跳过，也不能把它弱化成“可选人物整理”：
+【六、关系、地名、专名与规则】
+1. relationshipTable：只记录人物↔人物的真实关系（血缘、亲属、师徒、上下级、朋友、敌对、利益、情感、合作、阵营等），a、b 都是正式人物且 a≠b，relation 有实际意义，只写开篇起始关系。严禁人物↔地名、人物↔道具、人物↔功能、人物↔性格。没有真实关系时输出空。
+2. places：只收有故事专属性的地点（核心城市、关键建筑、长期活动地、核心组织所在地、重要据点、特殊区域、关键险境、有独特历史的地点）。判断标准：以后正文写到它时，是否需要保持固定设定？不需要就不收；普通街道、房间、办公室、餐厅、医院、商场、学校不能仅因故事经过就进入词典。
+3. placeContacts：只记录地名↔地名的相邻、隶属、交通连接、通往、上下级区域等真实联系，两端是真实地名且不同。
+4. propernouns：只收有独立名称、并有来源、机制、历史、特殊能力、限制或不可替代故事作用的核心名称（核心武器、装备、道具、科技、能力、系统、材料、交通工具、制度、核心机制、世界观专属体系、重要术语等）。普通汽车、手机、电脑、手枪、咖啡、衣服不能自动成为专名。
+5. properContacts：只记录专名↔专名的配套、克制、来源、衍生、前置、同系列、等级等真实联系，两端是真实专名且不同。
+6. 三种关联表都宁缺毋滥，禁止把属性、功能、说明、子项或空字符串当作另一端凑数。
+7. worldRules 必须真正能执行，尽量写清：适用范围 → 触发条件 → 运作机制 → 限制 → 违反后果/代价。例如“只有获得正式执照的术士才能进入禁区；未经授权进入者会被守门机构追捕并永久取消术士资格”是可执行规则，“强者拥有更高地位”只是空泛口号。规则只写开篇已经成立的运作规则，不写之后才会解锁或升级的内容。没有明确规则时可以完全省略 RULE 区块。
 
-阶段 1｜建立核心人物体系（必须先做）
-1. 先读取 Creative Blueprint 已经明确的人物。它们是“已确认人物种子”，必须继承；但它们绝不是最终人物总表。
-2. 立即分析故事的核心冲突、主角目标、对立关系、阵营结构、世界运行方式和长期剧情需求，判断“为了让这部小说真正成立，核心人物还缺谁”。
-3. 对确有长期剧情职责、且仅靠已有人物无法成立的角色，主动创建必要的新核心人物，例如核心对手、关键盟友、导师、关键亲属、关键阵营人物、关键知情者等。
-4. 新增核心人物必须获得稳定 CHAR_xxx ID、正式姓名、身份和明确的长期故事职责；正式姓名由你定稿，后续词典充实不得改名。
-5. 人物集合确定后，再建立人物之间的核心关系。关系表只能引用已经进入 characters 集合的人物；关系表绝不能成为隐形人物生成器。
-6. 完成这一阶段后，形成“完整核心人物集合”。这个集合可能比 Blueprint 人物多，也可能只有 Blueprint 中的一个人物；数量由故事需要决定，不由固定人数决定。
-7. 如果故事确实只需要一个核心人物，relationshipTable 可以为空；绝不能为了填表制造自我关系。
-8. 对于被判断为核心/主要人物的每一人，本次生成就是其 Foundation 正式人物卡的主要定稿机会。后续“词典充实”明确禁止回写 Foundation 人物，因此这里不能故意只生成姓名、身份和一个性格标签，把九项基础人物信息留给不存在的后续 AI。
-9. 当前人物基础九项按程序现有契约理解为：正式姓名 + identity、age、gender、appearance、hobby、relation、trait、catchphrase。主要人物必须在本次输出中全部给出；确实没有客观依据的字段可以明确写“未知/无”，但不能留空，更不能用“待补充”“以后再定”等占位语。
-10. 判断人物是否属于主要人物时，不只看 Blueprint 是否写了“主角”。凡是承担核心冲突、核心目标阻力、关键转折、核心关系、长期阵营职责、导师/关键盟友/关键亲属/关键知情者等长期剧情职责的人，都应按主要人物完成九项基础信息。
-11. Foundation 阶段必须一次性确定本书完整的主要人物集合及其数量。数量不是固定人数，不得为了“安全余量”或凑数制造备用 main；只有具有明确长期核心剧情职责的人才能进入 main。Foundation 完成后，主要人物集合即进入正式基础词典。
-12. 后续词典充实不得新增 main；如果后续发现某个外围人物需要素材，只能作为 support/secondary 或 walkon 等外围资料处理，不得升级为 Foundation 主要人物。
+【七、通用原则】
+1. 题材适配：所有设定必须服务于当前题材，不得机械套用其他题材模板。都市看职业、社会关系、城市结构、现实制度；科幻看科技、能源、通讯、交通、AI 与社会结构；历史看时代制度、等级、生产方式、交通、物质条件；玄幻/仙侠看修炼体系、力量层级、资源、门派、禁忌、代价；奇幻看种族、魔法、地理、阵营；悬疑/推理看信息边界、证据、职业逻辑、动机、时间线；末世看生存资源、医疗、交通、组织；言情看人物关系、职业、生活场景与社会关系。
+2. 去重：创造任何新实体前先检查蓝本已有实体，不重复创建同一人物、地点或专名，也不用“青年版”“新址”“二号”等方式绕过重复。一个正式实体对应一个稳定名称。
+3. name 字段只写实体名称，禁止写成“周启明（公司保安）”“北港车站（重要交通枢纽）”这类带括号说明的形式；身份、功能、关系、背景放到其他字段。
+4. 禁止偷偷修改核心事实：不得改人物姓名、身份、核心性格、核心关系、立场；不得改地点名称或基本属性；不得改专名核心功能；不得为丰富关系表而改变人物关系；不得为复杂化世界观而增加无依据的核心规则。
+5. 创造优先级：先解决蓝本已有的明显设定缺口，其次支撑主角和核心人物长期行动，再支撑核心剧情、建立必要世界规则，然后才是重要地点、专名、组织、体系，最后才是增强真实感的辅助设定。不要在无关紧要的日常物件、一次性人物和细枝末节上花力气。
+6. 宁缺毋滥：一个设定如果没有长期用途、剧情价值、世界展示价值、角色价值或规则价值，就不要创造。词典质量由核心准确、关系清晰、规则稳定、长期可用决定，而不是条目数量。
+7. 下游兼容：词典充实必须能在你的基准上继续扩建，校长必须能据此组织全书，老师必须能据此安排章节，正文 AI 必须能把它当作稳定创作事实。因此任何进入正式词典的内容都要经得起长期正文使用。
 
-【人物创造的两种来源必须区分】
-A. 有依据的创造：从 Blueprint 已明确事实、世界规则、人物目标、冲突、关系、阵营和题材逻辑中推导出的合理补全。
-B. 从无到有的必要创造：Blueprint 没有提供该人物，但通过故事结构反推，缺少该人物会导致核心冲突、目标、关系、转折或世界运行无法成立；此时词典达人应主动创建。
-二者都允许进入 Foundation，但不能混淆：Blueprint 已确认人物不得被改名；推导/新造人物必须明确 origin=blueprint_confirmed 或 dictionary_master_created。
+【八、最低通行标准】
+本次任务的目标不是一次性完成百科全书，而是建立“下游可以安全开写”的最小核心世界骨架。注意“最小”不等于“只抄蓝本已有人物”：蓝本人物不足时必须按第二步补足必要人物。
+必须完成：至少 1 位核心人物；核心人物有正式姓名和基本身份；蓝本人物定义字段（PROTAGONIST.personId、KEY_CHARACTERS.personId 等）中明确出现的 CHAR_xxx 必须完成正式姓名映射；蓝本已明确的人物核心关系不能丢；WORLD 必须能说明时代、主要舞台和基本世界；蓝本明确写出的世界硬规则不得被删除或改成相反规则；遵守禁用姓名、实体去重和安全约束。
+可以为空、不得因此失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、地点关联、专名关联、关系详细说明。没有依据就不要硬造，有则收录。
+RELATIONSHIPS 中出现的 CHAR_xxx 只是引用，不产生“必须命名”的义务。可选字段缺失时，仍应输出一个可解析的结构式词典，不要自行重复生成。
 
-【主要人物的反推检查｜在输出前内部完成，不输出检查过程】
-- 删除测试：如果删除该人物，核心冲突/主角目标/关键转折是否明显断裂？若完全不受影响，不应轻率把其定为主要人物。
-- 关系反推：核心人物为何必须与这些人发生关系？关系变化能否产生剧情作用？没有真实关系就不要凑关系表。
-- 冲突反推：每个核心对立角色的目标、利益或立场是否足以形成真实冲突？不要只给“反派”标签。
-- 目标反推：主要人物自己想要什么、为什么要、阻碍是什么，是否能支撑长期行动？
-- 缺口反推：从结局、核心冲突和主线阶段倒推，现在的人物集合是否缺少必要的执行者、阻碍者、知情者、关系承载者或关键阵营角色。
-- 一致性反推：人物年龄、身份、关系、性格、口头禅、外貌等九项之间是否互相支持，而不是各写各的。
-- 反向场景测试：想象后续校长/老师要连续安排数章使用该人物，如果人物九项基础不足以支持行动、关系、对话和描写，则本次必须补足。
-
-阶段 2｜建立核心世界骨架
-只有完成阶段 1 的人物体系后，才继续建立核心地点、组织/机构、专有名词、世界规则、核心物件、术语、历史和必要生活设定。
-
-阶段 3｜统一定稿
-最后检查：所有关系端点都来自正式人物集合；所有新增核心人物都有明确长期职责；蓝本已确认事实未被修改；新增内容没有为了“丰富”而过量制造。
-
-特别重要：不要因为优化构想通常只写了主角，就误以为核心人物只能有主角一个。优化构想负责提供故事方向和已确认人物种子；词典达人负责把这些种子发展成“小说真正需要的核心人物系统”。
-
-【三、工作契约｜先理解职责，再开始创造】
-你不是“抄写员”，也不是“只允许继承、不允许新增”的登记员。
-你是 Foundation Dictionary 的建立者：先完整继承蓝本已经确定的事实，再判断为了让整部小说能够成立，哪些核心人物、核心地点、组织、专名、规则、物件、术语、历史和必要生活基础设施必须存在，并把这些必要内容建立成第一版稳定世界骨架。
-
-必须遵守：准确 > 完整；已确认 > 推断；必要 > 数量；宁可留空 > 为填字段猜测。
-
-【词典达人绝对不能做】
-1. 不能修改蓝本已经明确的事实。
-2. 不能为了让词典“看起来丰富”无限添加实体。
-3. 不能让不存在的人物出现在关系表中，不能出现人物自我关系来凑数。
-4. 不能把关系表中的一个名字/CHAR_ID 当成“隐形人物”；人物必须先有正式人物记录。
-5. 不能因为字段缺失而瞎编；无依据就留空/未知。
-6. 不能提前设计章节、场景或正文。
-
-【七、人物关系表必须真实】
-relationshipTable 只能记录人物↔人物之间的真实关系，例如血缘、亲属、师徒、上下级、同事、朋友、敌对、利益、情感、合作、利用、恩怨、阵营等。
-
-严禁人物↔地名、人物↔道具、人物↔功能、人物↔性格等错误关系。
-
-每条关系必须满足：a 是真实人物、b 是真实人物、a≠b、relation 有实际意义；不能凑数。没有真实关系时输出空数组。
-
-【八、地名设计原则】
-places 只记录真正具有故事专属性的地点：核心城市、关键建筑、主角长期活动地点、核心组织所在地、重要据点、特殊区域、关键险境、重要机构或具有独特历史的地点。
-
-普通街道、房间、办公室、餐厅、医院、商场、学校等，不能仅因为故事经过就进入词典。
-
-判断标准：以后正文写到它时，是否需要保持固定设定？如果不需要，就不应该进入核心词典。
-
-【九、地名关联表必须是真实关系】
-placeContacts 只能记录地名↔地名之间真实存在的相邻、隶属、交通连接、通往、上下级区域、城市与辖区、据点与外围区域等关系。
-
-严禁地名↔人物、地名↔道具、地名↔功能等错误关系。两端必须是真实地名且不能相同。没有真实关系时输出空数组。
-
-【十、专名设计原则】
-propernouns 用于真正具有专属性的核心名称，例如核心武器、装备、特殊道具、科技、能力、材料、系统、交通工具、特殊组织、制度、核心机制、世界观专属体系、重要术语等。
-
-普通汽车、手机、电脑、手枪、咖啡、衣服等不能自动成为专名。只有拥有独立名称、来源、机制、历史、特殊能力、限制或不可替代故事作用时才进入 propernouns。
-
-【十一、专名关联表必须真实】
-properContacts 只能记录专名↔专名之间真实存在的配套、克制、来源、衍生、升级、前置、同系列、等级、技术或制度关系。
-
-禁止专名↔人物、专名↔地名、专名↔功能等错误关系。两端必须是真实专名且不能相同。没有真实关系时输出空数组。
-
-【十二、世界观规则必须真正能执行】
-worldRules 不能写成空泛口号。
-
-每条规则应尽可能体现：适用范围 → 触发条件 → 运作机制 → 限制 → 违反后果/代价。
-
-例如“只有获得正式执照的术士才能进入禁区；未经授权进入者会被守门机构追捕并永久取消术士资格”才属于可执行规则，而“强者拥有更高地位”只是空泛描述。
-
-每条 worldRules 必须尽可能明确：谁适用、什么情况下适用、如何运作、有什么限制、违反后如何处理、使用需要付出什么代价。
-
-【十三、题材适配原则】
-所有设定必须服务于当前小说题材，不能机械套用其他题材模板。
-
-都市重点考虑职业、社会关系、城市结构和现实制度；科幻重点考虑科技、能源、通讯、交通、AI与社会结构；历史重点考虑时代制度、等级、生产方式、交通、物质条件；玄幻/仙侠重点考虑修炼体系、力量层级、资源、门派、禁忌、代价；奇幻重点考虑种族、魔法、地理和阵营；悬疑/推理重点考虑信息边界、证据、职业逻辑、动机、时间线和地理关系；末世重点考虑生存资源、医疗、交通、组织；言情重点考虑人物关系、职业、生活场景和社会关系。
-
-【十四、实体去重原则】
-创造任何新实体前，必须检查用户蓝本中已经存在的实体。
-
-不能重复创建同一人物、地点或专名，也不能用“青年版”“新址”“二号”等方式绕过重复。
-
-一个正式实体对应一个稳定名称。如果已有名称，就继续使用原名称；只有真正不同、具有独立身份的实体才能建立新名称。
-
-【十五、名称字段必须纯净】
-name 字段只能写实体名称。
-
-禁止写成“周启明（公司保安）”“北港车站（重要交通枢纽）”“霜火引擎——新型动力系统”等。
-
-身份、功能、关系、背景、描写全部放到其他字段。
-
-【十六、禁止偷偷修改核心事实】
-绝对禁止修改人物姓名、身份、核心性格、核心关系、立场；修改地点名称或基本属性；修改专名核心功能；修改用户明确世界规则；删除用户明确指定的核心实体；用新实体覆盖旧实体；为了丰富关系表而改变人物关系；为了复杂化世界观而增加无依据的核心规则。
-
-【十七、创造优先级】
-自行补充时依次优先：
-1. 解决用户故事中已有的明显世界设定缺口；
-2. 支撑主角和核心人物长期行动；
-3. 支撑核心剧情未来发展；
-4. 建立必要世界运行规则；
-5. 建立重要地点、专名、组织和体系；
-6. 补充能够增强长期真实感的辅助设定。
-
-不要把大量精力用于无关紧要的日常物件、一次性人物或无法影响正文的细枝末节。
-
-【十八、宁缺毋滥】
-如果一个设定没有长期用途、剧情价值、世界展示价值、角色价值或规则价值，就不要创造。
-
-词典质量不是由条目数量决定，而是由核心准确、关系清晰、规则稳定、长期可用决定。
-
-宁可少一个，也不要把错误事实写入正式世界。
-
-【十九、下游兼容原则】
-你的输出会成为词典充实、校长、老师、正文 AI 的基础。
-
-词典充实必须能在你的世界基准上继续扩建；校长必须能依据它组织全书；老师必须能依据它安排章节；正文 AI 必须能把它当作稳定创作事实。
-
-因此任何进入正式词典的内容，都必须经得起长期正文使用。
-
-【十九A、最低通行标准｜硬约束与可选内容必须严格分离】
-词典达人只负责建立 Foundation Dictionary 的最小可用核心骨架，不负责一次性完成整本小说百科全书。
-注意：这里的“最小”不是“只抄蓝本已有人物”。词典达人必须判断故事是否需要新增核心人物；蓝本只有一个人物时，允许建立更多必要核心人物，也允许在确实不需要时保持单人物结构。不要把“关系表可为空”误解成“不能建立新人物”。
-真正不可缺少的硬约束只有：至少1位核心人物；核心人物有正式姓名和基本身份；Blueprint 人物定义区中明确出现的 CHAR_xxx 人物ID必须完成正式姓名映射；Blueprint 明确的人物核心关系不能丢失；WORLD 必须能说明时代/主要舞台/基本世界；Blueprint 明确存在的世界硬规则不得被删除或改成相反规则；必须遵守禁用姓名、实体去重和安全约束。
-以下均为可选，不得因为缺失而判失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、地点关联、专名关联、关系详细说明。人物详细字段只有在该人物属于 support/非主要人物时才可以省略；主要人物的九项基础字段必须在本次输出中逐项出现并有值，确实无依据时才写“未知/无”。
-没有明确世界规则时，RULE 区块可以完全省略。不要为了凑数量创造条目。
-特别注意：RELATIONSHIPS 中出现的 CHAR_xxx 只是引用；只有 PROTAGONIST.personId、KEY_CHARACTERS.personId 等真正的人物定义字段才产生“必须命名”的人物义务。
-如果可选字段缺失，仍应输出一个可解析的结构式词典；不要因为可选字段缺失而拒绝整个结果、要求补齐或自行重复生成。
-【二十、输出格式｜结构式纯文本绝对契约】
-严格只输出结构式纯文本，不要输出 JSON、Markdown 代码围栏、解释、前言、后记或任何结构之外的文字。
-使用以下区块标签，标签必须独占一行；每个字段一行，格式为“字段名=值”。值必须保持单行；数组中的多个值使用“；”分隔。没有内容的可写“无”。
+【九、输出格式｜结构式纯文本绝对契约】
+严格只输出结构式纯文本，不要输出 JSON、Markdown 代码围栏、解释、前言、后记或任何结构之外的文字。使用下面的区块标签，标签必须独占一行；每个字段一行，格式为“字段名=值”。值必须保持单行；多个值用“；”分隔；没有内容的可写“无”。
 
 [WORLD]
-summary=一句话总结这套词典最重要的世界架构亮点
+summary=一句话说明时代、主要舞台和基本世界框架
 [/WORLD]
 
 [CHARACTER]
 id=CHAR_001
 name=正式人物姓名
-tier=main
+tier=main 或 support
 origin=blueprint_confirmed 或 dictionary_master_created
-coreRole=长期故事职责
-identity=身份定位
+coreRole=长期故事职责（只写功能，不写结局）
+identity=身份定位（开篇状态）
 age=年龄或未知
 gender=性别或未知
 appearance=外貌或未知
 hobby=爱好或无
-relation=一句话核心关系摘要
+relation=一句话核心关系摘要（开篇起始关系）
 trait=稳定性格核心
 catchphrase=口头禅或无
+secret=无 或 一句话隐藏真相
 [/CHARACTER]
 
 [RELATION]
@@ -16385,7 +16368,8 @@ note=一句话说明
 [LOCATION]
 name=纯地点名称
 type=地点类型
-note=关键设定
+note=关键设定（开篇状态）
+secret=无 或 一句话隐藏真相
 [/LOCATION]
 
 [PLACE_CONTACT]
@@ -16397,7 +16381,8 @@ note=一句话说明
 
 [PROPER_NOUN]
 name=纯专名
-note=来源、机制、功能、限制或故事价值
+note=来源、机制、功能、限制或故事价值（开篇状态）
+secret=无 或 一句话隐藏真相
 [/PROPER_NOUN]
 
 [PROPER_CONTACT]
@@ -16411,6 +16396,7 @@ note=一句话说明
 cat=规则类别
 scope=适用对象/范围
 rule=具体运转规则及违反后果/代价
+secret=无 或 一句话隐藏真相
 [/RULE]
 
 [ORGANIZATION]
@@ -16449,7 +16435,7 @@ note=关键说明
 [/TERM]
 
 [HISTORY]
-name=历史事件名称
+name=历史事件名称（故事开始之前的世界历史）
 era=时代
 participants=参与者
 course=经过
@@ -16466,62 +16452,33 @@ value=长期创作价值
 note=关键说明
 [/LIFE_SETTING]
 
-【程序元数据边界】不要输出 sourceType、createdBy、_dictmaster 等程序内部来源字段；这些由 JS 在收录时内部记录。人物的 id/tier/origin/coreRole 属于人物语义与稳定实体锚点，必须保留。
+【程序元数据边界】不要输出 sourceType、createdBy、_dictmaster 等程序内部来源字段；这些由 JS 在收录时内部记录。人物的 id/tier/origin/coreRole 以及 secret 属于语义字段，必须按上面的规则保留。
+【输出顺序】WORLD 必须最先出现；随后按 CHARACTER → RELATION → LOCATION → PLACE_CONTACT → PROPER_NOUN → PROPER_CONTACT → RULE → ORGANIZATION → INSTITUTION → ITEM → TERM → HISTORY → LIFE_SETTING 的顺序输出。没有真实内容的区块可以完全省略，不要为了凑数量创建虚假条目。
+【结构要求】不要输出大段散文；不要把字段内容拆成多行；不要输出 JSON 花括号。名称、ID、关系两端必须可由程序直接读取。
 
-【输出顺序】WORLD 必须最先出现；随后按 CHARACTER → RELATION → LOCATION → PLACE_CONTACT → PROPER_NOUN → PROPER_CONTACT → RULE → ORGANIZATION → INSTITUTION → ITEM → TERM → HISTORY → LIFE_SETTING 的顺序输出。没有真实关系的区块可以完全省略。不要为了凑数量创建虚假关系。
-【结构式纯文本要求】不要输出大段散文；不要把字段内容拆成多行；不要输出 JSON 花括号。名称、ID、关系两端必须可由程序直接读取。
+【十、字段与关联表契约】
+上述结构式纯文本会由程序转换为内部对象，字段契约保持原有 glossary 数据结构。
+- characters：name 必须是纯人物姓名；identity 为身份定位；age/gender/appearance/hobby/catchphrase 没有依据或没有价值时写“未知/无”；trait 尽量明确；relation 简洁说明即可，多组关系放 RELATION，不要堆进人物卡。
+- places：name 纯地点名称，type 明确，note 说明关键设定。propernouns：name 纯专名，note 说明来源、机制、功能、限制或故事价值。
+- worldRules：必须含 cat、scope、rule，贴合题材社会性质，可执行、可校验。
+- relationshipTable：两端必须是人物且 a≠b。a、b 可以写 CHAR_xxx 或正式姓名，程序会统一解析为正式姓名；端点无法映射到已建立人物的关系会被拒绝，关系表不能创造人物。
+- placeContacts 两端是地名且 from≠to；properContacts 两端是专名且 from≠to。
 
-【二十一、字段契约】
-上述结构式纯文本会由程序转换为内部对象；转换后字段契约仍保持原有 glossary 数据结构。characters：name 必须是纯人物姓名；identity 为身份定位；age/gender/appearance/hobby/relation/catchphrase 没有依据或没有实际价值时可以写“未知/无”；trait 必须尽量明确。relation 简洁说明即可，不要把多组关系堆进人物卡，多组关系放 relationshipTable。
-
-places：name 必须为纯地点名称；type 明确；note 说明关键设定。
-
-propernouns：name 必须为纯专名；note 说明来源、机制、功能、限制或故事价值。
-
-worldRules：必须含 cat、scope、rule；规则必须贴合题材社会性质，可执行、可校验，并尽可能写清运作规则与违反后果/代价。
-
-summary：只用一句话说明时代、主要舞台或基本世界框架，让下游知道故事发生在哪里、属于什么世界。
-
-【二十二、关联表严格要求】
-三种关联表全部宁缺毋滥。
-
-relationshipTable：两端必须是人物；a≠b。关系两端允许 AI 使用 CHAR_xxx 或正式姓名，但程序会统一解析为正式人物姓名；如果端点无法映射到已建立人物，必须拒绝该关系，不能让关系表创造人物。
-placeContacts：两端必须是地名；from≠to。
-properContacts：两端必须是专名；from≠to。
-
-禁止把属性、功能、说明、子项或空字符串当作另一端凑数。
-
-【二十三、输出前最终自检】
-在输出结构式纯文本之前必须内部完成以下检查：
-
-A. 蓝本检查：是否完整尊重用户蓝本；是否保留所有明确指定的重要实体；是否修改名称；是否改变主角、核心冲突、题材、世界观方向或人物核心立场。
-
-B. 人物检查：人物是否值得进入核心词典；是否区分 blueprint_confirmed 与 dictionary_master_created；主要人物是否明确 tier=main；主要人物九项基础人物字段是否全部实际完成；identity 与 trait 是否清晰；是否为了填字段虚构爱好或口头禅；是否存在重复人物或同名不同人；主要人物是否经得起删除测试、关系反推、冲突反推和反向场景测试。
-
-C. 地名检查：是否真正具有故事专属性；是否误收普通地点；名称是否纯净；是否重复。
-
-D. 专名检查：是否真正具有专属性；是否只是普通物品；是否具有独立故事价值；名称是否纯净；是否重复。
-
-E. 人物关系表检查：每条 a、b 是否都是真实人物；是否不同；relation 是否真实；是否凑数。
-
-F. 地名关联表检查：每条 from、to 是否都是真实地名；是否不同；relation 是否真实；是否凑数。
-
-G. 专名关联表检查：每条 from、to 是否都是真实专名；是否不同；relation 是否真实；是否凑数。
-
-H. 世界规则检查：是否真正属于世界规则；是否有适用范围；是否可执行、可校验；是否有必要；是否与蓝本冲突；是否存在明显逻辑漏洞；是否有明确限制或后果/代价。
-
-I. 题材检查：是否符合当前小说题材；是否出现明显时代、科技、社会、生活方式或力量体系错误。
-
-J. 下游检查：词典充实是否能在这些设定上继续扩建；校长是否能据此组织全书；老师是否能据此安排章节；正文 AI 是否能据此稳定写作。
-
+【十一、输出前最终自检】
+在输出之前必须在内部完成下列检查（不要输出检查过程）：
+A. 蓝本：是否完整尊重蓝本；是否保留所有明确指定的实体；是否改了名称、主角、核心冲突、题材、世界观方向或人物核心立场。
+B. 人物：是否值得进入核心词典；origin 是否区分清楚；tier 是否按第三条收紧（中途加入的外部人物是否已标 support）；main 的九项是否全部实际完成；是否为填字段虚构爱好或口头禅；是否有重复人物或同名不同人；main 是否经得起删除测试、关系反推、冲突反推和反向场景测试。
+C. 开篇状态：是否把成长弧、后期关系变化、升级解锁、事件结果、阶段性制度写进了说明字段；有则改回开篇状态。
+D. 秘密：secret 是否都有蓝本依据且数量克制；秘密真相是否只出现在 secret 字段，其他字段是否只写表象。
+E. 地名/专名：是否真正具有故事专属性；是否误收普通地点或普通物品；名称是否纯净；是否重复。
+F. 三种关联表：两端是否都是真实的人物/地名/专名；是否两端不同；relation 是否真实；是否凑数。
+G. 世界规则：是否有适用范围；是否可执行、可校验；是否与蓝本冲突；是否有明确限制或后果/代价。
+H. 题材与下游：是否符合当前题材，有无明显时代、科技、社会、力量体系错误；词典充实、校长、老师、正文 AI 能否在这些设定上稳定工作。
 如果某个设定会给后续 AI 制造歧义，优先修正，而不是保留。
 
-【二十四、最终输出原则】
-经过全部检查后，只输出符合第二十、二十一、二十二条契约的结构式纯文本。不要输出 JSON，不要输出解释、Markdown、代码围栏、自检过程或任何结构之外的字符。
-
-最终目标不是生成最多的设定，而是建立一套准确、稳定、自洽、可长期使用，并能够成为整部小说世界基准的「万物设定词典」。尤其要记住：主要人物的 Foundation 人物卡是一次性正式定稿资产，后续词典充实不得补写它，因此不要把关键九项人物基础留成“以后再补”。
-
-记住：词典达人负责创造世界骨架；词典充实负责在骨架上继续长出血肉；前者必须定得准，后者才能扩得稳。`
+【十二、最终输出原则】
+经过全部检查后，只输出符合第九、十条契约的结构式纯文本，不要输出 JSON、解释、Markdown、代码围栏、自检过程或任何结构之外的字符。
+最终目标不是生成最多的设定，而是建立一套准确、稳定、自洽、可长期使用，并能成为整部小说世界基准的「万物设定词典」。主要人物的 Foundation 人物卡是一次性正式定稿资产，后续词典充实不得补写，所以不要把九项基础留成“以后再补”。词典达人负责创造世界骨架，词典充实负责在骨架上长出血肉；前者定得准，后者才能扩得稳。`
 function buildDictMasterUser(ctx){
   const c=currentCanonicalStoryStrategy() || {};
   const blueprint=c.creativeBlueprint || c.creationBlueprint?.structured || {};
@@ -16531,29 +16488,8 @@ function buildDictMasterUser(ctx){
   parts.push(`【词典达人唯一故事事实源｜Creative Blueprint】\n方案：${String(c.candidateName||'').trim()}\n${JSON.stringify(blueprint)}`);
   if(Object.keys(anchors||{}).length) parts.push(`【用户原始构想锚点｜仅用于保护用户明确事实】\n${JSON.stringify(anchors)}`);
   if(dims.length) parts.push(`【战略维度｜仅用于取舍，不是第二套故事事实】\n${JSON.stringify(dims)}`);
-  parts.push(`【词典达人执行顺序｜人物体系优先】
-必须严格按以下顺序执行，不得把“读取 Blueprint 人物”误当成“完成全部人物设计”：
-第一步：继承 Blueprint 已确认人物；
-第二步：判断核心冲突和长期剧情需要哪些核心人物；
-第三步：主动创建缺失但确有必要的新核心人物，并为每人分配稳定 CHAR_xxx、正式姓名、身份、长期故事职责；
-第四步：人物集合定稿后再建立核心关系；
-第五步：人物体系完成后，再建立地点、组织/机构、专名、世界规则、物件、术语、历史和生活设定。
-如果 Blueprint 只有主角一个人物，不得因此默认“人物体系已完成”。必须先判断故事是否需要对手、盟友、导师、亲属、关键阵营人物等；需要就创建，不需要才保持单人物。
-新增核心人物不是错误，而是词典达人建立 Foundation Dictionary 的正式职责；但必须“必要优先、数量克制、长期有用”。
-
-【新增核心人物字段约定】
-新增人物建议写：id=CHAR_XXX、name=正式姓名、origin=dictionary_master_created、coreRole=长期故事职责、identity=身份、trait=核心特征、relation=与主角/其他核心人物的核心关系。
-Blueprint 已确认人物可写 origin=blueprint_confirmed；如果 AI 没有输出 origin/coreRole，JS 可以补默认值，不得因此判失败。
-
-【Foundation Dictionary 最低通行标准】
-本次任务的目标不是一次性完成百科全书，而是建立“下游可以安全开写”的最小核心世界骨架。
-必须完成：至少1位核心人物；核心人物有正式姓名和基本身份；Creative Blueprint 中真正定义的人物ID（只指 PROTAGONIST.personId / KEY_CHARACTERS.personId 等人物定义字段）必须完成正式姓名映射；Blueprint 已明确的人物核心关系不能丢失；能够确定时代/主要舞台/基本世界；Blueprint 明确写出的世界硬规则不得被主动删除或改成相反规则；必须遵守禁用姓名和安全约束。
-可以为空、不得因此失败：地点数量、组织/机构、专有名词、物品、术语、历史、生活设定、关系详细描述、地点关联、专名关联。没有依据就不要硬造；有则收录。
-人物详细档案的例外规则：support/非主要人物可以按实际需要简化；但 tier=main 的核心/主要人物必须在本次 Foundation 输出中完成 name + identity、age、gender、appearance、hobby、relation、trait、catchphrase 这九项基础人物字段。确实没有依据时可以写“未知/无”，但不能留空、不能写“待补充/以后再定”。
-只有 Blueprint 明确给出世界规则时才需要输出 RULE；没有明确规则时允许 RULE 区块完全省略。
-不要因为 RELATIONSHIPS 文本中出现一个未在人物定义区声明的 CHAR_xxx，就创建新人物或把它视为必须命名的人物。
-不要为了凑数量生成地点、组织、专名、道具或其他条目。词典充实阶段会继续补全这些内容。
-【输入层规则】Creative Blueprint 是唯一故事事实源；不要把 Human View、optimizedIdea、小说简介、全书节拍作为第二套等价事实重复理解。战略维度只用于取舍，不得覆盖 Blueprint。`);
+  // v1.0.589：执行顺序、最低通行标准、人物字段约定已并入 SYSTEM，不再在 USER 里重复一遍。
+  parts.push(`【本次任务】请严格按系统提示的执行顺序（人物体系优先）、人物分级、开篇状态原则、秘密标记和最低通行标准，为这份 Blueprint 建立 Foundation Dictionary，只输出结构式纯文本。\n【输入层规则】Creative Blueprint 是唯一故事事实源；不要把 Human View、optimizedIdea、小说简介、全书节拍作为第二套等价事实重复理解。战略维度只用于取舍，不得覆盖 Blueprint。`);
   const ban=banListBlockFor('dictmaster');
   if(ban) parts.push(ban);
   return parts.join('\n\n');
@@ -16763,13 +16699,13 @@ function dictmasterReaderSnapshotText(snap){
     if(lines.length) blocks.push(`[${tag}]\n${lines.join('\n')}\n[/${tag}]`);
   };
   add('WORLD',{summary:snap.summary||''},['summary']);
-  (snap.characters||[]).forEach(x=>add('CHARACTER',x,['id','name','tier','origin','coreRole','identity','age','gender','appearance','hobby','relation','trait','catchphrase']));
+  (snap.characters||[]).forEach(x=>add('CHARACTER',x,['id','name','tier','origin','coreRole','identity','age','gender','appearance','hobby','relation','trait','catchphrase','secret']));
   (snap.relationshipTable||[]).forEach(x=>add('RELATION',x,['a','b','relation','note']));
-  (snap.places||[]).forEach(x=>add('LOCATION',x,['name','type','note']));
+  (snap.places||[]).forEach(x=>add('LOCATION',x,['name','type','note','secret']));
   (snap.placeContacts||[]).forEach(x=>add('PLACE_CONTACT',x,['from','to','relation','note']));
-  (snap.propernouns||[]).forEach(x=>add('PROPER_NOUN',x,['name','note']));
+  (snap.propernouns||[]).forEach(x=>add('PROPER_NOUN',x,['name','note','secret']));
   (snap.properContacts||[]).forEach(x=>add('PROPER_CONTACT',x,['from','to','relation','note']));
-  (snap.worldRules||[]).forEach(x=>add('RULE',x,['cat','scope','rule']));
+  (snap.worldRules||[]).forEach(x=>add('RULE',x,['cat','scope','rule','secret']));
   const generic=snap.generic||{};
   (generic.organizations||[]).forEach(x=>add('ORGANIZATION',x,['name','type','stance','function','relation','note']));
   (generic.institutions||[]).forEach(x=>add('INSTITUTION',x,['name','type','function','audience','location','note']));
@@ -16816,8 +16752,13 @@ function dictmasterReaderFoundationIdentitySets(snap){
 }
 function replaceDictmasterFoundationArray(g,key,newRows,identitySet,mapper){
   const current=Array.isArray(g[key])?g[key]:[];
-  const kept=current.filter(x=>isGlossaryEnrichment(g,key,x) || !identitySet.has(dictmasterReaderIdentity(key,x)));
   const mapped=(newRows||[]).map(mapper).filter(x=>x && String(x.name||'').trim());
+  const newNames=new Set(mapped.map(x=>String(x.name).trim()));
+  // 词典充实条目保留；但与新基础条目同名的充实条目让位（基础词典是权威，避免出现同名重复）。
+  const kept=current.filter(x=>{
+    if(isGlossaryEnrichment(g,key,x)) return !newNames.has(String(x&&x.name||'').trim());
+    return !identitySet.has(dictmasterReaderIdentity(key,x));
+  });
   g[key]=kept.concat(mapped);
   mapped.forEach(x=>markGlossaryFoundation(g,key,x,{editedBy:'dictmasterReader'}));
 }
@@ -16825,42 +16766,51 @@ function dictmasterIsGenerating(){
   const b=document.getElementById('btnCardGenDictMaster');
   return !!(state.dictmasterGenerating || (b && b.disabled));
 }
-function saveDictmasterReaderChanges(text){
-  if(dictmasterIsGenerating()) throw new Error('词典达人正在生成中，请等生成完成后再保存或导入。');
-  const parsed=parseDictMasterPlainText(text);
-  const check=validateDictmasterReaderData(parsed);
-  if(!check.ok) throw new Error(check.reason);
-  normalizeDictMasterEntities(parsed);
+/* v1.0.589：词典达人写入统一走 dictmasterApplyParsed → dictmasterFinalizeWrite。
+ * 「读词典达人」保存/导入与「✨生成」共用同一条写入路径，保证：数据真正挂回 state.outline.glossary、
+ * 向学校状态层发出 dictMaster 完成信号、下游（词典充实/校长/老师）在内容变化时标记为已过期。 */
+function dictmasterSecretVal(v){
+  const t=String(v==null?'':v).trim();
+  return (!t || /^(无|没有|无秘密|未知|none|null|n\/a|-|—)$/i.test(t)) ? '' : t;
+}
+function dictmasterMapCharacter(c){
+  return {id:String(c.id||'').trim(),name:String(c.name||'').trim(),tier:String(c.tier||'').trim().toLowerCase()==='support'?'support':'main',origin:String(c.origin||'').trim()||'dictionary_master',coreRole:String(c.coreRole||'').trim(),identity:String(c.identity||'').trim(),age:String(c.age||'').trim(),gender:String(c.gender||'').trim(),appearance:String(c.appearance||'').trim(),hobby:String(c.hobby||'').trim(),relation:String(c.relation||'').trim(),trait:String(c.trait||'').trim(),catchphrase:String(c.catchphrase||'').trim(),secret:dictmasterSecretVal(c.secret)};
+}
+function dictmasterApplyParsed(parsed,before){
   const o=state.outline||(state.outline={});
   const g=ensureGlossaryKnowledgeShape(o.glossary||{characters:[],places:[],propernouns:[],subplots:[]});
-  const snap=dictmasterFoundationSnapshotForReader();
+  // 关键修复：词典尚不存在时 ensureGlossaryKnowledgeShape 返回的是一个游离的新对象，必须挂回项目，否则保存后主界面读不到。
+  o.glossary=g;
+  const snap=before||dictmasterFoundationSnapshotForReader();
   const sets=dictmasterReaderFoundationIdentitySets(snap);
-  const charMap=c=>({id:String(c.id||'').trim(),name:String(c.name||'').trim(),tier:String(c.tier||'').trim().toLowerCase()==='support'?'support':'main',origin:String(c.origin||'').trim()||'dictionary_master',coreRole:String(c.coreRole||'').trim(),identity:String(c.identity||'').trim(),age:String(c.age||'').trim(),gender:String(c.gender||'').trim(),appearance:String(c.appearance||'').trim(),hobby:String(c.hobby||'').trim(),relation:String(c.relation||'').trim(),trait:String(c.trait||'').trim(),catchphrase:String(c.catchphrase||'').trim()});
-  replaceDictmasterFoundationArray(g,'characters',parsed.characters,sets.characters,charMap);
-  replaceDictmasterFoundationArray(g,'places',parsed.places,sets.places,p=>({name:String(p.name||'').trim(),type:String(p.type||'').trim(),note:String(p.note||'').trim()}));
-  replaceDictmasterFoundationArray(g,'propernouns',parsed.propernouns,sets.propernouns,p=>({name:String(p.name||'').trim(),note:String(p.note||'').trim()}));
+  replaceDictmasterFoundationArray(g,'characters',parsed.characters,sets.characters,dictmasterMapCharacter);
+  replaceDictmasterFoundationArray(g,'places',parsed.places,sets.places,p=>({name:String(p.name||'').trim(),type:String(p.type||'').trim(),note:String(p.note||'').trim(),secret:dictmasterSecretVal(p.secret)}));
+  replaceDictmasterFoundationArray(g,'propernouns',parsed.propernouns,sets.propernouns,p=>({name:String(p.name||'').trim(),note:String(p.note||'').trim(),secret:dictmasterSecretVal(p.secret)}));
+  // 注意：不含 rules——结构式文本里没有对应区块（RULE 写入 worldRules），若在此替换会误删旧项目里的基础 rules 数据。
   const genericMap={
     organizations:x=>({name:String(x.name||'').trim(),type:String(x.type||'').trim(),stance:String(x.stance||'').trim(),function:String(x.function||'').trim(),relation:String(x.relation||'').trim(),note:String(x.note||'').trim()}),
     institutions:x=>({name:String(x.name||'').trim(),type:String(x.type||'').trim(),function:String(x.function||'').trim(),audience:String(x.audience||'').trim(),location:String(x.location||'').trim(),note:String(x.note||'').trim()}),
     items:x=>({name:String(x.name||'').trim(),type:String(x.type||'').trim(),function:String(x.function||'').trim(),source:String(x.source||'').trim(),limit:String(x.limit||'').trim(),note:String(x.note||'').trim()}),
-    rules:x=>({name:String(x.name||'').trim(),note:String(x.note||'').trim()}),
     terms:x=>({name:String(x.name||'').trim(),category:String(x.category||'').trim(),meaning:String(x.meaning||'').trim(),usage:String(x.usage||'').trim(),note:String(x.note||'').trim()}),
     events:x=>({name:String(x.name||'').trim(),era:String(x.era||'').trim(),participants:String(x.participants||'').trim(),course:String(x.course||'').trim(),impact:String(x.impact||'').trim(),relation:String(x.relation||'').trim()}),
     lifeSettings:x=>({name:String(x.name||'').trim(),category:String(x.category||'').trim(),scope:String(x.scope||'').trim(),content:String(x.content||'').trim(),value:String(x.value||'').trim(),note:String(x.note||'').trim()})
   };
   Object.keys(genericMap).forEach(k=>replaceDictmasterFoundationArray(g,k,parsed[k],sets[k],genericMap[k]));
   const replaceAssoc=(key,cat,newRows,mapper)=>{
-    const cur=Array.isArray(g[key])?g[key]:[]; const set=sets[cat]; const kept=cur.filter(x=>isGlossaryEnrichment(g,cat,x)||!set.has(dictmasterReaderIdentity(cat,x))); const mapped=(newRows||[]).map(mapper); g[key]=kept.concat(mapped); mapped.forEach(x=>markGlossaryFoundation(g,cat,x,{editedBy:'dictmasterReader'}));
+    const cur=Array.isArray(g[key])?g[key]:[]; const set=sets[cat];
+    const kept=cur.filter(x=>isGlossaryEnrichment(g,cat,x)||!set.has(dictmasterReaderIdentity(cat,x)));
+    const mapped=(newRows||[]).map(mapper); g[key]=kept.concat(mapped);
+    mapped.forEach(x=>markGlossaryFoundation(g,cat,x,{editedBy:'dictmasterReader'}));
   };
   replaceAssoc('_relationshipTable','relationshipTable',parsed.relationshipTable,x=>({a:String(x.a||'').trim(),b:String(x.b||'').trim(),relation:String(x.relation||'').trim(),note:String(x.note||'').trim()}));
   replaceAssoc('_placeContacts','placeContacts',parsed.placeContacts,x=>({from:String(x.from||'').trim(),to:String(x.to||'').trim(),relation:String(x.relation||'').trim(),note:String(x.note||'').trim()}));
   replaceAssoc('_properContacts','properContacts',parsed.properContacts,x=>({from:String(x.from||'').trim(),to:String(x.to||'').trim(),relation:String(x.relation||'').trim(),note:String(x.note||'').trim()}));
-  replaceAssoc('_worldRules','worldRules',parsed.worldRules,x=>({cat:String(x.cat||'').trim(),scope:String(x.scope||'').trim(),rule:String(x.rule||'').trim()}));
+  replaceAssoc('_worldRules','worldRules',parsed.worldRules,x=>({cat:String(x.cat||'').trim(),scope:String(x.scope||'').trim(),rule:String(x.rule||'').trim(),secret:dictmasterSecretVal(x.secret)}));
   migrateAndCleanGlossarySources(g);
-  // 更新正式词典达人基线，但不把词典充实等增量数据改造成新的第二事实源。
-  const prevSummary=String(state.dictmasterLatest?.summary||storyState()?.canon?.masterSnapshot?.summary||'').trim();
+  // WORLD 一句话：以本次内容里的 summary 为准；本次没写才沿用旧的。
+  const summary=String(parsed.summary||'').trim()||String(snap.summary||'').trim();
   const newSnap={
-    summary:prevSummary,
+    summary,
     characters:(g.characters||[]).filter(x=>!isGlossaryEnrichment(g,'characters',x)).map(x=>({...x})),
     places:(g.places||[]).filter(x=>!isGlossaryEnrichment(g,'places',x)).map(x=>({...x})),
     propernouns:(g.propernouns||[]).filter(x=>!isGlossaryEnrichment(g,'propernouns',x)).map(x=>({...x})),
@@ -16871,16 +16821,181 @@ function saveDictmasterReaderChanges(text){
     worldRules:(g._worldRules||[]).filter(x=>!isGlossaryEnrichment(g,'worldRules',x)).map(x=>({...x}))
   };
   ['organizations','institutions','items','rules','terms','events','lifeSettings'].forEach(k=>{newSnap.generic[k]=(g[k]||[]).filter(x=>!isGlossaryEnrichment(g,k,x)).map(x=>({...x}));});
-  storyState().canon=storyState().canon||{}; storyState().canon.masterSnapshot=newSnap;
-  // v1.0.585：保存/导入成功即视为「词典达人已完成」（卡片显示已有内容，下游把它当基础词典）。
+  return {g,summary,snap:newSnap};
+}
+function dictmasterHasDownstream(){
+  const sc=scState(), ss=storyState();
+  if(sc.finished && (sc.finished.dictEnrich||sc.finished.principal)) return true;
+  if(sc.principal && String(sc.principal.raw||'').trim()) return true;
+  if(Array.isArray(sc.teachers) && sc.teachers.some(t=>t && String(t.raw||'').trim())) return true;
+  if(ss && ss.canon && ss.canon.dictEnrichAt) return true;
+  return false;
+}
+function dictmasterBuildHistoryEntry(g,summary,via){
+  const rel=validAssoc(g._relationshipTable,'a','b'), pc=validAssoc(g._placeContacts,'from','to'), prc=validAssoc(g._properContacts,'from','to');
+  const wr=(g._worldRules||[]).filter(x=>x&&String(x.rule||'').trim());
+  const fnd=(arr,cat)=>(arr||[]).filter(x=>x&&!isGlossaryEnrichment(g,cat,x));
+  const chars=fnd(g.characters,'characters');
+  const c0=currentCanonicalStoryStrategy()||{};
+  return {
+    ts:Date.now(), via:via||'ai', summary:String(summary||''),
+    book:String((state.outline&&(state.outline.title||state.outline.bookTitle))||c0.candidateName||'').trim(),
+    nChar:chars.length, nPlace:fnd(g.places,'places').length, nProp:fnd(g.propernouns,'propernouns').length, nRel:rel.length, nWR:wr.length,
+    characters:chars.map(c=>({name:c.name,tier:c.tier})),
+    rel:rel.map(x=>({a:x.a,b:x.b,relation:x.relation,note:x.note})),
+    pc:pc.map(x=>({from:x.from,to:x.to,relation:x.relation})),
+    prc:prc.map(x=>({from:x.from,to:x.to,relation:x.relation})),
+    wr:wr.map(x=>({cat:x.cat,scope:x.scope,rule:x.rule}))
+  };
+}
+// 写入完成后的统一收尾：快照、完成信号、历史、下游过期。返回 true 表示已把下游标为过期。
+function dictmasterFinalizeWrite(res,opts){
+  opts=opts||{};
+  const ss=storyState(); ss.canon=ss.canon||{}; ss.versions=ss.versions||{};
+  const changed=opts.changed!==false;
+  const hadDown=dictmasterHasDownstream();
+  ss.canon.masterSnapshot=res.snap;
+  ss.canon.dictmasterAt=Date.now();
   state.dictmasterRan=true;
-  state.dictmasterLatest=Object.assign({}, state.dictmasterLatest||{}, {summary:prevSummary, manualAt:Date.now()});
-  storyState().canon.dictmasterAt=Date.now();
+  state.dictmasterLatest=Object.assign({}, state.dictmasterLatest||{}, {summary:res.summary}, opts.via==='reader'?{manualAt:Date.now()}:{ts:Date.now()});
+  if(changed){
+    state.dictmasterHistory=(Array.isArray(state.dictmasterHistory)?state.dictmasterHistory:[]).concat([dictmasterBuildHistoryEntry(res.g,res.summary,opts.via)]).slice(-6);
+  }
   ssEnsureCanonEntities();
+  let staled=false;
+  if(changed && hadDown){ invalidateSchoolDownstream('dictMaster'); staled=true; }
+  else if(changed){ ss.versions.dictMaster=(Number(ss.versions.dictMaster)||0)+1; ss.pipelineVersion=(Number(ss.pipelineVersion)||0)+1; }
+  // 完成信号：词典充实入口、学校步骤、一键老师都读 scDone('dictMaster')。
+  scMark('dictMaster',true,false);
   persist();
-  refreshDictMasterCardOnly();
-  refreshGlossaryCardOnly();
+  return staled;
+}
+function dictmasterRefreshAfterWrite(){
+  [refreshDictMasterCardOnly,refreshGlossaryCardOnly,refreshDictEnrichCardOnly,refreshPrincipalUi,refreshAllTeacherUi].forEach(fn=>{ try{ fn(); }catch(e){ console.warn('[dictmaster refresh]',e); } });
+}
+function dictmasterStaleToast(){
+  toast('词典达人内容已更新：词典充实、校长、老师已标记为「已过期」，需要时请重新生成。');
+}
+function saveDictmasterReaderChanges(text){
+  if(dictmasterIsGenerating()) throw new Error('词典达人正在生成中，请等生成完成后再保存或导入。');
+  const parsed=parseDictMasterPlainText(text);
+  const check=validateDictmasterReaderData(parsed);
+  if(!check.ok) throw new Error(check.reason);
+  normalizeDictMasterEntities(parsed);
+  const before=dictmasterFoundationSnapshotForReader();
+  const res=dictmasterApplyParsed(parsed,before);
+  const changed=dictmasterReaderSnapshotText(before)!==dictmasterReaderSnapshotText(res.snap);
+  const staled=dictmasterFinalizeWrite(res,{via:'reader',changed});
+  dictmasterRefreshAfterWrite();
+  if(staled) dictmasterStaleToast();
   return true;
+}
+
+// ---- 词典达人生成（v1.0.589 补回）----
+function dictmasterSanitizeForGenerate(parsed){
+  const notes=[];
+  const nm=x=>String(x&&x.name||'').trim();
+  const seenN=new Set(), seenI=new Set();
+  parsed.characters=(parsed.characters||[]).filter(c=>{
+    const n=nm(c);
+    if(!n){ notes.push('丢弃了一个没有姓名的人物'); return false; }
+    if(seenN.has(n)){ notes.push('丢弃重名人物「'+n+'」'); return false; }
+    seenN.add(n);
+    const id=String(c.id||'').trim().toUpperCase();
+    if(!id || !/^CHAR_\d{3,}$/.test(id) || seenI.has(id)) c.id=''; else { c.id=id; seenI.add(id); }
+    return true;
+  });
+  normalizeDictMasterEntities(parsed);   // 补发缺失 ID，并把关系两端的 CHAR_xxx 解析成正式姓名
+  const dedupe=(key,label)=>{ const seen=new Set(); parsed[key]=(parsed[key]||[]).filter(x=>{ const n=nm(x); if(!n) return false; if(seen.has(n)){ notes.push('丢弃重复'+label+'「'+n+'」'); return false; } seen.add(n); return true; }); };
+  [['places','地点'],['propernouns','专名'],['organizations','组织'],['institutions','机构'],['items','道具'],['terms','术语'],['events','历史'],['lifeSettings','生活设定']].forEach(([k,l])=>dedupe(k,l));
+  const charNames=new Set(parsed.characters.map(nm)), placeNames=new Set(parsed.places.map(nm)), propNames=new Set(parsed.propernouns.map(nm));
+  const pairOk=(rows,ka,kb,names,label)=>{ const seen=new Set(); return (rows||[]).filter(r=>{
+    const a=String(r&&r[ka]||'').trim(), b=String(r&&r[kb]||'').trim(), rel=String(r&&r.relation||'').trim();
+    if(!a||!b||!rel||a===b||!names.has(a)||!names.has(b)){ notes.push('丢弃无效'+label+'：'+(a||'?')+'↔'+(b||'?')); return false; }
+    const k=a+'|'+b+'|'+rel; if(seen.has(k)) return false; seen.add(k); return true; }); };
+  parsed.relationshipTable=pairOk(parsed.relationshipTable,'a','b',charNames,'人物关系');
+  parsed.placeContacts=pairOk(parsed.placeContacts,'from','to',placeNames,'地名关联');
+  parsed.properContacts=pairOk(parsed.properContacts,'from','to',propNames,'专名关联');
+  parsed.worldRules=(parsed.worldRules||[]).filter(x=>String(x&&x.rule||'').trim()).map(x=>Object.assign({},x,{cat:String(x.cat||'').trim()||'世界规则',scope:String(x.scope||'').trim()||'全域'}));
+  return notes;
+}
+function dictmasterWarnBans(parsed){
+  if(!isScopeBanned('dictmaster','entity')) return;
+  const hits=[];
+  const chk=(arr,type)=>(arr||[]).forEach(x=>{ const n=String(x&&x.name||'').trim(); if(n && bannedEntityName(n,type)) hits.push({value:n}); });
+  chk(parsed.characters,'person'); chk(parsed.places,'place'); chk(parsed.propernouns,'properNoun');
+  if(hits.length) warnBanHits('dictmaster',hits,'输出（名称）');   // 只提示，不拦截；可在人物定名台改名
+}
+function dictMasterGate(opts){
+  opts=opts||{};
+  if(!isLong() || !state.outline){ if(!opts.silent) toast('请先完成 ②生成大纲，再生成词典达人'); return false; }
+  const c=currentCanonicalStoryStrategy();
+  const bp=c && (c.creativeBlueprint || (c.creationBlueprint && c.creationBlueprint.structured));
+  if(!bp || !Object.keys(bp).length){ if(!opts.silent) toast('还没有可用的故事蓝本，请先在「优化构想」里选定方案'); return false; }
+  if(dictmasterIsGenerating()){ if(!opts.silent) toast('词典达人正在生成中，请稍候'); return false; }
+  if(!opts.force && genBusy()){ if(!opts.silent) toast('已有生成任务进行中，请稍候'); return false; }
+  if(state.outline && !state.outlineConfirmed){ state.outlineConfirmed=true; }
+  return true;
+}
+async function genDictMaster(btn, opts){
+  opts=opts||{};
+  const st=$('#dictmasterStatus'); if(st){ st.className='status'; st.textContent=''; }
+  if(!dictMasterGate(opts)) return false;
+  state.dictmasterGenerating=true;
+  markAIRunning('dictmaster');
+  if(btn) busy(btn,true,'建立词典中…','de-busy');
+  const stopParent=(btn && btn.closest('.dm-card')) || (btn && btn.parentNode);
+  if(stopParent) showStopBtn(stopParent);
+  const stream=$('#dictmasterStream');
+  if(stream){ stream.style.display='block'; stream.textContent='正在生成词典达人…'; }
+  let ok=false;
+  try{
+    const spec=resolveActiveSpec('dictmaster');
+    const temp=(spec && spec.dictmasterTemp!=null) ? spec.dictmasterTemp : 0.4;
+    const system=getSystemPrompt('dictmaster',{}) + globalCreativeConstraintBlock('dictmaster');
+    const user=buildAIPrompt('dictmaster',{});
+    if(!String(user||'').trim()) throw new Error('词典达人输入组装失败');
+    // 真实生成前快照，供「注入导出」只读展示；不是第二套正式数据源。
+    state.dictmasterInjectionSnapshot={system:String(system||''),user:String(user||''),createdAt:Date.now()};
+    const onStream=delta=>{ if(stream){ stream.textContent+=String(delta||''); stream.scrollTop=stream.scrollHeight; } };
+    const res=await callDeepSeek(system,user,{temperature:temp,topP:0.6,maxTokens:clampMaxTokens('dictmaster'),onStream,signal:_abortCtl?.signal,taskKey:'dictmaster'});
+    const txt=String(res.text||'').trim();
+    if(!txt) throw new Error('词典达人返回为空');
+    const parsed=parseDictMasterPlainText(txt);
+    if(!parsed) throw new Error('词典达人返回内容无法解析：没有找到 [CHARACTER] 等结构区块');
+    const notes=dictmasterSanitizeForGenerate(parsed);
+    if(!parsed.characters.length) throw new Error('词典达人没有输出任何有效人物，请重试');
+    if(notes.length) addGenerationDiagnostic('dictmaster',{type:'STRUCTURE',code:'DICTMASTER_SANITIZED',details:notes.slice(0,20)});
+    dictmasterWarnBans(parsed);
+    const before=dictmasterFoundationSnapshotForReader();
+    const applied=dictmasterApplyParsed(parsed,before);
+    const staled=dictmasterFinalizeWrite(applied,{via:'ai',changed:true});
+    collapseGlossaryAfterDictionaryGeneration(false);
+    markAIDone('dictmaster',false);
+    persist();
+    ok=true;
+    const sn=applied.snap;
+    toast('词典达人已完成：人物 '+sn.characters.length+' · 地名 '+sn.places.length+' · 专名 '+sn.propernouns.length+' · 关系 '+sn.relationshipTable.length+' · 世界规则 '+sn.worldRules.length+(staled?'；词典充实/校长/老师已标记为「已过期」':''));
+    playEventSound('dictmaster_done');
+    return true;
+  }catch(e){
+    if(!(e && e.name==='AbortError')){
+      addToFixQueue({ kind:'dictmaster', error:'词典达人：'+(e&&e.message) });
+      toast('词典达人失败：'+(e&&e.message)); reportSoundError('dictmaster', e);
+      if(!scDone('dictMaster')) scSetFailed('dictMaster', true);   // 已有可用词典时，一次失败的重新生成不动它的完成状态
+    }
+    if(st){ st.className='status err'; st.textContent=(e&&e.message)||'失败'; }
+    return false;
+  }finally{
+    state.dictmasterGenerating=false;
+    state.aiNetwork.running=(state.aiNetwork.running||[]).filter(k=>k!=='dictmaster');
+    hideStopBtn(); if(btn) busy(btn,false); if(stream) stream.style.display='none';
+    if(ok){
+      // 点击「生成」后焦点还停在卡片按钮上，会让局部刷新被跳过（卡片里有焦点时不替换），先失焦。
+      try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); }catch(_e){}
+      dictmasterRefreshAfterWrite();
+    }
+  }
 }
 function openDictmasterInjectionExport(){
   let text=dictmasterInjectionTextFromSnapshot();
@@ -16917,7 +17032,7 @@ function dictMasterBlockHtml(){
   const locked = dictmasterLocked();
   const histN = Array.isArray(state.dictmasterHistory) ? state.dictmasterHistory.length : 0;
   const dmCollapsed = !!state.dmCollapsed;
-  const status = `<p id="dictmasterStatus" class="status" style="margin:8px 0 0"></p>`;
+  const status = `<p id="dictmasterStatus" class="status" style="margin:8px 0 0"></p><pre id="dictmasterStream" class="cp-stream-preview" style="display:none;white-space:pre-wrap"></pre>`;
   if(hasOut){
     const r = state.dictmasterLatest || {};
     const relArr = validAssoc(g._relationshipTable,'a','b');
@@ -16930,13 +17045,13 @@ function dictMasterBlockHtml(){
     const prcRows = prcArr.map(contactRow).join('');
     const wrRows = wrArr.map(x=>`<div class="dm-wr"><b>${esc(x.cat||'')}${String(x.scope||'').trim()?` · ${esc(String(x.scope).trim())}`:''}</b><div>${esc(x.rule||'')}</div></div>`).join('');
   const hue = s=>{ let h=0; for(const ch of String(s||'')) h=(h*31+ch.codePointAt(0))%360; return h; };
-  const _labels = { identity:'身份', age:'岁数', gender:'性别', appearance:'外貌', hobby:'爱好', catchphrase:'口头禅', relation:'关系', trait:'性格', type:'类型', note:'说明' };
+  const _labels = { identity:'身份', age:'岁数', gender:'性别', appearance:'外貌', hobby:'爱好', catchphrase:'口头禅', relation:'关系', trait:'性格', type:'类型', note:'说明', secret:'秘密' };
   const detailLines = (o, keys)=> keys.map(k=> (o && String(o[k]||'').trim())
     ? `<div class="dmt-line"><b>${esc(_labels[k]||k)}</b><span>${esc(String(o[k]).trim())}</span></div>` : '').join('');
   const chip = nm=>`<b class="de-chip" style="--h:${hue(nm)}">${esc(nm)}</b>`;
-  const charRow = c=>`<details class="dmt-entry"><summary>${chip(c.name)}<span class="muted dmt-brief">${esc([c.identity,c.gender,c.age].filter(Boolean).join(' · ')||'（无简介）')}</span></summary><div class="dmt-body">${detailLines(c,['identity','age','gender','appearance','hobby','catchphrase','relation','trait'])||'<span class="muted">（无字段）</span>'}</div></details>`;
-  const placeRow = p=>`<details class="dmt-entry"><summary>${chip(p.name)}<span class="muted dmt-brief">${esc([p.type,p.note].filter(Boolean).join(' · ')||'')}</span></summary><div class="dmt-body">${detailLines(p,['type','note'])||''}</div></details>`;
-  const propRow  = p=>`<details class="dmt-entry"><summary>${chip(p.name)}<span class="muted dmt-brief">${esc(String(p.note||'').trim()||'')}</span></summary><div class="dmt-body">${detailLines(p,['note'])||''}</div></details>`;
+  const charRow = c=>`<details class="dmt-entry"><summary>${chip(c.name)}<span class="muted dmt-brief">${esc([c.identity,c.gender,c.age].filter(Boolean).join(' · ')||'（无简介）')}</span></summary><div class="dmt-body">${detailLines(c,['identity','age','gender','appearance','hobby','catchphrase','relation','trait','secret'])||'<span class="muted">（无字段）</span>'}</div></details>`;
+  const placeRow = p=>`<details class="dmt-entry"><summary>${chip(p.name)}<span class="muted dmt-brief">${esc([p.type,p.note].filter(Boolean).join(' · ')||'')}</span></summary><div class="dmt-body">${detailLines(p,['type','note','secret'])||''}</div></details>`;
+  const propRow  = p=>`<details class="dmt-entry"><summary>${chip(p.name)}<span class="muted dmt-brief">${esc(String(p.note||'').trim()||'')}</span></summary><div class="dmt-body">${detailLines(p,['note','secret'])||''}</div></details>`;
   const charMain = (g.characters||[]).filter(c=>c && c.tier!=='support');
   const charSup  = (g.characters||[]).filter(c=>c && c.tier==='support');
   const dmtGroup = (lab, rows)=> rows.length ? `<details class="dmt-group"><summary>${lab}（${rows.length}）</summary><div class="dmt-list">${rows}</div></details>` : '';
@@ -18205,8 +18320,8 @@ async function genDictEnrich(btn, opts){
     if(!parsedCounts) addGenerationDiagnostic('dictEnrich',{type:'STRUCTURE',code:'DICTENRICH_PARSE_PARTIAL',details:'词典充实原文已返回，但未解析出结构化条目；仍允许任务完成并保存原文。'});
     if(isScopeBanned('dictEnrich','entity')){
       const allNamed = [parsed.characters,parsed.walkons,parsed.places,parsed.propernouns,parsed.organizations,parsed.institutions,parsed.items,parsed.rules,parsed.terms,parsed.events,parsed.lifeSettings];
-      const bad = allNamed.flatMap(arr=>(arr||[]).map(x=>({name:String(x&&x.name||'').trim(),bad:bannedEntityName(x&&x.name)}))).find(x=>x.bad);
-      if(bad) throw new Error(`词典充实命中禁则姓名/名称「${bad.name}」：${bad.bad}；已拒绝本次扩充，请按现有重试机制重新生成`);
+      const bads = allNamed.flatMap(arr=>(arr||[]).map(x=>({name:String(x&&x.name||'').trim(),bad:bannedEntityName(x&&x.name)}))).filter(x=>x.bad);
+      if(bads.length) warnBanHits('dictEnrich', bads.map(x=>({value:x.name})), '输出（名称）');   // v1.0.588：只提示，不拦截；可在人物定名台改名
     }
     // 421：移除词典充实的阻塞式质量质检/有效条目数量闸门；解析结果可为空时仍安全结束，不影响已有词典与后续流程。
     const n = mergeDictEnrich(parsed);
@@ -18524,7 +18639,7 @@ function dictEnrichBlockHtml(){
       <div class="ch-left">
         <span class="ch-badge ch-badge-enrich">🗂</span>
         <h3 class="ch-title">词典充实 · 设定细化工坊</h3>
-        <span class="ch-subtag ch-subtag-enrich">${countTxt?`已并入：${countTxt}`:'感官特征 · 场景禁忌 · 氛围龙套'}</span>
+        <span class="ch-subtag ch-subtag-enrich">${_scStaleHas('dictEnrich')?'⚠ 已过期（词典达人已更新，建议重新充实） · ':''}${countTxt?`已并入：${countTxt}`:'感官特征 · 场景禁忌 · 氛围龙套'}</span>
       </div>
       <div class="ch-right">
         ${foldBtn}
@@ -18727,31 +18842,30 @@ function chapterEndingFeelingAudit(text){
 function localNarrativeIronAudit(i,text){
   const src=String(text||'').trim();
   const issues=[];
-  if(!src) return {status:'FAIL',issues:[{type:'empty',severity:'fail',evidence:'正文为空',expected:'产生有效正文',actual:'空文本',repair:'重新生成正文。'}]};
-  // 只对高置信、可确定的模板化重复做本地硬检查；语义质量继续交给现有审计AI。
-  const templates=['倏然','眸光','眼底','凤眸','邪魅一笑','轻嗤'];
-  templates.forEach(w=>{
-    const n=(src.match(new RegExp(w.replace(/[.*+?^${}()|[\\]\\]/g,'\\$&'),'g'))||[]).length;
-    if(n>1) issues.push({type:'template_repeat',severity:'fail',evidence:`模板词「${w}」本章出现${n}次`,expected:'同类模板词原则上最多一次',actual:`${n}次`,repair:`减少「${w}」的重复使用，优先改为具体行动、语气或场景信息。`});
-  });
-  const sentences=src.split(/[。！？!?]+/).map(x=>x.replace(/\s+/g,'').trim()).filter(x=>x.length>=12);
+  if(!src) return {status:'FAIL',issues:[{type:'empty',severity:'warn',evidence:'正文为空',expected:'产生有效正文',actual:'空文本',repair:'重新生成正文。'}]};
+  // v1.0.588：模板词不再写死在这里（具体词归「禁则清单」，命中由禁则检查提示）；
+  // 这里只保留“完全相同的长句重复”，且忽略对白（有意的复述/口头重复不算）。
+  const narr=src.replace(/[“「『][^”」』]*[”」』]/g,'').replace(/"[^"\n]*"/g,'');
+  const sentences=narr.split(/[。！？!?]+/).map(x=>x.replace(/\s+/g,'').trim()).filter(x=>x.length>=12);
   const seen=new Map();
   sentences.forEach(x=>seen.set(x,(seen.get(x)||0)+1));
   for(const [x,n] of seen){
-    if(n>1) issues.push({type:'sentence_duplicate',severity:'fail',evidence:`同句重复${n}次：「${x.slice(0,80)}${x.length>80?'…':''}」`,expected:'避免完全重复的长句',actual:`${n}次`,repair:'删除重复句或改为真正新增的信息。'});
+    if(n>1) issues.push({type:'sentence_duplicate',severity:'warn',evidence:`旁白同句重复${n}次：「${x.slice(0,80)}${x.length>80?'…':''}」`,expected:'避免完全重复的长句',actual:`${n}次`,repair:'删除重复句或改为真正新增的信息。'});
   }
-  return {status:issues.length?'FAIL':'PASS',issues};
+  return {status:issues.length?'WARN':'PASS',issues};
 }
 function localChapterHardGate(i,text){
   const issues=[];
   const role='chapter';
   const entityHits=banEntityTextViolations(text,role);
   const textHits=banTextViolations(text,role);
-  entityHits.forEach(x=>issues.push({type:'ban_entity',severity:'fail',value:x.value,entityType:x.entityType}));
-  textHits.forEach(x=>issues.push({type:'ban_text',severity:'fail',value:x.value}));
+  entityHits.forEach(x=>issues.push({type:'ban_entity',severity:'warn',value:x.value,entityType:x.entityType}));
+  textHits.forEach(x=>issues.push({type:'ban_text',severity:'warn',value:x.value}));
   if(state._narrIron!==false){ const iron=localNarrativeIronAudit(i,text); issues.push(...iron.issues); }
   return issues;
 }
+let _chGateWarnSig='';
+// v1.0.588：本地检查只提示、不拦截（不再抛错中断正文）。调用方沿用原名，返回值可忽略。
 function assertChapterLocalHardGate(i,text){
   const issues=localChapterHardGate(i,text);
   if(!issues.length) return {ok:true,issues:[]};
@@ -18761,14 +18875,20 @@ function assertChapterLocalHardGate(i,text){
   if(ban.length){
     const entities=ban.filter(x=>x.type==='ban_entity').map(x=>`${x.entityType||'实体'}「${x.value}」`);
     const texts=ban.filter(x=>x.type==='ban_text').map(x=>`文本「${x.value}」`);
-    if(entities.length) parts.push('禁用实体命中：'+[...new Set(entities)].slice(0,12).join('、'));
-    if(texts.length) parts.push('禁用词/短语/短句命中：'+[...new Set(texts)].slice(0,12).join('、'));
+    if(entities.length) parts.push('命中禁用实体：'+[...new Set(entities)].slice(0,12).join('、'));
+    if(texts.length) parts.push('命中禁用词/短语/短句：'+[...new Set(texts)].slice(0,12).join('、'));
   }
-  if(iron.length) parts.push('叙事铁律本地硬检查：'+iron.slice(0,6).map(x=>x.evidence).join('；'));
-  const e=new Error(parts.join('；')||'正文未通过本地质量硬门');
-  e.code='CHAPTER_LOCAL_HARD_GATE'; e.qualityIssues=issues;
-  throw e;
+  if(iron.length) parts.push('叙事铁律本地检查：'+iron.slice(0,6).map(x=>x.evidence).join('；'));
+  const msg=parts.join('；');
+  const sig=`${i}|${msg}`;
+  if(sig!==_chGateWarnSig){
+    _chGateWarnSig=sig;
+    try{ addGenerationDiagnostic('chapter',{type:'QUALITY',code:'CHAPTER_LOCAL_WARN',details:[msg]}); }catch(_e){}
+    try{ toast(`第${Number(i)+1}章提示（不拦截）：${msg}`); }catch(_e){}
+  }
+  return {ok:false,warned:true,issues};
 }
+
 
 function getChapterTeacherRawTextDirect(i){
   const raw=String(getCurrentChapterTeacherRawText(i)||'').trim();
@@ -19752,7 +19872,7 @@ async function genNChapters(start, n){
           }
         }
         let content = enforceChapterBoundary(idx, String(txt||'').trim());
-        // 批量正文与单章正文使用同一个本地硬门；通过后才允许写入正式章节状态。
+        // 批量正文与单章正文使用同一个本地检查（v1.0.588 起只提示、不拦截，正文照常写入）。
         assertChapterLocalHardGate(idx, content);
         snapshotChapterVersion(idx);
         state.chapters[idx].content = content;
@@ -20555,8 +20675,23 @@ function renderResumePanel(){
 }
 
 
+const BAN_ROLE_LIST = [['ideaOptimization','优化构想'],['dictmaster','词典达人'],['dictEnrich','词典充实'],['principal','校长'],['teacher','老师'],['chapter','正文'],['titles','标题']];
+let _blRuleDraft = [];   // 附加规则的编辑草稿：新增/删除时先把输入框内容收进草稿，不会丢字
+function _blCollectRules(m){
+  const out=[];
+  m.querySelectorAll('[data-bl-rule-text]').forEach(t=>{
+    const i=+t.dataset.blRuleText;
+    const ai=[...m.querySelectorAll(`[data-bl-rule-ai="${i}"]`)].filter(x=>x.checked).map(x=>x.dataset.role);
+    out[i]={text:t.value,ai};
+  });
+  return out.filter(Boolean);
+}
+function _blRenderRules(m){
+  const host=m.querySelector('[data-bl-rules-host]'); if(!host) return;
+  host.innerHTML=_blRuleDraft.map((r,i)=>`<div class="ne-bl-rule" style="margin:8px 0;padding:8px;border:1px solid rgba(128,128,128,.25);border-radius:10px"><div class="bl-note muted" style="margin-bottom:4px">生效 AI（不勾选＝所有 AI）：</div><div>${BAN_ROLE_LIST.map(([k,l])=>`<label class="mini-check"><input type="checkbox" data-bl-rule-ai="${i}" data-role="${k}" ${(r.ai||[]).includes(k)?'checked':''}> ${l}</label>`).join('')}</div><textarea data-bl-rule-text="${i}" rows="2" placeholder="例如：全书不得出现现代网络用语">${esc(r.text||'')}</textarea><button class="btn small ghost" data-bl-rule-del="${i}">删除</button></div>`).join('')||'<div class="muted">暂无附加规则。</div>';
+}
 function _banScopeCheckboxesHtml(prefix, scopes, active){
-  const labels=[['ideaOptimization','优化构想'],['dictmaster','词典达人'],['dictEnrich','词典充实'],['principal','校长'],['teacher','老师'],['chapter','正文']];
+  const labels=BAN_ROLE_LIST.filter(([k])=>prefix==='text'||k!=='titles');
   return labels.map(([k,l])=>`<label class="mini-check"><input type="checkbox" data-bl-${prefix}-scope="${k}" ${active.includes(k)?'checked':''}> ${l}</label>`).join('');
 }
 function _banListArea(label, key, items, placeholder){
@@ -20565,14 +20700,14 @@ function _banListArea(label, key, items, placeholder){
 function _banScopeArrFromModal(m,prefix,fallback){
   const nodes=[...m.querySelectorAll(`[data-bl-${prefix}-scope]`)];
   if(!nodes.length) return fallback.slice();
-  return nodes.filter(x=>x.checked).map(x=>x.dataset.blScope);
+  return nodes.filter(x=>x.checked).map(x=>x.getAttribute(`data-bl-${prefix}-scope`));
 }
 function renderBanListPanel(){
   const b=banListRaw();
   const html=`
   <div class="ne-body ne-bl-body">
     <div class="ne-bl-enable"><label class="mini-check"><input type="checkbox" data-bl-enabled ${stateBanEnabled()?'checked':''}> <b>总开关：启用「禁则清单」</b></label></div>
-    <div class="bl-note muted">现在把“实体名称”和“文本片段”彻底分开。关闭其中一套，不会影响另一套。实体名称默认按完整名称精确匹配；旧版“禁用字”不会默认启用，避免一个汉字误伤大量名称。</div>
+    <div class="bl-note muted">现在把“实体名称”和“文本片段”彻底分开。关闭其中一套，不会影响另一套。实体名称默认按完整名称精确匹配；旧版“禁用字”不会默认启用，避免一个汉字误伤大量名称。<br>命中禁则只会提示，不会拦截生成，也不会自动删字：提示词已要求 AI 自己改写。人名“百家姓+两字”格式只做 ⚠ 提示，不再拒绝人物。</div>
 
     <section style="margin-top:12px;padding:12px;border:1px solid rgba(99,102,241,.22);border-radius:14px;background:rgba(99,102,241,.05)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b>👤 实体名称禁则</b><label class="mini-check"><input type="checkbox" data-bl-entity-enabled ${b.entity.enabled!==false?'checked':''}> 启用</label></div>
@@ -20596,6 +20731,7 @@ function renderBanListPanel(){
     <section style="margin-top:12px;padding:12px;border:1px solid rgba(16,185,129,.22);border-radius:14px;background:rgba(16,185,129,.05)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b>📝 文本禁则</b><label class="mini-check"><input type="checkbox" data-bl-text-enabled ${b.text.enabled!==false?'checked':''}> 启用</label></div>
       <div class="bl-note muted">与人名/地名完全独立。词汇、短语、短句可以分别开关。</div>
+      <div class="btn-row"><button class="btn small ghost" data-bl-preset-template>＋ 载入网文模板词预设</button></div>
       <label class="mini-check"><input type="checkbox" data-bl-word-enabled ${b.text.words.enabled!==false?'checked':''}> 词汇</label>
       ${_banListArea('禁用词汇','words',b.text.words.items,'例如：眸光、不由得')}
       <label class="mini-check"><input type="checkbox" data-bl-phrase-enabled ${b.text.phrases.enabled!==false?'checked':''}> 短语</label>
@@ -20610,19 +20746,15 @@ function renderBanListPanel(){
   </div>`;
   openNeModal('禁则清单',html);
   const m=$('#neModal');
-  const renderRules=()=>{
-    const cur=normalizeBanList(state.banList)||normalizeBanList(BANLIST_DEFAULT);
-    const host=m.querySelector('[data-bl-rules-host]'); if(!host)return;
-    host.innerHTML=(cur.rules||[]).map((r,i)=>`<div class="ne-bl-rule"><label>生效 AI：<select data-bl-rule-ai="${i}">${['ideaOptimization','dictmaster','dictEnrich','principal','teacher','chapter'].map(k=>`<option value="${k}" ${(r.ai||[]).includes(k)?'selected':''}>${({'ideaOptimization':'优化构想',dictmaster:'词典达人',dictEnrich:'词典充实',principal:'校长',teacher:'老师',chapter:'正文'})[k]}</option>`).join('')}</select></label><textarea data-bl-rule-text="${i}" rows="2">${esc(r.text||'')}</textarea><button class="btn small ghost" data-bl-rule-del="${i}">删除</button></div>`).join('')||'<div class="muted">暂无附加规则。</div>';
-  };
-  renderRules();
-  m.querySelector('[data-bl-rule-add]')?.addEventListener('click',()=>{const cur=normalizeBanList(state.banList)||normalizeBanList(BANLIST_DEFAULT);cur.rules.push({text:'',ai:['chapter']});state.banList=cur;renderRules();});
-  m.querySelector('[data-bl-rule-rules]');
+  _blRuleDraft=(banListRaw().rules||[]).map(r=>({text:r.text,ai:(r.ai||[]).slice()}));
+  _blRenderRules(m);
+  m.querySelector('[data-bl-rule-add]')?.addEventListener('click',()=>{ _blRuleDraft=_blCollectRules(m); _blRuleDraft.push({text:'',ai:[]}); _blRenderRules(m); });
 }
 function handleBanListAction(e){
   const m=$('#neModal'); if(!m || (m.style.display==='none'&&m.classList?.contains('hidden')) || !m.contains(e.target)) return false;
   const naming=e.target.closest('[data-bl-character-naming]'); if(naming){renderCharacterNamingPanel();return true;}
-  const del=e.target.closest('[data-bl-rule-del]'); if(del){const cur=normalizeBanList(state.banList)||normalizeBanList(BANLIST_DEFAULT);const i=+del.dataset.blRuleDel;cur.rules.splice(i,1);state.banList=cur;renderBanListPanel();return true;}
+  const pre=e.target.closest('[data-bl-preset-template]'); if(pre){ const ta=m.querySelector('[data-bl-list="words"]'); if(ta){ const cur=ta.value.split(/[,，\n]/).map(x=>x.trim()).filter(Boolean); ['倏然','眸光','凤眸','邪魅一笑','轻嗤'].forEach(w=>{ if(!cur.includes(w)) cur.push(w); }); ta.value=cur.join('\n'); } toast('已载入到“禁用词汇”，点「保存禁则」后生效'); return true; }
+  const del=e.target.closest('[data-bl-rule-del]'); if(del){ _blRuleDraft=_blCollectRules(m); _blRuleDraft.splice(+del.dataset.blRuleDel,1); _blRenderRules(m); return true; }
   const save=e.target.closest('[data-bl-save]'); if(save){
     const cur=normalizeBanList(state.banList)||normalizeBanList(BANLIST_DEFAULT), val=k=>{const x=m.querySelector(`[data-bl-list="${k}"]`);return x?x.value.trim():'';}, arr=k=>val(k).split(/[,，\n]/).map(x=>x.trim()).filter(Boolean);
     cur.enabled=!!m.querySelector('[data-bl-enabled]')?.checked;
@@ -20635,9 +20767,13 @@ function handleBanListAction(e){
     cur.entity.person.charRulesEnabled=!!m.querySelector('[data-bl-person-char]')?.checked; cur.entity.place.charRulesEnabled=!!m.querySelector('[data-bl-place-char]')?.checked;
     cur.text.enabled=!!m.querySelector('[data-bl-text-enabled]')?.checked; cur.text.words.enabled=!!m.querySelector('[data-bl-word-enabled]')?.checked; cur.text.phrases.enabled=!!m.querySelector('[data-bl-phrase-enabled]')?.checked; cur.text.sentences.enabled=!!m.querySelector('[data-bl-sentence-enabled]')?.checked;
     cur.text.words.items=arr('words'); cur.text.phrases.items=arr('phrases'); cur.text.sentences.items=arr('sentences');
-    const readScope=p=>{const out=[];m.querySelectorAll(`[data-bl-${p}-scope]`).forEach(x=>{if(x.checked)out.push(x.dataset.blScope)});return out;};
+    const readScope=p=>{const out=[];m.querySelectorAll(`[data-bl-${p}-scope]`).forEach(x=>{if(x.checked)out.push(x.getAttribute(`data-bl-${p}-scope`))});return out;};
     cur.entityScopeAi=readScope('entity'); cur.textScopeAi=readScope('text');
-    m.querySelectorAll('[data-bl-rule-text]').forEach(t=>{const i=+t.dataset.blRuleText;const sel=m.querySelector(`[data-bl-rule-ai="${i}"]`);if(cur.rules[i]){cur.rules[i].text=t.value.trim();cur.rules[i].ai=sel&&sel.value?[sel.value]:[];}});cur.rules=cur.rules.filter(r=>r&&r.text);
+    // 没勾选任何 AI：视为想关闭这一套（范围回落默认，避免空范围被误读）
+    let _autoOff=[];
+    if(!cur.entityScopeAi.length){ cur.entity.enabled=false; cur.entityScopeAi=BANLIST_DEFAULT.entityScopeAi.slice(); _autoOff.push('实体名称禁则'); }
+    if(!cur.textScopeAi.length){ cur.text.enabled=false; cur.textScopeAi=BANLIST_DEFAULT.textScopeAi.slice(); _autoOff.push('文本禁则'); }
+    cur.rules=_blCollectRules(m).map(r=>({text:String(r.text||'').trim(),ai:r.ai})).filter(r=>r.text); _blRuleDraft=cur.rules.map(r=>({text:r.text,ai:r.ai.slice()}));
     // 兼容旧字段：把新数据同步到旧字段，但运行时只读取新结构。
     cur.names=cur.entity.person.names.slice();cur.chars=cur.entity.person.chars.slice();cur.phrases=[...new Set([...cur.text.words.items,...cur.text.phrases.items,...cur.text.sentences.items])];cur.scopeAi=cur.entityScopeAi.slice();
     // 保存链路：读取 UI → 规范化 → 落盘 → 重新读取最终状态，确保总开关与空范围不会被迁移逻辑覆盖。
@@ -20645,11 +20781,32 @@ function handleBanListAction(e){
     persist();
     state.banList=normalizeBanList(state.banList);
     renderNarrativeEngineMenu();
-    toast(stateBanEnabled()?'禁则清单已保存并全局生效':'禁则清单已保存：总开关已关闭');
+    toast((stateBanEnabled()?'禁则清单已保存并全局生效':'禁则清单已保存：总开关已关闭')+(_autoOff.length?`（未勾选任何 AI，已关闭：${_autoOff.join('、')}）`:''));
     return true;
   }
   const reset=e.target.closest('[data-bl-reset]');if(reset){state.banList=null;persist();renderNarrativeEngineMenu();toast('已恢复默认禁则清单');return true;}
   return false;
+}
+function _ironItemRow(x){
+  const on=!ironOffSet().has(x.id);
+  const tag=x.when?`<span class="muted"> · 仅${x.when==='team'?'团队':'双主角'}书注入</span>`:'';
+  return `<label class="mini-check" style="display:flex;align-items:flex-start;gap:6px;margin:6px 0"><input type="checkbox" data-iron-item="${x.id}" ${on?'checked':''} style="margin-top:3px"><span style="font-size:12px;line-height:1.7"><b>${esc(x.title)}</b>${tag}<br>${esc(x.text)}</span></label>`;
+}
+function _ironGroupHtml(grp,title,hint){
+  const list=IRON_ITEMS.filter(x=>x.grp===grp);
+  return `<details style="margin-top:10px"><summary><b>${title}</b> <span class="muted" data-iron-cnt="${grp}"></span></summary><div class="bl-note muted">${hint}</div>${list.map(_ironItemRow).join('')}</details>`;
+}
+function _ironRefresh(m){
+  const off=ironOffSet();
+  ['hard','soft','special','planning'].forEach(g=>{
+    const list=IRON_ITEMS.filter(x=>x.grp===g), n=list.filter(x=>!off.has(x.id)).length;
+    const el=m.querySelector(`[data-iron-cnt="${g}"]`); if(el) el.textContent=`（已开 ${n}/${list.length}）`;
+  });
+  m.querySelectorAll('[data-iron-prev]').forEach(el=>{
+    el.textContent = el.dataset.ironPrev==='chapter'
+      ? (narrativeIronBlock('chapter').trim()||'（正文当前没有注入任何叙事纪律）')
+      : (globalCreativeConstraintBlock('teacher').trim()||'（规划层当前没有注入内容）');
+  });
 }
 function renderIronPanel(){
   const ironOn = state._narrIron !== false;
@@ -20658,23 +20815,36 @@ function renderIronPanel(){
     <div class="ne-body ne-bl-body">
       <div class="ne-bl-enable">
         <label class="mini-check"><input type="checkbox" data-narr-iron2 ${ironOn?'checked':''}> <b>叙事铁律总开关（默认开，仅长篇生效）</b></label>
-        <div class="bl-note muted">统一注入三大写作要求：硬约束（禁止/必须）为铁律不可逾越，软约束尽力而为、随题材微调。</div>
+        <div class="bl-note muted">每一条都可以单独开关，关掉的条目不会写进提示词。写作风格词条优先于铁律：两者冲突时按风格执行。</div>
       </div>
       <div class="ne-bl-enable" style="margin-top:8px">
-        <label class="mini-check"><input type="checkbox" data-lang-layer2 ${langOn?'checked':''}> <b>语言分层自动调节（默认开，仅长篇生效，不注入规划师）</b></label>
-        <div class="bl-note muted">书面语造氛围、口语推剧情；随题材自动定语言底色。属叙事纪律（非文风词条）：不随写作风格预设迁移，仅作用于章节正文。</div>
+        <label class="mini-check"><input type="checkbox" data-lang-layer2 ${langOn?'checked':''}> <b>语言分层自动调节（默认开，仅长篇正文生效，不注入规划层）</b></label>
+        <div class="bl-note muted">书面语造氛围、口语推剧情；随题材定语言底色。属叙事纪律，不随写作风格预设迁移。</div>
       </div>
-      <div style="margin-top:12px">
-        <div style="font-weight:700;margin-bottom:4px">硬约束（铁律）</div>
-        <div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:#333">${esc(NARRATIVE_IRON_HARD)}</div>
-        <div style="font-weight:700;margin:10px 0 4px">软约束（引导）</div>
-        <div style="white-space:pre-wrap;font-size:12px;line-height:1.7;color:#333">${esc(NARRATIVE_IRON_SOFT)}</div>
-      </div>
+      ${_ironGroupHtml('hard','① 正文·硬约束','写作正文时注入，不可逾越。')}
+      ${_ironGroupHtml('soft','② 正文·软约束','写作正文时注入，尽力而为。')}
+      ${_ironGroupHtml('special','③ 正文·专项（章首 / 视角 / 团队 / 双主角）','视角铁律是可选项：多主角书会自动改成“每个场景取该场景视角人物的受限感知”。团队、双主角铁律只在对应叙事主体下注入。')}
+      ${_ironGroupHtml('planning','④ 规划层（校长 / 老师 / 优化构想）','规划阶段注入。章首开法的分配规则在这一层，由校长和老师落实到每章教案的“起点”里。')}
+      <details style="margin-top:10px"><summary><b>⑤ 语言分层全文（正文）</b></summary><div style="white-space:pre-wrap;font-size:12px;line-height:1.7;margin-top:6px">${esc(LANG_LAYER_SYS)}</div></details>
+      <details style="margin-top:10px"><summary><b>📄 实际注入全文 · 正文</b></summary><div class="bl-note muted">与正文生成时拼进提示词的内容一致（含禁则清单区块、语言分层）。</div><div data-iron-prev="chapter" style="white-space:pre-wrap;font-size:12px;line-height:1.7;margin-top:6px"></div></details>
+      <details style="margin-top:10px"><summary><b>📄 实际注入全文 · 校长 / 老师 / 优化构想</b></summary><div class="bl-note muted">以老师为例展示（含禁则清单区块与规划层铁律）；校长、优化构想的铁律部分相同。</div><div data-iron-prev="plan" style="white-space:pre-wrap;font-size:12px;line-height:1.7;margin-top:6px"></div></details>
+      <div class="btn-row" style="margin-top:12px"><button class="btn ghost" data-iron-reset>恢复全部条目默认</button></div>
     </div>`;
   openNeModal('叙事铁律 · 写作总纲', html, '<button class="btn ghost" data-ne-close>关闭</button>');
-  const it=$('[data-narr-iron2]'); if(it) it.onchange = ()=>{ state._narrIron=it.checked; persist(); renderIronPanel(); };
-  const lt=$('[data-lang-layer2]'); if(lt) lt.onchange = ()=>{ state.langLayer=lt.checked; persist(); renderIronPanel(); };
+  const m=$('#neModal'); if(!m) return;
+  _ironRefresh(m);
+  m.querySelectorAll('[data-iron-item]').forEach(cb=>{
+    cb.onchange=()=>{
+      const off=ironOffSet(), id=cb.dataset.ironItem;
+      if(cb.checked) off.delete(id); else off.add(id);
+      state._ironOff=[...off]; persist(); _ironRefresh(m);
+    };
+  });
+  const rs=m.querySelector('[data-iron-reset]'); if(rs) rs.onclick=()=>{ state._ironOff=[]; persist(); renderIronPanel(); toast('叙事铁律条目已恢复默认'); };
+  const it=m.querySelector('[data-narr-iron2]'); if(it) it.onchange = ()=>{ state._narrIron=it.checked; persist(); _ironRefresh(m); };
+  const lt=m.querySelector('[data-lang-layer2]'); if(lt) lt.onchange = ()=>{ state.langLayer=lt.checked; persist(); _ironRefresh(m); };
 }
+
 
 function ensureCharacterIdsForNaming(){
   const g=ensureGlossaryKnowledgeShape((state.outline&&state.outline.glossary)||{});
@@ -21202,16 +21372,29 @@ function banTextViolations(text, role){
   banListAllTextItems().forEach(w=>{ if(w && src.includes(w)) hits.push({type:'text',value:w}); });
   return hits;
 }
+let _banWarnLast={sig:'',t:0};
+// v1.0.588：命中禁则只提示，不拦截、不自动删字（提示词已要求 AI 改写整句；删词会留下病句）。
+function warnBanHits(role,hits,label){
+  const vals=[...new Set((hits||[]).map(x=>x&&x.value).filter(Boolean))].slice(0,12);
+  if(!vals.length) return;
+  const sig=role+'|'+vals.join(','), now=Date.now();
+  if(_banWarnLast.sig===sig && now-_banWarnLast.t<5000) return;
+  _banWarnLast={sig,t:now};
+  const roleName=(BAN_ROLE_LIST.find(x=>x[0]===role)||[0,role])[1];
+  const msg=`${roleName}${label||''}命中禁则：${vals.join('、')}`;
+  try{ addGenerationDiagnostic('banlist',{type:'BANLIST',code:'BAN_HIT_WARN',details:[msg]}); }catch(_e){}
+  try{ toast(`⚠ ${msg}（仅提示，未拦截、未自动删除）`); }catch(_e){}
+}
 function scrubBannedPhrases(text, role){
-  let out=String(text||'');
-  if(!banTextEnabled() || (role && !banListAiActive(role,'text'))) return out;
-  const items=banListAllTextItems();
-  items.slice().sort((a,b)=>String(b).length-String(a).length).forEach(w=>{ const needle=String(w||'').trim(); if(needle) out=out.split(needle).join(''); });
+  const out=String(text||'');
+  const hits=banTextViolations(out, role);   // 内部已判断总开关/文本开关/生效范围
+  if(hits.length) warnBanHits(role,hits,'输出');
   return out;
 }
+
 function bannedEntityName(name, type='person'){
   const s=String(name||'').trim(); if(!s) return '';
-  return type==='person' ? nmNameRuleViolation(s) || banListViolation(s,'person') : banListViolation(s,type);
+  return banListViolation(s,type);   // v1.0.588：只认用户禁则，不再把姓名格式当拒绝理由
 }
 function filterDictMasterEntry(entry, category){
   if(!entry || !isScopeBanned('dictmaster','entity')) return entry;
