@@ -1,3 +1,4 @@
+/* v1.0.590 DICTENRICH-KERNEL: 词典充实内核调整。①提示词：新增「开篇状态原则」（只写故事开始时已存在的世界，不写主角将来的行动/设局/结果）、「保密事项原则」（充实师可见词典达人的 secret，但绝不触碰）、基础人物只读规则；次要配角加性别/年龄；各类条目加「描写标签」；新增「人物补充」行，只给词典达人标注为「可补充描写」的基础次要配角补外貌/爱好/口头禅（单独存放 _charSupplements，不覆盖基础卡）。②输入：新增人物代号对照（CHAR_xxx＝姓名）与【保密事项】段。③解析器：字段只按「；」「｜」切分，字段内的逗号保留（此前每个字段只剩第一个逗号前的半句）；描写标签入库（tags）；路人不再被「像不像人名」误删；「与主线关系」改为「可用钩子」（旧写法仍可读）。④下游：老师可见 tags 与人物补充，校长清洗词典带上人物补充，正文人物卡带上人物补充；读词典充实可读写 tags 与人物补充。 */
 /* v1.0.589 DICTMASTER-REPAIR: 词典达人修复与内核调整。①「读词典达人」保存/导入：词典尚不存在时数据写进临时对象、没挂回项目（保存了但主界面不显示）已修；WORLD 一句话现在取粘贴内容里的 summary；保存/导入成功后向学校状态层发出 dictMaster 完成信号（词典充实/校长/一键老师可接上）；内容有变化且下游已有成果时，词典充实/校长/老师标记为「已过期」并提示。②补回丢失的 genDictMaster（✨生成按钮）：流式生成、解析容错、写入词典、历史版本、完成信号。③内核提示词整理：去掉 SYSTEM/USER 重复与编号空缺；新增「开篇状态原则」（设定不写剧情）；人物 tier 收紧（中途加入的外部人物默认 support）；新增 secret 秘密字段（人物/地点/专名/规则），校长可读到、老师与正文不会读到。 */
 /* v1.0.588 BANLIST-IRON-TIDY: 「禁则清单」「叙事铁律」整理修理。禁则：生效范围勾选保存失效已修；新增/删除规则不再丢字且可多选 AI；人名“百家姓+两字”格式规则降为提示（不再拒绝人物）；命中禁则只提示、不拦截、不再自动删除（由提示词让 AI 改写）；新增“载入网文模板词预设”。铁律：逐条可开关、面板显示实际注入全文；写作风格优先于铁律；视角铁律改为可选项；章首开法上收到校长/老师规划层；语言分层补全；本地检查只提示不拦截，模板词改读禁则清单，重复句检查忽略对白。 */
 /* v1.0.587 STYLE-PACK-TOLERANT + RECIPE-PICK-GAPS: 优化构想风格资料包解析容错（少一格自动修复、原因前缀、缺原因给默认），提示词加格数硬要求与示例；AI 配方助手 gap id 规范化、选用时提示并可一并加入新词条。
@@ -30,7 +31,7 @@
    5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.589';
+const APP_VERSION = '1.0.590';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
 const APP_FILE_VERSION = 'app1.0.586.js';
 function installV569Styles(){
@@ -484,6 +485,7 @@ function ensureGlossaryKnowledgeShape(g){
   g._placeContacts = Array.isArray(g._placeContacts) ? g._placeContacts : [];
   g._properContacts = Array.isArray(g._properContacts) ? g._properContacts : [];
   g._worldRules = Array.isArray(g._worldRules) ? g._worldRules : [];
+  g._charSupplements = Array.isArray(g._charSupplements) ? g._charSupplements : [];
   migrateAndCleanGlossarySources(g);
   return g;
 }
@@ -5250,6 +5252,7 @@ function _principalCleanGlossary(glossary){
   out.placeContacts=Array.isArray(g._placeContacts)?g._placeContacts.map(x=>({...x})):[];
   out.properContacts=Array.isArray(g._properContacts)?g._properContacts.map(x=>({...x})):[];
   out.worldRules=Array.isArray(g._worldRules)?g._worldRules.map(x=>({...x})):[];
+  out.charSupplements=Array.isArray(g._charSupplements)?g._charSupplements.map(x=>({...x})):[];   // v1.0.590：基础次要配角的补充描写
   delete out._sourceMeta;
   Object.keys(out).forEach(k=>{ if(Array.isArray(out[k])) out[k].forEach(cleanGlossarySourceFields); });
   return out;
@@ -7177,6 +7180,12 @@ function teacherRedactForGroup(text, g, plan){
   (plan||principalRevealPlan()).forEach(x=>{ if(x.revealChapter>last) x.redactTerms.forEach(term=>{ t=t.split(term).join('（保密）'); }); });
   return t;
 }
+// v1.0.590：基础次要配角的「补充描写」（词典充实写入 _charSupplements，不覆盖基础卡）。
+function enrichSupplementText(g,name){
+  const nm=String(name||'').trim(); if(!nm) return '';
+  const s=((g&&g._charSupplements)||[]).find(x=>String(x&&x.name||'').trim()===nm); if(!s) return '';
+  return [s.appearance?`外貌:${s.appearance}`:'', s.hobby?`爱好:${s.hobby}`:'', s.catchphrase?`口头禅:${s.catchphrase}`:'', s.tags?`描写标签:${s.tags}`:''].filter(Boolean).join('；');
+}
 function teacherScopedGlossary(g, gi, maxChar){
   const o=state.outline||{}, gl=o.glossary||{}; const plans=state.school?.principal?.plans||{}; const names=new Set();
   const textOfPlan=p=>JSON.stringify(p||{});
@@ -7187,7 +7196,7 @@ function teacherScopedGlossary(g, gi, maxChar){
   const match=arr=>(Array.isArray(arr)?arr:[]).filter(x=>{const nm=String(x?.name||'').trim();return nm&&[...names].some(q=>nm===q||nm.includes(q)||q.includes(nm));});
   const out=[];
   const sets=[['人物',gl.characters],['地点',gl.places],['专名',gl.propernouns],['组织/势力',gl.organizations],['职业/机构',gl.institutions],['物品/道具',gl.items],['术语',gl.terms],['历史事件',gl.events],['生活设定',gl.lifeSettings]];
-  sets.forEach(([label,arr])=>{const hits=match(arr);if(hits.length)out.push(label+'：'+hits.map(x=>{const vals=[x.name,x.type,x.category,x.identity,x.function,x.meaning,x.content,x.note,x.impact,x.usage,x.value].map(v=>String(v||'').trim()).filter(Boolean);return vals.join('｜');}).join('\n· '));});
+  sets.forEach(([label,arr])=>{const hits=match(arr);if(hits.length)out.push(label+'：'+hits.map(x=>{const vals=[x.name,x.type,x.category,x.identity,x.function,x.meaning,x.content,x.note,x.impact,x.usage,x.value,x.tags,(label==='人物'?enrichSupplementText(gl,x.name):'')].map(v=>String(v||'').trim()).filter(Boolean);return vals.join('｜');}).join('\n· '));});
   // 世界观规则只有一个正式来源：gl._worldRules。gl.rules 是词典充实产生的普通“扩充规则”，不是第二套世界观规则，必须分开标识，避免下游把两者合并成新的规则源。
   const worldRules=(gl._worldRules||[]).map(x=>({...x,_sourceBucket:'worldRules'})).map(fmtWR).filter(Boolean);
   if(worldRules.length) out.push('世界观规则｜正式唯一来源：词典 _worldRules\n'+worldRules.slice(0,30).map(x=>'- '+x).join('\n'));
@@ -10415,7 +10424,7 @@ function chapterGlossaryBlock(curN, opts){
     const rf = glossaryForAI();
     const cDetail = lean
       ? c => [c.identity?`身份:${c.identity}`:'', c.relation?`关系:${c.relation}`:''].filter(Boolean).join('；')
-      : c => [c.identity?`身份:${c.identity}`:'', c.age?`岁数:${c.age}`:'', c.gender?`性别:${c.gender}`:'', c.appearance?`外貌:${c.appearance}`:'', c.hobby?`爱好:${c.hobby}`:'', (c.catchphrase&&c.catchphrase!=='无')?`口头禅:${c.catchphrase}`:'', c.relation?`关系:${c.relation}`:'', c.trait?`性格:${c.trait}`:''].filter(Boolean).join('；');
+      : c => [c.identity?`身份:${c.identity}`:'', c.age?`岁数:${c.age}`:'', c.gender?`性别:${c.gender}`:'', c.appearance?`外貌:${c.appearance}`:'', c.hobby?`爱好:${c.hobby}`:'', (c.catchphrase&&c.catchphrase!=='无')?`口头禅:${c.catchphrase}`:'', c.relation?`关系:${c.relation}`:'', c.trait?`性格:${c.trait}`:'', enrichSupplementText(g,c.name)].filter(Boolean).join('；');
     const pDetail = p => [p.type?`类型:${p.type}`:'', p.note?`说明:${p.note}`:''].filter(Boolean).join('；');
     const cs = rf.characters.map(c=> `${c.name}${cDetail(c)?`（${cDetail(c)}）`:''}`).join('、');
     const ps = rf.places.map(p=> `${p.name}${pDetail(p)?`（${pDetail(p)}）`:''}`).join('、');
@@ -14110,7 +14119,7 @@ function glossaryCardHtml(){
         ['sub',    '🧵 副线',     subsHtml,     (g.subplots||[]).length],
         ['world',  '🌍 世界素材', (()=>{
           const groups=[['🏛️ 组织/势力',g.organizations],['🏢 职业/机构',g.institutions],['🧰 物品/道具',g.items],['⚙️ 扩充规则',g.rules],['🔤 术语',g.terms],['🕰️ 历史事件',g.events],['🍜 生活设定',g.lifeSettings],['📜 世界观规则',g._worldRules]];
-          return groups.map(([lab,arr])=>{const a=Array.isArray(arr)?arr:[]; if(!a.length) return ''; const body=a.map(x=>{const nm=String(x&&x.name||'').trim(); const brief=[x.type,x.category,x.function,x.meaning,x.content,x.note,x.impact,x.usage,x.value,x.scope,x.rule,x.limit].map(v=>String(v||'').trim()).filter(Boolean).join(' · '); const src=Object.values(glossarySourceMeta(g).foundation).some(v=>v && String(v).length>=0 && false)?'基底':(Object.keys(glossarySourceMeta(g).foundation).some(k=>k.endsWith(':'+String(x&&x.name||'').trim()))?'基底':'扩充'); return `<div class="gs-entry gs-world-entry"><div class="gs-head"><span class="gs-fold-ico">•</span><span class="gs-name" style="cursor:default">${esc(nm)}</span><span class="gs-brief">[${src}] ${esc(brief||'可供下游AI按章授权调用')}</span></div></div>`;}).join(''); return `<details class="dm-fold" open><summary>${lab}（${a.length}）</summary><div>${body}</div></details>`;}).join('') || '<span class="muted">（暂无世界素材）</span>';
+          return groups.map(([lab,arr])=>{const a=Array.isArray(arr)?arr:[]; if(!a.length) return ''; const body=a.map(x=>{const nm=String(x&&x.name||'').trim(); const brief=[x.type,x.category,x.function,x.meaning,x.content,x.note,x.impact,x.usage,x.value,x.scope,x.rule,x.limit,x.tags].map(v=>String(v||'').trim()).filter(Boolean).join(' · '); const src=Object.values(glossarySourceMeta(g).foundation).some(v=>v && String(v).length>=0 && false)?'基底':(Object.keys(glossarySourceMeta(g).foundation).some(k=>k.endsWith(':'+String(x&&x.name||'').trim()))?'基底':'扩充'); return `<div class="gs-entry gs-world-entry"><div class="gs-head"><span class="gs-fold-ico">•</span><span class="gs-name" style="cursor:default">${esc(nm)}</span><span class="gs-brief">[${src}] ${esc(brief||'可供下游AI按章授权调用')}</span></div></div>`;}).join(''); return `<details class="dm-fold" open><summary>${lab}（${a.length}）</summary><div>${body}</div></details>`;}).join('') || '<span class="muted">（暂无世界素材）</span>';
         })(), worldTotal],
       ]).map(([t,lab,body,cnt])=>{
       const fold = !!(state.gsCatFold && state.gsCatFold[t]);
@@ -17238,6 +17247,24 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 7. 你可以创造新的世界素材，但新素材必须与既有词典保持自洽。不得把新增人物标记为主要人物。
 8. 本阶段正式输出并被系统收录的新条目，同样会成为后续正文可以使用的正式创作事实。
 
+【开篇状态原则】
+
+词典记录的是“这个世界里有什么”，不是“主角之后会做什么”。所有新增条目只写故事开始时已经存在的人、地点、物品、规矩、行当和生活，以及后续可以用到的钩子。
+
+禁止写：主角或同伴将要采取的行动、设局、计谋、对话结果、任何事件之后如何发展。说明、影响、可用钩子、描写价值等字段，只能写成客观状态，或写成“可用于……”的可能性，不得写成已经发生的剧情。素材在哪一章怎么用，由校长和老师决定，不由你预先安排。
+
+【保密事项原则】
+
+如果输入里出现【保密事项】，那是词典达人标出的隐藏真相。你知道它，但绝不触碰：不得让任何新增人物知情、察觉或暗示；不得把它写进任何条目的任何字段（包括台词、描写标签、关系、事件）；不得设计会暴露它的物品、规则或生活设定。涉及相关人物、专名或规则时，只写外人看得到的表象。
+
+【对基础人物的规则】
+
+Foundation 人物卡是只读的。你可以通过“人物关系”写基础人物与新增人物之间的关系，也可以写他们与新增场所、机构、物品之间的往来；但不得改变基础人物的身份、性格、立场和核心关系，不得赋予他们新的职务头衔，也不得替他们编造重要的过往经历。
+
+如果输入里标注某位基础次要配角“可补充描写：外貌、爱好、口头禅”，你可以用“人物补充”行补写这些空缺（只写被标注的，不要重复已有字段）。补充内容必须贴合该人物既有性格，不得带入秘密、剧情或新关系。
+
+任何有名字的新人物，都必须有自己单独的一行（次要配角或路人）；不要在别的条目的说明里顺手提到一个没有条目的新人名。
+
 【核心使命】
 在不破坏既有世界事实的前提下，主动补足：
 
@@ -17588,40 +17615,45 @@ name 字段只能填写纯实体名称。
 
 名称字段中不得再次使用“｜”。
 
+字段内部的内容可以使用逗号、顿号、句号，但不得使用“｜”和“；”；“；”只用来分隔字段。每个字段写成完整的话，不要写半句。
+
 【输出格式｜结构式纯文本协议 v2】
 
 只输出纯文本，不输出 JSON，不输出 Markdown 代码块，不解释过程。每条新增内容独占一行，统一使用：类别｜名称｜字段：值；字段：值
 
 【新增次要配角】
-次要配角｜姓名｜身份：…；关系：…；外貌：…；性格：…；口头禅：…；描写标签：…
+次要配角｜姓名｜身份：…；性别：…；年龄：…（大致年龄即可）；关系：…；外貌：…；性格：…；口头禅：…；描写标签：…
+
+【基础次要配角的补充描写】（仅限输入中标注“可补充描写”的人物）
+人物补充｜姓名｜外貌：…；爱好：…；口头禅：…；描写标签：…
 
 【新增地名】
 地名｜名称｜类型：…；氛围特征：…；说明：…；描写标签：…
 
 【新增组织/势力】
-组织｜名称｜类型：…；立场：…；核心职能：…；关系：…；说明：…
+组织｜名称｜类型：…；立场：…；核心职能：…；关系：…；说明：…；描写标签：…
 
 【新增职业/机构】
-机构｜名称｜类型：…；行业/职能：…；服务对象：…；地点：…；说明：…
+机构｜名称｜类型：…；行业/职能：…；服务对象：…；地点：…；说明：…；描写标签：…
 
 【新增物品/道具】
-物品｜名称｜类型：…；功能：…；来源：…；使用限制：…；说明：…
+物品｜名称｜类型：…；功能：…；来源：…；使用限制：…；说明：…；描写标签：…
 
 【新增世界规则/术语】
-规则｜名称｜类别：…；适用范围：…；规则内容：…；代价/限制：…；说明：…
+规则｜名称｜类别：…；适用范围：…；规则内容：…；代价/限制：…；说明：…；描写标签：…
 世界观规则｜名称｜类别：…；适用范围：…；规则内容：…；代价/限制：…；说明：…
-术语｜名称｜类别：…；含义：…；使用场景：…；说明：…
+术语｜名称｜类别：…；含义：…；使用场景：…；说明：…；描写标签：…
 
 【新增关系与关联】
 人物关系｜人物A｜人物B｜关系：…；说明：…
 地名关联｜地名A｜地名B｜关系：…；说明：…
 专名关联｜专名A｜专名B｜关系：…；说明：…
 
-【新增历史事件】
-事件｜名称｜时间/时代：…；参与方：…；经过：…；影响：…；与主线关系：…
+【新增历史事件】（只写故事开始之前已经发生的事）
+事件｜名称｜时间/时代：…；参与方：…；经过：…；影响：…；可用钩子：…；描写标签：…
 
 【新增生活设定】
-生活设定｜名称｜类别：…；适用地区/群体：…；内容：…；描写价值：…
+生活设定｜名称｜类别：…；适用地区/群体：…；内容：…；描写价值：…；描写标签：…
 
 【新增路人/龙套】
 路人｜姓名｜身份：…；登场：…；台词：…；描写标签：…
@@ -17645,6 +17677,11 @@ name 字段只能填写纯实体名称。
 13. 是否为了数量而制造路人。
 14. 新设定是否真正能够帮助后续正文。
 15. 所有新增内容是否符合小说题材和时代。
+16. 是否写入了主角或同伴将来的行动、设局、对话结果或情节发展（应改为客观状态或“可用于……”）。
+17. 是否让任何新增人物知道、察觉或暗示了【保密事项】。
+18. 是否在说明里提到了没有单独条目的新人名。
+19. 是否给基础人物新增了职务头衔、重要履历或改变了性格。
+20. 字段内是否误用了“｜”或“；”。
 
 记住：
 
@@ -17687,6 +17724,14 @@ function buildDictEnrichUser(){
 
   // (1) 人物卡（主要人物与次要配角，9维全字段）
   const charList = g.characters || [];
+  // v1.0.590：基础次要配角若外貌/爱好/口头禅为空，标注“可补充描写”，允许充实师用「人物补充」补写（单独存放，不覆盖基础卡）。
+  const _blank = v => { const t=String(v==null?'':v).trim(); return !t||t==='未知'||t==='无'; };
+  const supHint = c => {
+    if(!(c && c.tier==='support' && isGlossaryFoundation(g,'characters',c))) return '';
+    const sup=(g._charSupplements||[]).find(x=>String(x&&x.name||'').trim()===String(c.name||'').trim())||{};
+    const miss=[['appearance','外貌'],['hobby','爱好'],['catchphrase','口头禅']].filter(([f])=>_blank(c[f]) && _blank(sup[f])).map(([,l])=>l);
+    return miss.length ? `可补充描写: ${miss.join('、')}` : '';
+  };
   if(charList.length){
     const charLines = charList.map(c => {
       const [cName] = cleanEntityName(c && c.name);
@@ -17701,7 +17746,8 @@ function buildDictEnrichUser(){
         c.trait ? `性格特征: ${String(c.trait).trim()}` : '',
         c.hobby ? `爱好癖好: ${String(c.hobby).trim()}` : '',
         c.catchphrase ? `口头禅: ${String(c.catchphrase).trim()}` : '',
-        c.relation ? `关系定位: ${String(c.relation).trim()}` : ''
+        c.relation ? `关系定位: ${String(c.relation).trim()}` : '',
+        supHint(c)
       ].filter(Boolean);
       return `- ` + fields.join(' | ');
     }).filter(Boolean);
@@ -17760,13 +17806,13 @@ function buildDictEnrichUser(){
 
   // (8) 已有扩展世界素材（只读参照）
   const extended = [
-    ['组织/势力', g.organizations, x=>`- ${x.name} | 类型:${x.type||''} | 立场:${x.stance||''} | 核心职能:${x.function||''} | 关系:${x.relation||''} | 说明:${x.note||''}`],
-    ['职业/机构', g.institutions, x=>`- ${x.name} | 类型:${x.type||''} | 行业/职能:${x.function||''} | 服务对象:${x.audience||''} | 地点:${x.location||''} | 说明:${x.note||''}`],
-    ['物品/道具', g.items, x=>`- ${x.name} | 类型:${x.type||''} | 功能:${x.function||''} | 来源:${x.source||''} | 使用限制:${x.limit||''} | 说明:${x.note||''}`],
+    ['组织/势力', g.organizations, x=>`- ${x.name} | 类型:${x.type||''} | 立场:${x.stance||''} | 核心职能:${x.function||''} | 关系:${x.relation||''} | 说明:${x.note||''}${x.tags?` | 描写标签:${x.tags}`:''}`],
+    ['职业/机构', g.institutions, x=>`- ${x.name} | 类型:${x.type||''} | 行业/职能:${x.function||''} | 服务对象:${x.audience||''} | 地点:${x.location||''} | 说明:${x.note||''}${x.tags?` | 描写标签:${x.tags}`:''}`],
+    ['物品/道具', g.items, x=>`- ${x.name} | 类型:${x.type||''} | 功能:${x.function||''} | 来源:${x.source||''} | 使用限制:${x.limit||''} | 说明:${x.note||''}${x.tags?` | 描写标签:${x.tags}`:''}`],
     ['世界规则', g.rules, x=>`- ${x.name} | 类别:${x.category||''} | 范围:${x.scope||''} | 规则:${x.rule||''} | 代价/限制:${x.limit||''}`],
-    ['术语', g.terms, x=>`- ${x.name} | 类别:${x.category||''} | 含义:${x.meaning||''} | 使用场景:${x.usage||''} | 说明:${x.note||''}`],
-    ['历史事件', g.events, x=>`- ${x.name} | 时间/时代:${x.era||''} | 参与方:${x.participants||''} | 经过:${x.course||''} | 影响:${x.impact||''} | 主线关系:${x.relation||''}`],
-    ['生活设定', g.lifeSettings, x=>`- ${x.name} | 类别:${x.category||''} | 适用范围:${x.scope||''} | 内容:${x.content||''} | 描写价值:${x.value||''}`]
+    ['术语', g.terms, x=>`- ${x.name} | 类别:${x.category||''} | 含义:${x.meaning||''} | 使用场景:${x.usage||''} | 说明:${x.note||''}${x.tags?` | 描写标签:${x.tags}`:''}`],
+    ['历史事件', g.events, x=>`- ${x.name} | 时间/时代:${x.era||''} | 参与方:${x.participants||''} | 经过:${x.course||''} | 影响:${x.impact||''} | 主线关系:${x.relation||''}${x.tags?` | 描写标签:${x.tags}`:''}`],
+    ['生活设定', g.lifeSettings, x=>`- ${x.name} | 类别:${x.category||''} | 适用范围:${x.scope||''} | 内容:${x.content||''} | 描写价值:${x.value||''}${x.tags?` | 描写标签:${x.tags}`:''}`]
   ];
   extended.forEach(([label,list,fmt])=>{ const arr=Array.isArray(list)?list.filter(x=>x&&String(x.name||'').trim()):[]; if(arr.length) dmSections.push(`【${label}（共 ${arr.length} 项）】\n${arr.map(fmt).join('\n')}`); });
 
@@ -17789,6 +17835,15 @@ function buildDictEnrichUser(){
   parts.push('【第三部分：本次词典充实允许做什么】只在 dictionary_foundation 之上增加辅助/外围/生活层素材：次要配角、外围地点、次要组织/机构、辅助专名、次要/生活道具、补充术语、外围历史、生活设定、行业生态、地方习俗、环境细节。禁止重新定义、覆盖、改名或升级任何 Foundation 核心事实；禁止新增主角/核心人物/主线关键人物/幕后Boss；关系只能引用已存在实体，不能借关系偷偷创造核心实体。用户后续通过人物定名台主动改名属于用户授权操作，不属于词典充实权限。所有新增条目的来源标记由 JS 自动写入，不要求 AI 输出 sourceType。');
   const dictmasterPart = `【第二部分：词典达人所生成的所有内容（只读参照：不得改动、不得重复新增同名）】\n${dmSections.length ? dmSections.join('\n\n') : '（暂无词典达人生成数据）'}`;
   parts.push(dictmasterPart);
+
+  // v1.0.590：人物代号对照（故事战略里写的是 CHAR_xxx，词典里写的是姓名）
+  const idMap=(g.characters||[]).map(c=>{ const id=String(c&&c.id||'').trim().toUpperCase(); const nm=cleanEntityName(c&&c.name)[0]; return (/^CHAR_\d{3,}$/.test(id)&&nm)?`${id}＝${nm}`:''; }).filter(Boolean);
+  if(idMap.length) parts.push('【人物代号对照｜故事战略里的 CHAR_xxx 就是下列人物】\n'+idMap.join('；'));
+  // v1.0.590：保密事项（词典达人标出的 secret）。充实师可见，但绝不触碰。
+  const secretRows=[];
+  const addSec=(label,list,nameFn)=>(list||[]).forEach(x=>{ const t=String(x&&x.secret||'').trim(); if(!t||t==='无') return; secretRows.push(`- ${label}「${nameFn(x)}」：${t}`); });
+  addSec('人物',g.characters,x=>cleanEntityName(x.name)[0]); addSec('地点',g.places,x=>cleanEntityName(x.name)[0]); addSec('专名',g.propernouns,x=>cleanEntityName(x.name)[0]); addSec('规则',g._worldRules,x=>String(x.cat||'世界观规则'));
+  if(secretRows.length) parts.push('【保密事项｜只读：你知道，但绝不触碰】\n下列是词典达人标出的隐藏真相。新增的任何条目、任何字段（含台词、描写标签、关系、事件）都不得让人物知情、察觉或暗示它们，也不得设计会暴露它们的物品、规则或习俗；涉及相关人物、专名或规则时，只写外人看得到的表象。\n'+secretRows.join('\n'));
 
   return parts.join('\n\n');
 }
@@ -17815,7 +17870,7 @@ function sanitizePersonCollections(res){
 }
 
 function parseDictEnrichText(txt){
-  const res = { characters:[], places:[], propernouns:[], walkons:[], organizations:[], institutions:[], items:[], rules:[], terms:[], events:[], lifeSettings:[], relationshipTable:[], placeContacts:[], properContacts:[], worldRules:[] };
+  const res = { characters:[], places:[], propernouns:[], walkons:[], organizations:[], institutions:[], items:[], rules:[], terms:[], events:[], lifeSettings:[], relationshipTable:[], placeContacts:[], properContacts:[], worldRules:[], supplements:[] };
   if(!txt) return res;
   
   let cleaned = String(txt).trim()
@@ -17824,15 +17879,25 @@ function parseDictEnrichText(txt){
     .trim();
 
   // 2. Line-by-line flexible parser
+  // v1.0.590：字段只按「；」「｜」换行切分，字段内部的逗号保留；
+  // 仅当逗号后面紧跟“已知字段名：”时才视为字段分隔（兼容 AI 偶尔写成「身份：x，关系：y」）。
+  // 不是已知字段名的片段，并入上一个字段，不再丢弃。
+  const FIELD_LABELS='身份定位|身份|简介|定位|人际关系|关系|外貌感官特征|外貌特征|外貌|感官特征|长相|性格要点|性格特征|性格|口头禅|口癖|爱好|年龄|岁数|性别|正文描写标签|描写标签|标签|类型|类别|感官氛围特征|氛围特征|氛围|说明|备注|功能特效|功能/特效|功能|特效|使用禁忌/限制|使用禁忌|使用限制|禁忌|限制|来源|立场|核心职能|职能|行业/职能|行业|服务对象|地点|适用范围|范围|规则内容|规则|代价/限制|代价|含义|解释|定义|使用场景|场景|时间/时代|时间|时代|参与方|经过|过程|影响|与主线关系|主线关系|可用钩子|适用地区/群体|内容|设定|描写价值|价值|登场|台词|人物B|地名B|专名B|对象|关联';
+  const KNOWN_LABEL=new RegExp('^(?:'+FIELD_LABELS+')$');
+  const SPLIT_RE=new RegExp('[；;\\n|｜]|[，,](?=\\s*(?:'+FIELD_LABELS+')[：:])');
   const parsePairs = detail => {
-    const m = {};
-    const segs = String(detail||'').split(/[；;，,\n|｜]/);
+    const m = {}; let last='';
+    const segs = String(detail||'').split(SPLIT_RE);
     for(const seg of segs){
       const s = String(seg||'').trim();
       if(!s) continue;
       const kv = s.match(/^[ \t*#-]*([\u4e00-\u9fa5A-Za-z0-9/_\-\—]{1,16})[：:]\s*(.+)$/);
-      if(!kv || !kv[1] || !String(kv[2]||'').trim()) continue;
-      m[kv[1].trim()] = kv[2].trim();
+      if(kv && KNOWN_LABEL.test(kv[1].trim()) && String(kv[2]||'').trim()){
+        last = kv[1].trim();
+        m[last] = m[last] ? (m[last]+'；'+kv[2].trim()) : kv[2].trim();
+      } else if(last){
+        m[last] = m[last]+'；'+s;
+      }
     }
     return m;
   };
@@ -17847,7 +17912,7 @@ function parseDictEnrichText(txt){
     if(ln.startsWith('【') && ln.endsWith('】') && /新增|分类|类别|人物|地名|专名|路人|设定/.test(ln)) continue;
 
     let cat = '';
-    const m_cat_prefix = ln.match(/^[【\[\(（]?(次要配角|人物关系|地名关联|专名关联|世界观规则|地名|专名|路人|龙套|组织|势力|机构|物品|道具|规则|世界规则|术语|事件|历史事件|生活设定)[】\]\)）]?[：:·\s|｜│┆丨]+(.*)$/);
+    const m_cat_prefix = ln.match(/^[【\[\(（]?(次要配角|人物补充|人物关系|地名关联|专名关联|世界观规则|地名|专名|路人|龙套|组织|势力|机构|物品|道具|规则|世界规则|术语|事件|历史事件|生活设定)[】\]\)）]?[：:·\s|｜│┆丨]+(.*)$/);
     let rest = ln;
     if(m_cat_prefix){
       cat = m_cat_prefix[1];
@@ -17856,7 +17921,7 @@ function parseDictEnrichText(txt){
 
     let seg = rest.split(/[｜|│┆丨]/).map(s=>String(s||'').trim()).filter(Boolean);
     if(!cat){
-      if(seg.length && /^(次要配角|人物关系|地名关联|专名关联|世界观规则|地名|专名|路人|龙套|组织|势力|机构|物品|道具|规则|世界规则|术语|事件|历史事件|生活设定)$/.test(seg[0])){
+      if(seg.length && /^(次要配角|人物补充|人物关系|地名关联|专名关联|世界观规则|地名|专名|路人|龙套|组织|势力|机构|物品|道具|规则|世界规则|术语|事件|历史事件|生活设定)$/.test(seg[0])){
         cat = seg[0];
         seg = seg.slice(1);
       } else {
@@ -17896,6 +17961,11 @@ function parseDictEnrichText(txt){
       detail = (extraFromClean + '；' + detail).replace(/^；+|；+$/g, '');
     }
 
+    if(/人物补充/.test(cat)){
+      const m=parsePairs(detail);
+      res.supplements.push({name, appearance:m['外貌']||m['外貌特征']||m['长相']||'', hobby:m['爱好']||'', catchphrase:m['口头禅']||m['口癖']||'', tags:m['描写标签']||m['正文描写标签']||m['标签']||''});
+      continue;
+    }
     if(/人物关系/.test(cat)){
       const m=parsePairs(detail);
       const bName=String(seg[1]||m['人物B']||m['B']||m['对象']||'').trim();
@@ -17922,25 +17992,25 @@ function parseDictEnrichText(txt){
       continue;
     }
     if(/组织|势力/.test(cat)){
-      const m=parsePairs(detail); res.organizations.push({name, type:m['类型']||m['类别']||'', stance:m['立场']||'', function:m['核心职能']||m['职能']||m['功能']||'', relation:m['关系']||'', note:m['说明']||m['备注']||detail}); continue;
+      const m=parsePairs(detail); res.organizations.push({tags:(m['描写标签']||m['标签']||''), name, type:m['类型']||m['类别']||'', stance:m['立场']||'', function:m['核心职能']||m['职能']||m['功能']||'', relation:m['关系']||'', note:m['说明']||m['备注']||detail}); continue;
     }
     if(/机构|职业/.test(cat)){
-      const m=parsePairs(detail); res.institutions.push({name, type:m['类型']||m['类别']||'', function:m['行业/职能']||m['职能']||m['行业']||'', audience:m['服务对象']||'', location:m['地点']||'', note:m['说明']||m['备注']||detail}); continue;
+      const m=parsePairs(detail); res.institutions.push({tags:(m['描写标签']||m['标签']||''), name, type:m['类型']||m['类别']||'', function:m['行业/职能']||m['职能']||m['行业']||'', audience:m['服务对象']||'', location:m['地点']||'', note:m['说明']||m['备注']||detail}); continue;
     }
     if(/物品|道具/.test(cat)){
-      const m=parsePairs(detail); res.items.push({name, type:m['类型']||m['类别']||'', function:m['功能']||m['用途']||'', source:m['来源']||'', limit:m['使用限制']||m['限制']||'', note:m['说明']||m['备注']||detail}); continue;
+      const m=parsePairs(detail); res.items.push({tags:(m['描写标签']||m['标签']||''), name, type:m['类型']||m['类别']||'', function:m['功能']||m['用途']||'', source:m['来源']||'', limit:m['使用限制']||m['限制']||'', note:m['说明']||m['备注']||detail}); continue;
     }
     if(/规则|世界规则/.test(cat)){
-      const m=parsePairs(detail); res.rules.push({name, category:m['类别']||m['类型']||'', scope:m['适用范围']||m['范围']||'', rule:m['规则内容']||m['规则']||m['内容']||detail, limit:m['代价/限制']||m['限制']||m['代价']||''}); continue;
+      const m=parsePairs(detail); res.rules.push({tags:(m['描写标签']||m['标签']||''), name, category:m['类别']||m['类型']||'', scope:m['适用范围']||m['范围']||'', rule:m['规则内容']||m['规则']||m['内容']||detail, limit:m['代价/限制']||m['限制']||m['代价']||'', note:m['说明']||m['备注']||''}); continue;
     }
     if(/术语/.test(cat)){
-      const m=parsePairs(detail); res.terms.push({name, category:m['类别']||m['类型']||'', meaning:m['含义']||m['解释']||m['定义']||detail, usage:m['使用场景']||m['场景']||'', note:m['说明']||m['备注']||''}); continue;
+      const m=parsePairs(detail); res.terms.push({tags:(m['描写标签']||m['标签']||''), name, category:m['类别']||m['类型']||'', meaning:m['含义']||m['解释']||m['定义']||detail, usage:m['使用场景']||m['场景']||'', note:m['说明']||m['备注']||''}); continue;
     }
     if(/事件|历史事件/.test(cat)){
-      const m=parsePairs(detail); res.events.push({name, era:m['时间/时代']||m['时间']||m['时代']||'', participants:m['参与方']||'', course:m['经过']||m['过程']||'', impact:m['影响']||'', relation:m['与主线关系']||m['主线关系']||'', note:m['说明']||''}); continue;
+      const m=parsePairs(detail); res.events.push({tags:(m['描写标签']||m['标签']||''), name, era:m['时间/时代']||m['时间']||m['时代']||'', participants:m['参与方']||'', course:m['经过']||m['过程']||'', impact:m['影响']||'', relation:m['可用钩子']||m['与主线关系']||m['主线关系']||'', note:m['说明']||''}); continue;
     }
     if(/生活设定|生活/.test(cat)){
-      const m=parsePairs(detail); res.lifeSettings.push({name, category:m['类别']||m['类型']||'', scope:m['适用地区/群体']||m['适用范围']||'', content:m['内容']||m['设定']||detail, value:m['描写价值']||m['价值']||'', note:m['说明']||''}); continue;
+      const m=parsePairs(detail); res.lifeSettings.push({tags:(m['描写标签']||m['标签']||''), name, category:m['类别']||m['类型']||'', scope:m['适用地区/群体']||m['适用范围']||'', content:m['内容']||m['设定']||detail, value:m['描写价值']||m['价值']||'', note:m['说明']||''}); continue;
     }
     if(/路人|龙套|闲人/.test(cat)){
       res.walkons.push({ name, note: detail, _auto:true, tier:'walkon' });
@@ -17990,7 +18060,10 @@ function parseDictEnrichText(txt){
       continue;
     }
   }
-  return sanitizePersonCollections(res);
+  // v1.0.590：不再用“像不像人名”误删（“石桥关排队老汉”这类路人曾被丢弃），只剔除纯泛称。
+  const okName=x=>{ const n=String(x&&x.name||'').trim(); return !!n && !PERSON_GENERIC_NAMES.has(n); };
+  res.characters=res.characters.filter(okName); res.walkons=res.walkons.filter(okName);
+  return res;
 }
 function mergeDictEnrich(res){
   const o = state.outline; if(!o) return {c:0,w:0,p:0,k:0,total:0};
@@ -18004,7 +18077,7 @@ function mergeDictEnrich(res){
     });
   };
 
-  (res.characters||[]).filter(it=>isLikelyPersonEntity(it&&it.name,it)).forEach(it=>{
+  (res.characters||[]).forEach(it=>{
     const [nm, extra] = cleanEntityName(it.name);
     if(!nm) return;
     it.name = nm;
@@ -18061,7 +18134,7 @@ function mergeDictEnrich(res){
     n.k++;
   });
 
-  (res.walkons||[]).filter(it=>isLikelyPersonEntity(it&&it.name,it)).forEach(it=>{
+  (res.walkons||[]).forEach(it=>{
     const [nm, extra] = cleanEntityName(it.name);
     if(!nm) return;
     it.name = nm;
@@ -18075,6 +18148,24 @@ function mergeDictEnrich(res){
     markGlossaryEnrichment(g,'walkons',it,{how:'词典充实'});
     g.walkons.push(it);
     n.w++;
+  });
+
+  // v1.0.590：基础次要配角的补充描写。只补基础卡里为空的 外貌/爱好/口头禅，另加描写标签；单独存放在 _charSupplements，不写回基础卡。
+  const _blank=v=>{ const t=String(v==null?'':v).trim(); return !t||t==='未知'||t==='无'; };
+  const supArr=(Array.isArray(g._charSupplements)?g._charSupplements:(g._charSupplements=[]));
+  n.sup=0;
+  (res.supplements||[]).forEach(it=>{
+    const nm=cleanEntityName(it&&it.name)[0]; if(!nm) return;
+    const base=(g.characters||[]).find(x=>cleanEntityName(x&&x.name)[0]===nm);
+    if(!base || !isGlossaryFoundation(g,'characters',base)) return;
+    const add={};
+    ['appearance','hobby','catchphrase'].forEach(f=>{ if(_blank(base[f]) && String(it[f]||'').trim()) add[f]=String(it[f]).trim(); });
+    if(String(it.tags||'').trim()) add.tags=String(it.tags).trim();
+    if(!Object.keys(add).length) return;
+    let ex=supArr.find(x=>String(x&&x.name||'').trim()===nm);
+    if(ex){ Object.keys(add).forEach(f=>{ if(!String(ex[f]||'').trim()) ex[f]=add[f]; }); }
+    else { ex=Object.assign({name:nm},add); supArr.push(ex); n.sup++; }
+    markGlossaryEnrichment(g,'_charSupplements',ex,{how:'词典充实'});
   });
 
   const ensureArr = key => { if(!Array.isArray(g[key])) g[key]=[]; return g[key]; };
@@ -18121,7 +18212,7 @@ function mergeDictEnrich(res){
   mergeAssoc('_placeContacts',res.placeContacts,x=>{const a=String(x&&x.from||'').trim(),b=String(x&&x.to||'').trim();return a&&b?`place:${a}|${b}|${String(x.relation||'').trim()}`:'';});
   mergeAssoc('_properContacts',res.properContacts,x=>{const a=String(x&&x.from||'').trim(),b=String(x&&x.to||'').trim();return a&&b?`proper:${a}|${b}|${String(x.relation||'').trim()}`:'';});
   mergeAssoc('_worldRules',res.worldRules,x=>{const rule=String(x&&x.rule||'').trim();return rule?`rule:${String(x.cat||'').trim()}|${String(x.scope||'').trim()}|${rule}`:'';});
-  n.total = n.c + n.w + n.p + n.k + n.organizations + n.institutions + n.items + n.rules + n.terms + n.events + n.lifeSettings + n.relationshipTable + n.placeContacts + n.properContacts + n.worldRules;
+  n.total = n.c + n.w + n.p + n.k + n.organizations + n.institutions + n.items + n.rules + n.terms + n.events + n.lifeSettings + n.relationshipTable + n.placeContacts + n.properContacts + n.worldRules + (n.sup||0);
   return n;
 }
 
@@ -18400,13 +18491,14 @@ function serializeDictEnrichFinalText(glossaryOverride){
   emit('路人','walkons',g.walkons,[['说明','note'],['身份','identity'],['关系','relation'],['特征','trait']]);
   emit('地名','places',g.places,[['类型','type'],['说明','note']]);
   emit('专名','propernouns',g.propernouns,[['说明','note']]);
-  emit('组织','organizations',g.organizations,[['类型','type'],['立场','stance'],['核心职能','function'],['关系','relation'],['说明','note']]);
-  emit('机构','institutions',g.institutions,[['类型','type'],['职能','function'],['服务对象','audience'],['地点','location'],['说明','note']]);
-  emit('道具','items',g.items,[['类型','type'],['功能','function'],['来源','source'],['使用限制','limit'],['说明','note']]);
-  emit('规则','rules',g.rules,[['类别','category'],['范围','scope'],['规则','rule'],['代价/限制','limit']]);
-  emit('术语','terms',g.terms,[['类别','category'],['含义','meaning'],['使用场景','usage'],['说明','note']]);
-  emit('事件','events',g.events,[['时间/时代','era'],['参与方','participants'],['经过','course'],['影响','impact'],['与主线关系','relation'],['说明','note']]);
-  emit('生活设定','lifeSettings',g.lifeSettings,[['类别','category'],['适用范围','scope'],['内容','content'],['描写价值','value'],['说明','note']]);
+  emit('组织','organizations',g.organizations,[['类型','type'],['立场','stance'],['核心职能','function'],['关系','relation'],['说明','note'],['描写标签','tags']]);
+  emit('机构','institutions',g.institutions,[['类型','type'],['职能','function'],['服务对象','audience'],['地点','location'],['说明','note'],['描写标签','tags']]);
+  emit('道具','items',g.items,[['类型','type'],['功能','function'],['来源','source'],['使用限制','limit'],['说明','note'],['描写标签','tags']]);
+  emit('规则','rules',g.rules,[['类别','category'],['范围','scope'],['规则','rule'],['代价/限制','limit'],['说明','note'],['描写标签','tags']]);
+  emit('术语','terms',g.terms,[['类别','category'],['含义','meaning'],['使用场景','usage'],['说明','note'],['描写标签','tags']]);
+  emit('事件','events',g.events,[['时间/时代','era'],['参与方','participants'],['经过','course'],['影响','impact'],['与主线关系','relation'],['说明','note'],['描写标签','tags']]);
+  emit('生活设定','lifeSettings',g.lifeSettings,[['类别','category'],['适用范围','scope'],['内容','content'],['描写价值','value'],['说明','note'],['描写标签','tags']]);
+  (g._charSupplements||[]).forEach(x=>{ if(!x||!isGlossaryEnrichment(g,'_charSupplements',x)) return; const name=String(x.name||'').trim(); const tail=_deKV(x,[['外貌','appearance'],['爱好','hobby'],['口头禅','catchphrase'],['描写标签','tags']]); if(name&&tail) lines.push(`【词典充实·人物补充】${name}｜${tail}`); });
   (g._relationshipTable||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_relationshipTable',x)) return; const a=String(x.a||'').trim(),b=String(x.b||'').trim(); if(a&&b) lines.push(`【词典充实·人物关系】${a}｜${b}｜关系：${String(x.relation||'').trim()}${x.note?'｜说明：'+String(x.note).trim():''}`); });
   (g._placeContacts||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_placeContacts',x)) return; const a=String(x.from||'').trim(),b=String(x.to||'').trim(); if(a&&b) lines.push(`【词典充实·地名关联】${a}｜${b}｜关系：${String(x.relation||'').trim()}${x.note?'｜说明：'+String(x.note).trim():''}`); });
   (g._properContacts||[]).forEach(x=>{ if(!isGlossaryEnrichment(g,'_properContacts',x)) return; const a=String(x.from||'').trim(),b=String(x.to||'').trim(); if(a&&b) lines.push(`【词典充实·专名关联】${a}｜${b}｜关系：${String(x.relation||'').trim()}${x.note?'｜说明：'+String(x.note).trim():''}`); });
@@ -18414,7 +18506,7 @@ function serializeDictEnrichFinalText(glossaryOverride){
   return lines.join('\n');
 }
 function parseDictEnrichFinalText(text){
-  const res={characters:[],places:[],propernouns:[],walkons:[],organizations:[],institutions:[],items:[],rules:[],terms:[],events:[],lifeSettings:[],relationshipTable:[],placeContacts:[],properContacts:[],worldRules:[]};
+  const res={characters:[],places:[],propernouns:[],walkons:[],organizations:[],institutions:[],items:[],rules:[],terms:[],events:[],lifeSettings:[],relationshipTable:[],placeContacts:[],properContacts:[],worldRules:[],supplements:[]};
   const src=String(text||'').replace(/^```[\s\S]*?\n/,'').replace(/```$/,'').trim();
   if(!src) return res;
   const lines=src.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
@@ -18452,6 +18544,11 @@ function parseDictEnrichFinalText(text){
       const m=parseKV(seg); const rule=val(m,'规则','规则内容'); if(!rule) continue;
       res.worldRules.push({name,cat:val(m,'类别','分类'),scope:val(m,'适用范围','范围'),rule,limit:val(m,'代价/限制','限制','代价')}); continue;
     }
+    if(tag==='人物补充'){
+      const nm=String(seg.shift()||'').trim(); if(!nm) continue;
+      const m=parseKV(seg); res.supplements.push({name:nm,appearance:val(m,'外貌','外貌特征'),hobby:val(m,'爱好'),catchphrase:val(m,'口头禅','口癖'),tags:val(m,'描写标签','标签')});
+      continue;
+    }
     const key=cats[tag]; if(!key) continue;
     if(!seg[0]) continue;
     const name=seg.shift(), m=parseKV(seg), x={name};
@@ -18463,10 +18560,11 @@ function parseDictEnrichFinalText(text){
     else if(key==='organizations') Object.assign(x,{type:val(m,'类型','类别'),stance:val(m,'立场'),function:val(m,'核心职能','职能'),relation:val(m,'关系'),note:val(m,'说明','备注')});
     else if(key==='institutions') Object.assign(x,{type:val(m,'类型','类别'),function:val(m,'职能'),audience:val(m,'服务对象'),location:val(m,'地点'),note:val(m,'说明','备注')});
     else if(key==='items') Object.assign(x,{type:val(m,'类型','类别'),function:val(m,'功能'),source:val(m,'来源'),limit:val(m,'使用限制','限制'),note:val(m,'说明','备注')});
-    else if(key==='rules') Object.assign(x,{category:val(m,'类别','类型'),scope:val(m,'范围','适用范围'),rule:val(m,'规则','规则内容'),limit:val(m,'代价/限制','限制','代价')});
+    else if(key==='rules') Object.assign(x,{category:val(m,'类别','类型'),scope:val(m,'范围','适用范围'),rule:val(m,'规则','规则内容'),limit:val(m,'代价/限制','限制','代价'),note:val(m,'说明','备注')});
     else if(key==='terms') Object.assign(x,{category:val(m,'类别','类型'),meaning:val(m,'含义','解释','定义'),usage:val(m,'使用场景','场景'),note:val(m,'说明','备注')});
     else if(key==='events') Object.assign(x,{era:val(m,'时间/时代','时间','时代'),participants:val(m,'参与方'),course:val(m,'经过','过程'),impact:val(m,'影响'),relation:val(m,'与主线关系','主线关系'),note:val(m,'说明','备注')});
     else if(key==='lifeSettings') Object.assign(x,{category:val(m,'类别','类型'),scope:val(m,'适用范围','适用地区/群体'),content:val(m,'内容','设定'),value:val(m,'描写价值','价值'),note:val(m,'说明','备注')});
+    if(['organizations','institutions','items','rules','terms','events','lifeSettings'].includes(key)) x.tags=val(m,'描写标签','标签');
     res[key].push(x);
   }
   return res;
@@ -18513,10 +18611,10 @@ function saveDictEnrichReaderChanges(text){
   const normalizedText=normalizeDictEnrichInput(text);
   const parsed=parseDictEnrichFinalText(normalizedText);
   const working=JSON.parse(JSON.stringify(original)); ensureGlossaryKnowledgeShape(working);
-  const cats=['characters','places','propernouns','walkons','organizations','institutions','items','rules','terms','events','lifeSettings','_relationshipTable','_placeContacts','_properContacts','_worldRules'];
+  const cats=['characters','places','propernouns','walkons','organizations','institutions','items','rules','terms','events','lifeSettings','_relationshipTable','_placeContacts','_properContacts','_worldRules','_charSupplements'];
   // 先只删除旧 enrichment，Foundation 和非 enrichment 数据完全保留。
   cats.forEach(cat=>{ working[cat]=(working[cat]||[]).filter(x=>!isGlossaryEnrichment(original,cat,x)); });
-  const maps={characters:'characters',places:'places',propernouns:'propernouns',walkons:'walkons',organizations:'organizations',institutions:'institutions',items:'items',rules:'rules',terms:'terms',events:'events',lifeSettings:'lifeSettings',relationshipTable:'_relationshipTable',placeContacts:'_placeContacts',properContacts:'_properContacts',worldRules:'_worldRules'};
+  const maps={characters:'characters',places:'places',propernouns:'propernouns',walkons:'walkons',organizations:'organizations',institutions:'institutions',items:'items',rules:'rules',terms:'terms',events:'events',lifeSettings:'lifeSettings',supplements:'_charSupplements',relationshipTable:'_relationshipTable',placeContacts:'_placeContacts',properContacts:'_properContacts',worldRules:'_worldRules'};
   for(const [pk,cat] of Object.entries(maps)){
     for(const row of (parsed[pk]||[])){
       // 严格保护 Foundation：任何编辑文本都不得覆盖 Foundation 同名/同身份事实。
@@ -18656,7 +18754,7 @@ function dictEnrichBlockHtml(){
       ${stream}
       ${status}
       ${(t || hasWorldKnowledge) ? `<div class="dm-tables" style="margin-top:10px">
-        ${(()=>{ const ext=[['🏛️ 组织/势力',g.organizations,'organizations'],['🏢 职业/机构',g.institutions,'institutions'],['🧰 物品/道具',g.items,'items'],['📜 世界规则',g.rules,'rules'],['🔤 术语',g.terms,'terms'],['🕰️ 历史事件',g.events,'events'],['🍜 生活设定',g.lifeSettings,'lifeSettings']]; return ext.map(([lab,arr])=>{ const a=Array.isArray(arr)?arr:[]; if(!a.length) return ''; const body=a.map(x=>{const nm=String(x&&x.name||'').trim(); if(!nm) return ''; const vals=[x.type,x.category,x.function,x.stance,x.meaning,x.rule,x.content,x.note,x.impact].map(v=>String(v||'').trim()).filter(Boolean); const isNew=!!isGlossaryEnrichment(g,'organizations',x)||!!isGlossaryEnrichment(g,'institutions',x)||!!isGlossaryEnrichment(g,'items',x)||!!isGlossaryEnrichment(g,'rules',x)||!!isGlossaryEnrichment(g,'terms',x)||!!isGlossaryEnrichment(g,'events',x)||!!isGlossaryEnrichment(g,'lifeSettings',x); const isFoundation=!isNew && (isGlossaryFoundation(g,'organizations',x)||isGlossaryFoundation(g,'institutions',x)||isGlossaryFoundation(g,'items',x)||isGlossaryFoundation(g,'rules',x)||isGlossaryFoundation(g,'terms',x)||isGlossaryFoundation(g,'events',x)||isGlossaryFoundation(g,'lifeSettings',x)); const src=isFoundation?'基底':'扩充'; return `<div class="de-item${isNew?' new':''}"><span class="de-chip">${isNew?'✦ ':''}${esc(nm)}</span><span class="de-brief-desc dm-rel-txt">[${src}] ${esc(vals.join(' · ')||'（暂无详细简介）')}</span></div>`;}).join(''); return `<details class="dm-fold" open><summary>${lab}（${a.length}）</summary><div class="de-grid">${body}</div></details>`; }).join(''); })()}
+        ${(()=>{ const ext=[['🏛️ 组织/势力',g.organizations,'organizations'],['🏢 职业/机构',g.institutions,'institutions'],['🧰 物品/道具',g.items,'items'],['📜 世界规则',g.rules,'rules'],['🔤 术语',g.terms,'terms'],['🕰️ 历史事件',g.events,'events'],['🍜 生活设定',g.lifeSettings,'lifeSettings']]; return ext.map(([lab,arr])=>{ const a=Array.isArray(arr)?arr:[]; if(!a.length) return ''; const body=a.map(x=>{const nm=String(x&&x.name||'').trim(); if(!nm) return ''; const vals=[x.type,x.category,x.function,x.stance,x.meaning,x.rule,x.content,x.note,x.impact,x.tags].map(v=>String(v||'').trim()).filter(Boolean); const isNew=!!isGlossaryEnrichment(g,'organizations',x)||!!isGlossaryEnrichment(g,'institutions',x)||!!isGlossaryEnrichment(g,'items',x)||!!isGlossaryEnrichment(g,'rules',x)||!!isGlossaryEnrichment(g,'terms',x)||!!isGlossaryEnrichment(g,'events',x)||!!isGlossaryEnrichment(g,'lifeSettings',x); const isFoundation=!isNew && (isGlossaryFoundation(g,'organizations',x)||isGlossaryFoundation(g,'institutions',x)||isGlossaryFoundation(g,'items',x)||isGlossaryFoundation(g,'rules',x)||isGlossaryFoundation(g,'terms',x)||isGlossaryFoundation(g,'events',x)||isGlossaryFoundation(g,'lifeSettings',x)); const src=isFoundation?'基底':'扩充'; return `<div class="de-item${isNew?' new':''}"><span class="de-chip">${isNew?'✦ ':''}${esc(nm)}</span><span class="de-brief-desc dm-rel-txt">[${src}] ${esc(vals.join(' · ')||'（暂无详细简介）')}</span></div>`;}).join(''); return `<details class="dm-fold" open><summary>${lab}（${a.length}）</summary><div class="de-grid">${body}</div></details>`; }).join(''); })()}
         ${deCat('👤 主要人物', liveMain, 'grid')}
         ${deCat('🤝 次要配角', liveSupport, 'grid')}
         ${deCat('🚶 路人龙套', liveWalkons, 'grid')}
@@ -19183,6 +19281,7 @@ function fmtCharFullFields(c){
   if(c.hobby && c.hobby !== '未知') segs.push('爱好:'+c.hobby);
   if(c.catchphrase && c.catchphrase !== '未知' && c.catchphrase !== '无') segs.push('口头禅:'+c.catchphrase);
   if(c.relation && c.relation !== '未知') segs.push('关系:'+c.relation);
+  { const _sup=enrichSupplementText(state.outline&&state.outline.glossary,c.name); if(_sup) segs.push(_sup); }
   return segs;
 }
 function formatRelevantGlossary(rg){
@@ -19577,6 +19676,7 @@ function buildAiRefineCtx(i){
     if(c.catchphrase && c.catchphrase !== '无') parts.push('口头禅:'+c.catchphrase);
     if(c.relation) parts.push('关系:'+c.relation);
     if(c.trait) parts.push('性格:'+c.trait);
+    { const _sup=enrichSupplementText(g,c.name); if(_sup) parts.push(_sup); }
     return (c.name||'')+(parts.length?'（'+parts.join('；')+'）':'');
   }).join('；');
   const dictPlaces = (g.places||[]).map(p=>`${p.name||''}${p.note?`（${p.note}）`:''}`).join('；');
