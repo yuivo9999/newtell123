@@ -31,7 +31,7 @@
    5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.592';
+const APP_VERSION = '1.0.593';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
 const APP_FILE_VERSION = 'app1.0.586.js';
 function installV569Styles(){
@@ -1971,27 +1971,44 @@ async function persistCritical(label){
   }
   const raw=JSON.stringify(snap);
   let storage='ls';
+  // v1.0.593：localStorage 写满（QuotaExceededError）时，严格保存也自动改存 IndexedDB（与普通 persist() 的降级一致），
+  // 不再直接报「The quota has been exceeded.」；索引写不进去时先清掉可再生的缓存（AI 日志/提示日志）再重试一次。
+  const lsSetRelief=(key,val)=>{
+    try{ localStorage.setItem(key,val); return; }
+    catch(e1){
+      try{ localStorage.removeItem(KEY_AILOG); }catch(_e){}
+      try{ localStorage.removeItem(nsKey('toastLog_v1')); }catch(_e){}
+      localStorage.setItem(key,val);
+    }
+  };
+  const writeIndex=(mode)=>{
+    const oldIdx=(()=>{try{return JSON.parse(localStorage.getItem(KEY_INDEX))||{};}catch(e){return {};}})();
+    const st=(oldIdx.st&&typeof oldIdx.st==='object')?oldIdx.st:{};
+    st[snap.id]=mode;
+    const ids=lib.items.map(i=>i.id);
+    try{ lsSetRelief(KEY_INDEX,JSON.stringify({curId:lib.curId,ids,st})); }catch(e){ throw new Error('项目索引保存失败：'+String(e?.message||e)); }
+  };
+  const toIdb=async(why)=>{
+    if(typeof idbPut!=='function') throw new Error('浏览器存储不可用：无法确认项目已保存'+(why?`（${why}）`:''));
+    await idbPut(snap);
+    storage='idb';
+    try{ localStorage.removeItem(lsKeyFor(snap.id)); }catch(_e){}   // 释放 localStorage 空间，避免读到旧数据
+    writeIndex('idb');
+    if(typeof idbGet==='function'){
+      const verify=await idbGet(snap.id);
+      if(!verify || verify.id!==snap.id) throw new Error('数据库回读校验失败');
+    }
+  };
   try{
     if(raw.length<=LS_SINGLE_SAFE){
-      localStorage.setItem(lsKeyFor(snap.id),raw);
-      const oldIdx=(()=>{try{return JSON.parse(localStorage.getItem(KEY_INDEX))||{};}catch(e){return {};}})();
-      const st=(oldIdx.st&&typeof oldIdx.st==='object')?oldIdx.st:{};
-      st[snap.id]='ls';
-      const ids=lib.items.map(i=>i.id);
-      try{localStorage.setItem(KEY_INDEX,JSON.stringify({curId:lib.curId,ids,st}));}catch(e){throw new Error('项目索引保存失败');}
-    }else{
-      if(typeof idbPut!=='function') throw new Error('浏览器存储不可用：无法确认大项目已保存');
-      await idbPut(snap);
-      storage='idb';
-      const oldIdx=(()=>{try{return JSON.parse(localStorage.getItem(KEY_INDEX))||{};}catch(e){return {};}})();
-      const st=(oldIdx.st&&typeof oldIdx.st==='object')?oldIdx.st:{};
-      st[snap.id]='idb';
-      const ids=lib.items.map(i=>i.id);
-      try{localStorage.setItem(KEY_INDEX,JSON.stringify({curId:lib.curId,ids,st}));}catch(e){throw new Error('项目索引保存失败');}
-      if(typeof idbGet==='function'){
-        const verify=await idbGet(snap.id);
-        if(!verify || verify.id!==snap.id) throw new Error('数据库回读校验失败');
+      try{
+        localStorage.setItem(lsKeyFor(snap.id),raw);
+        writeIndex('ls');
+      }catch(lsErr){
+        await toIdb(String(lsErr?.message||lsErr));
       }
+    }else{
+      await toIdb();
     }
   }catch(e){ throw new Error(`${label||'关键保存'}失败：${e?.message||e}`); }
   // 前台立即回读验证，避免 UI 在未真正落盘时显示完成。
@@ -5028,6 +5045,7 @@ function schoolTeacherBtn(g, i){
       <button type="button" class="sc-plan-btn" data-scp-plan="${i}" title="${done?('查看'+ label +'本组教案并可编辑保存'):'该组教案尚未生成，先生成后才能阅读'}">📖 读教案</button>
       <button type="button" class="sc-plan-btn sc-injection-export-btn" data-scp-injection-export="${i}" title="查看该老师真实 AI 请求的 SYSTEM + USER">📦 注入导出</button>
     </div>
+    ${typeof tbCardExtra==='function'?tbCardExtra(i,g):''}
     <div class="sc-tc-cut-row"><span class="sc-tc-final-note" style="font-weight:700">${_boundary.finalResponsible?'🎯 本项目结局负责者｜无后续老师':'🔗 有后续老师时按系统边界交接'}</span><span class="sc-tc-cut-status ${cut.status}" data-scp-cut-status>${esc(cutText)}</span><span class="sc-tc-cut-detail" data-scp-cut-detail>${esc(cut.status==='ready'?`本章纯文本教案已就绪：${cut.ready}/${cut.total}`:cut.status==='stale'?'总教案已更新，旧单章卡已失效，请重新切割':cut.status==='no-teacher'?'请先完成本老师总教案':`尚未切割本章纯文本教案：${cut.ready}/${cut.total}，点击“切割教案”后按章头尾直接切割`)}</span><button type="button" class="sc-tc-cut-more" data-scp-cut-more>查看详情 ▾</button></div>
     <div class="sc-tc-cut-list" data-scp-cut-list style="display:none">${renderTeacherCutChapterList(i)}</div>
   </div>`;
@@ -6820,10 +6838,12 @@ function parsePrincipalStrategyMachine(text, total, assignment){
     // 新规则：GLOBAL 只是 ALL 的合法子集；未进入 GLOBAL 的词条自动进入 remaining，不再作为校长错误。
     if(new Set(ge).size!==ge.length) errors.push('STYLE_STRATEGY.globalStyleEntries存在重复ID');
     const defs=parsePrincipalJsonField(style.globalStyleDefinitions,[]);
+    let _metaFixed=false;
     if(Array.isArray(defs)){
       const got=defs.map(x=>String(x?.id||'').trim()).filter(Boolean);
       if(JSON.stringify(got)!==JSON.stringify(ge)) errors.push('GLOBAL词条解释区必须与GLOBAL词条池一一对应');
-      defs.forEach(d=>{const x=selected.find(v=>String(v.id)===String(d?.id)); if(!x) return; if(String(d?.name||'').trim()!==String(x.name||d.id).trim()) errors.push(`GLOBAL词条解释区的词条名必须使用已选词条原名：${d.id}`); const meaning=String(d?.meaning||'').trim(); const expected=String(x.note||x.name||'').trim(); if(meaning!==expected) errors.push(`GLOBAL词条解释区的词条解释必须忠实于已选词条原定义：${d.id}`);});
+      defs.forEach(d=>{const x=selected.find(v=>String(v.id)===String(d?.id)); if(!x) return; if(String(d?.name||'').trim()!==String(x.name||d.id).trim()) errors.push(`GLOBAL词条解释区的词条名必须使用已选词条原名：${d.id}`); const meaning=String(d?.meaning||'').trim(); const expected=String(x.note||x.name||'').trim(); if(meaning!==expected){ d.meaning=expected; _metaFixed=true; } });
+      if(_metaFixed){ try{ style.globalStyleDefinitions=JSON.stringify(defs); }catch(_e){} }   // v1.0.593：词条解释由程序按已选词条原定义回填，不再因 AI 概括改写而报错
     }
   }
   const jsonChecks=[['BOOK_STRATEGY.longTermDrivers',book?.longTermDrivers,'array'],['BOOK_STRATEGY.majorTurningPoints',book?.majorTurningPoints,'array'],['BOOK_STRATEGY.majorClimaxes',book?.majorClimaxes,'array'],['BOOK_STRATEGY.irreversibleChanges',book?.irreversibleChanges,'array'],['BOOK_STRATEGY.bookRhythm',book?.bookRhythm,'object']];
@@ -7581,70 +7601,7 @@ function teacherMiddleStructureInstruction(shape, chapterNumber){
   return `【本章微拍施工要求｜第${Number(chapterNumber)||''}章】\n本章微拍：${label}\n\n${rows.length?rows.join('\n\n'):'本章微拍没有可展开的阶段列表；保持现有结构形状，不自行创建第二套微拍。'}\n\n施工关系：微拍规定中段节奏形状；校长规定本章战略、目标、核心事件与边界；老师负责把两者结合为推进骨架，再落实为中段施工。微拍不是剧情节点，不是人物行动清单，也不是旧结构骨架。`;
 }
 
-function buildTeacherUser(g,gi){
-  const pr=principalCurrentResult()||{},lines=[],code=g.teacherCode||teacherCodeForIndex(gi),groups=teacherAssignmentGroups(),role=teacherRoleForIndex(gi,groups.length),assignment=buildTeacherAssignment(),finalFacts=teacherGroupBoundaryFacts(gi,assignment);
-  const seenBlocks=new Set();
-  // v1.0.581：老师输入统一经 addBlock 组装——每个来源块有唯一id，同一id只会进入一次，空块自动忽略（与校长的来源块机制一致）。
-  const addBlock=(id,text)=>{ const t=String(text==null?'':text).trim(); if(!t||seenBlocks.has(id)) return; seenBlocks.add(id); lines.push(t); };
-  const plans=state.school?.principal?.plans||{};
-  const targetCount=Math.max(Number(state.outline?.chapters?.length)||0,Object.keys(plans).length,Number(state.school?.principal?.targetChapterCount)||0);
-  const stageForChapter=(n)=>{
-    const stages=Array.isArray(pr.stageStrategies)?pr.stageStrategies:[];
-    return stages.find(x=>Number(x.startChapter)<=n&&Number(x.endChapter)>=n)||null;
-  };
-  const groupStrategy=(pr.teacherGroupStrategies||[]).find(x=>String(x.teacherCode||'')===String(code))||{};
-  const middleSource=principalChapterMiddleShapeSource(targetCount), middleByChapter={};
-  (middleSource.chapters||[]).forEach(x=>{middleByChapter[String(x.chapter)]=x;});
-  const timeSource=principalTimeSystemSource(targetCount);
-
-  addBlock('identity',`【老师身份与交接边界｜系统事实】\n老师代号=${code}｜系统角色=${role.role}（${role.roleLabel}）｜负责章节=${g.first}-${g.last}（共${g.chapterCount}章）\n最终老师=${finalFacts.finalTeacher||'未确定'}｜本组是否最终结局负责=${finalFacts.finalResponsible?'是':'否'}｜${finalFacts.hasNextTeacher?`下一位老师=${finalFacts.nextTeacherCode}`:'没有后续老师'}`);
-  addBlock('facts',`【系统事实｜FACTS】\n${storyStateCanonBlock()}`);
-
-  const global=compileTeacherGlobal(pr);
-  const previousStyleAudit=teacherStyleLedgerForPriorGroups(gi);
-  const remainingForThisGroup=Array.isArray(global.remainingStyleEntries) ? global.remainingStyleEntries.filter(x=>!previousStyleAudit.assignedIds.includes(String(x.id))) : [];
-  addBlock('strategy',`【校长战略来源｜WHAT / WHY / WHERE TO END】\n以下战略来自校长；老师不得改写战略事实。\n${teacherPromptText({global:global.global,selectedSemantics:global.selectedSemantics},9000)}\n【校长唯一GLOBAL｜全书只出现一次】\n\n${teacherStyleRelayText(global,previousStyleAudit,remainingForThisGroup,g)}`);
-
-  const stageRows=(pr.stageStrategies||[]).filter(x=>Number(x.endChapter)>=Number(g.first)&&Number(x.startChapter)<=Number(g.last));
-  const compiledStages=compileTeacherStageRows(stageRows);
-  if(compiledStages.length) addBlock('stages',`【本组阶段战略｜仅出现一次】\n${teacherPromptText(compiledStages,10000)}\n\n章节内部只引用本章所属阶段及必要差异，不重复整套阶段对象。`);
-
-  const compiledGroup=compileTeacherGroupStrategy(groupStrategy);
-  if(Object.keys(compiledGroup).length) addBlock('group',`【本组战略与施工边界】\n${teacherPromptText(compiledGroup,8000)}`);
-  addBlock('handoff',teacherHandoffCard(gi));
-  const revealPlan=principalRevealPlan();
-  addBlock('reveal',teacherRevealGroupBlock(g,revealPlan));
-  addBlock('ending-contract',`【章末施工契约】\n${chapterEndingContractText()}\n\n【允许的章末表现形式】\n${chapterEndingFormText()}\n\n【章末承接方式】\n${chapterEndingTransitionText()}\n\n【章末功能说明】\n${chapterEndingFunctionText()}`);
-  addBlock('chapter-common',`【逐章施工通用规则｜适用于下面每一章，只出现一次】
-1. 承接：每章先核对该章「本章承接」里的上一章实际结束状态再承接；第一场只能取自上一章实际结束状态、本章opening信息和本章既有章节计划，不得新增未经授权的事件，不改变校长原有战略；缺少正文结算状态时不得自行补写缺失事实。
-2. 微拍/中段结构只提供结构形状、节奏分段与边界，不改写成第二套剧情事件清单；某章没有给出阶段、微拍或时间信息时，以已成立正文状态和章节事实为准，不得臆造。
-3. 三层：GLOBAL完整继承上方校长唯一GLOBAL；HYBRID/CHAPTER只有本章确有需要时才施工；不得把校长数据、旧style对象或机器字段再次作为第二来源。
-4. 章末：必须落实该章「章节战略与剧情事实」里的ending信息（function、intensity、lastEffectiveEvent、form、nextTransitionType、nextTransitionBasis、handoff、diversityNote）；章末必须形成真正停止边界，并明确最后有效事件之后不再追加内容。`);
-
-  for(let n=g.first;n<=g.last;n++){
-    const p=plans[n]||{}, stage=stageForChapter(n)||{}, middle=middleByChapter[String(n)]||getChapterMiddleShape(n)||null, time=timeSource?.plannedChapters?.find(x=>Number(x.chapter)===n)||null;
-    const previousState=String(storyStateChapterBlock(n-1)||'').trim();
-    const chapterData=compileTeacherChapterPlan(p,n,state.chapters?.[n-1]?.title||'');
-    const carryOver=teacherChapterCarryOver(n,p,previousState);
-    const stageLabel=teacherPromptCompact({stage:stage.stage||stage.name||'',startChapter:stage.startChapter,endChapter:stage.endChapter,goal:stage.goal||stage.mission||stage.stageGoal||'',teacherTask:stage.teacherTask||stage.task||'',stageBeatInterpretation:String(stage.stageBeatInterpretation||'').trim(),handoff:stage.handoff||''});
-    const chParts=[`【第${n}章｜章节施工信息】`,`【章节战略与剧情事实】\n${teacherPromptText(chapterData,14000)}`];
-    if(Object.keys(stageLabel||{}).length) chParts.push(`【本章所属阶段】\n${teacherPromptText(stageLabel,5000)}`);
-    if(middle) chParts.push(`【本章微拍 / 中段结构】\n${teacherPromptText(middle,9000)}\n\n${teacherMiddleStructureInstruction(middle,n)}`);
-    const timeText=String(compileTeacherTimeContext(timeSource,n)||'').trim();
-    if(timeText) chParts.push(`【本章时间要求】\n${timeText}`);
-    const revealLines=teacherRevealChapterLines(n,revealPlan);
-    if(revealLines) chParts.push(revealLines);
-    chParts.push(carryOver);
-    addBlock(`chapter:${n}`,chParts.join('\n\n'));
-  }
-
-  addBlock('glossary',`【本组授权词典｜仅保留实际相关创作事实】\n${teacherScopedGlossary(g,gi,9000)}`);
-  addBlock('prev-state',`【前序正文状态｜连续性事实】\n${g.first>1?(storyStateChapterBlock(g.first-1)||'（暂无结算状态；不得自行假定缺失事实）'):'（首组，无前序正文）'}`);
-  addBlock('final-exec',`【最终输出执行口令】
-现在一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。不得输出摘要、章节概述或第二套机器教案。
-
-【总教案固定七区结构｜必须严格按顺序、一次且仅一次输出】
-【一、GLOBAL继承与风格层级归属】
+const TEACHER_ZONES_1_6 = `【一、GLOBAL继承与风格层级归属】
 GLOBAL：这里只放校长唯一GLOBAL的完整正式内容，不得混入HYBRID/CHAPTER章节分配。
 
 【二、世界观规则执行说明】
@@ -7662,8 +7619,9 @@ GLOBAL：这里只放校长唯一GLOBAL的完整正式内容，不得混入HYBRI
 【六、CHAPTER执行规则】
 每个CHAPTER独立成一个规则块，写正文AI可以直接执行的自然语言施工规则。章节归属只由第四区决定，不得因为规则正文提到其他章节而改变归属。
 
-【七、正式章节教案】
-随后依次输出第${g.first}章至第${g.last}章正式章节教案。每章必须保留完整剧情安排、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。每章正式章节教案必须显式、肉眼可见地包含【本章章头承接】【本章中段施工】【本章章末设计】三个固定施工区，不能把三者混写成一大段普通正文。每章至少按以下顺序组织：
+`;
+function teacherSevenZoneText(first,last){ return `【七、正式章节教案】
+随后依次输出第${first}章至第${last}章正式章节教案。每章必须保留完整剧情安排、承接、时间地点人物状态、核心变化、中段文学施工、动态推进、章末完整设计和创作边界。每章正式章节教案必须显式、肉眼可见地包含【本章章头承接】【本章中段施工】【本章章末设计】三个固定施工区，不能把三者混写成一大段普通正文。每章至少按以下顺序组织：
 第X章……
 【本章章头承接】
 ……
@@ -7697,11 +7655,98 @@ GLOBAL：这里只放校长唯一GLOBAL的完整正式内容，不得混入HYBRI
 
 其中“本章章头承接”必须承接上一章真实状态与上一章ending，并执行本章已有opening信息；“本章章末设计”必须只使用本章真实授权的ending字段。不得把上一章ending复制成下一章ending。正式章节教案不重新定义全书HYBRID/CHAPTER。
 
-【切割说明】
+`; }
+const TEACHER_CUT_NOTE_TAIL = `【切割说明】
 之后系统会按第三、四区的章节索引，从第五、六区提取每章对应的HYBRID/CHAPTER规则，再加上GLOBAL、世界观规则和当前章节教案交给正文AI。所以第三、四区的章节归属必须准确，第五、六区的规则必须能脱离全文单独执行。
 不得删除或改写上游已经锁定的GLOBAL、世界观规则以及章节剧情事实。
 
-输出只作为正文AI唯一章节教案来源。`);
+输出只作为正文AI唯一章节教案来源。`;
+/* v1.0.593：老师「最终输出执行口令」按模式生成。whole＝原整组一次输出（文本与旧版逐字一致）；plan＝只出总纲（一至六区）；batch＝只出指定章节的正式教案（第七区正文）。 */
+function teacherFinalExecText(g,part,from,to){
+  const head0='【最终输出执行口令】\n';
+  if(part==='plan'){
+    return head0+`现在只完成负责章节${g.first}-${g.last}的老师总教案【总纲部分】：只输出七区结构中的第一至第六区，严格按顺序、各一次；不得输出【七、正式章节教案】及任何章节教案，不得输出摘要、章节概述或第二套机器教案。\n本组章节较多，系统会在总纲定稿后分批向你索取各章正式教案，所以第五、六区的规则必须能脱离全文单独执行；第三、四区必须覆盖本组第${g.first}-${g.last}章全部章节的归属判断（每个章节编号单独一行）。\n\n【总教案固定结构｜本次只输出一至六区】\n`+TEACHER_ZONES_1_6.trim()+`\n\n输出到【六、CHAPTER执行规则】结束即停止，不要写第七区。`;
+  }
+  if(part==='batch'){
+    return head0+`现在只完成第${from}章至第${to}章的正式章节教案（总教案第七区的正文部分）。上方【本组总纲】是已定稿的一至六区，只读，不得重复输出，不得改写；不得输出【七、正式章节教案】标题，不得输出其他章节。\n\n`+teacherSevenZoneText(from,to).replace(/^【七、正式章节教案】\n/,'').trim()+`\n\n输出只作为正文AI唯一章节教案来源；第${from}章至第${to}章每章都必须完整包含上述全部固定施工区，不得因为章节多而压缩或省略任何一区。`;
+  }
+  return `【最终输出执行口令】
+现在一次完成负责章节${g.first}-${g.last}的完整老师总教案原始文本。不得输出摘要、章节概述或第二套机器教案。
+
+【总教案固定七区结构｜必须严格按顺序、一次且仅一次输出】
+`+TEACHER_ZONES_1_6+teacherSevenZoneText(g.first,g.last)+TEACHER_CUT_NOTE_TAIL;
+}
+
+function buildTeacherUser(g,gi,opt){
+  /* v1.0.593：opt.part = 'whole'(默认，整组一次输出，与旧版一致) | 'plan'(只出总纲一至六区) | 'batch'(只出 opt.from-opt.to 章的正式教案，opt.zoneText＝已定稿总纲，opt.handoffText＝上一批章末承接) */
+  const _part=(opt&&opt.part)||'whole';
+  const _from=_part==='batch'?Number(opt.from):Number(g.first), _to=_part==='batch'?Number(opt.to):Number(g.last);
+  const gB=_part==='batch'?Object.assign({},g,{first:_from,last:_to,chapterCount:_to-_from+1}):g;
+  const pr=principalCurrentResult()||{},lines=[],code=g.teacherCode||teacherCodeForIndex(gi),groups=teacherAssignmentGroups(),role=teacherRoleForIndex(gi,groups.length),assignment=buildTeacherAssignment(),finalFacts=teacherGroupBoundaryFacts(gi,assignment);
+  const seenBlocks=new Set();
+  // v1.0.581：老师输入统一经 addBlock 组装——每个来源块有唯一id，同一id只会进入一次，空块自动忽略（与校长的来源块机制一致）。
+  const addBlock=(id,text)=>{ const t=String(text==null?'':text).trim(); if(!t||seenBlocks.has(id)) return; seenBlocks.add(id); lines.push(t); };
+  const plans=state.school?.principal?.plans||{};
+  const targetCount=Math.max(Number(state.outline?.chapters?.length)||0,Object.keys(plans).length,Number(state.school?.principal?.targetChapterCount)||0);
+  const stageForChapter=(n)=>{
+    const stages=Array.isArray(pr.stageStrategies)?pr.stageStrategies:[];
+    return stages.find(x=>Number(x.startChapter)<=n&&Number(x.endChapter)>=n)||null;
+  };
+  const groupStrategy=(pr.teacherGroupStrategies||[]).find(x=>String(x.teacherCode||'')===String(code))||{};
+  const middleSource=principalChapterMiddleShapeSource(targetCount), middleByChapter={};
+  (middleSource.chapters||[]).forEach(x=>{middleByChapter[String(x.chapter)]=x;});
+  const timeSource=principalTimeSystemSource(targetCount);
+
+  addBlock('identity',`【老师身份与交接边界｜系统事实】\n老师代号=${code}｜系统角色=${role.role}（${role.roleLabel}）｜负责章节=${g.first}-${g.last}（共${g.chapterCount}章）\n最终老师=${finalFacts.finalTeacher||'未确定'}｜本组是否最终结局负责=${finalFacts.finalResponsible?'是':'否'}｜${finalFacts.hasNextTeacher?`下一位老师=${finalFacts.nextTeacherCode}`:'没有后续老师'}${_part==='plan'?`\n【分批说明】本组共${g.chapterCount}章，章节较多，分批完成：本次只输出总纲（一至六区），随后系统会按批次索取各章正式教案。`:(_part==='batch'?`\n【分批说明】本组共${g.chapterCount}章（第${g.first}-${g.last}章），分批完成：本次只负责第${_from}-${_to}章的正式章节教案；总纲（一至六区）已定稿，见下方【本组总纲】。`:'')}`);
+  addBlock('facts',`【系统事实｜FACTS】\n${storyStateCanonBlock()}`);
+
+  const global=compileTeacherGlobal(pr);
+  const previousStyleAudit=teacherStyleLedgerForPriorGroups(gi);
+  const remainingForThisGroup=Array.isArray(global.remainingStyleEntries) ? global.remainingStyleEntries.filter(x=>!previousStyleAudit.assignedIds.includes(String(x.id))) : [];
+  if(_part==='batch'){ addBlock('plan-zone',`【本组总纲｜已定稿的一至六区，只读（GLOBAL、世界观规则执行说明、HYBRID/CHAPTER章节索引与执行规则；本批章节必须按其中第三、四区的归属执行）】\n${String(opt.zoneText||'').trim()}`); }
+  else addBlock('strategy',`【校长战略来源｜WHAT / WHY / WHERE TO END】\n以下战略来自校长；老师不得改写战略事实。\n${teacherPromptText({global:global.global,selectedSemantics:global.selectedSemantics},9000)}\n【校长唯一GLOBAL｜全书只出现一次】\n\n${teacherStyleRelayText(global,previousStyleAudit,remainingForThisGroup,g)}`);
+
+  const stageRows=(pr.stageStrategies||[]).filter(x=>Number(x.endChapter)>=Number(gB.first)&&Number(x.startChapter)<=Number(gB.last));
+  const compiledStages=compileTeacherStageRows(stageRows);
+  if(compiledStages.length) addBlock('stages',`【本组阶段战略｜仅出现一次】\n${teacherPromptText(compiledStages,10000)}\n\n章节内部只引用本章所属阶段及必要差异，不重复整套阶段对象。`);
+
+  const compiledGroup=compileTeacherGroupStrategy(groupStrategy);
+  if(Object.keys(compiledGroup).length) addBlock('group',`【本组战略与施工边界】\n${teacherPromptText(compiledGroup,8000)}`);
+  addBlock('handoff',(_part==='batch'&&_from>Number(g.first))?String(opt.handoffText||''):teacherHandoffCard(gi));
+  const revealPlan=principalRevealPlan();
+  addBlock('reveal',teacherRevealGroupBlock(gB,revealPlan));
+  if(_part!=='plan') addBlock('ending-contract',`【章末施工契约】\n${chapterEndingContractText()}\n\n【允许的章末表现形式】\n${chapterEndingFormText()}\n\n【章末承接方式】\n${chapterEndingTransitionText()}\n\n【章末功能说明】\n${chapterEndingFunctionText()}`);
+  if(_part!=='plan') addBlock('chapter-common',`【逐章施工通用规则｜适用于下面每一章，只出现一次】
+1. 承接：每章先核对该章「本章承接」里的上一章实际结束状态再承接；第一场只能取自上一章实际结束状态、本章opening信息和本章既有章节计划，不得新增未经授权的事件，不改变校长原有战略；缺少正文结算状态时不得自行补写缺失事实。
+2. 微拍/中段结构只提供结构形状、节奏分段与边界，不改写成第二套剧情事件清单；某章没有给出阶段、微拍或时间信息时，以已成立正文状态和章节事实为准，不得臆造。
+3. 三层：GLOBAL完整继承上方校长唯一GLOBAL；HYBRID/CHAPTER只有本章确有需要时才施工；不得把校长数据、旧style对象或机器字段再次作为第二来源。
+4. 章末：必须落实该章「章节战略与剧情事实」里的ending信息（function、intensity、lastEffectiveEvent、form、nextTransitionType、nextTransitionBasis、handoff、diversityNote）；章末必须形成真正停止边界，并明确最后有效事件之后不再追加内容。`);
+
+  if(_part==='plan'){
+    const brief=[];
+    for(let n=g.first;n<=g.last;n++){ const p=plans[n]||{}; brief.push(`第${n}章｜${String(p.title||state.chapters?.[n-1]?.title||'').trim()}｜功能：${String(p.function||'').trim()}｜目标：${String(p.goal||'').trim()}｜核心事件：${String(p.coreEvent||'').trim()}｜章末功能：${String(p.ending?.function||p.endingFunction||'').trim()}`); }
+    addBlock('chapter-brief',`【本组章节速览｜用于第三、四区的章节归属判断（各章完整施工信息会在后续分批注入）】\n${brief.join('\n')}`);
+  }
+  for(let n=(_part==='plan'?1:_from);n<=(_part==='plan'?0:_to);n++){
+    const p=plans[n]||{}, stage=stageForChapter(n)||{}, middle=middleByChapter[String(n)]||getChapterMiddleShape(n)||null, time=timeSource?.plannedChapters?.find(x=>Number(x.chapter)===n)||null;
+    const previousState=String(storyStateChapterBlock(n-1)||'').trim();
+    const chapterData=compileTeacherChapterPlan(p,n,state.chapters?.[n-1]?.title||'');
+    const carryOver=teacherChapterCarryOver(n,p,previousState);
+    const stageLabel=teacherPromptCompact({stage:stage.stage||stage.name||'',startChapter:stage.startChapter,endChapter:stage.endChapter,goal:stage.goal||stage.mission||stage.stageGoal||'',teacherTask:stage.teacherTask||stage.task||'',stageBeatInterpretation:String(stage.stageBeatInterpretation||'').trim(),handoff:stage.handoff||''});
+    const chParts=[`【第${n}章｜章节施工信息】`,`【章节战略与剧情事实】\n${teacherPromptText(chapterData,14000)}`];
+    if(Object.keys(stageLabel||{}).length) chParts.push(`【本章所属阶段】\n${teacherPromptText(stageLabel,5000)}`);
+    if(middle) chParts.push(`【本章微拍 / 中段结构】\n${teacherPromptText(middle,9000)}\n\n${teacherMiddleStructureInstruction(middle,n)}`);
+    const timeText=String(compileTeacherTimeContext(timeSource,n)||'').trim();
+    if(timeText) chParts.push(`【本章时间要求】\n${timeText}`);
+    const revealLines=teacherRevealChapterLines(n,revealPlan);
+    if(revealLines) chParts.push(revealLines);
+    chParts.push(carryOver);
+    addBlock(`chapter:${n}`,chParts.join('\n\n'));
+  }
+
+  addBlock('glossary',`【本组授权词典｜仅保留实际相关创作事实】\n${teacherScopedGlossary(gB,gi,9000)}`);
+  addBlock('prev-state',`【前序正文状态｜连续性事实】\n${_from>1?(storyStateChapterBlock(_from-1)||'（暂无结算状态；不得自行假定缺失事实）'):'（首组，无前序正文）'}`);
+  addBlock('final-exec',teacherFinalExecText(g,_part,_from,_to));
 
   return lines.join('\n\n');
 }
@@ -7724,12 +7769,12 @@ function teacherPerfRecord(gi, metrics){
 
 
 
-function buildTeacherInjection(g, gi){
+function buildTeacherInjection(g, gi, opt){
   const index = Number(gi);
   const groups = teacherAssignmentGroups();
   const group = g || groups[index];
   if(!group || !Number.isInteger(index) || index < 0) return null;
-  const teacherUser = String(buildTeacherUser(group, index) || '').trim();
+  const teacherUser = String(buildTeacherUser(group, index, opt) || '').trim();
   const teacherSystem = String(TEACHER_SYS + globalCreativeConstraintBlock('teacher') || '').trim();
   if(!teacherSystem || !teacherUser) return null;
   return { system:teacherSystem, user:teacherUser, group, gi:index };
@@ -7741,6 +7786,7 @@ async function genTeacher(btn, gi){
   if(!scDone('dictEnrich')){toast('老师备课需要先接收完整词典，请先完成“词典充实”');return false;}
   if(!scDone('principal')){toast('请先生成校长');return false;}
   if(typeof ptTeacherGuard==='function'){ const _gm=ptTeacherGuard(gi); if(_gm){ toast(_gm); return false; } }
+  if(typeof tbIsBatched==='function' && tbIsBatched(g)) return tbGenTeacher(btn,gi,g);   // v1.0.593：章节多的老师组分批备课（teacher-batch.js）
   const key='t'+gi; markAIRunning(key); if(btn)busy(btn,true,'备课中…'); if(btn&&btn.parentNode)showStopBtn(btn.parentNode);
   try{
     const spec=resolveActiveSpec('teacher'),temp=(spec&&spec.teacherTemp!=null)?spec.teacherTemp:0.4;
@@ -8633,6 +8679,7 @@ function teacherInjectionFileName(gi){
   return `老师${Number(gi)+1}_${code}_注入.txt`;
 }
 function openTeacherInjectionExport(gi){
+  { const _gs=teacherAssignmentGroups(), _g=_gs[Number(gi)]; if(_g && typeof tbIsBatched==='function' && tbIsBatched(_g)) return tbOpenInjectionExport(gi); }
   const inj=teacherInjectionTextForGroup(gi);
   if(!inj){ toast('该老师当前无法组装真实 AI 注入，请检查老师分组上下文'); return; }
   const text=`【SYSTEM】\n${inj.system}\n\n【USER】\n${inj.user}`;
@@ -8752,8 +8799,8 @@ function openSchoolPlanReader(gi, jumpCh){
     title:`🎓 ${label} · 本组教案`,
     initialText:String(t.raw||''), originalText:original,
     onRestore:async()=>{ t.raw=original; markTeacherChapterCardsStale(t); await persistCritical('恢复老师原始教案'); renderTeacherCutUi(Number(gi)); },
-    onSave:async val=>{ t.raw=val; markTeacherChapterCardsStale(t); await persistCritical('保存老师教案修改'); renderTeacherCutUi(Number(gi)); },
-    onImport:async val=>{ t.raw=val; markTeacherChapterCardsStale(t); await persistCritical('导入老师教案'); renderTeacherCutUi(Number(gi)); }
+    onSave:async val=>{ t.raw=val; if(t.batched) t.batched.manual=true; markTeacherChapterCardsStale(t); await persistCritical('保存老师教案修改'); renderTeacherCutUi(Number(gi)); },
+    onImport:async val=>{ t.raw=val; if(t.batched) t.batched.manual=true; markTeacherChapterCardsStale(t); await persistCritical('导入老师教案'); renderTeacherCutUi(Number(gi)); }
   });
 }
 

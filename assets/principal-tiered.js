@@ -195,7 +195,7 @@ function ptGroupSystem(){
 - 全书层战略（BOOK/STYLE/REVEAL/STAGE/TEACHER_GROUP）与粗章表已经定稿，只读，不得推翻、不得重写、不得再次输出。
 - 本次只负责「本组」章节：把粗章表里本组每一章从粗展开为完整的[PRINCIPAL_CHAPTER]块，必须且只能输出本组每一章各一块，chapter严格等于本组章号范围，不得多出、缺少、重复或越界。
 - 细化必须服从：所属阶段战略、本组战略（groupTask / mustAdvance / mustNotPrematurelyResolve / nextGroupLaunch）、上一组交接卡、上一组最后2章完整块（用于承接）、揭示计划、词典事实。
-- 细化可以在方向不变的前提下修正粗章表的标题/功能/目标，但每处修正必须有理由（写进diversityNote）；不得把本组粗章表内容整体改写成另一条故事线。
+- 细化可以在方向不变的前提下修正粗章表的标题/功能/目标，但每处修正必须有理由（写进diversityNote）；不得把本组粗章表内容整体改写成另一条故事线。\n- title/function/goal默认原样沿用粗章表；function必须保持粗章表那样的“一句话”写法，不得改写成“引入/推进/转折/高潮/后果收束”之类的类别词；没有必要修正就逐字照抄，不要为了“更细”而改写。
 - 本组结束时的状态要能被下一组承接：最后一章的lastEffectiveEvent、nextTransitionType/nextTransitionBasis、handoff必须明确写出本组留给下一组的条件。
 
 输出格式：只输出本组的[PRINCIPAL_CHAPTER]结构块，每块成对闭合，字段名一字不改，不得省略、合并，不得用“同上”“略”代替字段值：
@@ -475,6 +475,8 @@ function ptBuildAutoCard(gi){
   if(stage && Number(stage.endChapter) === Number(g.endChapter) && stage.nextStageLaunch && stage.nextStageLaunch !== '无') lines.push(`阶段交接（本组为阶段末）：${stage.nextStageLaunch}`);
   return lines.join('\n');
 }
+/* function 字段：≤8 字且无标点视为「类别词」，否则视为「一句话」 */
+function ptFnIsLabel(s){ s = String(s||'').trim(); return !!s && s.length <= 8 && !/[，。；、,;.\s]/.test(s); }
 function ptApplyGroupRaw(gi, rawIn, opts){
   opts = opts || {};
   const P = scState().principal;
@@ -527,7 +529,12 @@ function ptApplyGroupRaw(gi, rawIn, opts){
   const deviations = [];
   Object.keys(plans).map(Number).forEach(n => {
     const r = T.rough[n], p = plans[n]; if(!r) return;
-    ['title','function','goal'].forEach(f => { const a = String(r[f]||'').trim(), b = String(p[f]||'').trim(); if(a !== b) deviations.push({ chapter:n, field:f, rough:a, detailed:b }); });
+    ['title','function','goal'].forEach(f => {
+      const a = String(r[f]||'').trim(), b = String(p[f]||'').trim(); if(a === b) return;
+      /* v1.0.593：粗章表的 function 是一句话，AI 细化时常改成类别词（引入/推进/后果收束）。写法不同不算偏离，也不回写。 */
+      if(f === 'function' && ptFnIsLabel(a) !== ptFnIsLabel(b)) return;
+      deviations.push({ chapter:n, field:f, rough:a, detailed:b });
+    });
   });
   const status = (!missing.length && !invalid.length) ? 'detailed' : 'partial';
   const old = T.groups[gi] || {};

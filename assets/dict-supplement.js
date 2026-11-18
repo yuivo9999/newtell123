@@ -1,5 +1,5 @@
 /* ================================================================
- * dict-supplement.js · v1.0.591 · 词典增补 + 词典充实「剧情泄漏」清理
+ * dict-supplement.js · v1.0.593 · 词典增补 + 词典充实「剧情泄漏」清理（v1.0.593：「读增补成果」按组保存并回填原文）
  *
  * ① 剧情泄漏清理：词典只写“世界里有什么”，不写主角之后做什么。
  *    提示词已有「开篇状态原则」，但 AI 仍会写出“第一个助人任务的帮扶对象”“被主角塞过半块饼”之类。
@@ -86,7 +86,7 @@ function dsApply(gi, txt){
   o._dictEnrichText = (String(o._dictEnrichText || '') + '\n' + text).trim();
   const T = ptEnsure();
   T.supplements = T.supplements || {};
-  T.supplements[gi] = { ts:Date.now(), count, leaks:leaks.length, names:[].concat(...Object.values(parsed).filter(Array.isArray).map(a => a.map(x => String(x && x.name || '')).filter(Boolean))).slice(0, 60) };
+  T.supplements[gi] = { ts:Date.now(), count, leaks:leaks.length, raw:text.slice(0, 200000), names:[].concat(...Object.values(parsed).filter(Array.isArray).map(a => a.map(x => String(x && x.name || '')).filter(Boolean))).slice(0, 60) };
   storyState().canon.dictEnrichAt = Date.now();
   storyState().versions.dictEnrich = Number(storyState().versions.dictEnrich || 0) + 1;
   persist();
@@ -122,12 +122,12 @@ function dsOpen(gi){
   const sup = T.supplements && T.supplements[gi];
   const modal = ptOpenText({
     title:`📚 词典增补 · 第${gi+1}组（第${g.startChapter}-${g.endChapter}章）`,
-    sub: sup ? `上次增补：${sup.count}条` : '增补清单：每行一个新实体「名称｜类型｜客观用途」；可编辑',
+    sub: sup ? `上次增补：${sup.count}条${sup.names && sup.names.length ? '（' + sup.names.slice(0, 8).join('、') + (sup.names.length > 8 ? '…' : '') + '）' : ''}` : '增补清单：每行一个新实体「名称｜类型｜客观用途」；可编辑',
     text: dsNeedsText(gi),
     buttons:[
       { label:'保存清单', onClick:(t)=>{ const T2 = ptEnsure(); if(T2.groups[gi]) T2.groups[gi].needs = String(t||'').trim(); persist(); toast('增补清单已保存'); } },
       { label:'📦 注入导出', onClick:(t)=>{ const T2 = ptEnsure(); if(T2.groups[gi]) T2.groups[gi].needs = String(t||'').trim(); persist(); const inj = dsBuildInjection(gi); if(!inj) return toast('增补清单为空'); const text = `【SYSTEM】\n${inj.system}\n\n【USER】\n${inj.user}`; ptOpenText({ title:`📦 词典增补 · 第${gi+1}组 · 注入导出`, sub:'SYSTEM + USER', text, readonly:true, buttons:[ { label:'复制', onClick:()=>{ copyText(text); toast('已复制'); } }, { label:'导出TXT', primary:true, onClick:()=>{ downloadPlainText(`词典增补_第${gi+1}组_注入.txt`, text); toast('TXT 已导出'); } } ] }); } },
-      { label:'📋 读增补成果', onClick:(t)=>{ const T2 = ptEnsure(); if(T2.groups[gi]) T2.groups[gi].needs = String(t||'').trim(); persist(); ptOpenText({ title:`📋 读增补成果 · 第${gi+1}组`, sub:'粘贴外部AI的输出（格式同词典充实），保存后并入词典', text:'', buttons:[ { label:'保存更改', primary:true, onClick:(v,close)=>{ const r = dsApply(gi, v); if(!r.ok) return toast(r.error); toast(`词典增补已并入：${r.count}条${r.leaks?`；剔除疑似剧情句${r.leaks}处`:''}`); close(); } } ] }); } },
+      { label:'📋 读增补成果', onClick:(t)=>{ const T2 = ptEnsure(); if(T2.groups[gi]) T2.groups[gi].needs = String(t||'').trim(); persist(); ptOpenText({ title:`📋 读增补成果 · 第${gi+1}组`, sub:(T2.supplements && T2.supplements[gi] && T2.supplements[gi].raw) ? '上次保存的增补成果已回填；同名条目不会重复并入，基础词典不会被改写' : '粘贴外部AI的输出（格式同词典充实），保存后并入词典', text:(T2.supplements && T2.supplements[gi] && T2.supplements[gi].raw) || '', buttons:[ { label:'保存更改', primary:true, onClick:(v,close)=>{ const r = dsApply(gi, v); if(!r.ok) return toast(r.error); toast(`词典增补已并入：${r.count}条${r.leaks?`；剔除疑似剧情句${r.leaks}处`:''}`); close(); } } ] }); } },
       { label:'🪄 AI生成并并入', primary:true, onClick:(t,close)=>{ const T2 = ptEnsure(); if(T2.groups[gi]) T2.groups[gi].needs = String(t||'').trim(); persist(); close(); dsGen(gi, null); } }
     ]
   });
