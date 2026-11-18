@@ -31,7 +31,7 @@
    5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.590';
+const APP_VERSION = '1.0.592';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
 const APP_FILE_VERSION = 'app1.0.586.js';
 function installV569Styles(){
@@ -5416,6 +5416,28 @@ function principalChapterMiddleShapeSource(targetCount){
     chapters:rows
   };
 }
+/* v1.0.591：校长来源里的中段微拍改为“形状只定义一次 + 章号映射”，同形状的章节不再重复整套说明。
+   老师侧仍用 principalChapterMiddleShapeSource 的逐章完整版，不受影响。 */
+function principalChapterMiddleShapeSourceCompact(targetCount){
+  const full=principalChapterMiddleShapeSource(targetCount);
+  const shapes={}, keys=[], runs=[];
+  (full.chapters||[]).forEach(row=>{
+    const key=JSON.stringify([row.patternId,row.patternLabel,row.phases]);
+    let id=keys.indexOf(key); if(id<0){ keys.push(key); id=keys.length-1; }
+    const sid='SHAPE-'+(id+1);
+    if(!shapes[sid]) shapes[sid]={patternId:row.patternId,patternLabel:row.patternLabel,phases:row.phases};
+    const last=runs[runs.length-1];
+    if(last && last.shape===sid && last.end===row.chapter-1) last.end=row.chapter; else runs.push({shape:sid,start:row.chapter,end:row.chapter});
+  });
+  return {
+    schema:'principal-chapter-middle-shape-source/v2-compact',
+    authority:full.authority,
+    rule:full.rule+' 同一形状只在shapes里定义一次，章号与形状的对应关系见chapterShapeMap。',
+    middleDefinition:full.middleDefinition,
+    shapes,
+    chapterShapeMap:runs.map(r=>({chapters:r.start===r.end?String(r.start):`${r.start}-${r.end}`,shape:r.shape}))
+  };
+}
 function buildChapterStrategiesFromPrincipal(plans, targetCount, strategy){
   const out={};
   const n=Math.max(0,Number(targetCount)||0);
@@ -5511,7 +5533,7 @@ function principalSourceBlocks(groups, targetCount){
   _ppAddSource(out,'book_structure','全书章节结构·唯一数量与目录依据',_principalChapterStructure(targetCount),'highest','outline_structure');
 
   /* 第三刀：chapterMiddleShape 是校长第一次接触的章节中段结构源；只给形状，不给剧情节点。 */
-  const middleShapeSource=principalChapterMiddleShapeSource(targetCount);
+  const middleShapeSource=principalChapterMiddleShapeSourceCompact(targetCount);
   _ppAddSource(out,'chapter_middle_shape','本章中段微拍形状·结构权威（只读形状，不含剧情节点）',middleShapeSource,'highest','chapter_middle_shape');
 
   /* 词典是校长必须依据的世界事实；只移除内部历史/运行字段，不做字符截断。 */
@@ -6517,10 +6539,19 @@ majorClimaxes=[]
 irreversibleChanges=[]
 bookRhythm={"overallPattern":"","escalationRule":"","recoveryRule":"","climaxSpacing":"","informationDensity":""}
 endingLogic=结局由前文自然导出的逻辑
+[/BOOK_STRATEGY]
+
+[SCHOOL_RULES]
+causality=因果纪律：事件必须有前因与后果，不得无因突变
+continuity=连续纪律：人物状态、位置、关系、资源在章与章之间必须连续
+beat=节拍纪律：严格服从上游已确认的全书节拍，不重写节拍
+time=时间纪律：时间推进只能向前，不得与已确立的时间线冲突
+character=人物纪律：人物行为服从词典与已发生事实，不得违背设定
+style=风格纪律：写作风格只服从唯一GLOBAL与老师分配，校长不再另立风格
 chapterBoundary=章节边界纪律
 creationPermission=正文拥有章头与章末之间的文学发挥权
 information=信息释放纪律
-[/BOOK_STRATEGY]
+[/SCHOOL_RULES]
 
 [STYLE_STRATEGY]
 globalStyle=【全书恒定风格】校长单独确定、向下不可改义的作品风格原规则。
@@ -6550,7 +6581,54 @@ redactTerms=词典原文中会泄露该真相的片段，必须与词典里的�
 REVEAL_PLAN只写真正会因“提前揭示”而破坏阅读体验的核心秘密（身份/血缘真相、关键反转、终局真相等），按故事需要写0到8个，普通信息不要写；每个秘密一个区块。揭示章节要与全书节拍和阶段战略一致。老师和正文只会按各自权限获得揭示计划：揭示章在本组之后的老师不会拿到真相，只拿到表象和铺垫规则，所以publicFace、hintChapters、hintStyle必须写清楚。
 词典里带有 secret 字段的条目（人物、地点、专名、规则）是词典达人标出的“秘密候选”：你来决定其中哪些真正需要保护、何时揭示，需要保护的才写进REVEAL_PLAN（secret 以词典所写为准，除非与全书节拍冲突）；不需要保护的直接忽略。词典其他字段写的只是表象。redactTerms 只写词典里除 secret 字段以外、仍会泄露该真相的片段。
 
-硬要求：BOOK_STRATEGY只能一个；REVEAL_PLAN可以有0到8个；STAGE_STRATEGY数量等于系统阶段数；TEACHER_GROUP_STRATEGY数量等于老师组数；PRINCIPAL_CHAPTER数量等于目标章节数；STYLE_STRATEGY只能有一个。STYLE_STRATEGY只能提供唯一GLOBAL，不得输出HYBRID/CHAPTER池、章节三层分配表或第二套三层来源。`;
+[STAGE_STRATEGY]
+stageIndex=阶段序号（从1开始，必须与系统阶段表一致；每个阶段一个区块）
+stageId=STAGE-001（与系统阶段表一致）
+startChapter=阶段起始章（与系统阶段表一致）
+endChapter=阶段结束章（与系统阶段表一致）
+stageName=阶段名称
+stageGoal=本阶段必须达成的目标
+coreConflict=本阶段核心冲突
+direction=本阶段推进方向
+mainEmotion=本阶段主导情绪
+stageClimax=本阶段高潮
+settlement=本阶段如何收束/结算
+newProblem=本阶段结束时引出的新问题（最终阶段必须写“无”）
+irreversibleChange=本阶段造成的不可逆变化
+previousStageHandoff=承接上一阶段什么（首阶段写“无”）
+nextStageLaunch=向下一阶段移交什么（最终阶段必须写“无”）
+stageRhythm={"opening":"","development":"","climax":"","landing":""}
+stageBeatInterpretation=（可选）对该阶段既有fullBookBeat的战略解释
+[/STAGE_STRATEGY]
+
+[TEACHER_GROUP_STRATEGY]
+groupIndex=老师组序号（从1开始，与TEACHER_ASSIGNMENT一致；每个老师组一个区块）
+teacherGroupId=逐字抄写TEACHER_ASSIGNMENT中的值
+teacherCode=逐字抄写
+teacherIndex=逐字抄写
+role=逐字抄写
+startChapter=逐字抄写
+endChapter=逐字抄写
+chapterCount=逐字抄写
+previousTeacherGroupId=逐字抄写（首组写“无”）
+nextTeacherGroupId=逐字抄写（末组写“无”）
+previousEndChapter=逐字抄写（首组写“无”）
+nextStartChapter=逐字抄写（末组写“无”）
+stageId=本组所属阶段id
+groupTask=本组整体任务
+chapterAssignments=[{"chapter":1,"task":"本章在本组中的分工"}]（JSON数组，覆盖本组每一章各一项）
+groupRhythm={"opening":"","development":"","climax":"","landing":""}
+emotionalCurve=本组情绪曲线
+previousGroupHandoff=承接上一组什么（首组写“无”）
+nextGroupLaunch=向下一组移交什么（末组必须写“无”）
+keyResources=[]
+mustAdvance=[]
+mustNotPrematurelyResolve=[]
+coreRisks=[]
+[/TEACHER_GROUP_STRATEGY]
+STAGE_STRATEGY与TEACHER_GROUP_STRATEGY的字段名必须原样使用上面的英文字段名，不得改名、不得合并、不得自创字段；复杂字段（数组/对象）必须是合法JSON；TEACHER_GROUP_STRATEGY里“逐字抄写”的字段必须与系统提供的TEACHER_ASSIGNMENT完全一致。
+
+硬要求：BOOK_STRATEGY只能一个；SCHOOL_RULES只能一个；REVEAL_PLAN可以有0到8个；STAGE_STRATEGY数量等于系统阶段数；TEACHER_GROUP_STRATEGY数量等于老师组数；PRINCIPAL_CHAPTER数量等于目标章节数；STYLE_STRATEGY只能有一个。STYLE_STRATEGY只能提供唯一GLOBAL，不得输出HYBRID/CHAPTER池、章节三层分配表或第二套三层来源。`;
 const PRINCIPAL_SYS_STRUCTURED = PRINCIPAL_SYS + STRUCTURED_PRINCIPAL_PROTOCOL;
 
 const PRINCIPAL_FOLDED_SYS = `【已废弃】不得启用校长兼任老师模式。无论章节数多少，校长只负责全校统筹，老师必须独立生成机器教案。`;
@@ -6714,8 +6792,9 @@ function parsePrincipalStrategyMachine(text, total, assignment){
   const book=bookRows[0]||null;
   const canonicalStages=principalCanonicalStageRows(total);
   const canonicalGroups=principalCanonicalTeacherGroups(assignment);
-  const stageBy={}; stageRows.forEach(r=>{const n=Number(r.stageIndex); if(Number.isInteger(n)&&n>0) stageBy[n]=r;});
-  const groupBy={}; groupRows.forEach(r=>{const n=Number(r.groupIndex||r.teacherIndex||0); if(Number.isInteger(n)&&n>0) groupBy[n]=r;});
+  // 容错：AI漏写 stageIndex / groupIndex 时，依次回退到 stageId、teacherGroupId 末尾数字，最后按出现顺序。
+  const stageBy={}; stageRows.forEach((r,pos)=>{let n=Number(r.stageIndex); if(!(Number.isInteger(n)&&n>0)){const m=String(r.stageId||'').match(/(\d+)\s*$/); n=m?Number(m[1]):pos+1;} if(Number.isInteger(n)&&n>0&&!stageBy[n]) stageBy[n]=r;});
+  const groupBy={}; groupRows.forEach((r,pos)=>{let n=Number(r.groupIndex||r.teacherIndex||0); if(!(Number.isInteger(n)&&n>0)){const m=String(r.teacherGroupId||'').match(/(\d+)\s*$/); n=m?Number(m[1]):pos+1;} if(Number.isInteger(n)&&n>0&&!groupBy[n]) groupBy[n]=r;});
   const errors=[];
   if(rulesRows.length!==1) errors.push(`SCHOOL_RULES必须且只能一个，实际${rulesRows.length}`);
   if(styleRows.length!==1) errors.push(`STYLE_STRATEGY必须且只能一个，实际${styleRows.length}`);
@@ -6823,7 +6902,7 @@ function parsePrincipalMachine(text,total,assignment,style){
   for(let n=1;n<=Number(total||0);n++){
     const r=by[n]; if(!r){missing.push(n);continue;}
     const intensity=Number(r.endingIntensity);
-    const required=['chapter','title','function','goal','coreEvent','characterActions','middlePermission','endingFunction','endingIntensity','lastEffectiveEvent','endingForm','nextTransitionType','nextTransitionBasis','narrativeRole','timeStrategy','stageTask','teacherTask','handoff'];
+    const required=['chapter','title','function','goal','coreEvent','characterActions','endingFunction','endingIntensity','lastEffectiveEvent','endingForm','nextTransitionType','nextTransitionBasis','narrativeRole','timeStrategy','stageTask','teacherTask','handoff'];
     const miss=required.filter(k=>!String(r[k]??'').trim());
     // GLOBAL只允许存在于STYLE_STRATEGY唯一来源；PRINCIPAL_CHAPTER不承载三层字段。
     if(!Number.isInteger(intensity)||intensity<0||intensity>4) miss.push('endingIntensity(0-4)');
@@ -7661,6 +7740,7 @@ async function genTeacher(btn, gi){
   const groups=teacherAssignmentGroups(),g=groups[gi]; if(!g){toast('未找到该分组');return false;}
   if(!scDone('dictEnrich')){toast('老师备课需要先接收完整词典，请先完成“词典充实”');return false;}
   if(!scDone('principal')){toast('请先生成校长');return false;}
+  if(typeof ptTeacherGuard==='function'){ const _gm=ptTeacherGuard(gi); if(_gm){ toast(_gm); return false; } }
   const key='t'+gi; markAIRunning(key); if(btn)busy(btn,true,'备课中…'); if(btn&&btn.parentNode)showStopBtn(btn.parentNode);
   try{
     const spec=resolveActiveSpec('teacher'),temp=(spec&&spec.teacherTemp!=null)?spec.teacherTemp:0.4;
@@ -7748,6 +7828,8 @@ function principalPerfRecord(metrics){
 let _principalRun = null;
 function buildPrincipalInjection(ctx){
   const sourceCtx = ctx && typeof ctx === 'object' ? ctx : {};
+  // v1.0.591：长篇分层校长——全书层注入由 principal-tiered.js 组装（不含逐章细化）。
+  if(!sourceCtx.forceSingle && typeof principalTieredEnabled==='function' && principalTieredEnabled()) return ptBuildGlobalInjection(sourceCtx);
   const teacherAssignment = sourceCtx.teacherAssignment || buildTeacherAssignment();
   const targetChapterCount = Number(sourceCtx.targetChapterCount || principalTargetChapterCount() || 0);
   if(!targetChapterCount || !teacherAssignment || !Array.isArray(teacherAssignment.groups) || !teacherAssignment.groups.length) return null;
@@ -7767,6 +7849,7 @@ function buildPrincipalInjection(ctx){
   return { system:principalSystem, user:principalUser, teacherAssignment, targetChapterCount };
 }
 async function genPrincipal(btn, opts){
+  if(typeof principalTieredEnabled==='function' && principalTieredEnabled()) return ptGenGlobal(btn, opts);
   if(_principalRun){ toast('校长统筹已经在运行中，请勿重复点击'); return false; }
   if(!isLong()){ toast('仅长篇小说模式支持校长统筹'); return false; }
   const targetChapterCount = principalTargetChapterCount();
@@ -8139,6 +8222,8 @@ function getPrincipalReaderTarget(){
   return sc.principal;
 }
 function saveCurrentPrincipalResult(raw, reason, target){
+  // v1.0.591：分层校长下，“读校长成果”保存的是「全书层」原文。
+  if(typeof principalTieredEnabled==='function' && principalTieredEnabled()) return ptSaveGlobalRaw(raw, reason, target);
   const p=target || principalCurrentResult();
   if(!p) throw new Error('当前“读校长成果”不存在，无法保存');
   const nextRaw=String(raw||'').trim();
@@ -8149,10 +8234,33 @@ function saveCurrentPrincipalResult(raw, reason, target){
   // 人工编辑校长成果后，同步刷新现有结构化路由缓存；不新建第二套三层来源。
   try{
     const a=buildTeacherAssignment();
-    const parsed=parsePrincipalStrategyMachine(nextRaw, Number(p.targetChapterCount||principalTargetChapterCount()||0), a);
-    if(parsed?.valid) p.styleStrategy=parsed.styleStrategy;
-    const pm=parsePrincipalMachine(nextRaw, Number(p.targetChapterCount||principalTargetChapterCount()||0), a, p.styleStrategy||{});
-    if(pm){ p.plans=normalizePrincipalPlans(pm); p.chapterStrategies=buildChapterStrategiesFromPrincipal(p.plans, Number(p.targetChapterCount||principalTargetChapterCount()||0)); }
+    const _tot=Number(p.targetChapterCount||principalTargetChapterCount()||0);
+    const parsed=parsePrincipalStrategyMachine(nextRaw, _tot, a);
+    // v1.0.591：手动保存也必须把战略层（全书/规则/风格/阶段/老师组）送进正式成果，
+    // 原先只有“校验完全通过”才更新风格，阶段与老师组战略从不更新，老师因此拿不到。
+    if(parsed){
+      if(parsed.book) p.bookStrategy=parsed.book;
+      if(parsed.schoolRules) p.schoolRules=parsed.schoolRules;
+      if(parsed.styleStrategy) p.styleStrategy=parsed.styleStrategy;
+      if(Array.isArray(parsed.stages) && parsed.stages.length) p.stageStrategies=parsed.stages;
+      if(Array.isArray(parsed.teacherGroups) && parsed.teacherGroups.length) p.teacherGroupStrategies=parsed.teacherGroups;
+      p.strategyAudit=principalStrategyAudit(parsed,_tot,a);
+      p.strategyErrors=parsed.valid?[]:(parsed.errors||[]).slice(0,40);
+    }
+    if(!p.targetChapterCount) p.targetChapterCount=_tot;
+    p.teacherAssignment=JSON.parse(JSON.stringify(a));
+    p.finalResponsibility=teacherFinalResponsibilityFacts(a);
+    const pm=parsePrincipalMachine(nextRaw, _tot, a, p.styleStrategy||{});
+    if(pm){ p.plans=normalizePrincipalPlans(pm); p.chapterStrategies=buildChapterStrategiesFromPrincipal(p.plans, _tot, parsed&&parsed.valid?parsed:undefined); }
+    if(parsed && parsed.valid && pm){
+      const _ff=p.finalResponsibility;
+      parsed.finalResponsibility=_ff;
+      parsed.teacherGroups=(parsed.teacherGroups||[]).map((tg,idx)=>({...tg,isFinalTeacher:idx===_ff.finalTeacherIndex,finalResponsible:idx===_ff.finalTeacherIndex,isSingleTeacher:_ff.isSingleTeacher,nextGroupLaunch:idx===_ff.finalTeacherIndex?'无':tg.nextGroupLaunch}));
+      p.teacherGroupStrategies=parsed.teacherGroups;
+      try{ p.managementBridge=principalManagementBridge(a,_tot,p.plans,parsed); }catch(_e){ p.managementBridge=null; }
+    }else{ p.managementBridge=null; }
+    const _sp=storyState().docs&&storyState().docs.schoolPlan;
+    if(_sp){ _sp.bookStrategy=p.bookStrategy||null; _sp.schoolRules=p.schoolRules||null; _sp.styleStrategy=p.styleStrategy||null; _sp.stageStrategies=p.stageStrategies||[]; _sp.teacherGroupStrategies=p.teacherGroupStrategies||[]; _sp.managementBridge=p.managementBridge||null; _sp.plans=p.plans||{}; _sp.chapterStrategies=p.chapterStrategies||{}; }
   }catch(e){ console.debug('[Principal save] 三层结构同步失败，保留原结构缓存',e); }
   p.ts=Date.now();
   p.updatedAt=Date.now();
@@ -13816,6 +13924,7 @@ function schoolZoneBlock(){
           <span>👑 校长（总控） → 🎓 老师（分段教案） → ✍️ 正文作家</span>
           <em class="school-zone-tip">${groups.length ? (groups.length > 1 ? `${groups.length} 位老师分段` : `1 位老师全书教案`) : '待设定章节数'}</em>
         </div>
+        ${typeof ptPanelHtml==='function'?ptPanelHtml():''}
         <div class="school-steps">
           <div class="school-steps-main" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <button type="button" class="sc-step sc-teacher-all" data-scp-teacher-all title="一键启动全部老师；每位老师只读取当前校长成果中授权给自己的部分">🎓 一键老师</button>
@@ -17253,6 +17362,12 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 
 禁止写：主角或同伴将要采取的行动、设局、计谋、对话结果、任何事件之后如何发展。说明、影响、可用钩子、描写价值等字段，只能写成客观状态，或写成“可用于……”的可能性，不得写成已经发生的剧情。素材在哪一章怎么用，由校长和老师决定，不由你预先安排。
 
+反例（以下写法一律不允许）：
+× “是主角第一个助人任务的帮扶对象”（把条目写成主角的任务/剧情）
+× “被主角私下塞过半块饼”“后来成为主角的盟友”（编造主角与该人物的往来或将来）
+✓ 正确写法：只写这个实体现在是什么、长什么样、在哪、有什么习惯、可用于什么场合，例如“住在村口的独居老汉，常蹲在石桥边晒太阳，可用于需要村口目击者的场合”。
+任何一句里同时出现主角/核心人物的名字和一个已发生或将发生的行为，都视为违规。
+
 【保密事项原则】
 
 如果输入里出现【保密事项】，那是词典达人标出的隐藏真相。你知道它，但绝不触碰：不得让任何新增人物知情、察觉或暗示；不得把它写进任何条目的任何字段（包括台词、描写标签、关系、事件）；不得设计会暴露它的物品、规则或生活设定。涉及相关人物、专名或规则时，只写外人看得到的表象。
@@ -17697,7 +17812,11 @@ name 字段只能填写纯实体名称。
 
 你的新增内容一旦正式收录，也会成为后续正文可以使用的正式创作事实；其来源级别由 JS 在收录时内部标记为 dictionary_enrichment，权威级别低于 Creative Blueprint 与 dictionary_foundation，不得覆盖上游事实。
 `;
-function buildDictEnrichUser(){
+function buildDictEnrichUser(opt){
+  /* v1.0.592：opt.scope（dict-scope.js 提供）存在时，只展开「本次需要」的实体，其余只给名录；不传则与旧版完全一致。 */
+  const SC = (opt && opt.scope) ? opt.scope : null;
+  const fullOf = (cat, rawName) => !SC || SC.isFull(cat, cleanEntityName(rawName)[0]);
+  const relKeep = (a, b) => !SC || SC.nameFull(a) || SC.nameFull(b);
   const o = state.outline || {};
   const parts = [];
   parts.push(storyStateCanonBlock());
@@ -17723,7 +17842,7 @@ function buildDictEnrichUser(){
   const dmSections = [];
 
   // (1) 人物卡（主要人物与次要配角，9维全字段）
-  const charList = g.characters || [];
+  const charList = (g.characters || []).filter(c => fullOf('characters', c && c.name));
   // v1.0.590：基础次要配角若外貌/爱好/口头禅为空，标注“可补充描写”，允许充实师用「人物补充」补写（单独存放，不覆盖基础卡）。
   const _blank = v => { const t=String(v==null?'':v).trim(); return !t||t==='未知'||t==='无'; };
   const supHint = c => {
@@ -17755,14 +17874,14 @@ function buildDictEnrichUser(){
   }
 
   // (2) 人物关系表
-  const relArr = validAssoc(g._relationshipTable, 'a', 'b');
+  const relArr = validAssoc(g._relationshipTable, 'a', 'b').filter(x => relKeep(x.a, x.b));
   if(relArr.length){
     const relLines = relArr.map(x => `- ${x.a} ↔ ${x.b} [${x.relation || '关联'}]${x.note ? `（${x.note}）` : ''}`);
     dmSections.push(`【2. 人物关系拓扑表（共 ${relLines.length} 条）】\n${relLines.join('\n')}`);
   }
 
   // (3) 地名设定
-  const placeList = g.places || [];
+  const placeList = (g.places || []).filter(p => fullOf('places', p && p.name));
   if(placeList.length){
     const placeLines = placeList.map(p => {
       const [pName] = cleanEntityName(p && p.name);
@@ -17773,14 +17892,14 @@ function buildDictEnrichUser(){
   }
 
   // (4) 地名关联表
-  const pcArr = validAssoc(g._placeContacts, 'from', 'to');
+  const pcArr = validAssoc(g._placeContacts, 'from', 'to').filter(x => relKeep(x.from, x.to));
   if(pcArr.length){
     const pcLines = pcArr.map(x => `- ${x.from} ↔ ${x.to} [${x.relation || '连通'}]${x.note ? `（${x.note}）` : ''}`);
     dmSections.push(`【4. 地名关联通路表（共 ${pcLines.length} 条）】\n${pcLines.join('\n')}`);
   }
 
   // (5) 专名与核心设定
-  const propList = g.propernouns || [];
+  const propList = (g.propernouns || []).filter(x => fullOf('propernouns', x && x.name));
   if(propList.length){
     const propLines = propList.map(x => {
       const [xName] = cleanEntityName(x && x.name);
@@ -17791,7 +17910,7 @@ function buildDictEnrichUser(){
   }
 
   // (6) 专名关联表
-  const prcArr = validAssoc(g._properContacts, 'from', 'to');
+  const prcArr = validAssoc(g._properContacts, 'from', 'to').filter(x => relKeep(x.from, x.to));
   if(prcArr.length){
     const prcLines = prcArr.map(x => `- ${x.from} ↔ ${x.to} [${x.relation || '关联'}]${x.note ? `（${x.note}）` : ''}`);
     dmSections.push(`【6. 专名关联谱系表（共 ${prcLines.length} 条）】\n${prcLines.join('\n')}`);
@@ -17814,10 +17933,11 @@ function buildDictEnrichUser(){
     ['历史事件', g.events, x=>`- ${x.name} | 时间/时代:${x.era||''} | 参与方:${x.participants||''} | 经过:${x.course||''} | 影响:${x.impact||''} | 主线关系:${x.relation||''}${x.tags?` | 描写标签:${x.tags}`:''}`],
     ['生活设定', g.lifeSettings, x=>`- ${x.name} | 类别:${x.category||''} | 适用范围:${x.scope||''} | 内容:${x.content||''} | 描写价值:${x.value||''}${x.tags?` | 描写标签:${x.tags}`:''}`]
   ];
-  extended.forEach(([label,list,fmt])=>{ const arr=Array.isArray(list)?list.filter(x=>x&&String(x.name||'').trim()):[]; if(arr.length) dmSections.push(`【${label}（共 ${arr.length} 项）】\n${arr.map(fmt).join('\n')}`); });
+  const extCat = {'组织/势力':'organizations','职业/机构':'institutions','物品/道具':'items','世界规则':'rules','术语':'terms','历史事件':'events','生活设定':'lifeSettings'};
+  extended.forEach(([label,list,fmt])=>{ const arr=Array.isArray(list)?list.filter(x=>x&&String(x.name||'').trim()&&fullOf(extCat[label],x.name)):[]; if(arr.length) dmSections.push(`【${label}（共 ${arr.length} 项）】\n${arr.map(fmt).join('\n')}`); });
 
   // (9) 现有路人/龙套（若有）
-  const walkonList = g.walkons || [];
+  const walkonList = (g.walkons || []).filter(w => fullOf('walkons', w && w.name));
   if(walkonList.length){
     const walkonLines = walkonList.map(w => {
       const [wName] = cleanEntityName(w && w.name);
@@ -17826,6 +17946,9 @@ function buildDictEnrichUser(){
     }).filter(Boolean);
     if(walkonLines.length) dmSections.push(`【8. 现有路人/龙套（共 ${walkonLines.length} 位）】\n${walkonLines.join('\n')}`);
   }
+
+  // v1.0.592：名录——已存在但本次未展开的实体（只读，防止重复建档）。
+  if(SC && SC.listText) dmSections.push(`【词典名录｜已存在但本次未展开的实体（只读：不得重复新增同名，不得改动，共 ${SC.listCount} 项）】\n${SC.listText}`);
 
   // (9) 词典达人架构总结（若有）
   if(state.dictmasterLatest && state.dictmasterLatest.summary){
@@ -18407,6 +18530,7 @@ async function genDictEnrich(btn, opts){
     const txt = String(res.text || '').trim();
     if(!txt) throw new Error('未返回词典充实内容');
     const parsed = parseDictEnrichText(txt) || {};
+    try{ if(typeof dictEnrichStripLeaks==='function'){ const _lk=dictEnrichStripLeaks(parsed); if(_lk.length) toast(`词典充实：已剔除${_lk.length}处疑似剧情句（记录在词典充实剔除日志）`); } }catch(_e){}
     const parsedCounts = Object.values(parsed).reduce((n,v)=>n+(Array.isArray(v)?v.length:0),0);
     if(!parsedCounts) addGenerationDiagnostic('dictEnrich',{type:'STRUCTURE',code:'DICTENRICH_PARSE_PARTIAL',details:'词典充实原文已返回，但未解析出结构化条目；仍允许任务完成并保存原文。'});
     if(isScopeBanned('dictEnrich','entity')){
