@@ -1,4 +1,5 @@
 /* v1.0.590 DICTENRICH-KERNEL: 词典充实内核调整。①提示词：新增「开篇状态原则」（只写故事开始时已存在的世界，不写主角将来的行动/设局/结果）、「保密事项原则」（充实师可见词典达人的 secret，但绝不触碰）、基础人物只读规则；次要配角加性别/年龄；各类条目加「描写标签」；新增「人物补充」行，只给词典达人标注为「可补充描写」的基础次要配角补外貌/爱好/口头禅（单独存放 _charSupplements，不覆盖基础卡）。②输入：新增人物代号对照（CHAR_xxx＝姓名）与【保密事项】段。③解析器：字段只按「；」「｜」切分，字段内的逗号保留（此前每个字段只剩第一个逗号前的半句）；描写标签入库（tags）；路人不再被「像不像人名」误删；「与主线关系」改为「可用钩子」（旧写法仍可读）。④下游：老师可见 tags 与人物补充，校长清洗词典带上人物补充，正文人物卡带上人物补充；读词典充实可读写 tags 与人物补充。 */
+/* v1.0.597 STANDARD-ALIGN（对照《全局标尺 v1.0》）：①老师职责去掉「台词」，新增老师→正文边界（不写整句台词/成品旁白，允许「此句须保留」）；正文提示明确台词/旁白归正文，可造一次性小细节、不可造新人物/地点/规则/关系/秘密。②口头禅改为可选（词典达人/充实：只给有鲜明说话习惯者，写成习惯描述）；充实不再自动补口头禅。③全书章数取全书章表（修分层校长下「全书共N章」及第N章被误判为终章）。④正文注入：GLOBAL 只给简洁文本、不再把已属 GLOBAL 的词条当「剩余」重复列出、去掉老师内部规则；GLOBAL 词条id丢失时兜底；次要配角卡字段错位只读修复。⑤上一章状态传递：接力锚点加长，并附上一章教案章末状态（计划值，以正文为准）。⑥词典规则要求写清边界情形。⑦校长：揭示章与章表一致、暗示章稀疏、人名照抄词典。 */
 /* v1.0.589 DICTMASTER-REPAIR: 词典达人修复与内核调整。①「读词典达人」保存/导入：词典尚不存在时数据写进临时对象、没挂回项目（保存了但主界面不显示）已修；WORLD 一句话现在取粘贴内容里的 summary；保存/导入成功后向学校状态层发出 dictMaster 完成信号（词典充实/校长/一键老师可接上）；内容有变化且下游已有成果时，词典充实/校长/老师标记为「已过期」并提示。②补回丢失的 genDictMaster（✨生成按钮）：流式生成、解析容错、写入词典、历史版本、完成信号。③内核提示词整理：去掉 SYSTEM/USER 重复与编号空缺；新增「开篇状态原则」（设定不写剧情）；人物 tier 收紧（中途加入的外部人物默认 support）；新增 secret 秘密字段（人物/地点/专名/规则），校长可读到、老师与正文不会读到。 */
 /* v1.0.588 BANLIST-IRON-TIDY: 「禁则清单」「叙事铁律」整理修理。禁则：生效范围勾选保存失效已修；新增/删除规则不再丢字且可多选 AI；人名“百家姓+两字”格式规则降为提示（不再拒绝人物）；命中禁则只提示、不拦截、不再自动删除（由提示词让 AI 改写）；新增“载入网文模板词预设”。铁律：逐条可开关、面板显示实际注入全文；写作风格优先于铁律；视角铁律改为可选项；章首开法上收到校长/老师规划层；语言分层补全；本地检查只提示不拦截，模板词改读禁则清单，重复句检查忽略对白。 */
 /* v1.0.587 STYLE-PACK-TOLERANT + RECIPE-PICK-GAPS: 优化构想风格资料包解析容错（少一格自动修复、原因前缀、缺原因给默认），提示词加格数硬要求与示例；AI 配方助手 gap id 规范化、选用时提示并可一并加入新词条。
@@ -31,7 +32,7 @@
    5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.593';
+const APP_VERSION = '1.0.597';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
 const APP_FILE_VERSION = 'app1.0.586.js';
 function installV569Styles(){
@@ -678,8 +679,13 @@ function getTeacherGlobalForChapterSync(t,pr){
   }
   const compiled=compileTeacherGlobal(pr||{});
   if(!compiled) return '';
-  const global=typeof compiled==='string'?compiled:JSON.stringify(compiled,null,2);
-  return String(global||'').trim();
+  /* v1.0.597 标尺§9.2/9.4：正文只需要「全书恒定风格」本身。内部的 remainingStyleEntries / rule 是给老师分配用的，
+     不送进正文；也不再重复列出已属 GLOBAL 的词条。 */
+  if(typeof compiled==='string') return String(compiled||'').trim();
+  const lines=['【全书恒定风格｜GLOBAL】',String(compiled.global||'').trim()];
+  const sel=Array.isArray(compiled.selectedSemantics)?compiled.selectedSemantics:[];
+  sel.forEach(e=>{ if(e&&(e.name||e.id)) lines.push('· '+String(e.name||e.id)+(e.meaning?'：'+e.meaning:'')); });
+  return lines.filter(Boolean).join('\n').trim();
 }
 function prependTeacherGlobalOnce(globalText,rawText){
   const g=String(globalText||'').trim();
@@ -2573,7 +2579,8 @@ L4【文学表达层】语言、对白、场景、动作、心理、感官、节
 词典中的正式世界观规则是规则本身。老师的“世界观规则执行说明”只是本章如何落实正式规则的施工说明，不是第二套世界观。正文AI负责把正式规则及老师本章执行说明自然写进剧情，不得另造第三套规则。
 
 【四、文学发挥范围】
-在不改变世界事实、已发生事实、老师本章主要事件与章末状态的前提下，可以自然补充人物反应、合理对白、潜台词、环境互动、感官细节、局部误解、合理失败尝试、短暂障碍、自然动作和过渡，让故事像真实发生过一样。
+在不改变世界事实、已发生事实、老师本章主要事件与章末状态的前提下，具体台词、旁白、动作与感官细节由你在文学表达层自己写：自然补充人物反应、对白、潜台词、环境互动、感官细节、局部误解、合理失败尝试、短暂障碍、自然动作和过渡，让故事像真实发生过一样。教案里若出现示意性的话语，只当作“这一轮要传达的信息”，用你自己的方式写出来，不照抄；只有标明“此句须保留”的句子才原样使用。人物口头禅只是说话习惯，不是必须说出口的台词，不要为了出现而硬塞。
+可以现场点缀一次性的氛围细节（路人的一句话、一件小物）；不得新造会持续影响后续的核心事实（新人物、新地点、新规则、新关系、新秘密）。
 不得凭空建立会持续影响后续章节的新核心事实，不得让临时细节抢占主线。
 
 【五、写作风格】
@@ -4451,7 +4458,14 @@ function openingStrategyHtml(){
 }
 
 function realChapterCount(){
+  /* v1.0.597 标尺§9.3：全书级章数必须取自全书章表。分层校长下 outline.chapters 只含「已细化」章，
+     不能当全书总数（否则已细化的最后一章会被误判为全书终章）。 */
   const n = (state.outline && Array.isArray(state.outline.chapters)) ? state.outline.chapters.length : 0;
+  try{
+    const P = state.school && state.school.principal;
+    const t = P ? Number(P.targetChapterCount) : 0;
+    if(P && P.tieredLayer && Number.isInteger(t) && t>=1 && t<=200) return Math.max(t, n);
+  }catch(e){}
   if(n>0) return n;
   return chapterCountVal();
 }
@@ -6591,8 +6605,8 @@ conflictPriority=规则冲突优先级
 secretId=英文小写短标识（如 identity_truth）
 secret=被保护的隐藏真相，一句话
 publicFace=在揭示之前，人物和读者看到的表象或默认认知，一句话
-revealChapter=揭示该真相的章节编号（整数，介于2和全书章数之间）
-hintChapters=可以提前铺垫的章节编号，用“；”分隔，没有写“无”
+revealChapter=揭示该真相的章节编号（整数，介于2和全书章数之间；必须与章节计划/章表中写“真相显露”的那一章是同一章）
+hintChapters=可以提前铺垫的章节编号，用“；”分隔，没有写“无”；要稀疏，只在少数关键章，通常不超过揭示前章数的三分之一，不得每章都暗示
 hintStyle=铺垫方式：只能暗示什么、不能说破什么
 redactTerms=词典原文中会泄露该真相的片段，必须与词典里的文字逐字一致，用“；”分隔，没有写“无”
 [/REVEAL_PLAN]
@@ -7313,7 +7327,13 @@ const TEACHER_SYS = `你是长篇小说创作链中的“老师AI”。你的唯
 【主链】校长 → 老师 → 正文。
 【第一权威：校长战略】校长负责WHAT、WHY、WHERE TO END，即全书GLOBAL、阶段战略、本组战略、章节任务、关键剧情方向及章末边界。老师不得擅自修改这些战略事实。
 【第二权威：系统事实】世界观规则、词典事实、时间连续性、前序正文真实状态、已成立人物/剧情事实及施工条件属于系统事实；老师只能理解并执行，不得重新创造或改写。
-【第三职责：老师施工】老师负责HOW：安排中段、场景、人物调度、信息释放、节奏、情绪、台词，以及把HYBRID/CHAPTER落地为正文可执行的章节教案。
+【第三职责：老师施工】老师负责“本章怎么搭”：安排中段推进、场景与人物调度、信息释放、节奏、情绪走向，以及把HYBRID/CHAPTER落地为正文可执行的章节教案。台词、旁白、动作与感官细节的具体写法不属于老师，由正文AI在文学表达层完成。
+【老师与正文的边界（全局标尺§4）】
+· 老师必须交给正文：本章要发生的事与因果链、承接起点、每个出场人物此刻的状态（位置、持有物、处境、关系现状）、知情边界（谁知道什么、谁不知道什么，读者此刻该知道到哪一步）、章末状态与不得越过的界线、风格分配与世界规则的落地约束、禁区。
+· 老师不得写：整句台词或整段对话脚本、可直接粘贴的成品旁白、逐动作逐场的剧本式编排、人物内心独白文本。需要让人物表达某个信息时，写成“必须让读者知道X / 这一轮交锋要改变Y”，不写措辞。
+· 判定法：对教案里每一句问“删掉它，正文还能写出同样的事实吗？”能，就是正文的活，不要写；不能（会丢事实、因果、状态或边界），才写进教案。
+· 极少数必须一字不改的关键句（誓言、暗号、伏笔句等），可以写成“此句须保留：……”，并同时说明原因；不得成为常态，一章最多少数几句。
+· 人物口头禅/标志语不是台词素材：不得把词典里的口头禅写成人物要说的话；是否出现由正文按场景自然决定。
 【风格三层】GLOBAL由校长锁定，老师只能原义继承，不得自创第二套GLOBAL；HYBRID/CHAPTER由老师按章施工，只能使用上游给出的原始style ID，不得自创ID、不得改写原始definition，允许新增的只有本章施工说明。当前老师只处理本组能够合法施工的词条，具体的归属、接力与频率规则见USER中的“风格三层接力”。
 【正文出口】老师形成的章节教案是正文AI的主要且唯一章节教案来源。
 【安全原则】优先忠实执行校长战略与已成立事实；不要越权改变章节任务、人物事实、因果关系、时间连续性或章末边界。输出完整、可执行、自然语言化的老师原始教案，不生成另一套并行机器教案。`;
@@ -7383,8 +7403,11 @@ function compileTeacherTimeContext(source, chapter){
 function compileTeacherGlobal(pr){
   const recovered=teacherPrincipalRuleSource(pr||{}), style=recovered.styleStrategy||{};
   const globalText=String(style.globalStyle||'').trim();
-  const ids=principalStyleEntryIds(style.globalStyleEntries);
+  let ids=principalStyleEntryIds(style.globalStyleEntries);
   const defs=Array.isArray(style.globalStyleDefinitions)?style.globalStyleDefinitions:[];
+  /* v1.0.597：词条编号丢失时的兜底——先用 globalStyleDefinitions 的 id，再从校长原文回读 globalStyleEntries。 */
+  if(!ids.length && defs.length) ids=defs.map(d=>String(d&&d.id||'').trim()).filter(Boolean);
+  if(!ids.length){ try{ const m=String((pr&&pr.raw)||'').match(/globalStyleEntries\s*=\s*(\[[^\n]*\])/); if(m) ids=principalStyleEntryIds(m[1]); }catch(e){} }
   const map={}; defs.forEach(d=>{if(d&&d.id) map[String(d.id)]=d;});
   const entries=ids.map(id=>{
     const d=map[id];
@@ -7654,6 +7677,7 @@ function teacherSevenZoneText(first,last){ return `【七、正式章节教案�
 ……
 
 其中“本章章头承接”必须承接上一章真实状态与上一章ending，并执行本章已有opening信息；“本章章末设计”必须只使用本章真实授权的ending字段。不得把上一章ending复制成下一章ending。正式章节教案不重新定义全书HYBRID/CHAPTER。
+写法要求（老师与正文的边界）：【本章剧情安排】【本章中段施工】【本章动态推进】用叙述性语言写“发生什么、为什么、谁做了什么选择、信息怎样释放、后果是什么”，不得写出人物的整句台词、成品旁白或逐动作脚本；对白只写“这一轮交锋改变了什么信息/立场/关系/行动方向”。【本章时间地点人物状态】里每个出场人物除状态外还要写清知情边界（知道什么、不知道什么）。例外：必须一字不改的关键句可写“此句须保留：……（原因）”，数量要极少。
 
 `; }
 const TEACHER_CUT_NOTE_TAIL = `【切割说明】
@@ -8117,8 +8141,8 @@ function refreshTeacherBatchUi(){
   const st=teacherBatchButtonState();
   tb.classList.toggle('running',st.running);
   tb.classList.toggle('done',st.allDone && !st.running);
-  tb.disabled=!!st.running;
-  tb.innerHTML=st.running ? `🎓 一键老师进行中（${st.completed}/${st.total}）…` : (st.allDone ? '✓ 一键老师已完成' : '🎓 一键老师');
+  tb.disabled=false;
+  tb.innerHTML=st.running ? `⏹ 停止一键老师（${st.completed}/${st.total}）…` : (st.allDone ? '✓ 一键老师已完成' : '🎓 一键老师');
 }
 
 function refreshAllTeacherUi(){
@@ -8135,6 +8159,7 @@ function teacherBatchButtonState(){
   return {groups,running,allDone,completed,total:groups.length};
 }
 async function genSchoolTeachersBatch(){
+  if(typeof ocTeacherAll==='function') return ocTeacherAll();   // v1.0.596：一键老师（失败停下 + 自动切割 + 步骤间隔 + 可停止）见 oneclick.js
   if(genBusy() || state._teacherBatchRunning){ toast('已有生成任务进行中，请稍候'); return; }
   const groups=teacherAssignmentGroups(); if(!groups.length){toast('请先填写章节数，才能一键老师');return;}
   if(!scDone('principal')){toast('请先完成校长；老师只读取“读校长成果”当前保存版本。');return;}
@@ -8783,6 +8808,25 @@ function openUnifiedTextReader(options){
   return ov;
 }
 
+/* v1.0.594：外部 AI 流程——在「读教案」里给从未生成过的老师组粘贴并保存时，补全身份字段并标记 raw-only，
+   否则 scTeacherGroupComplete 永远为 false，老师不会变成「已备」。 */
+function teacherStampManualResult(t,g,gi){
+  if(!t) return;
+  t.gi=gi;
+  if(!t.teacherCode) t.teacherCode=(g&&g.teacherCode)||teacherCodeForIndex(gi);
+  if(!t.teacherGroupId && g && g.teacherGroupId) t.teacherGroupId=g.teacherGroupId;
+  if(!t.ts) t.ts=Date.now();
+  t.updatedAt=Date.now();
+  if(String(t.raw||'').trim()) t.parseStatus='raw-only';
+  if(t.batched) t.batched.manual=true;
+}
+/* 手动保存后的风格分层提醒（只提醒，不拦截；AI 流程里这是硬校验） */
+function teacherManualStyleHint(){
+  try{
+    const a=validateTeacherStyleCoverageAcrossGroups();
+    if(a && (a.duplicate.length||a.unknown.length)) toast(`提醒：写作风格分层有重复${a.duplicate.length}项、未知${a.unknown.length}项（手动保存不拦截，请核对第三、四区的风格词条）`);
+  }catch(_e){}
+}
 function openSchoolPlanReader(gi, jumpCh){
   const sc=scState();
   const groups=teacherAssignmentGroups(), g=groups[Number(gi)];
@@ -8799,8 +8843,8 @@ function openSchoolPlanReader(gi, jumpCh){
     title:`🎓 ${label} · 本组教案`,
     initialText:String(t.raw||''), originalText:original,
     onRestore:async()=>{ t.raw=original; markTeacherChapterCardsStale(t); await persistCritical('恢复老师原始教案'); renderTeacherCutUi(Number(gi)); },
-    onSave:async val=>{ t.raw=val; if(t.batched) t.batched.manual=true; markTeacherChapterCardsStale(t); await persistCritical('保存老师教案修改'); renderTeacherCutUi(Number(gi)); },
-    onImport:async val=>{ t.raw=val; if(t.batched) t.batched.manual=true; markTeacherChapterCardsStale(t); await persistCritical('导入老师教案'); renderTeacherCutUi(Number(gi)); }
+    onSave:async val=>{ t.raw=val; teacherStampManualResult(t,g,Number(gi)); markTeacherChapterCardsStale(t); await persistCritical('保存老师教案修改'); renderTeacherCutUi(Number(gi)); teacherManualStyleHint(); },
+    onImport:async val=>{ t.raw=val; teacherStampManualResult(t,g,Number(gi)); markTeacherChapterCardsStale(t); await persistCritical('导入老师教案'); renderTeacherCutUi(Number(gi)); teacherManualStyleHint(); }
   });
 }
 
@@ -13974,7 +14018,7 @@ function schoolZoneBlock(){
         ${typeof ptPanelHtml==='function'?ptPanelHtml():''}
         <div class="school-steps">
           <div class="school-steps-main" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            <button type="button" class="sc-step sc-teacher-all" data-scp-teacher-all title="一键启动全部老师；每位老师只读取当前校长成果中授权给自己的部分">🎓 一键老师</button>
+            <button type="button" class="sc-step sc-teacher-all" data-scp-teacher-all title="一键启动全部老师；每位老师只读取当前校长成果中授权给自己的部分">🎓 一键老师</button>${typeof ocGapInputHtml==='function'?ocGapInputHtml():''}
           </div>
         </div>
         <div class="school-teachers">
@@ -16456,7 +16500,7 @@ const DICTMASTER_SYS = `你是一位资深全题材长篇小说「词典达人�
 tier 只有两档：
 - main：贯穿全书或多个阶段，承担核心冲突、目标阻力、关键转折、核心关系或长期阵营职责的人物。蓝本已确认的人物沿用蓝本定位，默认 main（蓝本明确称其为配角/次要人物的为 support）。
 - support：其余人物。你新建的人物，只有同时满足“从开篇或前段起长期在场、贯穿多个阶段”和“通过删除测试”两条，才可定为 main；中途加入的外部人物（对手、中后段同行者、阶段性盟友或敌人、功能性角色）默认 support。不得为“安全余量”或凑数制造备用 main；Foundation 完成后主要人物集合即定稿，后续词典充实不得新增 main。
-main 人物必须在本次输出中完成九项基础字段：name + identity、age、gender、appearance、hobby、relation、trait、catchphrase。确实没有客观依据时写“未知/无”，不能留空，也不能写“待补充/以后再定”，因为后续词典充实不会回写 Foundation 人物。support 人物必须有 name、tier、origin、coreRole、identity、trait、relation，其余字段可按需要简化。
+main 人物必须在本次输出中完成九项基础字段：name + identity、age、gender、appearance、hobby、relation、trait、catchphrase。其中 catchphrase（口头禅/说话习惯）是可选项：只有确有鲜明、稳定说话习惯的主要人物才写，且写成习惯描述（如“爱用反问收尾”“话说一半就停”），不要写成一句具体台词，也不要把优化构想里的示例对白直接当口头禅；多数人物应写“无”，不得为凑字段而编。确实没有客观依据时写“未知/无”，不能留空，也不能写“待补充/以后再定”，因为后续词典充实不会回写 Foundation 人物。support 人物必须有 name、tier、origin、coreRole、identity、trait、relation，其余字段可按需要简化。
 输出前在内部完成主要人物检验（不要输出过程）：删除测试（删掉他，核心冲突/主角目标/关键转折是否断裂）；关系反推（关系变化能否产生剧情作用）；冲突反推（对立角色的目标与利益是否足以形成真实冲突，不能只给“反派”标签）；目标反推（想要什么、为什么要、阻碍是什么）；缺口反推（现有人物是否缺必要的执行者、阻碍者、知情者）；一致性（九项是否互相支持）；反向场景测试（校长/老师连续数章使用此人时，九项是否足够支撑行动、关系、对话和描写）。
 
 【四、设定与剧情分离｜开篇状态原则】
@@ -16482,7 +16526,7 @@ CHARACTER、LOCATION、PROPER_NOUN、RULE 四类条目可以写 secret 字段，
 4. propernouns：只收有独立名称、并有来源、机制、历史、特殊能力、限制或不可替代故事作用的核心名称（核心武器、装备、道具、科技、能力、系统、材料、交通工具、制度、核心机制、世界观专属体系、重要术语等）。普通汽车、手机、电脑、手枪、咖啡、衣服不能自动成为专名。
 5. properContacts：只记录专名↔专名的配套、克制、来源、衍生、前置、同系列、等级等真实联系，两端是真实专名且不同。
 6. 三种关联表都宁缺毋滥，禁止把属性、功能、说明、子项或空字符串当作另一端凑数。
-7. worldRules 必须真正能执行，尽量写清：适用范围 → 触发条件 → 运作机制 → 限制 → 违反后果/代价。例如“只有获得正式执照的术士才能进入禁区；未经授权进入者会被守门机构追捕并永久取消术士资格”是可执行规则，“强者拥有更高地位”只是空泛口号。规则只写开篇已经成立的运作规则，不写之后才会解锁或升级的内容。没有明确规则时可以完全省略 RULE 区块。
+7. worldRules 必须真正能执行，尽量写清：适用范围 → 触发条件 → 运作机制 → 限制 → 违反后果/代价。例如“只有获得正式执照的术士才能进入禁区；未经授权进入者会被守门机构追捕并永久取消术士资格”是可执行规则，“强者拥有更高地位”只是空泛口号。规则只写开篇已经成立的运作规则，不写之后才会解锁或升级的内容。规则必须把边界情形也写出答案：例如有额度/次数/上限的规则，要写明“触到上限一次算什么、再次强行尝试算什么、各自有什么后果、后果是否可恢复、由谁承担”，让下游不必各自猜测。没有明确规则时可以完全省略 RULE 区块。
 
 【七、通用原则】
 1. 题材适配：所有设定必须服务于当前题材，不得机械套用其他题材模板。都市看职业、社会关系、城市结构、现实制度；科幻看科技、能源、通讯、交通、AI 与社会结构；历史看时代制度、等级、生产方式、交通、物质条件；玄幻/仙侠看修炼体系、力量层级、资源、门派、禁忌、代价；奇幻看种族、魔法、地理、阵营；悬疑/推理看信息边界、证据、职业逻辑、动机、时间线；末世看生存资源、医疗、交通、组织；言情看人物关系、职业、生活场景与社会关系。
@@ -16519,7 +16563,7 @@ appearance=外貌或未知
 hobby=爱好或无
 relation=一句话核心关系摘要（开篇起始关系）
 trait=稳定性格核心
-catchphrase=口头禅或无
+catchphrase=说话习惯描述（非台词），多数人物写无
 secret=无 或 一句话隐藏真相
 [/CHARACTER]
 
@@ -17423,7 +17467,7 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 
 Foundation 人物卡是只读的。你可以通过“人物关系”写基础人物与新增人物之间的关系，也可以写他们与新增场所、机构、物品之间的往来；但不得改变基础人物的身份、性格、立场和核心关系，不得赋予他们新的职务头衔，也不得替他们编造重要的过往经历。
 
-如果输入里标注某位基础次要配角“可补充描写：外貌、爱好、口头禅”，你可以用“人物补充”行补写这些空缺（只写被标注的，不要重复已有字段）。补充内容必须贴合该人物既有性格，不得带入秘密、剧情或新关系。
+如果输入里标注某位基础次要配角“可补充描写：外貌、爱好”，你可以用“人物补充”行补写这些空缺（口头禅不是必填，绝大多数次要配角不设，不要为填字段而编）（只写被标注的，不要重复已有字段）。补充内容必须贴合该人物既有性格，不得带入秘密、剧情或新关系。
 
 任何有名字的新人物，都必须有自己单独的一行（次要配角或路人）；不要在别的条目的说明里顺手提到一个没有条目的新人名。
 
@@ -17784,10 +17828,10 @@ name 字段只能填写纯实体名称。
 只输出纯文本，不输出 JSON，不输出 Markdown 代码块，不解释过程。每条新增内容独占一行，统一使用：类别｜名称｜字段：值；字段：值
 
 【新增次要配角】
-次要配角｜姓名｜身份：…；性别：…；年龄：…（大致年龄即可）；关系：…；外貌：…；性格：…；口头禅：…；描写标签：…
+次要配角｜姓名｜身份：…；性别：…；年龄：…（大致年龄即可）；关系：…；外貌：…；性格：…；口头禅：…（可选：只有确有鲜明说话习惯才写，写成习惯描述而非台词；绝大多数次要配角省略这一项）；描写标签：…
 
 【基础次要配角的补充描写】（仅限输入中标注“可补充描写”的人物）
-人物补充｜姓名｜外貌：…；爱好：…；口头禅：…；描写标签：…
+人物补充｜姓名｜外貌：…；爱好：…；描写标签：…（口头禅一般不补）
 
 【新增地名】
 地名｜名称｜类型：…；氛围特征：…；说明：…；描写标签：…
@@ -17895,7 +17939,7 @@ function buildDictEnrichUser(opt){
   const supHint = c => {
     if(!(c && c.tier==='support' && isGlossaryFoundation(g,'characters',c))) return '';
     const sup=(g._charSupplements||[]).find(x=>String(x&&x.name||'').trim()===String(c.name||'').trim())||{};
-    const miss=[['appearance','外貌'],['hobby','爱好'],['catchphrase','口头禅']].filter(([f])=>_blank(c[f]) && _blank(sup[f])).map(([,l])=>l);
+    const miss=[['appearance','外貌'],['hobby','爱好']].filter(([f])=>_blank(c[f]) && _blank(sup[f])).map(([,l])=>l);
     return miss.length ? `可补充描写: ${miss.join('、')}` : '';
   };
   if(charList.length){
@@ -19241,8 +19285,21 @@ function buildChapterDictionaryContext(i){
   const worldRules=(g._worldRules||[]).filter(x=>x&&String(x.rule||'').trim());
   const sections=[];
   const chars=matched.characters||[];
+  /* v1.0.597 标尺§9.5：资料字段必须落在正确位置。次要配角卡偶尔整行挤在 identity 里（含「；性别:女；年龄:40…」），
+     这里只读地拆回各字段（不改 state），避免正文看到大片「未知」。 */
+  const _repairCharCard=(c)=>{
+    const out=Object.assign({},c||{});
+    const id=String(out.identity||'');
+    if(!/[；;]\s*(性别|年龄|关系|外貌|性格|口头禅|描写标签)\s*[:：]/.test(id)) return out;
+    const map={性别:'gender',年龄:'age',关系:'relation',外貌:'appearance',性格:'trait',口头禅:'catchphrase',爱好:'hobby',描写标签:'tags'};
+    const parts=id.split(/[；;]/);
+    out.identity=String(parts.shift()||'').replace(/^\s*身份\s*[:：]\s*/,'').trim();
+    parts.forEach(seg=>{ const m=seg.match(/^\s*([^:：]{1,5})\s*[:：]\s*([\s\S]*)$/); if(!m) return; const k=map[m[1].trim()]; if(!k) return; const v=m[2].trim(); if(!v) return; if(!String(out[k]||'').trim()||/^(未知|无)$/.test(String(out[k]).trim())) out[k]=v; });
+    return out;
+  };
   if(chars.length){
-    sections.push(`【人物九维｜本章教案命中后从词典提取】\n${chars.map(c=>{
+    sections.push(`【人物九维｜本章教案命中后从词典提取】\n${chars.map(c0=>{
+      const c=_repairCharCard(c0);
       const vals={identity:c.identity,age:c.age,gender:c.gender,appearance:c.appearance,hobby:c.hobby,relation:c.relation,trait:c.trait,catchphrase:c.catchphrase};
       return `- ${c.name}｜${Object.entries(vals).map(([k,v])=>`${k}=${String(v??'').trim()||'未知'}`).join('｜')}`;
     }).join('\n')}`);
@@ -19269,13 +19326,26 @@ function extractChapterEndingRelay(content){
     .filter(Boolean);
   if(!paragraphs.length) return '';
 
+  /* v1.0.597：接力锚点至少取最后两段且不少于约120字，让下一章看清人物「此刻在哪、手里有什么、刚做了什么」。 */
   const last = paragraphs[paragraphs.length - 1];
-  const meaningfulLength = last.replace(/\s/g, '').length;
-  if(meaningfulLength >= 23) return last;
-  if(paragraphs.length >= 2){
-    return paragraphs[paragraphs.length - 2] + '\n\n' + last;
+  const len = x => x.replace(/\s/g, '').length;
+  let out = last, k = paragraphs.length - 2;
+  while(k >= 0 && (len(out) < 120 || out === last) && (paragraphs.length - 1 - k) <= 3){
+    out = paragraphs[k] + '\n\n' + out; k--;
   }
-  return last;
+  return out;
+}
+/* v1.0.597 标尺§4.5：上一章教案规定的「章末状态」（计划值，仅作位置/状态参照；与上一章正文实际不符时以正文为准）。 */
+function getPrevChapterPlannedEnding(i){
+  try{
+    if(Number(i)<=1) return '';
+    const raw=String(getChapterTeacherRawTextDirect(Number(i)-1)||'');
+    const a=raw.indexOf('【本章章末设计】'); if(a<0) return '';
+    const rest=raw.slice(a+'【本章章末设计】'.length);
+    const b=rest.search(/【本章创作边界】|^\s*(?:#{1,6}\s*)?第\s*\d{1,4}\s*章/m);
+    const sec=(b>=0?rest.slice(0,b):rest).trim();
+    return sec.length>1200?sec.slice(0,1200):sec;
+  }catch(e){ return ''; }
 }
 
 function getChapterEndingRelay(i){
@@ -19306,10 +19376,13 @@ function getChapterWriterUser(i){
     ? `【章节末尾接力变量｜上一章正文原文锚点】\n以下内容来自上一章已经最终落库的正文最后段落。它不是第二份教案、不是剧情规划，也不是故事状态数据库；只用于帮助本章开头进行很短、自然的文字衔接。\n\n上一章末尾：\n${relay}\n\n【使用规则】不要重新总结上一章；不要机械复制上一章结尾；不要为了使用接力变量而强行添加长过渡；只做必要的自然文字衔接，然后立即进入本章自己的剧情；必须同时服从上一章真实状态和本章老师教案，如有冲突以真实状态为准。`
     : '';
 
+  const prevPlan=getPrevChapterPlannedEnding(i);
+  const prevPlanCtx=prevPlan?`【上一章章末状态参照｜来自上一章教案的章末设计（计划值）】\n${prevPlan}\n【使用规则】只用来确认人物此刻的位置、持有物、处境与知情状态，帮助本章章头接得上；不是本章剧情；若与上方“上一章末尾”的实际正文不一致，以实际正文为准。`:'';
   const parts=[
     `【本章老师原始教案｜唯一内容权威】\n${teacher}`,
     sanitizeChapterWriterContext(continuity),
     sanitizeChapterWriterContext(relayContext),
+    sanitizeChapterWriterContext(prevPlanCtx),
     sanitizeChapterWriterContext(dict)
   ].filter(Boolean);
 

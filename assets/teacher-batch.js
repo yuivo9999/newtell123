@@ -249,7 +249,13 @@ async function tbGenTeacher(btn, gi, g){
       return raw;
     };
     const parts = tbParts(g);
+    let _first = true;   // v1.0.596：本次运行中第一次 AI 调用之前不等待，之后每个 AI 步骤之间按「步骤间隔」等待（可被停止）
+    const gap = async label => {
+      if(_first){ _first = false; return; }
+      if(typeof ocGapWait === 'function'){ const ok = await ocGapWait(label); if(!ok){ const e = new Error('已停止'); e.name = 'AbortError'; throw e; } }
+    };
     if(!b.stage1 || !b.stage1.raw){
+      await gap(`老师${gi + 1}总纲`);
       toast(`老师${gi + 1}：生成总纲（一至六区）…`);
       const raw = await ask({ part: 'plan' }, '总纲');
       const r = tbNormalizePlan(raw); if(!r.ok) throw new Error(r.error);
@@ -259,6 +265,7 @@ async function tbGenTeacher(btn, gi, g){
     for(let i = 0; i < parts.length; i++){
       const p = parts[i];
       if(b.parts[p.key] && b.parts[p.key].raw) continue;
+      await gap(`老师${gi + 1}第${p.from}-${p.to}章`);
       toast(`老师${gi + 1}：生成第${p.from}-${p.to}章（${i + 1}/${parts.length}）…`);
       const raw = await ask({ part: 'batch', from: p.from, to: p.to, zoneText: b.stage1.raw, handoffText: tbBatchHandoff(gi, g, p.from) }, `第${p.from}-${p.to}章`);
       const r = tbNormalizeBatch(raw, p.from, p.to); if(!r.ok) throw new Error(r.error);

@@ -182,7 +182,17 @@ function dscGroupClue(gi){
 }
 function dscPickOf(gi){
   const T = ptPeek(); const p = T && T.dictPick && T.dictPick[gi];
-  return p ? { add: (p.add || []).slice(), drop: (p.drop || []).slice() } : { add: [], drop: [] };
+  return p ? { add: (p.add || []).slice(), drop: (p.drop || []).slice(), auto: (p.auto || []).slice() } : { add: [], drop: [], auto: [] };
+}
+/* v1.0.595：细化结果保存后，把「只在名录里却被本组章节用到」的实体自动追加到本组词典（你手动取消勾选过的不追加）。
+   这样不需要人工核对蓝字提示再逐个打钩；重新导出/重做本组时它们就是完整卡。 */
+function dscAutoAppend(gi, hints){
+  const T = ptEnsure(); T.dictPick = T.dictPick || {};
+  const cur = dscPickOf(gi);
+  const add = new Set(cur.add), auto = new Set(cur.auto); let n = 0;
+  (hints || []).forEach(h => { if(!h || h.dropped || !h.key) return; if(!add.has(h.key)){ add.add(h.key); auto.add(h.key); n++; } });
+  if(n) T.dictPick[gi] = { add: [...add], drop: cur.drop, auto: [...auto] };
+  return n;
 }
 function dscGroupScope(gi, pickOverride){
   return dscBuild(dscGroupClue(gi), pickOverride || dscPickOf(gi), {});
@@ -194,9 +204,10 @@ function dscGroupStats(gi){
 function dscDictHints(gi, plans){
   try{
     const r = dscGroupScope(gi);
-    let blob = ''; try{ blob = JSON.stringify(plans || {}); }catch(_e){}
-    const used = r.ents.filter(e => !e.full && !e.main && e.name.length >= 2 && blob.includes(e.name));
-    return used.slice(0, 12).map(e => ({ name: e.name, label: e.label }));
+    const rows = Object.keys(plans || {}).map(k => { let b = ''; try{ b = JSON.stringify(plans[k]); }catch(_e){} return { n: Number((plans[k] && plans[k].chapter) || k), blob: b }; });
+    const used = r.ents.filter(e => !e.full && !e.main && e.name.length >= 2 && rows.some(x => x.blob.includes(e.name)));
+    return used.slice(0, 30).map(e => ({ name: e.name, label: e.label, key: e.key, dropped: !!e.dropped,
+      chapters: rows.filter(x => x.blob.includes(e.name)).map(x => x.n).filter(Number.isFinite).sort((a, b) => a - b) }));
   }catch(_e){ return []; }
 }
 
@@ -230,6 +241,7 @@ function dscOpenPicker(gi){
   const g = ptAssignment().groups[gi]; if(!g) return;
   const saved = dscPickOf(gi);
   const pick = { add: new Set(saved.add), drop: new Set(saved.drop) };
+  const autoSet = new Set(saved.auto || []);
   const clue = dscGroupClue(gi);
   let q = '';
   const ov = document.createElement('div'); ov.className = 'gs-overlay pt-overlay';
@@ -256,7 +268,7 @@ function dscOpenPicker(gi){
       const arr = r.ents.filter(e => e.cat === cat && (!q || e.name.includes(q)));
       if(!arr.length) return;
       html += `<div style="font-weight:700;font-size:12px;margin:8px 0 2px">${esc(label)}（${arr.length}）</div>` + arr.map(e => {
-        const tag = e.full ? DSC_TIER_TAG[e.tier] : (e.dropped ? '已取消' : (e.trimmed ? '超限已降级' : (e.main ? '精简行' : '名录')));
+        const tag = e.full ? ((e.tier === 'manual' && autoSet.has(e.key)) ? '自动追加' : DSC_TIER_TAG[e.tier]) : (e.dropped ? '已取消' : (e.trimmed ? '超限已降级' : (e.main ? '精简行' : '名录')));
         return `<label style="display:flex;gap:6px;align-items:center;padding:2px 0;font-size:13px"><input type="checkbox" data-k="${esc(e.key)}"${e.full ? ' checked' : ''}><span>${esc(e.name)}</span><span class="muted" style="font-size:11px">${esc(tag)} · ${e.size}字</span></label>`;
       }).join('');
     });
@@ -276,7 +288,7 @@ function dscOpenPicker(gi){
   mk('保存', true, () => {
     const T = ptEnsure(); T.dictPick = T.dictPick || {};
     if(!pick.add.size && !pick.drop.size) delete T.dictPick[gi];
-    else T.dictPick[gi] = { add:[...pick.add], drop:[...pick.drop] };
+    else T.dictPick[gi] = { add:[...pick.add], drop:[...pick.drop], auto:[...autoSet].filter(k => pick.add.has(k)) };
     persist(); ptRefresh();
     const st = T.groups && T.groups[gi];
     toast(st && st.raw ? '本组词典选择已保存；需要重新「细化本组」才会生效' : '本组词典选择已保存');

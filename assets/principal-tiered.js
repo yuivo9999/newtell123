@@ -125,6 +125,9 @@ goal=本章战略目标（一句话，只写方向，不写施工）
 1. 粗章表只给“方向”，细节留给分组细化；越远的章节越可以粗。不要为了凑细节而编造远期剧情。
 2. 全书不必死守某一章作为结局：可以把终局收束写进最后阶段，但章号总数必须等于系统给定的全书章节总数。
 3. 粗章表必须与各STAGE_STRATEGY的章节范围、各TEACHER_GROUP_STRATEGY的章节范围、REVEAL_PLAN的揭示章节一致，不得冲突。
+3a. REVEAL_PLAN 的 revealChapter 必须恰好是粗章表里“真相显露/揭示”所在的那一章：先在粗章表里确定哪一章揭示，再回填 revealChapter，两处必须同一章；STAGE/TEACHER_GROUP 的描述里提到揭示时也必须是同一章。
+3b. hintChapters 要稀疏：只在少数关键章给暗示，通常不超过揭示前章数的三分之一，不得几乎每章都暗示，也不得与揭示章重合。
+3c. 人名、地名、专名必须与词典完全一致，逐字照抄，不得写错字、不得自造近似写法。
 4. 篇幅硬限制（100章以上必须遵守，否则会超出单次输出上限被截断）：粗章表每章function不超过20字、goal不超过30字、title不超过15字；TEACHER_GROUP_STRATEGY里chapterAssignments每项task不超过20字；STAGE/GROUP/BOOK各字段尽量一句话，不写长段落；不要复述输入资料。
 5. 阶段之间、老师组之间的交接必须在STAGE_STRATEGY与TEACHER_GROUP_STRATEGY里写清楚（nextStageLaunch / previousStageHandoff / nextGroupLaunch / previousGroupHandoff / mustNotPrematurelyResolve），后续分组细化只读这些交接。
 
@@ -539,6 +542,7 @@ function ptApplyGroupRaw(gi, rawIn, opts){
   const status = (!missing.length && !invalid.length) ? 'detailed' : 'partial';
   const old = T.groups[gi] || {};
   T.groups[gi] = { raw, ts:Date.now(), status, first, last, diag, deviations, devApplied:false, dictHints: (typeof dscDictHints === 'function' ? dscDictHints(gi, plans) : []), needs: needsText || String(old.needs || ''), plans, forceReady: !!old.forceReady && status !== 'detailed' ? true : false, source: opts.source || 'manual' };
+  try{ if(typeof dscAutoAppend === 'function'){ const nAuto = dscAutoAppend(gi, T.groups[gi].dictHints); T.groups[gi].dictAuto = nAuto; } }catch(_e){}
   // 交接卡：程序摘录；保留用户手动编辑过的版本（卡片里并排显示自动版）。
   const prevCard = T.cards[gi];
   T.cards[gi] = { auto: ptBuildAutoCard(gi), manual: prevCard && prevCard.manual ? prevCard.manual : null, ts:Date.now() };
@@ -624,6 +628,7 @@ function ptPanelInner(){
     <option value="off"${mode==='off'?' selected':''}>关闭（一次性校长）</option></select>`;
   let html = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><b style="font-size:12px">👑 校长分层模式</b>${sel}<span class="muted" style="font-size:11px">${enabled?'当前：分层（全书层 + 分组细化）':'当前：一次性校长'}</span></div>`;
   if(!enabled) return html;
+  if(typeof ocPrincipalRowHtml === 'function') html += ocPrincipalRowHtml();   // v1.0.596：一键校长 + 步骤间隔
   const P = scState().principal || {}, T = ptPeek() || { rough:{}, groups:{}, cards:{} };
   const hasGlobal = !!(P.tiered && Object.keys(T.rough || {}).length);
   const groups = ptAssignment().groups;
@@ -643,7 +648,7 @@ function ptPanelInner(){
       const stale = s === 'stale' && st && st.staleReason ? `<span class="muted" style="font-size:11px">（${esc(st.staleReason)}）</span>` : '';
       const ds = (typeof dscGroupStats === 'function') ? dscGroupStats(gi) : null;
       const dsLine = ds ? `<div class="muted" style="font-size:11px;margin:4px 0 0 4px">📖 本组词典：完整${ds.full}条 · 名录${ds.listed}条 · 约${ds.chars}字${(ds.manualAdd||ds.manualDrop)?`（手动 +${ds.manualAdd}/-${ds.manualDrop}）`:''}${ds.over?' <span style="color:#dc2626">⚠超上限</span>':''}</div>` : '';
-      const dh = st && st.dictHints && st.dictHints.length ? `<div style="font-size:11px;color:#2563eb;margin:2px 0 0 4px">📖 本组章节用到了仅在名录里的：${esc(st.dictHints.map(x=>x.name).join('、'))}。若需要它们的完整设定，点「📖 本组词典」勾选后重新细化。</div>` : '';
+      const dh = st && st.dictHints && st.dictHints.length ? `<div style="font-size:11px;color:#2563eb;margin:2px 0 0 4px">📖 本组章节用到了本组词典里只有一句话名录信息的实体：${esc(st.dictHints.slice(0,8).map(x=>`${x.name}${x.chapters&&x.chapters.length?`（第${x.chapters.slice(0,4).join('、')}章${x.chapters.length>4?'…':''}）`:''}${x.dropped?'·你取消过':''}`).join('、'))}${st.dictHints.length>8?`等${st.dictHints.length}个`:''}。${st.dictAuto?`已自动追加${st.dictAuto}个到「📖 本组词典」（无需手动打钩）。`:''}想让它们按完整设定生效：重新「📦 注入导出」→ 外部AI →「读本组」覆盖保存；不重做也可以，已细化结果不受影响。</div>` : '';
       return `<div style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin:6px 0">
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <b style="font-size:12px">第${gi+1}组 · ${esc(g.teacherCode||'')}</b><span class="muted" style="font-size:12px">第${g.startChapter}-${g.endChapter}章</span>
@@ -666,6 +671,7 @@ function ptPanelInner(){
 function ptPanelHtml(){ return `<div data-pt-panel style="margin:6px 0 10px">${ptPanelInner()}</div>`; }
 function ptRefresh(){
   document.querySelectorAll('[data-pt-panel]').forEach(el => { el.innerHTML = ptPanelInner(); });
+  if(typeof ocPaint === 'function') ocPaint();   // 重绘后恢复一键按钮的运行态文字
 }
 function ptEnsureStyle(){
   if(document.getElementById('ptModalStyle')) return;

@@ -94,10 +94,10 @@ function dsApply(gi, txt){
   ptRefresh();
   return { ok:true, count, leaks:leaks.length, merged:n };
 }
-async function dsGen(gi, btn){
+async function dsGen(gi, btn, opts){
   const inj = dsBuildInjection(gi);
   if(!inj){ toast('增补清单为空：请先填写本组需要的新实体清单'); return false; }
-  if(genBusy()){ toast('已有生成任务进行中，请稍候'); return false; }
+  if(!(opts && opts.oneClick) && genBusy()){ toast('已有生成任务进行中，请稍候'); return false; }
   markAIRunning('dictEnrich'); if(btn) busy(btn, true, '增补中…');
   try{
     const spec = resolveActiveSpec('dictEnrich');
