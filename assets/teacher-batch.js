@@ -148,8 +148,7 @@ function tbOpenInjectionExport(gi){
   ov.querySelector('[data-tb-copy]').onclick = () => { if(!curText) return toast('当前部分没有可复制的注入'); copyText(curText); toast('已复制'); };
   ov.querySelector('[data-tb-txt]').onclick = () => {
     if(!curText) return toast('当前部分没有可导出的注入');
-    const base = teacherInjectionFileName(gi).replace(/\.txt$/, '');
-    downloadPlainText(`${base}_${cur === 'plan' ? '总纲' : '第' + cur + '章'}.txt`, curText); toast('TXT 已导出');
+    downloadPlainText(cur === 'plan' ? exportFileName('老师','注入',{group:Number(gi)+1,part:'总纲'}) : exportFileName('老师','注入',{group:Number(gi)+1,chapter:Number(cur)}), curText); toast('TXT 已导出');
   };
   show();
 }

@@ -708,7 +708,7 @@ function ptAct(act, gi, btn){
   if(act === 'rough'){
     ptOpenText({ title:'📋 粗章表', sub:'每章：chapter / title / function / goal；保存后立即生效（已细化章节以细化结果为准）', text:ptRoughToText(),
       buttons:[
-        { label:'导出TXT', onClick:(t)=>{ downloadPlainText('校长_粗章表.txt', t); toast('粗章表 TXT 已导出'); } },
+        { label:'导出TXT', onClick:(t)=>{ downloadPlainText(exportFileName('校长','输出',{part:'粗章表'}), t); toast('粗章表 TXT 已导出'); } },
         { label:'保存更改', primary:true, onClick:(t,close)=>{ const r = ptSaveRoughText(t); if(!r.ok) return toast(r.error); toast(`粗章表已保存（更新${r.changed}章）${r.missing.length?`；仍缺${r.missing.length}章`:''}`); close(); } }
       ] });
     return;
@@ -723,7 +723,7 @@ function ptAct(act, gi, btn){
     ptOpenText({ title:`👑 校长 · 第${gi+1}组细化 · 注入导出`, sub:`第${inj.first}-${inj.last}章 · SYSTEM + USER`, text, readonly:true,
       buttons:[
         { label:'复制', onClick:()=>{ copyText(text); toast('本组细化注入已复制'); } },
-        { label:'导出TXT', primary:true, onClick:()=>{ downloadPlainText(`校长_细化_第${gi+1}组_${ptFileSafe(g.teacherCode)}_注入.txt`, text); toast('TXT 已导出'); } }
+        { label:'导出TXT', primary:true, onClick:()=>{ downloadPlainText(exportFileName('校长','注入',{group:gi+1,part:'细化'}), text); toast('TXT 已导出'); } }
       ] });
     return;
   }
@@ -731,7 +731,7 @@ function ptAct(act, gi, btn){
     const st = T.groups[gi];
     ptOpenText({ title:`📋 读本组校长细化成果 · 第${gi+1}组`, sub:`第${g.startChapter}-${g.endChapter}章 · 粘贴外部AI的输出或直接编辑，保存后立即生效`, text: st && st.raw ? st.raw : '',
       buttons:[
-        { label:'导出TXT', onClick:(t)=>{ downloadPlainText(`校长_细化_第${gi+1}组_${ptFileSafe(g.teacherCode)}_输出.txt`, t); toast('TXT 已导出'); } },
+        { label:'导出TXT', onClick:(t)=>{ downloadPlainText(exportFileName('校长','输出',{group:gi+1,part:'细化'}), t); toast('TXT 已导出'); } },
         { label:'保存更改', primary:true, onClick:(t,close)=>{ const r = ptApplyGroupRaw(gi, t, { source:'manual' }); if(!r.ok) return toast(r.error); toast(r.status==='detailed' ? `第${gi+1}组已保存：${r.count}章已细化${r.deviations?`；偏离粗章表${r.deviations}处`:''}` : `第${gi+1}组已保存，但有诊断：${r.diag.slice(0,2).join('；')}`); close(); } }
       ] });
     return;
@@ -742,7 +742,7 @@ function ptAct(act, gi, btn){
     if(!cur){ toast('本组尚未细化，还没有交接卡'); return; }
     ptOpenText({ title:`🤝 交接卡 · 第${gi+1}组 → 第${gi+2}组`, sub: c.manual ? '当前使用：手动编辑版' : '当前使用：程序摘录版（可编辑，保存后下一组细化读取这一版）', text: cur,
       buttons:[
-        { label:'导出TXT', onClick:(t)=>{ downloadPlainText(`校长_交接卡_第${gi+1}组.txt`, t); toast('TXT 已导出'); } },
+        { label:'导出TXT', onClick:(t)=>{ downloadPlainText(exportFileName('校长','输出',{group:gi+1,part:'交接卡'}), t); toast('TXT 已导出'); } },
         { label:'恢复程序摘录版', onClick:(t,close)=>{ const T2 = ptEnsure(); T2.cards[gi] = { auto: ptBuildAutoCard(gi), manual:null, ts:Date.now() }; persist(); ptRefresh(); toast('已恢复为程序摘录版'); close(); } },
         { label:'保存更改', primary:true, onClick:(t,close)=>{ const T2 = ptEnsure(); const prev = T2.cards[gi] || {}; T2.cards[gi] = { auto: prev.auto || ptBuildAutoCard(gi), manual: String(t||'').trim() || null, ts:Date.now() }; persist(); ptRefresh(); toast('交接卡已保存'); close(); } }
       ] });
