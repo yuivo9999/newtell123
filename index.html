@@ -53,8 +53,8 @@
     <div class="spec-head">
       <span>📚 历史作品</span>
       <span class="spec-actions">
-        <button id="histNewLong" class="hist-new-btn" type="button">＋ 新建长篇</button>
-        <button id="btnNewProject" class="hist-new-btn" type="button">＋ 新建小说</button>
+        <button id="histNewLong" class="hist-new-btn" type="button">＋ 新建小说</button>
+        
       </span>
     </div>
     <!-- v10.17 第二行最左：导入项目（原「导入 .fyp」改名改色，移入此行） -->
@@ -124,10 +124,8 @@
   <!-- 机甲主题专用顶部胶囊导航 -->
   <nav id="mechaTopNav" class="mecha-top-nav">
     <button class="cap" data-step="1">故事构想</button>
-    <button class="cap" data-step="2">角色提示词</button>
-    <button class="cap" data-step="3">场景提示词</button>
-    <button class="cap" data-step="4">分镜文字</button>
-    <button class="cap" data-export>导出资产包</button>
+    <button class="cap" data-step="6">交流</button>
+    <button class="cap" data-step="5">导出</button>
   </nav>
 
   <!-- 主内容 -->
@@ -136,9 +134,7 @@
   <!-- 底部导航 -->
   <nav class="tabbar">
     <button class="tab" data-step="1"><span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>故事</button>
-    <button class="tab" data-step="2"><span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>角色</button>
-    <button class="tab" data-step="3"><span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></span>场景</button>
-    <button class="tab" data-step="4"><span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.2"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></span>分镜</button>
+    <button class="tab" data-step="6" id="tabChat"><span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>交流<i class="tab-dot hidden" id="chatDot"></i></button>
     <button class="tab" data-step="5"><span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></span>导出</button>
   </nav>
 </div>
@@ -276,11 +272,12 @@
   <script src="assets/vendor/tom-select/tom-select.complete.min.js"></script>
 <script src="assets/vendor/jszip.min.js"></script>
 <script src="assets/idb.js?v=5"></script>
-  <script src="assets/app.js?v=399"></script>
+  <script src="assets/app.js?v=400"></script>
   <script src="assets/dict-scope.js?v=2"></script>
   <script src="assets/principal-tiered.js?v=5"></script>
   <script src="assets/dict-supplement.js?v=4"></script>
   <script src="assets/teacher-batch.js?v=2"></script>
   <script src="assets/oneclick.js?v=1"></script>
+  <script src="assets/world-engine.js?v=1"></script>
   </body>
 </html>
