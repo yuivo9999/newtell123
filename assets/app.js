@@ -1,4 +1,6 @@
 /* v1.0.590 DICTENRICH-KERNEL: 词典充实内核调整。①提示词：新增「开篇状态原则」（只写故事开始时已存在的世界，不写主角将来的行动/设局/结果）、「保密事项原则」（充实师可见词典达人的 secret，但绝不触碰）、基础人物只读规则；次要配角加性别/年龄；各类条目加「描写标签」；新增「人物补充」行，只给词典达人标注为「可补充描写」的基础次要配角补外貌/爱好/口头禅（单独存放 _charSupplements，不覆盖基础卡）。②输入：新增人物代号对照（CHAR_xxx＝姓名）与【保密事项】段。③解析器：字段只按「；」「｜」切分，字段内的逗号保留（此前每个字段只剩第一个逗号前的半句）；描写标签入库（tags）；路人不再被「像不像人名」误删；「与主线关系」改为「可用钩子」（旧写法仍可读）。④下游：老师可见 tags 与人物补充，校长清洗词典带上人物补充，正文人物卡带上人物补充；读词典充实可读写 tags 与人物补充。 */
+/* v1.0.608 VARIANCE：偏差治理——决策型任务默认降温（词典达人/校长/老师 0.2，词典充实 0.35）与 top_p 0.8（校长/老师）；可选固定随机种子（网关设置，不支持自动关闭）；新增 quality-gate.js：词典达人与老师生成后做合同检查并自动修复重试（≤2次，可用 localStorage newtell.qg.off=1 关闭），记录进 qgLog，agent 可用 get_generation_checks 查询；世界时钟按章推进的后台逻辑（weChapterReport、体检提示、agent 工具 get_world_now）。 */
+/* v1.0.607 DIAG-FIX（据606运行诊断）：①叙事人称漂移（第4章由第一人称变第三人称）→ 正文注入新增「叙事人称」沿用上一章实际写法 + 体检新增人称一致性；②章末结算状态静默失败（正文拿不到上一章实际状态）→ 失败不再静默：toast+记录原因，体检提示，章节卡新增「🧾 结算」手动重试；③修复上一章教案章末参照在第2章缺失的 off-by-one；④词典提示词：地点/专名备注不得写将来会发生的事件（洪水等剧透），路人「台词」改写说话方式。 */
 /* v1.0.606 POLISH：①切页不再误导——与交流页互相切换时不弹「会中断生成」确认（切页本来就不中止生成）；②Agent 对格式更宽容：工具/操作/记忆块接受 json 或无标签围栏、整条回复就是JSON；③新增工具 get_outline（全书章表）；④后台生成时聊天页与概况有提示；⑤项目内新增 tests/（冒烟测试）与 docs/项目维护手册.md。 */
 /* v1.0.605 WORLD-ENGINE：新增「世界运转层」（可选，独立模块 world-engine.js）：世界时钟/成本底表/人物驱动/地点感官锚点；故事页词典充实下方生成与编辑；老师得到全部（作为约束），正文只得到成本底表+本章出场人物驱动+本章地点感官（不含世界时钟，避免剧透）；Agent 新增只读工具 get_world_engine；设置→分任务模型新增「世界运转设计师」。 */
 /* v1.0.604 AGENT-MEMORY：Agent 记忆——项目记忆（随项目）、作者偏好（跨小说，存本机）、会话摘要（对话变长时自动压缩）；🧠面板可查看/添加/修改/删除；助手只能提议（记忆卡，点「记住」才保存）；不记录密钥密码；只用于Agent，不进入老师/正文注入。 */
@@ -41,7 +43,7 @@
    5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.606';
+const APP_VERSION = '1.0.608';
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
 const APP_FILE_VERSION = 'app1.0.586.js';
 function installV569Styles(){
@@ -207,6 +209,7 @@ let gglib = [];
 
 const state = {
   mode: 'longnovel',    // v1.0.601：只保留长篇小说模式（短片/普通模式已移除，字段保留仅为兼容旧快照）
+  qgLog: [],   // v1.0.608：上游自动检查记录
   worldEngine: { raw:'', ts:0 },   // v1.0.605：世界运转层（单一来源文本）
   agent: { threads:[], activeId:'', log:[], memory:{project:[]} },   // v1.0.601：交流区（Agent 作者助手）对话线程，随项目保存
   wordRange: null,      // (兼容遗留) 不再作为长篇必填；保留字段避免旧快照破坏
@@ -1079,11 +1082,15 @@ async function commitChapterObservedState(i,text){
     const raw=unwrapAIResult(await callDeepSeek(CHAPTER_STATE_SYS,user,{maxTokens:1800,temperature:resolveTaskTemperature('chapterState'),topP:0.2,signal:_abortCtl?.signal,taskKey:'chapterState'}));
     const j=parseJson(raw)||{};
     const obs={time:String(j.time||'').trim(),location:String(j.location||'').trim(),characters:j.characters&&typeof j.characters==='object'&&!Array.isArray(j.characters)?j.characters:{},endingState:String(j.endingState||'').trim(),openThreads:Array.isArray(j.openThreads)?j.openThreads.map(x=>String(x||'').trim()).filter(Boolean).slice(0,12):[],newFacts:Array.isArray(j.newFacts)?j.newFacts.map(x=>String(x||'').trim()).filter(Boolean).slice(0,12):[],holdings:(j.holdings&&typeof j.holdings==='object'&&!Array.isArray(j.holdings))?Object.fromEntries(Object.entries(j.holdings).slice(0,12).map(([k,v])=>[String(k).slice(0,20),String(v||'').slice(0,80)])):{},newKnowledge:Array.isArray(j.newKnowledge)?j.newKnowledge.map(x=>({who:String(x&&x.who||'').trim().slice(0,20),what:String(x&&x.what||'').trim().slice(0,100)})).filter(x=>x.who&&x.what).slice(0,12):[],source:'observed',ts:Date.now()};
-    ss.chapters[i]=ss.chapters[i]||{}; ss.chapters[i].observed=obs; ss.chapters[i].observedAt=Date.now();
+    if(!obs.time && !obs.location && !obs.endingState && !Object.keys(obs.characters||{}).length){ ss.lastObserveError={chapter:i,msg:'AI 返回为空或无法解析',ts:Date.now()}; toast(`第${i+1}章状态结算返回为空（下一章将得不到这一章的实际状态；可点「🧾 结算」重试）`); return null; }
+    ss.chapters[i]=ss.chapters[i]||{}; ss.chapters[i].observed=obs; ss.chapters[i].observedAt=Date.now(); if(ss.lastObserveError && ss.lastObserveError.chapter===i) ss.lastObserveError=null;
     const committedTime=obs.time || String(ss.current?.time||'').trim();
     ss.current={chapter:i,time:committedTime,location:obs.location,characters:obs.characters,endingState:obs.endingState,openThreads:obs.openThreads};
     o._factCard=o._factCard||{}; o._factCard.storyStateLast=obs; persist(); return obs;
-  }catch(e){ return null; }
+  }catch(e){
+    try{ ss.lastObserveError={chapter:i,msg:String(e&&e.message||e).slice(0,160),ts:Date.now()}; toast(`第${i+1}章状态结算失败：${String(e&&e.message||e).slice(0,60)}（下一章将得不到这一章的实际状态；可在章节卡点「🧾 结算」重试）`); }catch(_e){}
+    return null;
+  }
 }
 
 
@@ -1409,6 +1416,7 @@ function normalizeCfg(cfg){
     gr.kind = gr.kind || 'openai';
     gr.baseUrl = gr.baseUrl || '';
     gr.keyInBody = !!gr.keyInBody;
+    gr.useSeed = !!gr.useSeed;
     gr.keys = (gr.keys||[]).map((k,j)=>({id: k.id||uid('k'), label: k.label||('账号'+(j+1)), key: k.key||''}));
     gr.models = (gr.models && gr.models.length) ? gr.models : defaultModels();
   });
@@ -1462,13 +1470,14 @@ function resolveActiveSpec(taskKey){
     baseUrl: (group.baseUrl || 'https://api.deepseek.com').replace(/\/+$/, ''),
     apiKey: key.key || '',
     keyInBody: !!group.keyInBody,
+    useSeed: !!group.useSeed,
     model: model.name || 'deepseek-v4-pro',
     temperature: (cfg.temperature==null ? 0.6 : cfg.temperature),
     ideaTemp:    (cfg.ideaTemp==null ? 0.45 : cfg.ideaTemp),
-    principalTemp:(cfg.principalTemp==null ? 0.4 : cfg.principalTemp),
-    teacherTemp: (cfg.teacherTemp==null ? 0.4 : cfg.teacherTemp),
-    dictmasterTemp: (cfg.dictmasterTemp==null ? 0.4 : cfg.dictmasterTemp),
-    dictEnrichTemp: (cfg.dictEnrichTemp==null ? 0.45 : cfg.dictEnrichTemp),
+    principalTemp:(cfg.principalTemp==null ? 0.2 : cfg.principalTemp),      // v1.0.608：决策型任务降低随机性（0.4→0.2）
+    teacherTemp: (cfg.teacherTemp==null ? 0.2 : cfg.teacherTemp),
+    dictmasterTemp: (cfg.dictmasterTemp==null ? 0.2 : cfg.dictmasterTemp),
+    dictEnrichTemp: (cfg.dictEnrichTemp==null ? 0.35 : cfg.dictEnrichTemp),
     assetsTemp:  (cfg.assetsTemp==null ? 0.7 : cfg.assetsTemp),
     titleTemp:   (cfg.titleTemp==null ? 0.5 : cfg.titleTemp),
     chapterTemp: (cfg.chapterTemp==null ? 0.5 : cfg.chapterTemp),
@@ -1524,6 +1533,7 @@ function projectSnapshot(){
   return {
     mode: 'longnovel',
     worldEngine: weSanitizeForSave(state.worldEngine),
+    qgLog: (typeof qgSanitizeForSave==='function')?qgSanitizeForSave(state.qgLog):[],
     agent: agentSanitizeState(state.agent),
     wordRange: state.wordRange || null,
     chapterRange: state.chapterRange || null,
@@ -1619,6 +1629,7 @@ function applyProject(p){
   p = (p && typeof p === 'object') ? p : {};
   state.mode = 'longnovel';
   state.worldEngine = weSanitizeForSave(p.worldEngine);
+  state.qgLog = (typeof qgSanitizeForSave==='function')?qgSanitizeForSave(p.qgLog):[];
   state.agent = agentSanitizeState(p.agent);
   state.wordRange = (p.wordRange && p.wordRange.min && p.wordRange.max) ? {min:+p.wordRange.min, max:+p.wordRange.max} : (p.chapterRange ? null : null);
   state.chapterRange = (p.chapterRange && p.chapterRange.min && p.chapterRange.max) ? {min:+p.chapterRange.min, max:+p.chapterRange.max} : null;
@@ -1756,6 +1767,7 @@ function clearState(){
   state.mode = 'longnovel';
   state.agent = { threads:[], activeId:'', log:[], memory:{project:[]} };
   state.worldEngine = { raw:'', ts:0 };
+  state.qgLog = [];
   state.wordRange = null; state.chapterRange = null; state.totalWords = null; state.chapterCount = null;
   state.idea = ''; state.outline = null; state.coverPrompt = ''; state.coverWithTitle = false; state.outlineConfirmed = false;
   state.glossAdherence = 60; state.glossAllowFill = false; state.gsCollapsed = false;
@@ -2160,6 +2172,15 @@ function resolveTaskTemperature(taskKey, explicitTemperature=null){
   if(explicitTemperature != null && isFinite(Number(explicitTemperature))) return _f2(explicitTemperature);
   return _f2(s.temperature);
 }
+/* v1.0.608 偏差治理：决策型任务（校长/老师）默认 top_p 0.8；种子为可选（网关设置「固定随机种子」，接口不支持时自动关闭）。 */
+const TASK_TOPP = { principal:0.8, teacher:0.8 };
+const SEEDED_TASKS = new Set(['dictmaster','dictEnrich','principal','teacher']);
+let _seedUnsupported = false;
+function stableSeed(taskKey, salt){
+  const base = String((state.outline&&state.outline.title)||'')+'|'+String(state.idea||'').slice(0,60)+'|'+taskKey+'|'+(salt||0);
+  let h = 2166136261; for(let k=0;k<base.length;k++){ h ^= base.charCodeAt(k); h = Math.imul(h,16777619); }
+  return Math.abs(h|0) % 2147483647;
+}
 async function callDeepSeek(system, user, {temperature=null, topP=null, signal=null, maxTokens=null, onStream=null, retry=2, taskKey=null, runId=null, attempt=null, messages=null}={}){
   const _t0 = Date.now();
   function isReasonModel(name){
@@ -2194,11 +2215,12 @@ async function callDeepSeek(system, user, {temperature=null, topP=null, signal=n
         messages: Array.isArray(messages) ? [{role:'system', content: system}, ...messages] : [{role:'system', content: system}, {role:'user', content: user}],
         ...(!_reason ? {
           temperature: resolveTaskTemperature(taskKey, temperature),
-          top_p: _f2(topP==null ? 0.95 : topP)
+          top_p: _f2(topP==null ? (TASK_TOPP[taskKey]!=null ? TASK_TOPP[taskKey] : 0.95) : topP)
         } : {}),   // 推理模型通常不支持 temperature/top_p，省略
         stream: streaming
       };
       if(s.keyInBody) body.api_key = s.apiKey;
+      if(s.useSeed && !_seedUnsupported && !_reason && SEEDED_TASKS.has(taskKey)) body.seed = stableSeed(taskKey, _rec.outerAttempt||0);
       if(_reason){
         body.max_completion_tokens = maxTokens && maxTokens>0 ? Math.max(maxTokens, 32768) : 32768;
       } else if(maxTokens && maxTokens>0){
@@ -2228,6 +2250,7 @@ async function callDeepSeek(system, user, {temperature=null, topP=null, signal=n
         }
         let msg = '请求失败 ('+res.status+')';
         try{ const j = await res.json(); if(j.error && j.error.message) msg = j.error.message; }catch(e){}
+        if(body.seed!=null && /seed/i.test(msg)){ _seedUnsupported = true; toast('该接口不支持固定随机种子，已自动关闭这一选项'); }
         throw new Error(msg);
       }
       if(!streaming){
@@ -7876,7 +7899,8 @@ async function genTeacher(btn, gi){
     _tp.systemChars=String(teacherInjection.system||'').length; _tp.inputChars=String(_teacherUser||'').length;
     const _aiStart=performance.now();
     const teacherRunId='teacher-'+Date.now().toString(36);
-    const teacherRes=await callDeepSeek(teacherInjection.system, _teacherUser, {temperature:temp,maxTokens:32768,signal:_abortCtl?.signal,taskKey:'teacher',runId:teacherRunId,attempt:1});
+    const _qgT=await qgGenerate('老师',(note,k)=>callDeepSeek(teacherInjection.system, note?_teacherUser+'\n\n'+note:_teacherUser, {temperature:temp,maxTokens:32768,signal:_abortCtl?.signal,taskKey:'teacher',runId:teacherRunId,attempt:k+1}),(t)=>qgCheckTeacher(t,{}),{what:'整组教案',maxRetry:1});
+    const teacherRes=_qgT.res;
     const txt=teacherRes.text;
     _tp.aiReturnMs=Math.round(performance.now()-_aiStart);
     const raw=String(txt||'').trim();
@@ -15136,6 +15160,27 @@ const CH_PAGE_SIZE = 10;
 
 /* ===================== v1.0.600：章节体检（程序核对，不调用AI）=====================
  * 标尺§11/§12：正文写完后做确定性检查，只报告、不改动。结果分三级：warn（建议处理）/ note（供参考）/ ok。 */
+/* v1.0.607：叙事人称检测（确定性，不调用AI）：去掉对白与系统方括号后，统计叙述里“我”的密度。 */
+function povOf(text){
+  const t=String(text||'').replace(/“[^”]*”/g,'').replace(/「[^」]*」/g,'').replace(/【[^】]*】/g,'');
+  const len=Math.max(1,t.replace(/\s/g,'').length); const n=(t.match(/我/g)||[]).length; const d=Math.round(n*1000/len*10)/10;
+  if(len<400) return {kind:'unknown',label:'篇幅太短',density:d};
+  if(d>=4) return {kind:'first',label:'第一人称',density:d};
+  if(d<1) return {kind:'third',label:'第三人称',density:d};
+  return {kind:'unknown',label:'人称不明确',density:d};
+}
+/* 正文注入：沿用上一章实际写法的人称，防止跨章视角漂移（数据驱动，不依赖题材）。 */
+function buildPovLock(i){
+  const n=Number(i); if(!(n>=1)) return '';
+  for(let k=n-1;k>=0;k--){
+    const c=state.chapters&&state.chapters[k]; if(!c||!String(c.content||'').trim()) continue;
+    const p=povOf(c.content); if(p.kind==='unknown') return '';
+    return p.kind==='first'
+      ? `【叙事人称｜沿用上一章的实际写法】第${k+1}章用第一人称“我”叙述。本章必须保持同一人称与同一个叙述者：叙述里用“我”，不得改成第三人称，也不得在叙述中用人物姓名或“她/他”指代叙述者本人（对白除外）。`
+      : `【叙事人称｜沿用上一章的实际写法】第${k+1}章用第三人称叙述。本章必须保持第三人称，不得在叙述里改用第一人称“我”（对白除外）。`;
+  }
+  return '';
+}
 function chapterHealthCheck(i){
   const items=[]; const add=(level,label,detail)=>items.push({level,label,detail:detail||''});
   const c=(state.chapters&&state.chapters[i])||{};
@@ -15184,6 +15229,20 @@ function chapterHealthCheck(i){
     const copied=quotes.filter(q=>text.includes(q));
     if(copied.length>=2) add('warn','与教案引号原话相同',`${copied.length} 处：`+copied.slice(0,3).map(q=>`「${q.slice(0,16)}${q.length>16?'…':''}」`).join('、'));
     else if(copied.length===1) add('note','与教案引号原话相同',`1 处：「${copied[0].slice(0,16)}」`);
+  }catch(e){}
+
+  // 5a 世界时钟：到期但疑似未体现的外部事件（启发式，仅供参考）
+  try{ if(typeof weChapterReport==='function'){ const wr=weChapterReport(i); if(wr&&wr.due){ const miss=wr.due.filter(x=>x.used===false); if(miss.length) add('note','世界时钟：到期但疑似未体现的事件（启发式）',miss.slice(0,4).map(x=>`${x.when}「${x.event}」`).join('；')); } } }catch(e){}
+  // 5b 章末结算状态是否存在（下一章要靠它承接）
+  try{
+    const ss=storyState(), ob=ss.chapters&&ss.chapters[i]&&ss.chapters[i].observed;
+    if(!ob){ const er=ss.lastObserveError&&ss.lastObserveError.chapter===i?('；上次失败原因：'+ss.lastObserveError.msg):''; add('warn','没有章末结算状态','下一章将得不到这一章的实际状态（位置、持有物、数值、新知情）'+er+'。可在章节卡点「🧾 结算」重试'); }
+    else add('ok','章末结算状态','已有');
+  }catch(e){}
+  // 5c 叙事人称与上一章是否一致
+  try{
+    const cur=povOf(text); let pj=-1; for(let k=i-1;k>=0;k--){ if(state.chapters[k]&&String(state.chapters[k].content||'').trim()){ pj=k; break; } }
+    if(pj>=0){ const prev=povOf(state.chapters[pj].content); if(cur.kind!=='unknown'&&prev.kind!=='unknown'&&cur.kind!==prev.kind) add('warn','叙事人称与上一章不一致',`第${pj+1}章是${prev.label}（“我”约${prev.density}次/千字），本章是${cur.label}（约${cur.density}次/千字）`); else if(cur.kind!=='unknown') add('ok','叙事人称',cur.label+'，与上一章一致'); }
   }catch(e){}
 
   // 6 疑似新人物 / 新地名（启发式，仅提示，请人工判断）
@@ -15319,7 +15378,7 @@ function chCardHtml(c, i){
             <button class="btn ghost" data-read="${i}">📖 阅读</button>
             <button class="btn ghost" data-ch-sum="${i}" title="生成本章速读梗概（本章正文压缩至约 1/3，省时阅读）">🏮 本章梗概</button>
             <button class="btn ghost" data-ver="${i}">📚 版本(${chVersions(i).length})</button>
-            <button class="btn ghost chapter-injection-btn" data-injection-export="${i}" title="查看本章此刻实际发送给正文 AI 的 system + user">📦 注入导出</button><button class="btn ghost" data-chapter-health="${i}" title="程序核对本章：字数、说话习惯、秘密、新名字等（不调用AI）">🩺 体检</button>
+            <button class="btn ghost chapter-injection-btn" data-injection-export="${i}" title="查看本章此刻实际发送给正文 AI 的 system + user">📦 注入导出</button><button class="btn ghost" data-chapter-health="${i}" title="程序核对本章：字数、说话习惯、秘密、新名字等（不调用AI）">🩺 体检</button><button class="btn ghost" data-chapter-settle="${i}" title="重新摘录本章写成后的实际状态（位置、持有物、数值、新知情），供下一章承接；会调用一次AI">🧾 结算</button>
           </div>
         </div>
       </div>`;
@@ -15376,7 +15435,7 @@ function renderChapters(){
           <button class="btn ghost" data-read="${i}">📖 阅读</button>
           <button class="btn ghost" data-ch-sum="${i}" title="生成本章速读梗概（本章正文压缩至约 1/3，省时阅读）">🏮 本章梗概</button>
           <button class="btn ghost" data-ver="${i}" title="版本历史">📚 版本(${chVersions(i).length})</button>
-          <button class="btn ghost chapter-injection-btn" data-injection-export="${i}" title="查看本章此刻实际发送给正文 AI 的 system + user">📦 注入导出</button><button class="btn ghost" data-chapter-health="${i}" title="程序核对本章：字数、说话习惯、秘密、新名字等（不调用AI）">🩺 体检</button>
+          <button class="btn ghost chapter-injection-btn" data-injection-export="${i}" title="查看本章此刻实际发送给正文 AI 的 system + user">📦 注入导出</button><button class="btn ghost" data-chapter-health="${i}" title="程序核对本章：字数、说话习惯、秘密、新名字等（不调用AI）">🩺 体检</button><button class="btn ghost" data-chapter-settle="${i}" title="重新摘录本章写成后的实际状态（位置、持有物、数值、新知情），供下一章承接；会调用一次AI">🧾 结算</button>
         </div>
       </div>`).join('');
   }
@@ -15818,7 +15877,9 @@ get_teacher_plan：老师给这一章的教案。参数：chapter
 get_health：本章程序体检结果。参数：chapter
 get_character：词典里某个人物/地点/专名的完整条目，并列出各章结算中提到他的状态。参数：name
 get_knowledge：知情进度（谁在第几章知道了什么）与秘密揭示计划。参数：无
+get_generation_checks：上游自动检查记录（哪些环节被自动修正过、还有哪些问题没通过）。参数：无
 get_outline：全书章表（每章标题、功能、目标；来自校长的粗章表，没有则只列标题）。参数：无
+get_world_now：某章的“世界此刻”（故事时点、已到期的外部事件及是否疑似体现、即将到期的事件）。参数：chapter
 get_world_engine：世界运转层（世界时钟、成本底表、人物驱动、地点感官锚点）。参数：无
 search_text：在所有已写正文里搜关键词，返回章号和上下文。参数：query
 list_dictionary：列出词典里的名字。参数：kind("characters"|"places"|"propernouns"|"walkons")`;
@@ -15854,11 +15915,13 @@ function agentRunTool(name,args){
       const ss=storyState(), seen=[]; Object.keys(ss.chapters||{}).map(Number).sort((a,b)=>a-b).forEach(k=>{ const ob=ss.chapters[k]&&ss.chapters[k].observed; if(ob&&ob.characters&&ob.characters[q]) seen.push(`第${k+1}章末：${ob.characters[q]}`); });
       return cap((hits.length?hits.join('\n'):'词典里没有叫「'+q+'」的条目。')+(seen.length?'\n各章结算中的状态：\n'+seen.join('\n'):''),3500);
     }
+    if(name==='get_generation_checks'){ const L=(state.qgLog||[]); return L.length?cap(L.slice(0,12).map(x=>`${new Date(x.ts).toLocaleString()} ${x.kind}${x.what?'·'+x.what:''}：${x.repaired?'已自动修正（'+x.attempts+'次生成）':'仍有未通过项'}${x.fixed.length?'；修正了：'+x.fixed.join('；'):''}${x.remaining.length?'；未通过：'+x.remaining.join('；'):''}`).join('\n'),3000):'还没有触发过自动检查（说明生成结果一次通过，或尚未生成）。'; }
     if(name==='get_outline'){
       let t=''; try{ if(typeof ptRoughToText==='function') t=String(ptRoughToText()||'').trim(); }catch(e){}
       if(!t) t=(state.chapters||[]).map((c,i)=>`第${i+1}章：${cleanChapterTitle(c.title)||'（无标题）'}`).join('\n');
       return t?cap(t,3500):'还没有章表。';
     }
+    if(name==='get_world_now'){ const i=_agentChapterIdx(args); if(i<0) return '错误：章号无效'; return typeof weChapterReportText==='function'?weChapterReportText(i):'世界运转层模块不可用'; }
     if(name==='get_world_engine'){ const raw=String((state.worldEngine&&state.worldEngine.raw)||'').trim(); return raw?cap(raw,3500):'世界运转层还没有生成（这是可选的一步，在故事页词典充实下方）。'; }
     if(name==='get_knowledge'){
       const led=knowledgeLedger(); let rp=[]; try{ rp=principalRevealPlan(); }catch(e){}
@@ -16825,9 +16888,17 @@ const lnER = $('#lnExportReader'); if(lnER) lnER.onclick = openExportReader;
 
   renderChapters();
   const chaptersDelegate = (e)=>{
-    const t = e.target.closest('[data-regen],[data-read],[data-fold],[data-page],[data-ver],[data-ch-sum],[data-ne-resume-ch],[data-ne-partial-adopt],[data-plan-ch],[data-injection-export],[data-chapter-health]');
+    const t = e.target.closest('[data-regen],[data-read],[data-fold],[data-page],[data-ver],[data-ch-sum],[data-ne-resume-ch],[data-ne-partial-adopt],[data-plan-ch],[data-injection-export],[data-chapter-health],[data-chapter-settle]');
     if(!t) return;
-    if(t.hasAttribute('data-chapter-health')){
+    if(t.hasAttribute('data-chapter-settle')){
+      e.preventDefault(); e.stopPropagation();
+      const idx=+t.dataset.chapterSettle, c=state.chapters&&state.chapters[idx];
+      if(!c||!String(c.content||'').trim()){ toast('这一章还没有正文'); return; }
+      if(genBusy()){ toast('已有生成任务进行中，请稍后再结算'); return; }
+      t.disabled=true; toast(`第${idx+1}章：正在结算章末状态…`);
+      commitChapterObservedState(idx,c.content).then(o=>{ t.disabled=false; if(o){ toast(`第${idx+1}章已结算：${o.location||'地点未写明'}，${Object.keys(o.characters||{}).length}个人物状态`); } }).catch(()=>{ t.disabled=false; });
+    }
+    else if(t.hasAttribute('data-chapter-health')){
       e.preventDefault(); e.stopPropagation();
       openChapterHealth(+t.dataset.chapterHealth);
     }
@@ -17141,7 +17212,7 @@ main 人物必须在本次输出中完成九项基础字段：name + identity、
 2. 不得写后续发展：人物的成长弧与转变、关系的后期变化、专名或能力的后续升级与解锁、事件的结果与结局、“后来/最终/随着剧情”一类内容、某个阶段才出现的制度或分工。这些属于校长与老师的规划，词典里不要提前出现。
 3. coreRole 只写该人物在长期剧情中承担的功能（例如“主角的家庭牵挂与现实压力来源”），不写他最后变成什么、是否被说服、是否背叛。
 4. HISTORY 只写故事开始之前已经发生的世界历史，不写本书剧情事件。
-5. “提前设计章节、场景或正文”也包括把剧情节拍写进设定说明，同样禁止。
+5. “提前设计章节、场景或正文”也包括把剧情节拍写进设定说明，同样禁止。地点、专名、机构的备注里也不得写“将来会发生的事件”（例如某地后来会被洪水淹没、某处将成为战场或基建舞台、某道路洪水后需绕行）；只写它开篇时是什么样、有什么固有特点。蓝本里的这类事件属于校长与老师的规划，不写进词典。
 6. 唯一的例外是下一条的 secret 字段：被保护的隐藏真相只能写在 secret 字段里，不得混进其他字段。
 
 【五、秘密标记｜secret 字段】
@@ -17811,7 +17882,8 @@ async function genDictMaster(btn, opts){
     // 真实生成前快照，供「注入导出」只读展示；不是第二套正式数据源。
     state.dictmasterInjectionSnapshot={system:String(system||''),user:String(user||''),createdAt:Date.now()};
     const onStream=delta=>{ if(stream){ stream.textContent+=String(delta||''); stream.scrollTop=stream.scrollHeight; } };
-    const res=await callDeepSeek(system,user,{temperature:temp,topP:0.6,maxTokens:clampMaxTokens('dictmaster'),onStream,signal:_abortCtl?.signal,taskKey:'dictmaster'});
+    const _qg=await qgGenerate('词典达人',(note,k)=>{ if(note&&stream) stream.textContent=''; return callDeepSeek(system,note?user+'\n\n'+note:user,{temperature:temp,topP:0.6,maxTokens:clampMaxTokens('dictmaster'),onStream,signal:_abortCtl?.signal,taskKey:'dictmaster',attempt:k}); },qgCheckDictMaster,{});
+    const res=_qg.res;
     const txt=String(res.text||'').trim();
     if(!txt) throw new Error('词典达人返回为空');
     const parsed=parseDictMasterPlainText(txt);
@@ -18098,7 +18170,7 @@ const DICT_ENRICH_SYS = `你是一位资深全题材长篇小说「词典充实�
 
 词典记录的是“这个世界里有什么”，不是“主角之后会做什么”。所有新增条目只写故事开始时已经存在的人、地点、物品、规矩、行当和生活，以及后续可以用到的钩子。
 
-禁止写：主角或同伴将要采取的行动、设局、计谋、对话结果、任何事件之后如何发展。说明、影响、可用钩子、描写价值等字段，只能写成客观状态，或写成“可用于……”的可能性，不得写成已经发生的剧情。素材在哪一章怎么用，由校长和老师决定，不由你预先安排。
+禁止写：主角或同伴将要采取的行动、设局、计谋、对话结果、任何事件之后如何发展；也不得写某地点、物品、组织将来会发生的事件（例如“汛期洪水暴发时最先被淹”“后来成为基建舞台”），只写它现在是什么样。说明、影响、可用钩子、描写价值等字段，只能写成客观状态，或写成“可用于……”的可能性，不得写成已经发生的剧情。素材在哪一章怎么用，由校长和老师决定，不由你预先安排。
 
 反例（以下写法一律不允许）：
 × “是主角第一个助人任务的帮扶对象”（把条目写成主角的任务/剧情）
@@ -18509,7 +18581,7 @@ name 字段只能填写纯实体名称。
 生活设定｜名称｜类别：…；适用地区/群体：…；内容：…；描写价值：…；描写标签：…
 
 【新增路人/龙套】
-路人｜姓名｜身份：…；登场：…；台词：…；描写标签：…
+路人｜姓名｜身份：…；登场：…；台词：…（只写说话方式的描述，如“嗓门大、爱用反问、爱压价”，不要写引号里的具体句子）；描写标签：…
 
 【最终自检】
 
@@ -19999,7 +20071,7 @@ function extractChapterEndingRelay(content){
 /* v1.0.597 标尺§4.5：上一章教案规定的「章末状态」（计划值，仅作位置/状态参照；与上一章正文实际不符时以正文为准）。 */
 function getPrevChapterPlannedEnding(i){
   try{
-    if(Number(i)<=1) return '';
+    if(Number(i)<1) return '';   // i 为 0 基序号；第1章(i=0)没有上一章
     const raw=String(getChapterTeacherRawTextDirect(Number(i)-1)||'');
     const a=raw.indexOf('【本章章末设计】'); if(a<0) return '';
     const rest=raw.slice(a+'【本章章末设计】'.length);
@@ -20072,6 +20144,7 @@ function getChapterWriterUser(i){
     sanitizeChapterWriterContext(continuity),
     sanitizeChapterWriterContext(relayContext),
     sanitizeChapterWriterContext(prevPlanCtx),
+    sanitizeChapterWriterContext(buildPovLock(i)),
     sanitizeChapterWriterContext((typeof worldEngineWriterBlock==='function')?worldEngineWriterBlock(i):''),
     sanitizeChapterWriterContext(dict)
   ].filter(Boolean);
@@ -22033,7 +22106,7 @@ const TM_GROUPS = [
 
 // 第二列数字就是当前代码的标准/推荐值。用户修改后的值才是运行时唯一任务温度。
 const TM_TEMP = {
-  idea:['ideaTemp',0.45], dictmaster:['dictmasterTemp',0.40], dictEnrich:['dictEnrichTemp',0.45],
+  idea:['ideaTemp',0.45], dictmaster:['dictmasterTemp',0.20], dictEnrich:['dictEnrichTemp',0.35],
   principal:['principalTemp',0.40], teacher:['teacherTemp',0.40], chapter:['chapterTemp',0.50], recipe:['aiRecipeTemp',0.85],
   strip:['stripTemp',0.80], subplot:['subplotTemp',0.25], glossary:['qcTemp',0.20], rolling:['rollingTemp',0.30],
   contentAdvice:['contentAdviseTemp',0.60], assets:['assetsTemp',0.70], titleAdvice:['titleTemp',0.50],
@@ -22208,6 +22281,7 @@ function renderGroupDetail(){
     </label>
     <label class="mini-check g-kib" title="部分 Cloudflare 中转不读 Authorization 头，要求把 Key 放进请求体 api_key 字段。开启后请求将不再携带 Bearer 头。">
       <input type="checkbox" class="g-kib-cb" ${g.keyInBody?'checked':''}> API Key 放请求体（api_key）传递，规避 Bearer 头
+      <br><input type="checkbox" class="g-seed-cb" ${g.useSeed?'checked':''}> 固定随机种子（校长/老师/词典；接口支持时输出更稳定，不支持会自动关闭）
     </label>
     <div class="gd-title">账号（API Key 仅存本机，多账号=多卡分流）</div>
     ${g.keys.length ? g.keys.map((k,i)=>`
@@ -22248,6 +22322,7 @@ function renderGroupDetail(){
   });
   const base = el.querySelector('.g-base'); if(base) base.onchange=(ev)=>{ const gg=_dg(); gg.baseUrl = ev.target.value.trim(); };
   const kib = el.querySelector('.g-kib-cb'); if(kib) kib.onchange=(ev)=>{ const gg=_dg(); gg.keyInBody = ev.target.checked; };
+  const sdc = el.querySelector('.g-seed-cb'); if(sdc) sdc.onchange=(ev)=>{ const gg=_dg(); gg.useSeed = ev.target.checked; };
 }
 function onDetail(ev){
   const b = ev.target && ev.target.closest('[data-act]'); if(!b) return;

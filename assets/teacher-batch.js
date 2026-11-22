@@ -243,7 +243,9 @@ async function tbGenTeacher(btn, gi, g){
     const ask = async (opt, what) => {
       const inj = buildTeacherInjection(g, gi, opt);
       if(!inj) throw new Error('老师真实 AI 输入组装失败');
-      const res = await callDeepSeek(inj.system, inj.user, { temperature: temp, maxTokens: 32768, signal: _abortCtl?.signal, taskKey: 'teacher', runId: 'teacher-' + Date.now().toString(36), attempt: 1 });
+      const _rid = 'teacher-' + Date.now().toString(36);
+      const qg = await qgGenerate('老师', (note, k) => callDeepSeek(inj.system, note ? inj.user + '\n\n' + note : inj.user, { temperature: temp, maxTokens: 32768, signal: _abortCtl?.signal, taskKey: 'teacher', runId: _rid, attempt: k + 1 }), (tx) => (opt && opt.part === 'batch') ? qgCheckTeacher(tx, { from: opt.from, to: opt.to }) : [], { what, maxRetry: 1 });
+      const res = qg.res;
       const raw = String(res.text || '').trim(); if(!raw) throw new Error(`${what}：老师返回空`);
       return raw;
     };
