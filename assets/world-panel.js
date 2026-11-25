@@ -97,7 +97,7 @@ function wpModel(chapter){
 function worldBarHtml(opt){
   const m = wpModel(opt&&opt.chapter), c = [];
   const built = m.counts.total>0;
-  c.push(built ? '<span class="wp-chip ok">骨架 ✓</span>' : '<span class="wp-chip warn">未建立运转层</span>');
+  c.push(built ? '<span class="wp-chip ok">骨架 ✓</span>' : '<span class="wp-chip">未建立运转层 · 可选</span>');
   if(m.places.length) c.push(`<span class="wp-chip">区域 ${m.opened}/${m.places.length} 已展开</span>`);
   if(m.report) c.push(`<span class="wp-chip accent">${m.report.startDay!=null?'第'+m.report.startDay+(m.report.endDay!=null&&m.report.endDay!==m.report.startDay?'–'+m.report.endDay:'')+' 日':'时点未知'}</span>`);
   if(m.clock.length) c.push(m.missed?`<span class="wp-chip warn">到期未体现 ${m.missed}</span>`:'<span class="wp-chip ok">事件均已体现</span>');

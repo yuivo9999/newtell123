@@ -6,13 +6,13 @@
 (function(){
 'use strict';
 const STAGES = [
-  { key:'prep',  no:1, name:'准备', sub:'风格 · 创作基础 · 构想 · 配方 · 节拍' },
+  { key:'prep',  no:1, name:'准备', sub:'风格 · 创作基础 · 构想 · 节拍（配方助手可选）' },
   { key:'world', no:2, name:'世界', sub:'词典达人 · 词典充实 · 世界运转 · 基础词典' },
   { key:'plan',  no:3, name:'规划', sub:'章节微拍 · 校长 · 老师' },
   { key:'write', no:4, name:'写作', sub:'正文 · 体检 · 状态结算' }
 ];
 const LS_KEY = 'nt_stage_open_v1';
-const PRINCIPLE = '<div class="stage-principle">🔌 <b>回填口原则</b>：每一步都常亮——<b>注入导出</b>（拿去外部 AI）、<b>读…</b>（把外部结果粘贴/导入回来，保存即激活下一步）、<b>生成</b>（项目内直接生成）。前置没满足时只给说明，不置灰、不隐藏。</div>';
+const PRINCIPLE = '<div class="stage-principle">🔌 <b>回填口原则</b>：每一步都常亮——<b>注入导出</b>（拿去外部 AI）、<b>读…</b>（把外部结果粘贴/导入回来，保存即激活下一步）、<b>生成</b>（项目内直接生成）。前置没满足时只给说明，不置灰、不隐藏。<br>🧪 <b>配方助手是可选辅助</b>：只有写作风格里没有你要的配方时才用，可以完全不做，不影响后面任何一步。</div>';
 
 /* storyState() 等读取函数会在 state.outline 为空时顺手建一个 {}，导致空项目误入「有大纲」分支；外壳只读，所以包一层还原 */
 function readOnly(fn, fb){

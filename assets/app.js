@@ -1,3 +1,4 @@
+/* v1.0.625 配方助手回归「可选辅助」：AI 配方助手不是必经步骤、可以不完成，只有用户需要配方（写作风格里没有）时才使用，不挡任何后续环节、不计入任何完成度。改动：节标题「配方助手（可选）」+ 说明常显 + 默认折叠（有候选或手动展开过则展开）；准备阶段副标题/回填口原则/世界状态条/设置里的任务名同步改成「可选」口径；文档加「接手必读」硬规则；tests/smoke21.cjs。 */
 /* v1.0.590 DICTENRICH-KERNEL: 词典充实内核调整。①提示词：新增「开篇状态原则」（只写故事开始时已存在的世界，不写主角将来的行动/设局/结果）、「保密事项原则」（充实师可见词典达人的 secret，但绝不触碰）、基础人物只读规则；次要配角加性别/年龄；各类条目加「描写标签」；新增「人物补充」行，只给词典达人标注为「可补充描写」的基础次要配角补外貌/爱好/口头禅（单独存放 _charSupplements，不覆盖基础卡）。②输入：新增人物代号对照（CHAR_xxx＝姓名）与【保密事项】段。③解析器：字段只按「；」「｜」切分，字段内的逗号保留（此前每个字段只剩第一个逗号前的半句）；描写标签入库（tags）；路人不再被「像不像人名」误删；「与主线关系」改为「可用钩子」（旧写法仍可读）。④下游：老师可见 tags 与人物补充，校长清洗词典带上人物补充，正文人物卡带上人物补充；读词典充实可读写 tags 与人物补充。 */
 /* v1.0.622 A-06：章节任务过载预警（软提示）——新增 assets/overload-warn.js：从校长计划「核心事件」（粗章表阶段用「目标」）数出每章有几件事（按；。箭头、①②、随后/最终/次日等连接词切分，不按逗号），对照本章目标字数（chapterLenBounds：3600字→≥4件偏重、≥6件过载）判断；全书章数≤15 且平均≥3.5件/章（或≥40%章偏重）另提示「章数偏少而事件偏多」。出现位置：校长面板常驻提示块（一次性/分层模式都显示，无按钮）、校长生成/细化/保存后的 toast 后缀、章节体检（note）。不调 AI、不改成果、不挡操作；tests/smoke20.cjs */
 /* v1.0.621 A-05：Agent 提议「重新生成某环节」操作卡——新增 assets/agent-regen.js，两种类型 regen_chapter（某章正文）/regen_teacher（某组老师教案）；只能提出，作者两道门才执行（卡片「查看影响并生成…」→ 独立弹窗列出覆盖范围/预计 AI 调用/下游影响/撤销方式，勾选后才可确认）；每次回答最多 1 个、不连锁；正文靠历史版本撤销，老师教案执行前整份备份（最近 3 次）；顺带修了操作记录 undo 超 20000 字符时 JSON 截断导致整段清洗失败的隐患。 */
@@ -56,7 +57,7 @@
    5) 后续版本不得建立第二套 AI 教案读取链；七区结构只作为老师原始总教案的确定性切割格式。
 */
 
-const APP_VERSION = '1.0.624';
+const APP_VERSION = '1.0.625';
 // v1.0.624 T01：功能冻结与 AI 提示词/解析/回填出口盘点；仅版本号与注释变更，不改运行逻辑。
 // Version line: app1.0.481.js — 建立最终老师/结局负责者硬边界；单老师项目与多老师最终组均禁止虚构后续交接。
 const APP_FILE_VERSION = 'app1.0.586.js';
@@ -3891,6 +3892,7 @@ function refreshAdvHistBadge(kind){
     if(rp){ const b = rp.querySelector('[data-advadv-hist] .ai-hist-badge'); if(b) b.textContent = histState('content').length||''; }
   }
 }
+/* ⚠ 给后续 AI：「AI 配方助手」只是可选辅助，可以不完成；只有用户需要配方（写作风格里没有）时才使用。不要把它当必经步骤/完成度/下游依赖。见 docs/接手必读_硬规则.md */
 const AI_RECIPE_SYS_PRO = `你是一位资深长篇小说“写作配方设计师”。
 
 【唯一动态输入来源】
@@ -3944,15 +3946,18 @@ function aiRecipePrompt(userDesc){
   return { system: AI_RECIPE_SYS_PRO, user: aiRecipeUser(userDesc) };
 }
 
+/* ⚠ 可选辅助：见 docs/接手必读_硬规则.md（不进入任何阶段完成度，下游不得依赖） */
 function aiRecipeCard(){
   const lib = writeStyleLib();
-  const collapsed = getCfg().aiRecipeCollapsed === true;
+  // v1.0.625：配方助手只是可选辅助——没有手动展开过、也没有候选配方时默认折叠（只收纳，不隐藏；标题与说明常显）
+  const _cfgC = getCfg().aiRecipeCollapsed;
+  const collapsed = (_cfgC === true) || (_cfgC === undefined && !(aiRp && Array.isArray(aiRp.list) && aiRp.list.length) && !(state.aiRecipeLatest && state.aiRecipeLatest.list && state.aiRecipeLatest.list.length));
   return `<div class="card ai-recipe-card card-theme-recipe${collapsed?' collapsed':''}">
     <div class="ai-recipe-head card-head-bar" data-ai-recipe-fold role="button" tabindex="0" title="展开/收起">
       <div class="ch-left">
         <span class="ch-badge ch-badge-recipe">🧪</span>
         <h3 class="ch-title">AI 配方助手</h3>
-        <span class="ch-subtag ch-subtag-recipe">风格设计 · 智能搭配</span>
+        <span class="ch-subtag ch-subtag-recipe">可选 · 辅助</span>
       </div>
       <div class="ch-right">
         <button type="button" class="ai-upload-btn ai-hist-btn" data-ai-recipe-hist title="AI 配方历史：回看已生成过的候选配方">📖<span class="ai-hist-badge">${snapAiHist().length||''}</span></button>
@@ -3960,6 +3965,7 @@ function aiRecipeCard(){
       </div>
     </div>
     <div class="ai-recipe-body">
+      <p class="ai-recipe-optional muted" style="margin:0 0 8px;font-size:12px;line-height:1.6">💡 <b>可选辅助，可以完全不用</b>：只有「写作风格」里没有你想要的配方时，才在这里让 AI 设计新配方；不用它不影响后面任何一步。</p>
       <div class="ai-desc-wrap">
         <textarea id="aiReDesc" rows="3" placeholder="" style="width:100%;box-sizing:border-box"></textarea>
       </div>
@@ -11850,7 +11856,7 @@ function flowNavItems(){
     ['风', '[data-flow="1"]', '风', '写作风格'],
     ['基', '[data-flow="2"]', '基', '创作基础'],
     ['构', '[data-flow="3"]', '构', '故事构想'],
-    ['配方', '[data-flow="4"], .ai-recipe-card', 'recipe', '写作配方'],
+    ['配方', '[data-flow="4"], .ai-recipe-card', 'recipe', '配方助手（可选）'],
     ['节', '[data-flow="5"]', '节', '全书节拍'],
     ['典', '[data-flow="6"]', '典', '词典达人'],
     ['充', '[data-flow="7"]', '充', '词典充实'],
@@ -12454,7 +12460,7 @@ function viewStory(){
   ${opt_card}
 </section>
 <section class="flow-sec" data-flow="4">
-        <div class="flow-sec-head"><span class="fs-no">4</span><span class="fs-name">写作配方</span><span class="fs-note">把已锁定风格翻译成可执行规则 · 全书共享</span></div>
+        <div class="flow-sec-head"><span class="fs-no">选</span><span class="fs-name">配方助手（可选）</span><span class="fs-note">可以不做 · 只有写作风格里没有你要的配方时才用</span></div>
         ${ safeCard(()=>aiRecipeCard()) }
         
       </section>
@@ -12572,7 +12578,7 @@ ${longNovelMemoryRepoHtml()}
     </div>
     </section>
 <section class="flow-sec" data-flow="3">
-      <div class="flow-sec-head"><span class="fs-no">3</span><span class="fs-name">写作配方</span><span class="fs-note">把已锁定风格翻译成可执行规则 · 全书共享</span></div>
+      <div class="flow-sec-head"><span class="fs-no">选</span><span class="fs-name">配方助手（可选）</span><span class="fs-note">可以不做 · 只有写作风格里没有你要的配方时才用</span></div>
       ${ aiRecipeCard() }
       
     </section>
@@ -21537,7 +21543,7 @@ const TM_GROUPS = [
     ['principal','校长总控','统领全量材料，产出全书与章节级规划'],
     ['teacher','老师备课','把章节规划转成场景级推进教案'],
     ['chapter','正文生成','正式小说正文生成，创作链温度核心'],
-    ['recipe','写作配方','写作风格/方法组合与配方设计']
+    ['recipe','写作配方（可选辅助）','仅在用 AI 配方助手设计新配方时才会调用']
   ]},
   { title:'🔧 二级任务 · 高频维护与质量控制', keys:[
     ['strip','本章梗概（速读）','每章生成后的快速压缩'],
@@ -21553,7 +21559,7 @@ const TM_GROUPS = [
     ['chapterRepair','正文修复','根据审计结果进行局部修复'],
     ['chapterState','正文状态结算','提取章末事实状态'],
     ['timeAnchor','时间锚点','从正文抽取时间状态'],
-    ['recipeAnalysis','配方输入理解','写作配方的前置需求分析']
+    ['recipeAnalysis','配方输入理解（可选辅助）','配方助手的前置需求分析，不用配方助手就不会调用']
   ]},
   { title:'🌍 世界运转层', keys:[
     ['worldEngine','世界运转设计师','生成世界时钟、成本底表、人物驱动、地点感官锚点（可选的一步）']
