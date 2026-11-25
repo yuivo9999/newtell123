@@ -75,7 +75,6 @@ function ocFinish(){ _ocRun = null; ocPaint(); try{ ptRefresh(); }catch(_e){} tr
 async function ocPrincipalAll(){
   if(_ocRun){ if(_ocRun.kind === 'principal') ocRequestStop(); else toast('一键老师正在运行，请先等它结束或点停止'); return; }
   if(genBusy() || state._teacherBatchRunning){ toast('已有生成任务进行中，请稍候'); return; }
-  if(!isLong()){ toast('仅长篇小说模式支持校长统筹'); return; }
   if(typeof principalTieredEnabled === 'function' && !principalTieredEnabled()){ toast('当前是「一次性校长」模式：直接点上方「生成校长」即可（一键校长用于分层模式）'); return; }
   const total = ptTotal(); if(!total){ toast('请先填写有效的全书章节数（1-200）'); return; }
   const groups = ptAssignment().groups; if(!groups.length){ toast('老师章节分配校验失败，请先检查章节数与老师分配'); return; }

@@ -74,7 +74,7 @@ html[data-theme]:not([data-theme="blackboard"]) :is(button, input, select, texta
 /* 复选/单选（全主题） */
 input[type="checkbox"], input[type="radio"]{ accent-color: var(--accent); width:16px; height:16px; cursor:pointer; }
 /* 数字等宽（统计/字数/进度） */
-.wc-badge, .cp-wc, .rp-tip, .gen-count-out, .board-total b, .ailog-time{ font-variant-numeric: tabular-nums; }
+.wc-badge, .cp-wc, .rp-tip, .gen-count-out, .ailog-time{ font-variant-numeric: tabular-nums; }
 /* 等宽字体的归宿：日志与 Key */
 .ailog-pre, .k-key, .g-base, .code, .gs-pre{ font-family: var(--font-mono); font-size:12px; }
 
@@ -1024,6 +1024,4 @@ input::placeholder {
   box-sizing: border-box !important;
   z-index: 90 !important;
 }
-
-
 

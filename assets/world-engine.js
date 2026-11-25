@@ -95,35 +95,55 @@ async function genWorldEngine(btn){
   }
 }
 
-function worldEngineBlockHtml(){
+/* v1.0.609 外部AI回填口原则：每一步都必须常亮三个入口——「注入导出」「读…（粘贴/导入外部结果并保存）」「生成」。
+ * 前置条件不满足时只给出说明，不置灰、不隐藏；这样用户随时可以把注入内容拿去外部AI，再把结果回填，激活下一步。 */
+const WE_FORMAT_HELP = '在这里粘贴外部AI生成的内容（或点「导入」选择 txt/md 文件）。每条一行，行首标记 + 字段用“｜”分隔：\n[CLOCK] 时点｜事件｜对故事的客观压力或机会\n[COST] 项目｜数值或规则\n[DRIVE] 人物｜想要｜害怕｜绝不肯做\n[SENSE] 地点｜感官锚点1；锚点2；锚点3\n（粘贴后点「保存更改」，立即生效。）';
+function worldEngineCardHtml(){
   const g = ensureGlossaryKnowledgeShape((state.outline&&state.outline.glossary)||{});
   const hasDict = (g.characters||[]).length>0;
   const c = weCounts();
-  const status = c.total ? `已有：世界时钟 ${c.clock} · 成本底表 ${c.costs} · 人物驱动 ${c.drives} · 地点感官 ${c.senses}` : (hasDict?'还没有生成':'请先完成词典达人');
+  const status = c.total ? `已有：世界时钟 ${c.clock} · 成本底表 ${c.costs} · 人物驱动 ${c.drives} · 地点感官 ${c.senses}` : (hasDict?'还没有生成（可点「生成」，或把「注入导出」拿到外部AI，再用「读世界运转层」回填）':'词典达人还没完成——仍可先「注入导出」或直接「读世界运转层」回填');
   return `<div class="card we-card" id="weCard"><h3>🌍 世界运转层 <span class="muted" style="font-size:12px;font-weight:400">可选 · 让世界自己运转</span></h3>
-    <p class="sub">在词典基础上补四类“约束与事实”：世界时钟（不依赖主角的外部事件）、成本底表（距离/消耗/价格等硬约束）、人物驱动（想要/害怕/底线）、地点感官锚点。老师会据此安排外部事件并核对数值，正文据此写出有质感的细节。不适用的类别模型会自动省略；你可以随时手动改。</p>
+    <p class="sub">在词典基础上补四类“约束与事实”：世界时钟（不依赖主角的外部事件）、成本底表（距离/消耗/价格等硬约束）、人物驱动（想要/害怕/底线）、地点感官锚点。老师会据此安排外部事件并核对数值，正文据此写出有质感的细节。不适用的类别可以省略；你可以随时手动改，或用外部AI生成后回填。</p>
     <p class="sub" style="margin-top:-4px"><b>${esc(status)}</b></p>
     <div class="btn-row">
-      <button type="button" class="btn primary" id="btnGenWE" ${hasDict?'':'disabled'}>${c.total?'重新生成':'生成世界运转层'}</button>
-      <button type="button" class="btn ghost" id="btnReadWE" ${c.total?'':'disabled'}>📋 查看 / 编辑</button>
-      <button type="button" class="btn ghost" id="btnInjWE" ${hasDict?'':'disabled'}>📦 注入导出</button>
+      <button type="button" class="btn primary" id="btnGenWE">${c.total?'重新生成':'生成世界运转层'}</button>
+      <button type="button" class="btn ghost" id="btnInjWE">📦 注入导出</button>
+      <button type="button" class="btn ghost" id="btnReadWE">📋 读世界运转层</button>
     </div></div>`;
 }
+/* v1.0.619 A-03：世界运转层卡片 + 区域展开卡片（region-expand.js）同处一个块；refresh 只刷新世界运转层卡片本身。 */
+function worldEngineBlockHtml(){ return worldEngineCardHtml() + (typeof regionCardHtml==='function' ? regionCardHtml() : ''); }
 function refreshWorldEngineCard(){
   const card = document.getElementById('weCard'); if(!card) return;
-  const wrap = document.createElement('div'); wrap.innerHTML = worldEngineBlockHtml().trim();
+  const wrap = document.createElement('div'); wrap.innerHTML = worldEngineCardHtml().trim();
   card.replaceWith(wrap.firstElementChild); bindWorldEngine();
 }
+function weImportInto(ta){
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='.txt,.md,text/plain,text/markdown';
+  inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ ta.value=String(r.result||''); toast('已导入：'+f.name); }; r.readAsText(f,'utf-8'); };
+  inp.click();
+}
 function bindWorldEngine(){
+  if(typeof bindRegionCard==='function') bindRegionCard();
   const g = document.getElementById('btnGenWE'); if(g) g.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); genWorldEngine(g); };
   const inj = document.getElementById('btnInjWE'); if(inj) inj.onclick = (e)=>{ e.preventDefault(); e.stopPropagation();
-    ptOpenText({ title:'📦 世界运转层 · 注入导出', sub:'此刻实际发送给模型的 SYSTEM + USER', text:weInjectionText(), readonly:true,
-      buttons:[ { label:'导出TXT', onClick:(t)=>{ downloadPlainText(exportFileName('世界运转层','注入'), t); toast('已导出'); } } ] }); };
+    const gl=ensureGlossaryKnowledgeShape((state.outline&&state.outline.glossary)||{}); const warn=(gl.characters||[]).length?'':'（注意：词典达人还没有人物，下面的 USER 里会缺少人物/地点资料）\n\n';
+    ptOpenText({ title:'📦 世界运转层 · 注入导出', sub:'此刻实际发送给模型的 SYSTEM + USER；拿去外部AI后，结果用「读世界运转层」回填', text:warn+weInjectionText(), readonly:true,
+      buttons:[ { label:'复制', onClick:(t)=>{ copyText(t); toast('已复制'); } }, { label:'导出TXT', primary:true, onClick:(t)=>{ downloadPlainText(exportFileName('世界运转层','注入'), t); toast('已导出'); } } ] }); };
   const rd = document.getElementById('btnReadWE'); if(rd) rd.onclick = (e)=>{ e.preventDefault(); e.stopPropagation();
-    ptOpenText({ title:'📋 世界运转层 · 查看 / 编辑', sub:'行首标记 [CLOCK]/[COST]/[DRIVE]/[SENSE]，字段用“｜”分隔；保存后立即生效', text:weState().raw,
+    const raw=weState().raw;
+    ptOpenText({ title:'📋 读世界运转层', sub:raw?'上次保存的内容已回填；改完点「保存更改」':'还没有内容：粘贴外部AI的输出，或点「导入」选文件', text:raw||WE_FORMAT_HELP,
       buttons:[
+        { label:'导入', onClick:(t,close,ta)=>weImportInto(ta) },
         { label:'导出TXT', onClick:(t)=>{ downloadPlainText(exportFileName('世界运转层','输出'), t); toast('已导出'); } },
-        { label:'保存更改', primary:true, onClick:(t,close)=>{ const p = weParse(t); const n=p.clock.length+p.costs.length+p.drives.length+p.senses.length; if(!n && String(t).trim()){ toast('没有解析到有效行，未保存'); return; } const W=weState(); W.raw=String(t||'').slice(0,12000); W.ts=Date.now(); persist(); toast('已保存'); close(); refreshWorldEngineCard(); } }
+        { label:'保存更改', primary:true, onClick:(t,close)=>{
+            const txt=String(t||'').trim();
+            if(!txt || txt===WE_FORMAT_HELP.trim()){ toast('没有内容可保存'); return; }
+            const p=weParse(txt), n=p.clock.length+p.costs.length+p.drives.length+p.senses.length;
+            if(!n){ toast('没有识别到有效行：每行要以 [CLOCK]/[COST]/[DRIVE]/[SENSE] 开头，字段用“｜”分隔'); return; }
+            const W=weState(); W.raw=txt.slice(0,12000); W.ts=Date.now(); persist();
+            toast(`已保存：时钟${p.clock.length}·成本${p.costs.length}·驱动${p.drives.length}·感官${p.senses.length}`); close(); refreshWorldEngineCard(); } }
       ] }); };
 }
 
@@ -192,4 +212,58 @@ function weChapterReportText(i){
   L.push('即将到期（2日内）：'+(r.upcoming.length?r.upcoming.map(x=>`${x.when}「${x.event}」`).join('；'):'无'));
   if(r.undated.length) L.push('时点无法解析的事件：'+r.undated.map(x=>`${x.when}「${x.event}」`).join('；'));
   return L.join('\n');
+}
+
+/* ================= v1.0.616 B-11 世界区域数据模型（不含 AI）=================
+ * state.worldEngine.regions = { 地点名: { status:'fog|open|visited', anchors:[], note:'', ts } }
+ *  fog=迷雾（词典里有名字，尚未展开）；open=已展开（有锚点/备注）；visited=已到达（保存的显式标记）。
+ * weRegionStatus 结合章末结算的地点，实时判定：current(当前) / visited(已到达) / open(已展开) / fog(迷雾) / ''(未知地点)。
+ * AI 自动展开由 A-03 另做；这里只有纯数据与手动展开。 */
+const WE_REGION_STATUSES = ['fog','open','visited'];
+function weRegionsSanitize(r){
+  const out = {};
+  if(!r || typeof r!=='object' || Array.isArray(r)) return out;
+  Object.keys(r).slice(0,300).forEach(k=>{
+    const name = String(k||'').trim().slice(0,60); const v = r[k];
+    if(!name || !v || typeof v!=='object' || Array.isArray(v)) return;
+    const anchors = (Array.isArray(v.anchors)?v.anchors:[]).map(x=>String(x||'').trim()).filter(Boolean).slice(0,12).map(x=>x.slice(0,80));
+    out[name] = { status: WE_REGION_STATUSES.indexOf(v.status)>=0 ? v.status : 'fog', anchors, note:String(v.note||'').slice(0,600), ts:Number(v.ts)||0 };
+  });
+  return out;
+}
+function weRegions(){ const w = weState(); if(!w.regions || typeof w.regions!=='object' || Array.isArray(w.regions)) w.regions = {}; return w.regions; }
+/* 从词典「地点」生成初始迷雾；已存在的条目保持不动。返回新增数量。 */
+function weRegionsFromDictionary(){
+  const g = (state.outline && state.outline.glossary) || {}; const r = weRegions(); let n = 0;
+  (g.places||[]).forEach(x=>{
+    const name = String((x&&x.name)||'').trim().slice(0,60); if(!name || r[name]) return;
+    r[name] = { status:'fog', anchors:[], note:'', ts:Date.now() }; n++;
+  });
+  return n;
+}
+/* 手动展开（不调 AI）：fog→open；已是 open/visited 则只更新锚点/备注，不降级。 */
+function weExpandRegion(name, opt){
+  name = String(name||'').trim().slice(0,60); if(!name) return null;
+  opt = opt || {}; const r = weRegions();
+  const cur = r[name] || { status:'fog', anchors:[], note:'', ts:0 };
+  const anchors = Array.isArray(opt.anchors) ? opt.anchors.map(x=>String(x||'').trim()).filter(Boolean).slice(0,12) : cur.anchors;
+  const note = opt.note!=null ? String(opt.note).slice(0,600) : cur.note;
+  r[name] = { status: cur.status==='visited' ? 'visited' : 'open', anchors, note, ts:Date.now() };
+  return r[name];
+}
+/* 判定：chapterIdx 为 0 基章号（缺省=不看章节，只看当前结算）。 */
+function weRegionStatus(name, chapterIdx){
+  name = String(name||'').trim(); if(!name) return '';
+  const r = weRegions(); const reg = r[name];
+  const ss = (typeof storyState==='function') ? storyState() : null;
+  const has = (loc)=>{ loc = String(loc||''); return !!loc && (loc.includes(name) || name.includes(loc)); };
+  const chs = (ss && ss.chapters) || {};
+  const upto = (chapterIdx==null || isNaN(chapterIdx)) ? Infinity : Number(chapterIdx);
+  if(chapterIdx!=null && !isNaN(chapterIdx)){
+    const ob = chs[chapterIdx] && chs[chapterIdx].observed; if(ob && has(ob.location)) return 'current';
+  }else if(ss && ss.current && ss.current.chapter>=0 && has(ss.current.location)) return 'current';
+  const seen = Object.keys(chs).some(k=>{ const i=+k; if(!(i<(upto===Infinity?Infinity:upto))) return false; const ob=chs[k]&&chs[k].observed; return ob && has(ob.location); });
+  if(seen) return 'visited';
+  if(reg){ return reg.status==='visited' ? 'visited' : (reg.status==='open' ? 'open' : 'fog'); }
+  return '';
 }

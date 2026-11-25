@@ -22,7 +22,6 @@ function principalTieredMode(){
   return (m === 'on' || m === 'off') ? m : 'auto';
 }
 function principalTieredEnabled(){
-  try{ if(!isLong()) return false; }catch(_e){}
   const m = principalTieredMode();
   if(m === 'on') return true;
   if(m === 'off') return false;
@@ -110,7 +109,7 @@ const PT_GLOBAL_CONTRACT = `━━━━━━━━━━━━━━━━━�
 
 本次是「分层校长」的【全书层】调用，本契约覆盖前文所有“一次输出全部[PRINCIPAL_CHAPTER]”的要求：
 - 本次不输出任何[PRINCIPAL_CHAPTER]块。逐章完整战略由后续「分组细化」按老师组逐组完成。
-- 本次只输出以下机器块，且只能输出这些：[SCHOOL_RULES]一个、[BOOK_STRATEGY]一个、[STYLE_STRATEGY]一个、[REVEAL_PLAN]0到8个、[STAGE_STRATEGY]按系统阶段数量、[TEACHER_GROUP_STRATEGY]按系统老师组数量、[CHAPTER_OUTLINE]按全书章节总数（每章一个）。
+- 本次不输出“第一章开篇任务卡”（程序自行生成，不需要你写）；开篇要求如需体现，只写进第1章的[CHAPTER_OUTLINE]一句话。本次只输出以下机器块，且只能输出这些：[SCHOOL_RULES]一个、[BOOK_STRATEGY]一个、[STYLE_STRATEGY]一个、[REVEAL_PLAN]0到8个、[STAGE_STRATEGY]按系统阶段数量、[TEACHER_GROUP_STRATEGY]按系统老师组数量、[CHAPTER_OUTLINE]按全书章节总数（每章一个）。
 - 不得输出Markdown、解释性文字、JSON或第二套计划。
 
 [CHAPTER_OUTLINE] 是「粗章表」，每章只写四个字段：
@@ -128,7 +127,7 @@ goal=本章战略目标（一句话，只写方向，不写施工）
 3a. REVEAL_PLAN 的 revealChapter 必须恰好是粗章表里“真相显露/揭示”所在的那一章：先在粗章表里确定哪一章揭示，再回填 revealChapter，两处必须同一章；STAGE/TEACHER_GROUP 的描述里提到揭示时也必须是同一章。
 3b. hintChapters 要稀疏：只在少数关键章给暗示，通常不超过揭示前章数的三分之一，不得几乎每章都暗示，也不得与揭示章重合。
 3c. 人名、地名、专名必须与词典完全一致，逐字照抄，不得写错字、不得自造近似写法。
-4. 篇幅硬限制（100章以上必须遵守，否则会超出单次输出上限被截断）：粗章表每章function不超过20字、goal不超过30字、title不超过15字；TEACHER_GROUP_STRATEGY里chapterAssignments每项task不超过20字；STAGE/GROUP/BOOK各字段尽量一句话，不写长段落；不要复述输入资料。
+4. 篇幅硬限制（100章以上必须遵守；100章及以下可放宽到约2倍，否则会超出单次输出上限被截断）：粗章表每章function不超过20字、goal不超过30字、title不超过15字；TEACHER_GROUP_STRATEGY里chapterAssignments每项task不超过20字；STAGE/GROUP/BOOK各字段尽量一句话，不写长段落；不要复述输入资料。
 5. 阶段之间、老师组之间的交接必须在STAGE_STRATEGY与TEACHER_GROUP_STRATEGY里写清楚（nextStageLaunch / previousStageHandoff / nextGroupLaunch / previousGroupHandoff / mustNotPrematurelyResolve），后续分组细化只读这些交接。
 
 `;
@@ -194,7 +193,7 @@ function ptGroupSystem(){
 【二十二、最终输出契约｜分层校长·分组细化】
 ━━━━━━━━━━━━━━━━━━
 
-本次是「分层校长」的【分组细化】调用，本契约覆盖前文所有“一次输出全部章节”的要求。
+本次是「分层校长」的【分组细化】调用，本契约覆盖前文所有“一次输出全部章节”的要求；也不输出“第一章开篇任务卡”（程序自行生成）。
 - 全书层战略（BOOK/STYLE/REVEAL/STAGE/TEACHER_GROUP）与粗章表已经定稿，只读，不得推翻、不得重写、不得再次输出。
 - 本次只负责「本组」章节：把粗章表里本组每一章从粗展开为完整的[PRINCIPAL_CHAPTER]块，必须且只能输出本组每一章各一块，chapter严格等于本组章号范围，不得多出、缺少、重复或越界。
 - 细化必须服从：所属阶段战略、本组战略（groupTask / mustAdvance / mustNotPrematurelyResolve / nextGroupLaunch）、上一组交接卡、上一组最后2章完整块（用于承接）、揭示计划、词典事实。
@@ -419,7 +418,6 @@ function ptSaveGlobalRaw(raw, reason, target){
 }
 async function ptGenGlobal(btn, opts){
   if(_ptRun || (typeof _principalRun !== 'undefined' && _principalRun)){ toast('校长统筹已经在运行中，请勿重复点击'); return false; }
-  if(!isLong()){ toast('仅长篇小说模式支持校长统筹'); return false; }
   const total = ptTotal();
   if(!total){ toast('请先填写有效的全书章节数（1-200），才能启动校长统筹'); return false; }
   const assignment = ptAssignment();
@@ -438,7 +436,7 @@ async function ptGenGlobal(btn, opts){
     if(!txt || !String(txt).trim()) throw new Error('校长返回空');
     const r = ptApplyGlobalRaw(txt, { source:'ai', injection:inj });
     if(!r.ok) throw new Error(r.error);
-    toast(`校长（全书层）已生成并采用：战略 + ${r.roughCount}章粗章表；请逐组做「分组细化」。${r.warnings.length?`（诊断${r.warnings.length}条）`:''}`);
+    toast(`校长（全书层）已生成并采用：战略 + ${r.roughCount}章粗章表；请逐组做「分组细化」。${r.warnings.length?`（诊断${r.warnings.length}条）`:''}${typeof owToastNote==='function'?owToastNote():''}`);
     return true;
   }catch(e){
     console.error('[ptGenGlobal]', e);
@@ -573,7 +571,7 @@ async function ptGenGroup(gi, btn){
     if(!txt || !String(txt).trim()) throw new Error('校长返回空');
     const r = ptApplyGroupRaw(gi, txt, { source:'ai' });
     if(!r.ok) throw new Error(r.error);
-    toast(`第${gi+1}组已细化：${r.count}章${r.status==='detailed'?'':'（有诊断，见该组「读本组」）'}${r.deviations?`；与粗章表偏离${r.deviations}处`:''}`);
+    toast(`第${gi+1}组已细化：${r.count}章${r.status==='detailed'?'':'（有诊断，见该组「读本组」）'}${r.deviations?`；与粗章表偏离${r.deviations}处`:''}${typeof owToastNote==='function'?owToastNote():''}`);
     return true;
   }catch(e){
     console.error('[ptGenGroup]', e);
@@ -627,7 +625,7 @@ function ptPanelInner(){
     <option value="on"${mode==='on'?' selected':''}>强制分层</option>
     <option value="off"${mode==='off'?' selected':''}>关闭（一次性校长）</option></select>`;
   let html = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0"><b style="font-size:12px">👑 校长分层模式</b>${sel}<span class="muted" style="font-size:11px">${enabled?'当前：分层（全书层 + 分组细化）':'当前：一次性校长'}</span></div>`;
-  if(!enabled) return html;
+  if(!enabled) return html + ptOwHtml();
   if(typeof ocPrincipalRowHtml === 'function') html += ocPrincipalRowHtml();   // v1.0.596：一键校长 + 步骤间隔
   const P = scState().principal || {}, T = ptPeek() || { rough:{}, groups:{}, cards:{} };
   const hasGlobal = !!(P.tiered && Object.keys(T.rough || {}).length);
@@ -660,14 +658,15 @@ function ptPanelInner(){
           <button type="button" class="sc-plan-btn" data-pt-act="read" data-pt-gi="${gi}">📋 读本组</button>
           <button type="button" class="sc-plan-btn" data-pt-act="card" data-pt-gi="${gi}">🤝 交接卡</button>
           <button type="button" class="sc-plan-btn" data-pt-act="dictpick" data-pt-gi="${gi}">📖 本组词典</button>
-          ${st ? `<button type="button" class="sc-plan-btn" data-pt-act="supp" data-pt-gi="${gi}">📚 词典增补${st.needs?'*':''}</button>` : ''}
+          <button type="button" class="sc-plan-btn" data-pt-act="supp" data-pt-gi="${gi}">📚 词典增补${st&&st.needs?'*':''}</button>
           ${devN?`<button type="button" class="sc-plan-btn" data-pt-act="dev" data-pt-gi="${gi}">Δ 偏离记录(${devN})</button>`:''}
           ${st && (s==='partial') ? `<button type="button" class="sc-plan-btn" data-pt-act="force" data-pt-gi="${gi}">${st.forceReady?'取消强制可用':'仍视为可用'}</button>`:''}
         </div>${dsLine}${diag}${dh}</div>`;
     }).join('');
   }
-  return html;
+  return html + ptOwHtml();
 }
+function ptOwHtml(){ try{ return typeof owPanelHtml === 'function' ? owPanelHtml() : ''; }catch(_e){ return ''; } }   // A-06：章节任务过载预警块
 function ptPanelHtml(){ return `<div data-pt-panel style="margin:6px 0 10px">${ptPanelInner()}</div>`; }
 function ptRefresh(){
   document.querySelectorAll('[data-pt-panel]').forEach(el => { el.innerHTML = ptPanelInner(); });
@@ -699,6 +698,14 @@ function ptOpenText(opt){
     el.onclick = () => { try{ b.onClick(ta.value, close, ta); }catch(e){ toast('操作失败：' + String(e && e.message || e)); } };
     bar.appendChild(el);
   });
+  /* v1.0.610 回填口原则：凡是“读…”（可编辑且带保存）的弹窗，自动补一个「导入」（选 txt/md 文件填入文本框）；自带「导入」的不重复。 */
+  if(!opt.readonly && (opt.buttons||[]).some(b=>/保存/.test(b.label)) && !(opt.buttons||[]).some(b=>/导入/.test(b.label))){
+    const im = document.createElement('button'); im.type='button'; im.className='btn'; im.textContent='导入';
+    im.onclick = () => { const inp=document.createElement('input'); inp.type='file'; inp.accept='.txt,.md,text/plain,text/markdown';
+      inp.onchange=()=>{ const f=inp.files&&inp.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ ta.value=String(r.result||''); toast('已导入：'+f.name+'（确认后点保存）'); }; r.readAsText(f,'utf-8'); };
+      inp.click(); };
+    bar.insertBefore(im, bar.firstChild);
+  }
   ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0;
   return { close, ta };
 }
@@ -732,7 +739,7 @@ function ptAct(act, gi, btn){
     ptOpenText({ title:`📋 读本组校长细化成果 · 第${gi+1}组`, sub:`第${g.startChapter}-${g.endChapter}章 · 粘贴外部AI的输出或直接编辑，保存后立即生效`, text: st && st.raw ? st.raw : '',
       buttons:[
         { label:'导出TXT', onClick:(t)=>{ downloadPlainText(exportFileName('校长','输出',{group:gi+1,part:'细化'}), t); toast('TXT 已导出'); } },
-        { label:'保存更改', primary:true, onClick:(t,close)=>{ const r = ptApplyGroupRaw(gi, t, { source:'manual' }); if(!r.ok) return toast(r.error); toast(r.status==='detailed' ? `第${gi+1}组已保存：${r.count}章已细化${r.deviations?`；偏离粗章表${r.deviations}处`:''}` : `第${gi+1}组已保存，但有诊断：${r.diag.slice(0,2).join('；')}`); close(); } }
+        { label:'保存更改', primary:true, onClick:(t,close)=>{ const r = ptApplyGroupRaw(gi, t, { source:'manual' }); if(!r.ok) return toast(r.error); toast(r.status==='detailed' ? `第${gi+1}组已保存：${r.count}章已细化${r.deviations?`；偏离粗章表${r.deviations}处`:''}${typeof owToastNote==='function'?owToastNote():''}` : `第${gi+1}组已保存，但有诊断：${r.diag.slice(0,2).join('；')}`); close(); } }
       ] });
     return;
   }

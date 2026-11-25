@@ -46,7 +46,7 @@ async function qgGenerate(kind, callFn, check, opt){
 }
 
 /* ---- 检查：词典达人 ---- */
-const QG_FUTURE_WORDS = /(将来|后来|最终|随后|终将|将被|将成为|暴发|洪水|淹没|被淹|打乱|基建|之后会|届时|日后)/;
+const QG_FUTURE_WORDS = /(将来|后来|最终|随后|终将|将被|将成为|将会|会被|届时|日后|之后会|等到|一旦)/;   // 只看“将来时”措辞，不绑定具体故事用词
 function qgCheckDictMaster(txt){
   const v=[]; let parsed=null;
   try{ parsed=parseDictMasterPlainText(txt); }catch(e){ return []; }

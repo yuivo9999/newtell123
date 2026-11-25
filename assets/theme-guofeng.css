@@ -310,18 +310,6 @@
 }
 
 /* 分镜按章节分组（古风：宣纸+墨字+金字边框） */
-[data-theme="guofeng"] .board-ch-head{
-  background: linear-gradient(180deg, #f7f1e3, #ede4cd);
-  border: 1px solid var(--gf-line); border-radius: 6px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.18);
-}
-[data-theme="guofeng"] .board-ch-title{ color: var(--gf-red) }
-[data-theme="guofeng"] .board-ch-stat{ color: var(--gf-dim) }
-[data-theme="guofeng"] .board-concept{
-  background: #faf6ed; border: 1px dashed #c9b896; color: var(--gf-ink);
-}
-[data-theme="guofeng"] .board-concept b{ color: var(--gf-red) }
-[data-theme="guofeng"] .board-total{ background: #faf6ed; color: var(--gf-ink); border-color: #d9cbb0 }
 
 /* 状态条 */
 [data-theme="guofeng"] .status.ok { color: #4a7c31; }
@@ -637,7 +625,6 @@
 [data-theme="guofeng"] .ws-combo-btn.on .ws-combo-del {
   color: rgba(255, 255, 255, 0.9) !important;
 }
-
 
 /* 主线简述卡片适配古风宣纸底色 */
 [data-theme="guofeng"] .cp-card {

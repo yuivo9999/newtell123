@@ -19,7 +19,7 @@ const TB_CHAPTER_SECTIONS = ['本章章头承接', '本章中段施工', '本章
 
 function tbBatchSize(){
   const v = Number(state && state.school && state.school.teacherBatchSize);
-  return Number.isInteger(v) && v >= 1 && v <= 12 ? v : TB_DEFAULT_SIZE;
+  return Number.isInteger(v) && v >= 1 && v <= 6 ? v : TB_DEFAULT_SIZE;
 }
 function tbIsBatched(g){
   const n = Number(g && g.last) - Number(g && g.first) + 1;
@@ -221,7 +221,7 @@ function tbOpenImport(gi){
 function tbCardExtra(gi, g){
   if(!g) return '';
   const n = Number(g.last) - Number(g.first) + 1;
-  const sel = `<select data-tb-size="${gi}" title="每批最多几章；章数超过它的老师组会分批备课（总纲 + 若干批）" style="padding:1px 4px;font-size:11px">${[2, 3, 4, 5, 6, 8, 10, 12].map(v => `<option value="${v}"${v === tbBatchSize() ? ' selected' : ''}>${v}</option>`).join('')}</select>`;
+  const sel = `<select data-tb-size="${gi}" title="每批最多几章；章数超过它的老师组会分批备课（总纲 + 若干批）" style="padding:1px 4px;font-size:11px">${[2, 3, 4, 5, 6].map(v => `<option value="${v}"${v === tbBatchSize() ? ' selected' : ''}>${v}</option>`).join('')}</select>`;
   if(!tbIsBatched(g)){
     return `<div class="sc-tb-row" data-tb-status="${gi}"><b>📚 备课方式</b>：本组${n}章 ≤ 每批上限 ${sel} 章，整组一次输出（旧流程）。</div>`;
   }

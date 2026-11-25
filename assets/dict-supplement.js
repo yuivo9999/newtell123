@@ -118,7 +118,13 @@ async function dsGen(gi, btn, opts){
 function dsOpen(gi){
   const g = ptAssignment().groups[gi]; if(!g) return;
   const T = ptEnsure(); const st = T.groups[gi];
-  if(!st){ toast('请先细化并保存本组，再做词典增补'); return; }
+  if(!st){
+    /* 回填口原则：入口常亮；本组未细化时给出说明和下一步，而不是隐藏入口 */
+    ptOpenText({ title:`📚 词典增补 · 第${gi+1}组`, sub:'本组还没有细化', readonly:true,
+      text:'词典增补的“增补清单”来自「细化本组」的结果（本组需要的新实体）。\n\n本组还没有细化，所以暂时没有清单可编辑、可注入。\n\n你可以：\n1. 点下面的「先细化本组」，在项目里直接细化；\n2. 或先点本组的「📦 注入导出」把细化注入拿到外部 AI，再用「📋 读本组」把结果回填并保存——保存后再回到这里。',
+      buttons:[ { label:'先细化本组(AI)', primary:true, onClick:(t,close)=>{ close(); if(typeof ptAct==='function') ptAct('gen', gi, null); } } ] });
+    return;
+  }
   const sup = T.supplements && T.supplements[gi];
   const modal = ptOpenText({
     title:`📚 词典增补 · 第${gi+1}组（第${g.startChapter}-${g.endChapter}章）`,
